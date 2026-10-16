@@ -1,0 +1,21 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    /**
+     * Leads can be captured without a known fabric interest —
+     * the field is optional in the CRM intake flow.
+     */
+    public function up(): void
+    {
+        DB::statement("ALTER TABLE `crm_leads` MODIFY COLUMN `interest_fabric` VARCHAR(255) NULL");
+    }
+
+    public function down(): void
+    {
+        DB::statement("ALTER TABLE `crm_leads` MODIFY COLUMN `interest_fabric` VARCHAR(255) NOT NULL");
+    }
+};
