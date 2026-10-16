@@ -8,6 +8,8 @@ const props = defineProps({
     clients: { type: Array, default: () => [] },
 });
 
+// Billy badap
+
 const searchTerm = ref('');
 const statusFilter = ref('all');
 
