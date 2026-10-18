@@ -1,13 +1,34 @@
 <script setup>
-import { ref, computed } from 'vue';
-import { Head, router, useForm, Link } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
+import { Head, router, useForm, Link, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import {
     Building2, User, Mail, Phone, MapPin, CreditCard, Calendar,
     MessageSquare, AlertCircle, Plus,
     FileText, ChevronLeft, Sparkles, CalendarCheck, BadgeCheck,
-    Wallet, Inbox, Users, Star, Pencil, Trash2, KanbanSquare, Package, Activity, Briefcase
+    Wallet, Inbox, Users, Star, Pencil, Crown, KanbanSquare, Package, Activity, Briefcase,
+    FolderOpen, Download, History, Eye, X, FileImage, Image as ImageIcon, Receipt, Hash, Clock,
+    KeyRound, CheckCircle2, XCircle, ShieldCheck
 } from 'lucide-vue-next';
+
+const inertiaPage = usePage();
+const toast = ref({ show: false, type: 'success', message: '' });
+const showToast = (type, message) => {
+    toast.value = { show: true, type, message };
+    setTimeout(() => { toast.value.show = false; }, 6000);
+};
+watch(() => inertiaPage.props.flash?.message, (msg) => { if (msg) showToast('success', msg); });
+
+// Partner-registered representatives awaiting CRM approval.
+const pendingReps = computed(() => (props.client.contacts || []).filter((c) => c.origin === 'partner' && c.status === 'pending'));
+const representatives = computed(() => (props.client.contacts || []).filter((c) => c.origin === 'partner' || c.is_primary));
+const contactStatus = (c) => {
+    if (c.origin !== 'partner') return null;
+    if (c.status === 'pending') return { label: 'Pending employee', cls: 'bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30' };
+    if (c.status === 'rejected') return { label: 'Rejected', cls: 'bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30' };
+    if (c.has_account) return { label: 'Has login', cls: 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30' };
+    return null;
+};
 
 const props = defineProps({
     client: { type: Object, required: true },
@@ -76,6 +97,101 @@ const openFeedbackCount = computed(() => props.feedback.filter(f => f.status ===
 const openDeals = computed(() => (props.client.opportunities || []).filter((o) => !['won', 'lost'].includes(o.stage)));
 const openCases = computed(() => (props.client.cases || []).filter((c) => ['open', 'in_progress'].includes(c.status)));
 
+// ── Files & images (from opportunity cards + approval page uploads) ──
+const documents = computed(() => props.client.documents || []);
+const allFiles = computed(() => {
+    const docs = documents.value.map((d) => ({
+        id: 'doc-' + d.id,
+        name: d.original_name || 'Untitled file',
+        url: d.file_url,
+        isImage: !!d.is_image,
+        mime: d.mime,
+        size: d.size,
+        uploader: d.uploader?.name || '—',
+        at: d.created_at,
+        source: d.opportunity?.title ? 'Deal · ' + d.opportunity.title : 'Approval / Client upload',
+    }));
+    const attachments = (props.feedback || []).flatMap((fb) =>
+        (fb.attachments || []).map((a) => ({
+            id: 'fb-' + a.id,
+            name: a.original_name || 'Attachment',
+            url: a.file_url,
+            isImage: !!a.is_image,
+            mime: a.mime,
+            size: a.size,
+            uploader: fb.assignee?.name || 'Client',
+            at: a.created_at,
+            source: 'Feedback · ' + (fb.subject || ''),
+        }))
+    );
+    return [...docs, ...attachments];
+});
+const imageFiles = computed(() => allFiles.value.filter((f) => f.isImage));
+const nonImageFiles = computed(() => allFiles.value.filter((f) => !f.isImage));
+
+const lightbox = ref(null);
+const openLightbox = (file) => { lightbox.value = file; };
+
+const formatSize = (bytes) => {
+    if (!bytes) return '—';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let n = Number(bytes), i = 0;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return n.toFixed(n < 10 && i > 0 ? 1 : 0) + ' ' + units[i];
+};
+
+const ordersTotal = computed(() => (props.client.purchase_orders || []).reduce((s, o) => s + parseFloat(o.total_amount || 0), 0));
+
+// ── Unified history timeline (registration → orders) ─────────────
+const timeline = computed(() => {
+    const client = props.client;
+    const events = [];
+    const push = (at, icon, tone, title, sub) => { if (at) events.push({ at, icon, tone, title, sub }); };
+
+    push(client.created_at, User, 'indigo', 'Client registered', (client.company_name || '') + ' onboarded as ' + (client.business_type || 'a client'));
+
+    (client.opportunities || []).forEach((o) => {
+        push(o.created_at, KanbanSquare, 'emerald', 'Deal opened · ' + o.title, 'Stage: ' + o.stage + ' · ' + formatCurrency(o.value));
+        (o.histories || []).forEach((h) => push(h.created_at, KanbanSquare, 'emerald',
+            'Stage moved: ' + (h.from_stage || '—') + ' → ' + h.to_stage,
+            [h.changer?.name, h.notes].filter(Boolean).join(' · ')));
+    });
+
+    (client.quotations || []).forEach((q) => push(q.issue_date || q.created_at, Receipt, 'amber',
+        'Quotation ' + q.quotation_number, (q.status || '') + ' · ' + formatCurrency(q.grand_total)));
+
+    (client.purchase_orders || []).forEach((o) => push(o.created_at, Package, 'amber',
+        'Order ' + o.po_number, (o.status || '') + ' · ' + formatCurrency(o.total_amount)));
+
+    (client.activities || []).forEach((a) => push(a.created_at, Activity, 'cyan',
+        (a.type ? a.type + ': ' : '') + (a.title || a.subject || 'Activity'), a.owner?.name || ''));
+
+    (props.meetings || []).forEach((m) => push(m.created_at, Calendar, 'blue',
+        'Meeting · ' + m.meeting_type, formatDateTime(m.scheduled_at) + ' · ' + m.status));
+
+    (props.feedback || []).forEach((f) => push(f.created_at, MessageSquare, f.type === 'complaint' ? 'rose' : 'violet',
+        (f.type === 'complaint' ? 'Complaint: ' : 'Feedback: ') + f.subject, f.message));
+
+    (client.cases || []).forEach((c) => push(c.created_at, Briefcase, 'rose',
+        'Case: ' + c.subject, [c.status, c.severity].filter(Boolean).join(' · ')));
+
+    (client.documents || []).forEach((d) => push(d.created_at, FolderOpen, 'slate',
+        'File uploaded: ' + d.original_name, d.uploader?.name || ''));
+
+    return events.filter((e) => e.at).sort((a, b) => new Date(b.at) - new Date(a.at));
+});
+
+const timelineDot = (tone) => ({
+    indigo: 'bg-indigo-500 shadow-indigo-500/40',
+    emerald: 'bg-emerald-500 shadow-emerald-500/40',
+    amber: 'bg-amber-500 shadow-amber-500/40',
+    cyan: 'bg-cyan-500 shadow-cyan-500/40',
+    blue: 'bg-blue-500 shadow-blue-500/40',
+    violet: 'bg-violet-500 shadow-violet-500/40',
+    rose: 'bg-rose-500 shadow-rose-500/40',
+    slate: 'bg-slate-400 shadow-slate-400/40',
+}[tone] || 'bg-gray-400');
+
 // ── Contacts manager ─────────────────────────────────────────────
 const showContactModal = ref(false);
 const editingContact = ref(null);
@@ -112,11 +228,48 @@ const submitContact = () => {
         });
     }
 };
-const removeContact = (c) => {
-    router.delete(route('crm.contacts.destroy', c.id), { preserveScroll: true });
-};
+const showPrimaryModal = ref(false);
+const primaryTarget = ref(null);
+const primaryProcessing = ref(false);
+const currentPrimary = computed(() => (props.client.contacts || []).find((c) => c.is_primary) || null);
 const primaryContact = (c) => {
-    router.post(route('crm.contacts.primary', c.id), {}, { preserveScroll: true });
+    primaryTarget.value = c;
+    showPrimaryModal.value = true;
+};
+const confirmPrimary = () => {
+    if (!primaryTarget.value) return;
+    primaryProcessing.value = true;
+    router.post(route('crm.contacts.primary', primaryTarget.value.id), {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            primaryProcessing.value = false;
+            showPrimaryModal.value = false;
+            primaryTarget.value = null;
+        },
+    });
+};
+const showApproveModal = ref(false);
+const approveTarget = ref(null);
+const approveProcessing = ref(false);
+const approveContact = (c) => {
+    approveTarget.value = c;
+    showApproveModal.value = true;
+};
+const confirmApprove = () => {
+    if (!approveTarget.value) return;
+    approveProcessing.value = true;
+    router.post(route('crm.contacts.create-account', approveTarget.value.id), {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            approveProcessing.value = false;
+            showApproveModal.value = false;
+            approveTarget.value = null;
+        },
+    });
+};
+const rejectContact = (c) => {
+    if (!confirm(`Reject ${c.name}'s representative registration?`)) return;
+    router.post(route('crm.contacts.reject-account', c.id), {}, { preserveScroll: true });
 };
 </script>
 
@@ -184,11 +337,11 @@ const primaryContact = (c) => {
                     </div>
                     <!-- tabs -->
                     <div class="relative flex gap-2 px-6 sm:px-8 pb-5 overflow-x-auto">
-                        <button v-for="t in [['overview','Overview'],['contacts','Contacts'],['deals','Deals'],['orders','Orders'],['activities','Activities'],['cases','Cases'],['meetings','Meetings'],['feedback','Feedback']]" :key="t[0]" @click="activeTab = t[0]"
+                        <button v-for="t in [['overview','Overview'],['contacts','Contacts'],['deals','Deals'],['orders','Orders'],['activities','Activities'],['cases','Cases'],['meetings','Meetings'],['feedback','Feedback'],['files','Files'],['history','History']]" :key="t[0]" @click="activeTab = t[0]"
                             :class="activeTab === t[0] ? 'bg-white text-indigo-700 shadow-lg' : 'bg-white/15 text-white hover:bg-white/25'"
                             class="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide backdrop-blur transition-all active:scale-95 whitespace-nowrap">
                             {{ t[1] }}
-                            <span v-if="t[0]==='contacts'" class="opacity-70">· {{ client.contacts?.length ?? 0 }}</span><span v-if="t[0]==='deals'" class="opacity-70">· {{ openDeals.length }}</span><span v-if="t[0]==='meetings'" class="opacity-70">· {{ meetings.length }}</span><span v-if="t[0]==='feedback'" class="opacity-70">· {{ feedback.length }}</span><span v-if="t[0]==='cases'" class="opacity-70">· {{ openCases.length }}</span>
+                            <span v-if="t[0]==='contacts'" class="opacity-70">· {{ client.contacts?.length ?? 0 }}</span><span v-if="t[0]==='deals'" class="opacity-70">· {{ openDeals.length }}</span><span v-if="t[0]==='orders'" class="opacity-70">· {{ client.purchase_orders?.length ?? 0 }}</span><span v-if="t[0]==='meetings'" class="opacity-70">· {{ meetings.length }}</span><span v-if="t[0]==='feedback'" class="opacity-70">· {{ feedback.length }}</span><span v-if="t[0]==='cases'" class="opacity-70">· {{ openCases.length }}</span><span v-if="t[0]==='files'" class="opacity-70">· {{ allFiles.length }}</span>
                         </button>
                     </div>
                 </div>
@@ -203,12 +356,16 @@ const primaryContact = (c) => {
                         <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div v-for="(item, idx) in [
                                 {icon: Building2, label: 'Company Name', value: client.company_name, bold: true, tint: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600'},
+                                {icon: Briefcase, label: 'Business Type', value: client.business_type, tint: 'bg-fuchsia-50 dark:bg-fuchsia-900/20 text-fuchsia-600'},
                                 {icon: User, label: 'Contact Person', value: client.contact_person, bold: true, tint: 'bg-violet-50 dark:bg-violet-900/20 text-violet-600'},
                                 {icon: Mail, label: 'Email Address', value: client.email, tint: 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600'},
                                 {icon: Phone, label: 'Phone Number', value: client.phone, tint: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600'},
                                 {icon: MapPin, label: 'Business Address', value: client.company_address, tint: 'bg-orange-50 dark:bg-orange-900/20 text-orange-600'},
+                                {icon: MapPin, label: 'City / Province', value: [client.city, client.province].filter(Boolean).join(', '), tint: 'bg-amber-50 dark:bg-amber-900/20 text-amber-600'},
+                                {icon: Hash, label: 'Postal Code', value: client.postal_code, tint: 'bg-slate-100 dark:bg-zinc-800 text-slate-500'},
                                 {icon: FileText, label: 'TIN Number', value: client.tin_number, tint: 'bg-slate-100 dark:bg-zinc-800 text-slate-500'},
                                 {icon: CreditCard, label: 'Credit Limit', value: formatCurrency(client.credit_limit), bold: true, tint: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600'},
+                                {icon: Clock, label: 'Payment Terms', value: client.payment_terms_days ? client.payment_terms_days + ' days' : null, tint: 'bg-teal-50 dark:bg-teal-900/20 text-teal-600'},
                                 {icon: Calendar, label: 'Registered On', value: formatDate(client.created_at), tint: 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'},
                             ]" :key="idx" class="animate-fade-up group flex items-start gap-3 rounded-2xl border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 p-3 -m-3 transition-all" :style="{animationDelay: `${idx*50}ms`}">
                                 <span :class="['flex h-10 w-10 shrink-0 items-center justify-center rounded-xl group-hover:scale-110 transition-transform', item.tint]"><component :is="item.icon" class="w-5 h-5" /></span>
@@ -218,7 +375,11 @@ const primaryContact = (c) => {
                                 </span>
                             </div>
                         </div>
-                        <div v-if="client.rejection_reason" class="m-6 mt-0 rounded-2xl border border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900 p-4 animate-fade-up">
+                        <div v-if="client.notes" class="mx-6 mb-4 rounded-2xl border border-indigo-100 dark:border-indigo-900 bg-indigo-50/60 dark:bg-indigo-900/10 p-4">
+                            <p class="flex items-center gap-1.5 text-[10px] font-black text-indigo-600 uppercase tracking-widest"><MessageSquare class="h-3.5 w-3.5" /> Account Notes</p>
+                            <p class="mt-1 text-sm text-gray-700 dark:text-gray-200 whitespace-pre-line">{{ client.notes }}</p>
+                        </div>
+                        <div v-if="client.rejection_reason" class="mx-6 mb-6 rounded-2xl border border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900 p-4 animate-fade-up">
                             <p class="text-[10px] font-black text-red-600 uppercase tracking-widest">Rejection Reason</p>
                             <p class="text-sm text-red-700 dark:text-red-300 mt-1">{{ client.rejection_reason }}</p>
                         </div>
@@ -231,6 +392,20 @@ const primaryContact = (c) => {
                             <p class="mt-2 text-3xl font-black">{{ openFeedbackCount === 0 ? 'Excellent' : openFeedbackCount + ' open' }}</p>
                             <p class="text-xs text-indigo-100 mt-1">{{ meetings.length }} meetings · {{ feedback.length }} notes on record</p>
                             <button v-if="canEdit" @click="activeTab='feedback'; openFeedbackModal()" class="mt-4 w-full rounded-xl bg-white text-indigo-700 py-2.5 text-xs font-black uppercase tracking-wide hover:bg-indigo-50 active:scale-95 transition">+ Log feedback</button>
+                        </div>
+                        <div v-if="representatives.length" class="animate-fade-up bg-white dark:bg-zinc-900 rounded-3xl border border-gray-100 dark:border-zinc-800 p-6" style="animation-delay:200ms">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-1.5"><ShieldCheck class="h-3.5 w-3.5 text-indigo-500" /> Representatives</p>
+                            <div class="mt-3 space-y-2">
+                                <div v-for="r in representatives" :key="'rep'+r.id" class="flex items-center gap-2.5 rounded-xl bg-gray-50 dark:bg-zinc-800/60 p-2.5">
+                                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-[11px] font-black text-white uppercase">{{ (r.name || '?').charAt(0) }}</span>
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-xs font-black truncate">{{ r.name }}</p>
+                                        <p class="text-[11px] text-gray-400 truncate">{{ r.email || 'No email' }}</p>
+                                    </div>
+                                    <span v-if="r.is_primary" class="shrink-0 rounded-full bg-indigo-600 text-white px-2 py-0.5 text-[9px] font-black uppercase">Primary</span>
+                                    <span v-else-if="contactStatus(r)" :class="['shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase ring-1', contactStatus(r).cls]">{{ contactStatus(r).label }}</span>
+                                </div>
+                            </div>
                         </div>
                         <div class="animate-fade-up bg-white dark:bg-zinc-900 rounded-3xl border border-gray-100 dark:border-zinc-800 p-6" style="animation-delay:250ms">
                             <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Latest activity</p>
@@ -251,34 +426,45 @@ const primaryContact = (c) => {
                         <h2 class="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                             <Users class="w-5 h-5 text-blue-600" /> People at this account
                         </h2>
-                        <button v-if="canEdit" @click="openContactModal()" class="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-xs font-black uppercase tracking-wide hover:shadow-lg hover:scale-105 active:scale-95 transition-all">
-                            <Plus class="w-4 h-4" /> Add
-                        </button>
+                        <span v-if="pendingReps.length" class="rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 px-3 py-1 text-[10px] font-black uppercase ring-1 ring-amber-200 dark:ring-amber-500/30">
+                            {{ pendingReps.length }} awaiting approval
+                        </span>
                     </div>
                     <div class="p-6">
                         <div v-if="client.contacts?.length" class="grid gap-3 md:grid-cols-2">
                             <div v-for="c in client.contacts" :key="c.id"
                                 class="rounded-2xl border p-4 transition-all hover:shadow-lg"
-                                :class="c.is_primary ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-900/10' : 'border-gray-100 dark:border-zinc-800'">
+                                :class="c.is_primary ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-900/10' : (c.status === 'pending' ? 'border-amber-200 dark:border-amber-700/50 bg-amber-50/40 dark:bg-amber-900/10' : 'border-gray-100 dark:border-zinc-800')">
                                 <div class="flex items-start gap-2">
                                     <div class="min-w-0 flex-1">
                                         <p class="font-black text-sm flex items-center gap-1.5 flex-wrap">
                                             {{ c.name }}
                                             <Star v-if="c.is_decision_maker" class="h-3.5 w-3.5 text-amber-500" />
+                                            <span v-if="contactStatus(c)" :class="['rounded-full px-2 py-0.5 text-[9px] font-black uppercase ring-1', contactStatus(c).cls]">{{ contactStatus(c).label }}</span>
                                         </p>
                                         <p class="text-[11px] font-bold text-gray-400">{{ c.title || 'No title' }}</p>
                                         <p class="text-xs text-gray-500 mt-1">{{ c.email || '—' }} · {{ c.phone || '—' }}</p>
                                     </div>
                                     <span v-if="c.is_primary" class="shrink-0 rounded-full bg-indigo-600 text-white px-2.5 py-0.5 text-[9px] font-black uppercase">Primary</span>
                                 </div>
-                                <div v-if="canEdit" class="mt-3 flex flex-wrap gap-1.5">
-                                    <button @click="openContactModal(c)" class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-zinc-800 px-2.5 py-1 text-[10px] font-black uppercase text-gray-500 hover:text-indigo-600"><Pencil class="h-3 w-3" /> Edit</button>
-                                    <button v-if="!c.is_primary" @click="primaryContact(c)" class="rounded-lg bg-gray-100 dark:bg-zinc-800 px-2.5 py-1 text-[10px] font-black uppercase text-gray-500 hover:text-indigo-600">Set primary</button>
-                                    <button @click="removeContact(c)" class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase text-gray-300 hover:text-rose-500"><Trash2 class="h-3 w-3" /></button>
+
+                                <!-- Partner-registered representative: CRM decides on the account -->
+                                <div v-if="canEdit && c.origin === 'partner' && c.status === 'pending'" class="mt-3 flex flex-wrap gap-1.5">
+                                    <button @click="approveContact(c)" class="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-1.5 text-[10px] font-black uppercase text-white shadow hover:scale-105 active:scale-95 transition"><KeyRound class="h-3 w-3" /> Create account</button>
+                                    <button @click="rejectContact(c)" class="inline-flex items-center gap-1 rounded-lg bg-rose-50 dark:bg-rose-900/20 px-3 py-1.5 text-[10px] font-black uppercase text-rose-600 hover:text-rose-700 transition"><XCircle class="h-3 w-3" /> Reject</button>
+                                </div>
+                                <div v-else-if="canEdit && c.origin === 'partner' && c.status === 'rejected'" class="mt-3">
+                                    <button @click="approveContact(c)" class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-zinc-800 px-3 py-1.5 text-[10px] font-black uppercase text-gray-500 hover:text-emerald-600 transition"><KeyRound class="h-3 w-3" /> Reconsider</button>
+                                </div>
+
+                                <div v-if="canEdit && (c.origin !== 'partner' || (c.status !== 'pending' && c.status !== 'rejected'))" class="mt-3 flex flex-wrap gap-1.5">
+                                    <button v-if="c.origin !== 'partner'" @click="openContactModal(c)" class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-zinc-800 px-2.5 py-1 text-[10px] font-black uppercase text-gray-500 hover:text-indigo-600"><Pencil class="h-3 w-3" /> Edit</button>
+                                    <!-- Move the main-account label from the current primary to this user -->
+                                    <button v-if="!c.is_primary" @click="primaryContact(c)" class="inline-flex items-center gap-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 px-2.5 py-1 text-[10px] font-black uppercase text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition"><Crown class="h-3 w-3" /> Make main account</button>
                                 </div>
                             </div>
                         </div>
-                        <p v-else class="text-center text-sm font-bold text-gray-400 py-8">No contacts yet — add the people you deal with.</p>
+                        <p v-else class="text-center text-sm font-bold text-gray-400 py-8">No contacts yet — representatives register from the partner portal.</p>
                     </div>
                 </div>
 
@@ -305,21 +491,57 @@ const primaryContact = (c) => {
                 </div>
 
                 <!-- Orders -->
-                <div v-show="activeTab === 'orders'" class="animate-fade-up bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden">
-                    <div class="p-6 border-b border-gray-100 dark:border-zinc-800 flex items-center gap-2 bg-gradient-to-r from-amber-50 to-transparent dark:from-amber-900/10">
-                        <Package class="w-5 h-5 text-amber-600" />
-                        <h2 class="text-sm font-black uppercase tracking-widest">Order history</h2>
-                    </div>
-                    <div class="p-6 space-y-2.5">
-                        <div v-for="o in client.purchase_orders" :key="o.id"
-                            class="flex items-center gap-3 rounded-2xl border border-gray-100 dark:border-zinc-800 p-4">
-                            <span class="min-w-0 flex-1">
-                                <span class="block font-mono font-black text-sm">{{ o.po_number }}</span>
-                                <span class="block text-[11px] text-gray-400">{{ o.status }} · {{ formatDate(o.created_at) }}</span>
+                <div v-show="activeTab === 'orders'" class="animate-fade-up space-y-5">
+                    <div class="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden">
+                        <div class="p-6 border-b border-gray-100 dark:border-zinc-800 flex items-center gap-2 bg-gradient-to-r from-amber-50 to-transparent dark:from-amber-900/10">
+                            <Package class="w-5 h-5 text-amber-600" />
+                            <h2 class="text-sm font-black uppercase tracking-widest">Purchase Orders</h2>
+                            <span class="ml-auto flex items-center gap-3 text-[11px] font-black">
+                                <span class="rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2.5 py-1">{{ client.purchase_orders?.length ?? 0 }} orders</span>
+                                <span class="rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2.5 py-1">{{ formatCurrency(ordersTotal) }} total</span>
                             </span>
-                            <span class="font-black text-sm">{{ formatCurrency(o.total_amount) }}</span>
                         </div>
-                        <p v-if="!client.purchase_orders?.length" class="text-center text-sm font-bold text-gray-400 py-8">No orders yet.</p>
+                        <div class="p-6 space-y-2.5">
+                            <div v-for="o in client.purchase_orders" :key="o.id"
+                                class="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-100 dark:border-zinc-800 p-4 hover:shadow-lg hover:border-amber-200 dark:hover:border-amber-800 transition-all">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-600"><Package class="h-5 w-5" /></span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block font-mono font-black text-sm">{{ o.po_number }}</span>
+                                    <span class="block text-[11px] text-gray-400">
+                                        {{ formatDate(o.created_at) }} · {{ o.items?.length ?? 0 }} item(s)
+                                        <template v-if="o.delivery_date"> · delivery {{ formatDate(o.delivery_date) }}</template>
+                                    </span>
+                                </span>
+                                <span class="rounded-full bg-gray-100 dark:bg-zinc-800 px-3 py-1 text-[10px] font-black uppercase text-gray-500">{{ (o.status || 'n/a').replace('_',' ') }}</span>
+                                <span class="font-black text-sm">{{ formatCurrency(o.total_amount) }}</span>
+                            </div>
+                            <p v-if="!client.purchase_orders?.length" class="text-center text-sm font-bold text-gray-400 py-8">No orders yet.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden">
+                        <div class="p-6 border-b border-gray-100 dark:border-zinc-800 flex items-center gap-2 bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-900/10">
+                            <Receipt class="w-5 h-5 text-indigo-600" />
+                            <h2 class="text-sm font-black uppercase tracking-widest">Quotations</h2>
+                            <span class="ml-auto rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[11px] font-black px-2.5 py-1">{{ client.quotations?.length ?? 0 }}</span>
+                        </div>
+                        <div class="p-6 space-y-2.5">
+                            <div v-for="q in client.quotations" :key="q.id"
+                                class="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-100 dark:border-zinc-800 p-4">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600"><Receipt class="h-5 w-5" /></span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block font-mono font-black text-sm">{{ q.quotation_number }}</span>
+                                    <span class="block text-[11px] text-gray-400">
+                                        {{ formatDate(q.issue_date || q.created_at) }}
+                                        <template v-if="q.valid_until"> · valid until {{ formatDate(q.valid_until) }}</template>
+                                        <template v-if="q.items?.length"> · {{ q.items.length }} item(s)</template>
+                                    </span>
+                                </span>
+                                <span class="rounded-full bg-gray-100 dark:bg-zinc-800 px-3 py-1 text-[10px] font-black uppercase text-gray-500">{{ (q.status || 'draft').replace('_',' ') }}</span>
+                                <span class="font-black text-sm">{{ formatCurrency(q.grand_total) }}</span>
+                            </div>
+                            <p v-if="!client.quotations?.length" class="text-center text-sm font-bold text-gray-400 py-8">No quotations issued.</p>
+                        </div>
                     </div>
                 </div>
 
@@ -436,7 +658,173 @@ const primaryContact = (c) => {
                         </div>
                     </div>
                 </div>
+
+                <!-- Files & Images -->
+                <div v-show="activeTab === 'files'" class="animate-fade-up">
+                    <div class="bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden">
+                        <div class="p-6 border-b border-gray-100 dark:border-zinc-800 flex flex-wrap items-center gap-2 bg-gradient-to-r from-sky-50 to-transparent dark:from-sky-900/10">
+                            <FolderOpen class="w-5 h-5 text-sky-600" />
+                            <h2 class="text-sm font-black uppercase tracking-widest">Files &amp; Images</h2>
+                            <span class="ml-auto flex gap-2 text-[11px] font-black">
+                                <span class="rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 px-2.5 py-1">{{ allFiles.length }} total</span>
+                                <span class="rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-2.5 py-1">{{ imageFiles.length }} images</span>
+                            </span>
+                        </div>
+                        <div class="p-6">
+                            <p class="mb-3 flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest"><ImageIcon class="h-3.5 w-3.5" /> Images</p>
+                            <div v-if="imageFiles.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                <button v-for="f in imageFiles" :key="f.id" @click="openLightbox(f)"
+                                    class="group relative aspect-square overflow-hidden rounded-2xl border border-gray-100 dark:border-zinc-800 hover:shadow-xl transition-all">
+                                    <img :src="f.url" :alt="f.name" class="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                                    <span class="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-black/10 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <span class="text-left text-white min-w-0">
+                                            <span class="block truncate text-xs font-bold">{{ f.name }}</span>
+                                            <span class="block truncate text-[10px] text-white/70">{{ f.source }}</span>
+                                        </span>
+                                    </span>
+                                    <span class="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition"><Eye class="h-4 w-4" /></span>
+                                </button>
+                            </div>
+                            <p v-else class="text-center text-sm font-bold text-gray-400 py-6">No images linked to this account.</p>
+
+                            <p class="mt-6 mb-3 flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest"><FileText class="h-3.5 w-3.5" /> Documents</p>
+                            <div v-if="nonImageFiles.length" class="grid gap-2.5 md:grid-cols-2">
+                                <a v-for="f in nonImageFiles" :key="f.id" :href="f.url" target="_blank"
+                                    class="flex items-center gap-3 rounded-2xl border border-gray-100 dark:border-zinc-800 p-3.5 hover:shadow-lg hover:border-sky-200 dark:hover:border-sky-800 transition-all">
+                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-900/20 text-sky-600"><FileImage class="h-5 w-5" /></span>
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block truncate text-sm font-bold">{{ f.name }}</span>
+                                        <span class="block truncate text-[11px] text-gray-400">{{ f.source }} · {{ formatSize(f.size) }} · {{ formatDate(f.at) }}</span>
+                                    </span>
+                                    <Download class="h-4 w-4 shrink-0 text-gray-300" />
+                                </a>
+                            </div>
+                            <p v-else class="text-center text-sm font-bold text-gray-400 py-6">No documents linked to this account.</p>
+
+                            <p v-if="!allFiles.length" class="text-center text-sm font-bold text-gray-400 py-10">No files or images uploaded for this client yet.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Full history -->
+                <div v-show="activeTab === 'history'" class="animate-fade-up bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden">
+                    <div class="p-6 border-b border-gray-100 dark:border-zinc-800 flex items-center gap-2 bg-gradient-to-r from-violet-50 to-transparent dark:from-violet-900/10">
+                        <History class="w-5 h-5 text-violet-600" />
+                        <h2 class="text-sm font-black uppercase tracking-widest">Full history</h2>
+                        <span class="ml-auto rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[11px] font-black px-2.5 py-1">{{ timeline.length }} events</span>
+                    </div>
+                    <div class="p-6">
+                        <div v-if="!timeline.length" class="text-center py-12">
+                            <History class="mx-auto h-10 w-10 text-gray-200 dark:text-zinc-700" />
+                            <p class="mt-2 text-sm font-bold text-gray-400">No history recorded yet.</p>
+                        </div>
+                        <div v-else class="relative ml-2 space-y-5 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gradient-to-b before:from-indigo-300 before:via-blue-200 before:to-transparent dark:before:from-indigo-800">
+                            <div v-for="(ev, i) in timeline" :key="i" class="animate-fade-up relative pl-8 group" :style="{animationDelay: `${Math.min(i*40,400)}ms`}">
+                                <span :class="['absolute left-0 top-1.5 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-white dark:ring-zinc-900 shadow-lg group-hover:scale-125 transition-transform', timelineDot(ev.tone)]" />
+                                <div class="rounded-2xl border border-gray-100 dark:border-zinc-800 p-4 hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all">
+                                    <div class="flex items-start gap-3">
+                                        <component :is="ev.icon" class="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                                        <div class="min-w-0 flex-1">
+                                            <p class="font-black text-sm text-gray-900 dark:text-white">{{ ev.title }}</p>
+                                            <p v-if="ev.sub" class="mt-0.5 text-xs text-gray-500 whitespace-pre-line">{{ ev.sub }}</p>
+                                        </div>
+                                        <span class="shrink-0 text-[11px] font-bold text-gray-400">{{ formatDateTime(ev.at) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            <!-- Make main account confirmation -->
+            <Transition name="modal">
+                <div v-if="showPrimaryModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showPrimaryModal = false">
+                    <div class="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-up">
+                        <div class="bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 p-5 flex items-center justify-between">
+                            <h2 class="text-white font-black flex items-center gap-2"><Crown class="h-5 w-5" /> Make main account</h2>
+                            <button @click="showPrimaryModal = false" class="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 text-white hover:bg-white/35">&times;</button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div class="flex items-start gap-3 rounded-2xl bg-indigo-50 dark:bg-indigo-900/15 border border-indigo-100 dark:border-indigo-900 p-4">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-black uppercase">{{ (primaryTarget?.name || '?').charAt(0) }}</span>
+                                <div class="min-w-0">
+                                    <p class="font-black text-sm dark:text-white">{{ primaryTarget?.name }}</p>
+                                    <p class="text-[11px] font-bold text-gray-400">{{ primaryTarget?.title || 'Contact' }}</p>
+                                    <p class="text-xs text-gray-500 mt-1 flex items-center gap-1"><Mail class="h-3 w-3" /> {{ primaryTarget?.email || 'No email on file' }}</p>
+                                </div>
+                            </div>
+
+                            <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                                You are about to make <strong>{{ primaryTarget?.name }}</strong> the main account for
+                                <strong>{{ client.company_name }}</strong>. They will be granted full access to the partner portal.
+                            </p>
+
+                            <div v-if="currentPrimary" class="rounded-2xl bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-900 p-3">
+                                <p class="text-[11px] font-bold text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
+                                    <AlertCircle class="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                                    {{ currentPrimary.name }} is currently the main account and will lose that status.
+                                </p>
+                            </div>
+
+                            <div class="flex gap-3 pt-1">
+                                <button type="button" @click="showPrimaryModal = false" class="flex-1 py-3 rounded-2xl bg-gray-100 dark:bg-zinc-800 text-gray-500 font-bold text-sm hover:bg-gray-200 active:scale-95 transition">Cancel</button>
+                                <button type="button" @click="confirmPrimary" :disabled="primaryProcessing"
+                                    class="flex-1 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-black text-sm shadow-lg disabled:opacity-60 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+                                    <svg v-if="primaryProcessing" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                    <Crown v-else class="h-4 w-4" />
+                                    {{ primaryProcessing ? 'Setting…' : 'Make main account' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+
+            <!-- Create representative account confirmation -->
+            <Transition name="modal">
+                <div v-if="showApproveModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showApproveModal = false">
+                    <div class="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-up">
+                        <div class="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 p-5 flex items-center justify-between">
+                            <h2 class="text-white font-black flex items-center gap-2"><KeyRound class="h-5 w-5" /> Create representative account</h2>
+                            <button @click="showApproveModal = false" class="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 text-white hover:bg-white/35">&times;</button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div class="flex items-start gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-100 dark:border-emerald-900 p-4">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white font-black uppercase">{{ (approveTarget?.name || '?').charAt(0) }}</span>
+                                <div class="min-w-0">
+                                    <p class="font-black text-sm dark:text-white">{{ approveTarget?.name }}</p>
+                                    <p class="text-[11px] font-bold text-gray-400">{{ approveTarget?.title || 'Representative' }}</p>
+                                    <p class="text-xs text-gray-500 mt-1 flex items-center gap-1"><Mail class="h-3 w-3" /> {{ approveTarget?.email || 'No email on file' }}</p>
+                                </div>
+                            </div>
+
+                            <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                                You are about to grant <strong>{{ approveTarget?.name }}</strong> a partner portal login.
+                                A temporary password will be generated automatically and their sign-in credentials will be
+                                emailed to them with a welcome message.
+                            </p>
+
+                            <div v-if="!approveTarget?.email" class="rounded-2xl bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-900 p-3">
+                                <p class="text-[11px] font-bold text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
+                                    <AlertCircle class="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                                    This representative has no email address on file — the credentials will be shown here instead, so please record them.
+                                </p>
+                            </div>
+
+                            <div class="flex gap-3 pt-1">
+                                <button type="button" @click="showApproveModal = false" class="flex-1 py-3 rounded-2xl bg-gray-100 dark:bg-zinc-800 text-gray-500 font-bold text-sm hover:bg-gray-200 active:scale-95 transition">Cancel</button>
+                                <button type="button" @click="confirmApprove" :disabled="approveProcessing"
+                                    class="flex-1 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm shadow-lg disabled:opacity-60 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+                                    <svg v-if="approveProcessing" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                    <KeyRound v-else class="h-4 w-4" />
+                                    {{ approveProcessing ? 'Creating…' : 'Create account & send login' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
 
             <!-- Contact modal -->
             <Transition name="modal">
@@ -531,6 +919,21 @@ const primaryContact = (c) => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </Transition>
+
+            <!-- Image lightbox -->
+            <Transition name="modal">
+                <div v-if="lightbox" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" @click.self="lightbox = null">
+                    <button @click="lightbox = null" class="absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white hover:bg-white/30 hover:rotate-90 transition-all"><X class="h-5 w-5" /></button>
+                    <div class="max-w-4xl w-full">
+                        <img :src="lightbox.url" :alt="lightbox.name" class="mx-auto max-h-[75vh] w-auto rounded-2xl shadow-2xl object-contain" />
+                        <div class="mt-4 flex flex-wrap items-center justify-center gap-3 text-center text-white">
+                            <p class="font-black">{{ lightbox.name }}</p>
+                            <span class="text-xs text-white/60">{{ lightbox.source }} · {{ formatSize(lightbox.size) }} · {{ formatDate(lightbox.at) }}</span>
+                            <a :href="lightbox.url" target="_blank" class="flex items-center gap-1.5 rounded-xl bg-white/15 px-4 py-2 text-xs font-black uppercase tracking-wide hover:bg-white/30 transition"><Download class="h-4 w-4" /> Download</a>
+                        </div>
                     </div>
                 </div>
             </Transition>

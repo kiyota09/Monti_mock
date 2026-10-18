@@ -12,7 +12,19 @@ const form = useForm({
     default_probability: props.stage.default_probability,
     is_folded: !!props.stage.is_folded,
     is_won: !!props.stage.is_won,
+    is_lost: !!props.stage.is_lost,
+    allows_uploads: !!props.stage.allows_uploads,
 });
+
+// Won and Lost are mutually exclusive terminal states — ticking one clears the other.
+const setWon = (v) => {
+    form.is_won = v;
+    if (v) form.is_lost = false;
+};
+const setLost = (v) => {
+    form.is_lost = v;
+    if (v) form.is_won = false;
+};
 
 const submit = () => {
     form.patch(route('crm.stages.update', props.stage.id), {
@@ -48,7 +60,15 @@ const submit = () => {
             </label>
             <label class="flex cursor-pointer items-center justify-between rounded-xl bg-slate-50 px-4 py-3 transition hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700">
                 <span class="text-xs font-bold dark:text-slate-200">Won stage <span class="block text-[10px] font-normal text-gray-400">Deals here count as won (100%)</span></span>
-                <input v-model="form.is_won" type="checkbox" class="h-5 w-5 accent-amber-500" />
+                <input :checked="form.is_won" @change="setWon($event.target.checked)" type="checkbox" class="h-5 w-5 accent-amber-500" />
+            </label>
+            <label class="flex cursor-pointer items-center justify-between rounded-xl bg-slate-50 px-4 py-3 transition hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700">
+                <span class="text-xs font-bold dark:text-slate-200">Lost stage <span class="block text-[10px] font-normal text-gray-400">Deals here can only be archived — no meetings or activities</span></span>
+                <input :checked="form.is_lost" @change="setLost($event.target.checked)" type="checkbox" class="h-5 w-5 accent-rose-500" />
+            </label>
+            <label class="flex cursor-pointer items-center justify-between rounded-xl bg-slate-50 px-4 py-3 transition hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700">
+                <span class="text-xs font-bold dark:text-slate-200">Allow file &amp; image uploads <span class="block text-[10px] font-normal text-gray-400">Adds an “Upload files/images” button to every card in this stage — files are linked to the deal's client</span></span>
+                <input v-model="form.allows_uploads" type="checkbox" class="h-5 w-5 accent-sky-600" />
             </label>
             <button :disabled="form.processing" class="w-full rounded-xl bg-indigo-600 py-3 text-xs font-black uppercase text-white transition hover:bg-indigo-700 disabled:opacity-50">Save</button>
         </form>

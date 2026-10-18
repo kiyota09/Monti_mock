@@ -75,6 +75,18 @@ class FabricSampleLoopTest extends TestCase
             $table->timestamps();
             $table->softDeletes();
         });
+        // Read by HandleInertiaRequests to resolve the account's primary login.
+        Schema::create('crm_contacts', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('client_id')->nullable();
+            $table->string('name')->nullable();
+            $table->string('email')->nullable();
+            $table->boolean('is_primary')->default(false);
+            $table->string('status')->default('active');
+            $table->boolean('has_account')->default(false);
+            $table->json('access_pages')->nullable();
+            $table->timestamps();
+        });
         Schema::create('products', function (Blueprint $table) {
             $table->id();
             $table->string('name')->nullable();

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Crm\ActivityController;
 use App\Http\Controllers\Crm\ApprovalController;
+use App\Http\Controllers\Crm\CallController;
 use App\Http\Controllers\Crm\CampaignController;
 use App\Http\Controllers\Crm\CaseController;
 use App\Http\Controllers\Crm\ContactController;
@@ -11,7 +12,12 @@ use App\Http\Controllers\Crm\CustomerProfileController;
 
 use App\Http\Controllers\Crm\InvestigationController;
 use App\Http\Controllers\Crm\LeadController;
+use App\Http\Controllers\Crm\LeadInvestigationController;
+use App\Http\Controllers\Crm\MeetingRequestController;
+use App\Http\Controllers\Crm\MessageController;
 use App\Http\Controllers\Crm\OpportunityController;
+use App\Http\Controllers\Crm\OpportunityDocumentController;
+use App\Http\Controllers\Crm\PipelineNoteController;
 use App\Http\Controllers\Crm\QuotationController;
 use App\Http\Controllers\Crm\StageController;
 use App\Http\Controllers\Crm\CrmLogoPartnerController;
@@ -64,6 +70,17 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
         ->middleware('page.permission:leads,edit')
         ->name('lead.pipeline');
 
+    // Lead investigation log (notes / flags / files before the pipeline)
+    Route::post('/lead/{lead}/investigations', [LeadInvestigationController::class, 'store'])
+        ->middleware('page.permission:leads,edit')
+        ->name('lead.investigations.store');
+    Route::post('/lead/{lead}/investigations/files', [LeadInvestigationController::class, 'storeFiles'])
+        ->middleware('page.permission:leads,edit')
+        ->name('lead.investigations.files');
+    Route::delete('/lead/investigations/{investigation}', [LeadInvestigationController::class, 'destroy'])
+        ->middleware('page.permission:leads,edit')
+        ->name('lead.investigations.destroy');
+
 
 
     // Approvals
@@ -85,6 +102,17 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::post('/approval/{id}/reject', [ApprovalController::class, 'reject'])
         ->middleware('page.permission:approvals,edit')
         ->name('approval.reject');
+    // Request a call/meeting for a pending client (same flow as pipeline cards).
+    Route::post('/approval/{id}/activity', [ApprovalController::class, 'storeActivity'])
+        ->middleware('page.permission:approvals,edit')
+        ->name('approval.activity');
+    // Files/images uploaded directly on a pending client.
+    Route::post('/approval/{id}/documents', [ApprovalController::class, 'storeDocument'])
+        ->middleware('page.permission:approvals,edit')
+        ->name('approval.documents.store');
+    Route::delete('/approval/documents/{document}', [ApprovalController::class, 'destroyDocument'])
+        ->middleware('page.permission:approvals,edit')
+        ->name('approval.documents.destroy');
 
     // Customer Profiles = Accounts (company 360)
     Route::get('/customerprofile', [CustomerProfileController::class, 'index'])
@@ -101,12 +129,15 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::patch('/contacts/{contact}', [ContactController::class, 'update'])
         ->middleware('page.permission:customer_profiles,edit')
         ->name('contacts.update');
-    Route::delete('/contacts/{contact}', [ContactController::class, 'destroy'])
-        ->middleware('page.permission:customer_profiles,edit')
-        ->name('contacts.destroy');
     Route::post('/contacts/{contact}/primary', [ContactController::class, 'makePrimary'])
         ->middleware('page.permission:customer_profiles,edit')
         ->name('contacts.primary');
+    Route::post('/contacts/{contact}/create-account', [ContactController::class, 'createAccount'])
+        ->middleware('page.permission:customer_profiles,edit')
+        ->name('contacts.create-account');
+    Route::post('/contacts/{contact}/reject-account', [ContactController::class, 'rejectAccount'])
+        ->middleware('page.permission:customer_profiles,edit')
+        ->name('contacts.reject-account');
 
     // Client inquiries & conversations — moved here from ECO: highly customized
     // orders go through multiple discussion/agreement rounds, so they belong
@@ -167,17 +198,37 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::post('/opportunities/{opportunity}/priority', [OpportunityController::class, 'setPriority'])
         ->middleware('page.permission:opportunities,edit')
         ->name('opportunities.priority');
+    Route::post('/opportunities/{opportunity}/convert', [OpportunityController::class, 'convertToClient'])
+        ->middleware('page.permission:opportunities,edit')
+        ->name('opportunities.convert');
+    Route::post('/opportunities/{opportunity}/archive', [OpportunityController::class, 'archive'])
+        ->middleware('page.permission:opportunities,edit')
+        ->name('opportunities.archive');
 
-    // Pipeline stages (custom columns)
+    // Card files/images (shown on stages with allows_uploads enabled).
+    Route::post('/opportunities/{opportunity}/documents', [OpportunityDocumentController::class, 'store'])
+        ->middleware('page.permission:opportunities,edit')
+        ->name('opportunities.documents.store');
+    Route::delete('/opportunities/documents/{document}', [OpportunityDocumentController::class, 'destroy'])
+        ->middleware('page.permission:opportunities,edit')
+        ->name('opportunities.documents.destroy');
+
+    // Shared progress log for the Opportunities board (floating Notes panel).
+    Route::post('/opportunities/notes', [PipelineNoteController::class, 'store'])
+        ->middleware('page.permission:opportunities,edit')
+        ->name('opportunities.notes.store');
+    Route::delete('/opportunities/notes/{note}', [PipelineNoteController::class, 'destroy'])
+        ->middleware('page.permission:opportunities,edit')
+        ->name('opportunities.notes.destroy');
+
+    // Pipeline stages (custom columns). Column order is derived from each
+    // stage's default probability — stages are no longer dragged.
     Route::post('/stages', [StageController::class, 'store'])
         ->middleware('page.permission:opportunities,edit')
         ->name('stages.store');
     Route::patch('/stages/{stage}', [StageController::class, 'update'])
         ->middleware('page.permission:opportunities,edit')
         ->name('stages.update');
-    Route::post('/stages/reorder', [StageController::class, 'reorder'])
-        ->middleware('page.permission:opportunities,edit')
-        ->name('stages.reorder');
     Route::delete('/stages/{stage}', [StageController::class, 'destroy'])
         ->middleware('page.permission:opportunities,edit')
         ->name('stages.destroy');
@@ -189,9 +240,15 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::post('/activities', [ActivityController::class, 'store'])
         ->middleware('page.permission:activities,edit')
         ->name('activities.store');
+    Route::patch('/activities/{activity}', [ActivityController::class, 'update'])
+        ->middleware('page.permission:activities,edit')
+        ->name('activities.update');
     Route::post('/activities/{activity}/done', [ActivityController::class, 'done'])
         ->middleware('page.permission:activities,edit')
         ->name('activities.done');
+    Route::post('/activities/{activity}/undone', [ActivityController::class, 'undone'])
+        ->middleware('page.permission:activities,edit')
+        ->name('activities.undone');
     Route::post('/activities/{activity}/cancel', [ActivityController::class, 'cancel'])
         ->middleware('page.permission:activities,edit')
         ->name('activities.cancel');
@@ -243,6 +300,76 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
         ->middleware('page.permission:investigation,edit')
         ->name('investigation.feedback.status');
 
+    // Direct messaging with business partners (flat thread per client company)
+    Route::get('/messages', [MessageController::class, 'index'])
+        ->middleware('page.permission:messaging,view')
+        ->name('messages');
+    Route::get('/messages/incoming-calls', [MessageController::class, 'incomingCalls'])
+        ->middleware('page.permission:messaging,view')
+        ->name('messages.incoming-calls');
+    Route::get('/messages/{client}/feed', [MessageController::class, 'feed'])
+        ->middleware('page.permission:messaging,view')
+        ->name('messages.feed');
+    Route::post('/messages/{client}', [MessageController::class, 'store'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('messages.store');
+    Route::post('/messages/{client}/{message}/unsend-for-me', [MessageController::class, 'unsendForMe'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('messages.unsend-for-me');
+    Route::post('/messages/{client}/{message}/unsend-for-everyone', [MessageController::class, 'unsendForEveryone'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('messages.unsend-for-everyone');
+    Route::post('/messages/{client}/{message}/react', [MessageController::class, 'toggleReaction'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('messages.react');
+    Route::post('/messages/{client}/calls/start', [MessageController::class, 'startCall'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('messages.calls.start');
+    Route::post('/messages/{client}/calls/{message}/end', [MessageController::class, 'endCall'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('messages.calls.end');
+    Route::post('/messages/{client}/calls/{message}/answer', [MessageController::class, 'answerCall'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('messages.calls.answer');
+    Route::post('/messages/{client}/calls/{message}/signal', [MessageController::class, 'signalCall'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('messages.calls.signal');
+    Route::get('/messages/{client}/calls/{message}/signals', [MessageController::class, 'callSignals'])
+        ->middleware('page.permission:messaging,view')
+        ->name('messages.calls.signals');
+
+    // Internal CRM user-to-user calls (voice / video).
+    Route::get('/calls/contacts', [CallController::class, 'contacts'])
+        ->middleware('page.permission:messaging,view')
+        ->name('calls.contacts');
+    Route::get('/calls/incoming', [CallController::class, 'incoming'])
+        ->middleware('page.permission:messaging,view')
+        ->name('calls.incoming');
+    Route::get('/calls/history', [CallController::class, 'history'])
+        ->middleware('page.permission:messaging,view')
+        ->name('calls.history');
+    Route::post('/calls', [CallController::class, 'store'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('calls.store');
+    Route::get('/calls/{call}', [CallController::class, 'show'])
+        ->middleware('page.permission:messaging,view')
+        ->name('calls.show');
+    Route::post('/calls/{call}/answer', [CallController::class, 'answer'])
+        ->middleware('page.permission:messaging,view')
+        ->name('calls.answer');
+    Route::post('/calls/{call}/decline', [CallController::class, 'decline'])
+        ->middleware('page.permission:messaging,view')
+        ->name('calls.decline');
+    Route::post('/calls/{call}/end', [CallController::class, 'end'])
+        ->middleware('page.permission:messaging,view')
+        ->name('calls.end');
+    Route::post('/calls/{call}/signal', [CallController::class, 'signal'])
+        ->middleware('page.permission:messaging,view')
+        ->name('calls.signal');
+    Route::get('/calls/{call}/signals', [CallController::class, 'signals'])
+        ->middleware('page.permission:messaging,view')
+        ->name('calls.signals');
+
     // Partner logos (company logos uploaded at registration / lead creation)
     Route::post('/logo-partner/upload', [CrmLogoPartnerController::class, 'upload'])
         ->middleware('page.permission:leads,edit')
@@ -251,4 +378,19 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
         ->middleware('page.permission:leads,edit')
         ->name('logo-partner.destroy');
 
+});
+
+/*
+|--------------------------------------------------------------------------
+| Public meeting-request responses (reached from the client email)
+|--------------------------------------------------------------------------
+| No auth: the client clicks a link in the email to confirm, decline or ask
+| for a reschedule. Responses land in the CRM feedback panel.
+*/
+Route::prefix('meeting-request')->name('meeting-request.')->middleware('throttle:40,1')->group(function () {
+    Route::get('{token}', [MeetingRequestController::class, 'show'])->name('show');
+    Route::get('{token}/confirm', [MeetingRequestController::class, 'confirm'])->name('confirm');
+    Route::get('{token}/decline', [MeetingRequestController::class, 'decline'])->name('decline');
+    Route::get('{token}/reschedule', [MeetingRequestController::class, 'rescheduleForm'])->name('reschedule.form');
+    Route::post('{token}/reschedule', [MeetingRequestController::class, 'reschedule'])->name('reschedule');
 });

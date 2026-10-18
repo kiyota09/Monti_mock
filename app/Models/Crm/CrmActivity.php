@@ -5,6 +5,7 @@ namespace App\Models\Crm;
 use App\Models\Core\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CrmActivity extends Model
 {
@@ -13,7 +14,7 @@ class CrmActivity extends Model
 
     protected $fillable = [
         'client_id', 'opportunity_id', 'lead_id', 'type', 'subject', 'summary',
-        'body', 'notes', 'due_at', 'due_date', 'done_at', 'status', 'owner_id', 'assigned_to',
+        'body', 'notes', 'due_at', 'due_date', 'meeting_link', 'done_at', 'status', 'owner_id', 'assigned_to',
     ];
 
     protected $casts = [
@@ -45,6 +46,12 @@ class CrmActivity extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    /** Meeting/call request emails sent for this activity (newest first). */
+    public function meetingRequests(): HasMany
+    {
+        return $this->hasMany(CrmMeetingRequest::class, 'activity_id')->latest('id');
     }
 
     /** Canonical due moment (new due_date wins, legacy due_at fallback). */

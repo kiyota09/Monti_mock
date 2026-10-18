@@ -1,10 +1,10 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import draggable from 'vuedraggable';
-import { Settings2, Plus, Trophy, X } from 'lucide-vue-next';
+import { Settings2, Trophy, X, Ban } from 'lucide-vue-next';
 import OpportunityCard from './OpportunityCard.vue';
 import ActivityBar from './ActivityBar.vue';
-import { peso, stageTotal, activityStateOf } from '@/composables/crm/usePipeline';
+import { activityStateOf } from '@/composables/crm/usePipeline';
 
 const props = defineProps({
     stage: { type: Object, required: true },
@@ -12,32 +12,55 @@ const props = defineProps({
     activityFilter: { type: String, default: null },
     canEdit: { type: Boolean, default: false },
     menuOpen: { type: Boolean, default: false },
+    // (opportunity, toStage) => boolean — parent decides if a drop is allowed.
+    canDrop: { type: Function, default: null },
+    // Bumped by the parent to force every column to re-read props after a
+    // rejected drop (the server was never called, so props are unchanged).
+    resetToken: { type: [Number, String], default: 0 },
 });
 const emit = defineEmits([
-    'quick-create', 'schedule', 'menu', 'fold', 'edit', 'automations', 'ask-delete',
-    'activity-filter', 'card-moved',
+    'schedule', 'open-activity', 'upload-docs', 'menu', 'fold', 'edit', 'ask-delete',
+    'activity-filter', 'card-moved', 'card-blocked',
 ]);
 
-const total = computed(() => stageTotal(props.opportunities));
 const visible = computed(() =>
     props.activityFilter
         ? props.opportunities.filter((o) => activityStateOf(o) === props.activityFilter)
         : props.opportunities,
 );
-const isDraggingOver = ref(false);
-
 const filterNames = { planned: 'Planned', today: 'Due today', overdue: 'Overdue', none: 'No activity' };
 
-// vuedraggable shared group: server persistence happens in onChange
-// (board moves the card + posts stage_id); totals recalc from fresh props.
-const dragList = computed({
-    get: () => [...visible.value],
-    set: () => {},
-});
+// Local mutable mirror of the (possibly activity-filtered) visible list.
+// Sortable writes the new order here on drop, so Vue's DOM never fights
+// the drag mid-gesture; the server refresh after each move re-syncs it.
+const dragList = ref([]);
+watch(
+    visible,
+    (list) => {
+        dragList.value = [...(list || [])];
+    },
+    { immediate: true },
+);
+// After a rejected drop (no server round-trip) the parent bumps the token so
+// the card snaps back to its original column/order.
+watch(
+    () => props.resetToken,
+    () => {
+        dragList.value = [...(visible.value || [])];
+    },
+);
 
 const onCardChange = (e) => {
-    isDraggingOver.value = false;
-    if (e.added) emit('card-moved', { opportunity: e.added.element, toStage: props.stage });
+    // Guard: ignore reorder/move events that carry no dropped item
+    // (prevents null-element crashes from stale Sortable nodes).
+    const added = e?.added;
+    if (!added?.element) return;
+    // Forward-only rule lives in the parent; reject before hitting the server.
+    if (props.canDrop && props.canDrop(added.element, props.stage) === false) {
+        emit('card-blocked', { opportunity: added.element, toStage: props.stage });
+        return;
+    }
+    emit('card-moved', { opportunity: added.element, toStage: props.stage });
 };
 </script>
 
@@ -58,34 +81,21 @@ const onCardChange = (e) => {
         >
             {{ stage.name }}
         </span>
-        <span class="text-[10px] font-black text-indigo-500">{{ peso(total) }}</span>
     </button>
 
     <!-- Open column -->
     <div
         v-else
-        :class="[
-            'group w-72 shrink-0 rounded-3xl border p-3 backdrop-blur transition-colors',
-            isDraggingOver
-                ? 'border-indigo-400 bg-indigo-50/70 dark:border-indigo-500 dark:bg-indigo-950/30'
-                : 'border-gray-100 bg-white/70 dark:border-zinc-800 dark:bg-zinc-900/70',
-        ]"
+        class="group flex max-h-[calc(100vh-13rem)] w-72 shrink-0 flex-col rounded-3xl border border-gray-100 bg-white/70 p-3 backdrop-blur transition-colors dark:border-zinc-800 dark:bg-zinc-900/70"
     >
-        <!-- Header: name + quick-create + gear -->
-        <div class="px-1 pb-2">
+        <!-- Header: name + gear -->
+        <div class="shrink-0 px-1 pb-2">
             <div class="flex items-center gap-1">
                 <p class="min-w-0 flex-1 truncate text-[11px] font-black uppercase tracking-widest" :title="stage.name">
                     {{ stage.name }}
                     <Trophy v-if="stage.is_won" class="ml-1 inline h-3 w-3 text-amber-400" />
+                    <Ban v-if="stage.is_lost" class="ml-1 inline h-3 w-3 text-rose-400" />
                 </p>
-                <button
-                    v-if="canEdit"
-                    @click="emit('quick-create', stage)"
-                    class="rounded-lg p-1 text-gray-400 transition hover:bg-indigo-50 hover:text-indigo-600"
-                    :title="`New deal in ${stage.name}`"
-                >
-                    <Plus class="h-4 w-4" />
-                </button>
                 <div v-if="canEdit" class="relative">
                     <button
                         @click.stop="emit('menu', stage.id)"
@@ -107,7 +117,6 @@ const onCardChange = (e) => {
                                 {{ stage.is_folded ? 'Unfold' : 'Fold' }}
                             </button>
                             <button @click="emit('edit', stage)" class="block w-full px-4 py-2 text-left text-xs font-bold hover:bg-slate-50 dark:hover:bg-zinc-800">Edit…</button>
-                            <button @click="emit('automations', stage)" class="block w-full px-4 py-2 text-left text-xs font-bold hover:bg-slate-50 dark:hover:bg-zinc-800">Automations…</button>
                             <div class="my-1 border-t border-gray-100 dark:border-zinc-800" />
                             <button @click="emit('ask-delete', stage)" class="block w-full px-4 py-2 text-left text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20">Delete…</button>
                         </div>
@@ -115,24 +124,30 @@ const onCardChange = (e) => {
                 </div>
             </div>
             <p class="mt-0.5 text-[10px] font-bold text-gray-400">
-                {{ opportunities.length }} deal{{ opportunities.length === 1 ? '' : 's' }} · {{ peso(total) }}
+                {{ opportunities.length }} deal{{ opportunities.length === 1 ? '' : 's' }}
                 <span class="text-indigo-500">· {{ stage.default_probability }}%</span>
             </p>
-            <ActivityBar
-                :opportunities="opportunities"
-                :active="activityFilter"
-                @select="(k) => emit('activity-filter', { stageId: stage.id, key: k })"
-                class="mt-2"
-            />
-            <!-- active segment filter chip -->
-            <button
-                v-if="activityFilter"
-                @click="emit('activity-filter', { stageId: stage.id, key: null })"
-                class="mt-1.5 inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-black text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300"
-                title="Clear activity filter"
-            >
-                {{ filterNames[activityFilter] }} <X class="h-3 w-3" />
-            </button>
+            <!-- Won/Lost are terminal: no more activities, so no activity bar. -->
+            <template v-if="!stage.is_won && !stage.is_lost">
+                <ActivityBar
+                    :opportunities="opportunities"
+                    :active="activityFilter"
+                    @select="(k) => emit('activity-filter', { stageId: stage.id, key: k })"
+                    class="mt-2"
+                />
+                <!-- active segment filter chip -->
+                <button
+                    v-if="activityFilter"
+                    @click="emit('activity-filter', { stageId: stage.id, key: null })"
+                    class="mt-1.5 inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-black text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300"
+                    title="Clear activity filter"
+                >
+                    {{ filterNames[activityFilter] }} <X class="h-3 w-3" />
+                </button>
+            </template>
+            <p v-else class="mt-2 rounded-lg bg-slate-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400 dark:bg-zinc-800 dark:text-zinc-500">
+                {{ stage.is_won ? 'Won — create client account' : 'Lost — archive to close' }}
+            </p>
         </div>
 
         <draggable
@@ -144,18 +159,21 @@ const onCardChange = (e) => {
             chosen-class="pipeline-chosen"
             drag-class="rotate-2"
             animation="180"
-            class="min-h-[80px] space-y-2.5 rounded-2xl"
+            class="min-h-[80px] flex-1 touch-pan-y space-y-2.5 overflow-y-auto rounded-2xl pb-1 pr-1"
             @change="onCardChange"
-            @dragenter="isDraggingOver = true"
-            @dragleave="isDraggingOver = false"
         >
-            <template #item="{ element }">
-                <OpportunityCard
-                    :opportunity="element"
-                    :can-edit="canEdit"
-                    @schedule="(o) => emit('schedule', o)"
-                />
-            </template>
+                            <template #item="{ element }">
+                                <OpportunityCard
+                                    :opportunity="element"
+                                    :can-edit="canEdit"
+                                    :can-upload="!!stage.allows_uploads"
+                                    :is-won="!!stage.is_won"
+                                    :is-lost="!!stage.is_lost"
+                                    @schedule="(o) => emit('schedule', o)"
+                                    @open-activity="(payload) => emit('open-activity', payload)"
+                                    @upload-docs="(o) => emit('upload-docs', o)"
+                                />
+                            </template>
         </draggable>
 
         <div v-if="!visible.length" class="rounded-2xl border-2 border-dashed border-gray-100 px-3 py-6 text-center dark:border-zinc-800">
@@ -163,14 +181,6 @@ const onCardChange = (e) => {
                 {{ activityFilter ? 'No match for filter' : 'Empty — drag a card here' }}
             </p>
         </div>
-
-        <button
-            v-if="canEdit"
-            @click="emit('quick-create', stage)"
-            class="mt-2 flex w-full items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-black uppercase tracking-wide text-gray-300 transition hover:bg-indigo-50 hover:text-indigo-500 dark:text-zinc-600 dark:hover:bg-indigo-950/40"
-        >
-            <Plus class="h-3.5 w-3.5" /> Add deal
-        </button>
     </div>
 </template>
 

@@ -91,6 +91,22 @@ export function activityCounts(opps) {
 
 export const stageTotal = (opps) => Math.round((opps || []).reduce((n, o) => n + Number(o.value || 0), 0));
 
+/**
+ * Column order is driven by the default probability (lowest first), so a 10%
+ * "New" column sits ahead of a 20% one. Won/Lost are pinned to the far right
+ * regardless of probability. Mirrors the ordering the backend returns.
+ */
+export function orderStages(stages) {
+    const rank = (s) => (s.is_won ? 1 : s.is_lost ? 2 : 0);
+    return [...(stages || [])].sort(
+        (a, b) =>
+            rank(a) - rank(b) ||
+            (Number(a.default_probability) || 0) - (Number(b.default_probability) || 0) ||
+            (Number(a.sequence) || 0) - (Number(b.sequence) || 0) ||
+            String(a.name || '').localeCompare(String(b.name || '')),
+    );
+}
+
 /** Board-level filtering: My Pipeline + search (title or contact name). */
 export function filterOpps(opps, { mine, userId, search }) {
     let list = opps || [];

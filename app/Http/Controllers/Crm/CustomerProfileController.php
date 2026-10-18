@@ -84,14 +84,19 @@ class CustomerProfileController extends Controller
         }
 
         $client->load([
-            'contacts', 'creditAccount',
-            'opportunities.owner', 'opportunities.lead',
-            'activities.owner', 'cases.owner',
-            'purchaseOrders' => fn ($q) => $q->latest()->take(10),
+            'contacts', 'creditAccount', 'logo',
+            'opportunities' => fn ($q) => $q->with(['owner', 'lead', 'documents', 'histories.changer']),
+            'activities' => fn ($q) => $q->with(['owner', 'assignee']),
+            'cases.owner',
+            'documents' => fn ($q) => $q->with(['uploader:id,name', 'opportunity:id,title']),
+            'feedback' => fn ($q) => $q->with(['assignee', 'attachments']),
+            'purchaseOrders' => fn ($q) => $q->with('items')->latest('id'),
+            'quotations',
+            'meetingRequests' => fn ($q) => $q->with('activity'),
         ]);
 
         $meetings = CrmMeeting::where('client_id', $client->id)->latest()->get();
-        $feedback = CrmFeedback::where('client_id', $client->id)->with('assignee')->latest()->get();
+        $feedback = CrmFeedback::where('client_id', $client->id)->with(['assignee', 'attachments'])->latest()->get();
 
         $openValue = $client->opportunities
             ->reject(fn ($o) => in_array($o->stage, ['won', 'lost'], true))

@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Auth\Concerns\LogsOutEveryGuard;
 use App\Models\Crm\Client;
+use App\Models\Crm\CrmContact;
 use App\Models\Crm\CrmLogoPartner;
+use App\Support\ClientAccess;
+use App\Support\ClientPortal;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -94,9 +97,42 @@ class ClientAuthController extends Controller
             RateLimiter::clear($this->throttleKey($request));
 
             Auth::guard('client')->login($client, $request->boolean('remember'));
+            $request->session()->forget('representative_id');
             $request->session()->regenerate();
 
-            return redirect()->intended(route('client.dashboard'));
+            // A restricted owner (matched to a non-primary contact) lands on the
+            // first page it is actually allowed to open, not a blanket 403.
+            $allowed = ClientAccess::accessPages($client, null);
+            $home = $allowed === null ? null : ClientPortal::firstRoute($allowed);
+
+            return redirect()->intended(route($home ?? 'client.dashboard'));
+        }
+
+        // Not the account owner? Try to sign in as an approved representative.
+        // Representatives authenticate against the owner account so all the
+        // data-scoped portal controllers keep working unchanged; the session
+        // flag + access middleware restrict what they can reach.
+        $representative = CrmContact::where('email', $credentials['email'])
+            ->where('has_account', true)
+            ->where('status', 'active')
+            ->whereNotNull('password')
+            ->whereNotNull('client_id')
+            ->first();
+
+        if ($representative && Hash::check($credentials['password'], $representative->password)) {
+            $owner = Client::find($representative->client_id);
+
+            if ($owner && in_array($owner->status, ['approved', 'active'], true)) {
+                RateLimiter::clear($this->throttleKey($request));
+
+                Auth::guard('client')->login($owner, $request->boolean('remember'));
+                $request->session()->put('representative_id', $representative->id);
+                $request->session()->regenerate();
+
+                $home = ClientPortal::firstRoute($representative->access_pages ?: []);
+
+                return redirect()->intended($home ? route($home) : route('client.dashboard'));
+            }
         }
 
         RateLimiter::hit($this->throttleKey($request));

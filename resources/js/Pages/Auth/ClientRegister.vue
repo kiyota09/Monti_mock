@@ -38,6 +38,7 @@ const showConfirmPassword = ref(false);
 
 const inputWarnings = ref({
     company_name: '',
+    business_type: '',
     contact_person: '',
     company_address: '',
     email: '',
@@ -105,6 +106,11 @@ watch(() => form.contact_person, (val) => {
     if (val !== filtered) form.contact_person = filtered;
 });
 
+watch(() => form.business_type, (val) => {
+    const filtered = val.replace(/[^a-zA-Z\s]/g, '');
+    if (val !== filtered) form.business_type = filtered;
+});
+
 watch(() => form.company_address, (val) => {
     const filtered = val.replace(/[^a-zA-Z0-9\s.]/g, '');
     if (val !== filtered) form.company_address = filtered;
@@ -123,11 +129,17 @@ watch(() => form.tin_number, (val) => {
 });
 
 watch(() => form.phone_raw, (val) => {
-    const filtered = val.replace(/\D/g, '').substring(0, 12);
+    const filtered = val.replace(/\D/g, '').substring(0, 10);
     if (val !== filtered) form.phone_raw = filtered;
 });
 
 const submit = () => {
+    if (form.phone_raw.length !== 10 || !/^\d{10}$/.test(form.phone_raw)) {
+        triggerWarning('phone_raw', 'Phone number must be exactly 10 digits (e.g. 9171234567).');
+        toast.error('Phone number must be exactly 10 digits (e.g. 9171234567).');
+        return;
+    }
+
     form.phone = form.phone_country + form.phone_raw;
 
     form.post(route('client.register.store'), {
@@ -174,16 +186,22 @@ const submit = () => {
                                     <TextInput id="business_type" type="text"
                                         class="auth-input mt-1 block w-full"
                                         v-model="form.business_type" required
+                                        @keypress="blockNumbersAndSpecial($event, 'business_type')"
                                         placeholder="e.g. Garment Manufacturer, Retailer, Exporter" />
                                     <InputError class="mt-1 text-red-300" :message="form.errors.business_type" />
+                                    <p v-if="inputWarnings.business_type" class="mt-1 text-xs text-red-300">{{
+                                        inputWarnings.business_type }}</p>
                                 </div>
 
                                 <div>
                                     <InputLabel for="tin_number" value="TIN Number" class="text-white/90" />
                                     <TextInput id="tin_number" type="text"
                                         class="auth-input mt-1 block w-full"
-                                        v-model="form.tin_number" maxlength="14" placeholder="000-000-000-000" />
+                                        v-model="form.tin_number" maxlength="15" placeholder="000-000-000-000"
+                                        @keypress="blockNonNumeric($event, 'tin_number')" />
                                     <InputError class="mt-1 text-red-300" :message="form.errors.tin_number" />
+                                    <p v-if="inputWarnings.tin_number" class="mt-1 text-xs text-red-300">{{
+                                        inputWarnings.tin_number }}</p>
                                 </div>
 
                                 <div>
@@ -218,11 +236,13 @@ const submit = () => {
                                             class="auth-input flex-1 block"
                                             style="border-top-left-radius: 0; border-bottom-left-radius: 0;"
                                             v-model="form.phone_raw" @keypress="blockNonNumeric($event, 'phone_raw')"
-                                            placeholder="9171234567" maxlength="10" />
+                                            placeholder="9171234567" maxlength="10" minlength="10" />
                                     </div>
                                     <InputError class="mt-1 text-red-300" :message="form.errors.phone" />
                                     <p v-if="inputWarnings.phone_raw" class="mt-1 text-xs text-red-300">{{
                                         inputWarnings.phone_raw }}</p>
+                                    <p :class="form.phone_raw.length === 10 ? 'text-emerald-300' : 'text-slate-300'"
+                                        class="mt-1 text-xs font-bold transition-colors">{{ form.phone_raw.length }} / 10 digits</p>
                                 </div>
 
                                 <div class="md:col-span-2">

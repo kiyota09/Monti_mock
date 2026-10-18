@@ -238,7 +238,7 @@ const identityPlaceholder = computed(() => "user@monticorp.com or EMP-XXXX-X");
                             <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-white/10 mt-6">
                                 <div class="text-sm font-medium text-slate-300">
                                     Want to be part of MontiTextile?
-                                    <Link :href="route('apply')"
+                                    <Link :href="route('applicant.register')"
                                         class="text-white hover:text-blue-300 font-semibold ml-1.5 transition-colors">
                                         Apply Now
                                     </Link>

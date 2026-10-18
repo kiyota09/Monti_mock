@@ -2,7 +2,7 @@
 import {
     LayoutDashboard, FileUser, Eye, Award, ClipboardCheck, Users,
     AlertCircle, UserPen, KanbanSquare, FileText, Activity,
-    Briefcase, Megaphone, ShieldCheck, MessageSquare,
+    Briefcase, Megaphone, ShieldCheck, MessageSquare, MessagesSquare,
 } from 'lucide-vue-next'
 
 export const crmModule = {
@@ -19,9 +19,10 @@ export const crmModule = {
         const all = [
             { label: 'Dashboard', href: route('crm.dashboard'), icon: LayoutDashboard, permKey: 'dashboard' },
             { label: 'Leads', href: route('crm.lead'), icon: FileUser, permKey: 'leads' },
-            { label: 'Accounts', href: route('crm.customerprofile.index'), icon: Users, permKey: 'customer_profiles' },
             { label: 'Opportunities', href: route('crm.opportunities'), icon: KanbanSquare, permKey: 'opportunities' },
+            { label: 'Accounts', href: route('crm.customerprofile.index'), icon: Users, permKey: 'customer_profiles' },
             { label: 'Inquiries', href: route('crm.inquiries'), icon: MessageSquare, permKey: 'inquiry' },
+            { label: 'Messaging', href: route('crm.messages'), icon: MessagesSquare, permKey: 'messaging' },
             { label: 'Approvals', href: route('crm.approval.index'), icon: ClipboardCheck, permKey: 'approvals' },
             { label: 'Quotations', href: route('crm.quotations'), icon: FileText, permKey: 'quotations' },
             { label: 'Activities', href: route('crm.activities'), icon: Activity, permKey: 'activities' },

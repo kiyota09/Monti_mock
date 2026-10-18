@@ -3,14 +3,19 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Mail\ClientWelcomeMail;
 use App\Models\Crm\Client;
 use App\Models\Crm\CrmContact;
 use App\Models\Crm\CrmLead;
 use App\Models\Crm\CrmOpportunity;
 use App\Models\Crm\CrmOpportunityHistory;
 use App\Models\Crm\CrmStage;
+use App\Models\Eco\CreditAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class OpportunityController extends Controller
 {
@@ -114,8 +119,7 @@ class OpportunityController extends Controller
     }
 
     /**
-     * Full edit from the opportunity form. Revenue edits instantly move the
-     * stage total because the board derives totals from live values.
+     * Full edit from the opportunity form.
      */
     public function update(Request $request, CrmOpportunity $opportunity)
     {
@@ -140,6 +144,16 @@ class OpportunityController extends Controller
         if (isset($data['stage_id']) && (int) $data['stage_id'] !== (int) $opportunity->stage_id) {
             $from = $opportunity->stageRef?->name ?? $opportunity->stage;
             $to = CrmStage::find($data['stage_id']);
+
+            // Same forward-only rule as drag-and-drop moves.
+            $fromStage = $opportunity->stageRef;
+            if ($fromStage && ! $to->is_lost
+                && (int) $to->default_probability < (int) $fromStage->default_probability) {
+                return back()->withErrors([
+                    'error' => "Deals only move forward — “{$to->name}” is behind “{$fromStage->name}”. Move it to a Lost stage to close it.",
+                ]);
+            }
+
             $data['probability'] = $data['probability'] ?? $to->default_probability;
             $data['stage'] = $this->legacyStageKey($to);
             $opportunity->update($data);
@@ -163,6 +177,109 @@ class OpportunityController extends Controller
         $opportunity->update(['priority' => $data['priority']]);
 
         return back()->with('message', 'Priority updated.');
+    }
+
+    /**
+     * Won deal → business client account. Creates the client portal login,
+     * links the opportunity (and its lead) to it, and seeds a credit account.
+     */
+    public function convertToClient(Request $request, CrmOpportunity $opportunity)
+    {
+        $opportunity->loadMissing(['stageRef', 'contact', 'lead', 'client']);
+
+        if (! $opportunity->stageRef?->is_won) {
+            return back()->withErrors(['error' => 'Only deals in the Won stage can be converted to a client account.']);
+        }
+        if ($opportunity->client_id) {
+            return back()->withErrors(['error' => 'This deal already has a client account.']);
+        }
+
+        $validated = $request->validate([
+            'company_name' => 'required|string|max:255',
+            'business_type' => 'required|string',
+            'tin_number' => 'required|string|unique:clients,tin_number',
+            'contact_person' => 'required|string|max:255',
+            'email' => 'required|email|unique:clients,email',
+            'phone' => 'required|string',
+            'company_address' => 'required|string',
+            'password' => 'required|string|min:8',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $client = Client::create([
+                'company_name' => $validated['company_name'],
+                'business_type' => $validated['business_type'],
+                'tin_number' => $validated['tin_number'],
+                'contact_person' => $validated['contact_person'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'],
+                'company_address' => $validated['company_address'],
+                'password' => bcrypt($validated['password']),
+                'status' => 'active',
+            ]);
+
+            CreditAccount::create([
+                'client_id' => $client->id,
+                'outstanding_balance' => 0.00,
+                'is_good_payer' => 1,
+            ]);
+
+            $contact = $opportunity->contact;
+            $client->contacts()->create([
+                'name' => $contact?->name ?? $client->contact_person ?: $client->email,
+                'title' => $contact?->title,
+                'email' => $contact?->email ?? $client->email,
+                'phone' => $contact?->phone ?? $client->phone,
+                'is_decision_maker' => (bool) ($contact?->is_decision_maker ?? true),
+                'is_primary' => true,
+                'notes' => 'Carried over from won opportunity.',
+            ]);
+
+            $opportunity->update(['client_id' => $client->id]);
+
+            // Attach any files uploaded from this card to the new client too.
+            $opportunity->documents()->whereNull('client_id')->update(['client_id' => $client->id]);
+
+            if ($opportunity->lead_id) {
+                CrmLead::where('id', $opportunity->lead_id)->update(['status' => 'Converted']);
+            }
+
+            CrmOpportunityHistory::create([
+                'opportunity_id' => $opportunity->id,
+                'from_stage' => $opportunity->stageRef?->name,
+                'to_stage' => $opportunity->stageRef?->name,
+                'changed_by' => Auth::id(),
+                'notes' => "Converted to client account: {$client->company_name}.",
+            ]);
+
+            DB::commit();
+
+            // Welcome email with portal credentials — best-effort, never blocks
+            // the account from being created.
+            $emailSent = true;
+            try {
+                Mail::to($client->email)->send(new ClientWelcomeMail(
+                    companyName: $client->company_name,
+                    contactPerson: $client->contact_person,
+                    email: $client->email,
+                    password: $validated['password'],
+                    portalUrl: route('client.login'),
+                ));
+            } catch (\Throwable $e) {
+                $emailSent = false;
+                Log::warning('Client welcome email failed for client #' . $client->id . ': ' . $e->getMessage());
+            }
+
+            return back()->with('message', $emailSent
+                ? "Client account created for {$client->company_name}. Sign-in details emailed to {$client->email}."
+                : "Client account created for {$client->company_name}, but the welcome email could not be sent.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return back()->withErrors(['error' => 'Account creation failed: ' . $e->getMessage()]);
+        }
     }
 
     /**
@@ -193,6 +310,16 @@ class OpportunityController extends Controller
             return back()->withErrors(['error' => 'Choose a target stage.']);
         }
 
+        // Forward-only rule: a deal may only advance to a stage with an equal or
+        // higher default probability, or be dropped into a Lost stage.
+        $fromStage = $opportunity->stageRef ?? CrmStage::find($opportunity->stage_id);
+        if ($fromStage && ! $target->is_lost
+            && (int) $target->default_probability < (int) $fromStage->default_probability) {
+            return back()->withErrors([
+                'error' => "Deals only move forward — “{$target->name}” is behind “{$fromStage->name}”. Move it to a Lost stage to close it.",
+            ]);
+        }
+
         $from = $opportunity->stageRef?->name ?? $opportunity->stage;
         $opportunity->update([
             'stage_id' => $target->id,
@@ -213,6 +340,34 @@ class OpportunityController extends Controller
         return back()->with('message', "Deal moved to {$target->name}.");
     }
 
+    /**
+     * Lost deal → Archives. Marks the deal as totally failed and hides it
+     * from the board (it lives in the Archives tab from now on).
+     */
+    public function archive(CrmOpportunity $opportunity)
+    {
+        $opportunity->loadMissing('stageRef');
+
+        if (! $opportunity->stageRef?->is_lost) {
+            return back()->withErrors(['error' => 'Only deals in a Lost stage can be archived.']);
+        }
+        if ($opportunity->archived_at) {
+            return back()->with('message', 'This deal is already archived.');
+        }
+
+        $opportunity->update(['archived_at' => now()]);
+
+        CrmOpportunityHistory::create([
+            'opportunity_id' => $opportunity->id,
+            'from_stage' => $opportunity->stageRef?->name,
+            'to_stage' => 'Archived',
+            'changed_by' => Auth::id(),
+            'notes' => 'Deal archived as totally failed.',
+        ]);
+
+        return back()->with('message', "“{$opportunity->title}” moved to Archives.");
+    }
+
     // ── Legacy helpers (BC for the old fixed stage list) ──────────────
 
     protected function legacyStageKey(CrmStage $stage): string
@@ -220,13 +375,16 @@ class OpportunityController extends Controller
         if ($stage->is_won) {
             return 'won';
         }
+        if ($stage->is_lost) {
+            return 'lost';
+        }
         $name = strtolower($stage->name);
-        foreach (['qualification', 'sampling', 'quotation', 'negotiation', 'lost'] as $key) {
+        foreach (['qualification', 'sampling', 'quotation', 'negotiation'] as $key) {
             if (str_contains($name, $key)) {
                 return $key;
             }
         }
-        // Folded "Lost"-style columns map to lost so forecasts stay correct.
+        // Lost-style columns map to lost so forecasts stay correct.
         if (str_contains($name, 'lost') || str_contains($name, 'cancel')) {
             return 'lost';
         }

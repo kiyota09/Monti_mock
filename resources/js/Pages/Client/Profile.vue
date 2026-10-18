@@ -342,7 +342,11 @@ const submit = () => {
         formData.append('logo', form.logo);
     }
 
-    router.patch(route('client.profile.update'), formData, {
+    // PHP only parses multipart bodies on POST, so spoof the PATCH here
+    // (uploading via a real PATCH silently drops every field).
+    formData.append('_method', 'patch');
+
+    router.post(route('client.profile.update'), formData, {
         preserveScroll: true,
         onSuccess: () => {
             cancelLogoSelection();

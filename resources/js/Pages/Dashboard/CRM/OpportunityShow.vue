@@ -8,7 +8,9 @@ import {
 } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
 import ActivityModal from '@/Components/crm/pipeline/ActivityModal.vue';
-import { peso, activityStateOf } from '@/composables/crm/usePipeline';
+import { activityStateOf, orderStages } from '@/composables/crm/usePipeline';
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 
 const { canEdit } = usePageAccess();
 const canEditOpp = computed(() => canEdit('CRM', 'opportunities'));
@@ -21,8 +23,11 @@ const props = defineProps({
     currentUserId: { type: Number, default: null },
 });
 const o = computed(() => props.opportunity);
-const orderedStages = computed(() => [...(props.stages || [])].sort((a, b) => a.sequence - b.sequence));
+const orderedStages = computed(() => orderStages(props.stages));
 const state = computed(() => activityStateOf(o.value));
+const currentStage = computed(() => (props.stages || []).find((s) => Number(s.id) === Number(o.value.stage_id)) || null);
+// Won/Lost are closed: no more activities to schedule.
+const isTerminal = computed(() => !!(currentStage.value?.is_won || currentStage.value?.is_lost));
 
 const fdate = (d) => (d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
 
@@ -31,7 +36,6 @@ const form = useForm({
     contact_id: o.value.contact_id ?? null,
     email: o.value.email ?? '',
     phone: o.value.phone ?? '',
-    value: Number(o.value.value ?? 0),
     probability: Number(o.value.probability ?? 0),
     priority: Number(o.value.priority ?? 0),
     owner_id: o.value.owner_id ?? null,
@@ -49,7 +53,19 @@ const save = () => {
 
 const moveTo = (stage) => {
     if (!canEditOpp.value || Number(stage.id) === Number(o.value.stage_id)) return;
+    if (!canMoveTo(stage)) {
+        toast.error(`Deals only move forward — “${stage.name}” is behind “${currentStage.value?.name}”. Move it to a Lost stage to close it.`);
+        return;
+    }
     router.post(route('crm.opportunities.move', o.value.id), { stage_id: stage.id }, { preserveScroll: true });
+};
+
+// Forward-only rule: same/higher default probability, or a Lost stage.
+const canMoveTo = (stage) => {
+    if (!currentStage.value) return true;
+    if (stage.is_lost) return true;
+    if (Number(stage.id) === Number(o.value.stage_id)) return true;
+    return Number(stage.default_probability ?? 0) >= Number(currentStage.value.default_probability ?? 0);
 };
 
 const activeTab = ref('notes');
@@ -85,7 +101,6 @@ const cancelAct = (a) => router.post(route('crm.activities.cancel', a.id), {}, {
                             <p class="text-sm text-blue-100/90">{{ o.contact?.name ?? o.client?.company_name ?? o.lead?.company_name ?? '—' }} · owner {{ o.owner?.name ?? '—' }}</p>
                         </div>
                         <div class="text-right">
-                            <p class="text-3xl font-black">{{ peso(o.value) }}</p>
                             <p class="text-xs font-bold text-blue-100">{{ o.probability }}% · {{ '★'.repeat(o.priority || 0) || 'no stars' }}</p>
                         </div>
                     </div>
@@ -96,10 +111,10 @@ const cancelAct = (a) => router.post(route('crm.activities.cancel', a.id), {}, {
                             v-for="(s, i) in orderedStages"
                             :key="s.id"
                             @click="moveTo(s)"
-                            :disabled="!canEditOpp"
-                            :title="`Move to ${s.name}`"
+                            :disabled="!canEditOpp || !canMoveTo(s)"
+                            :title="Number(s.id) === Number(o.stage_id) ? 'Current stage' : (canMoveTo(s) ? `Move to ${s.name}` : `${s.name} is behind the current stage`)"
                             :class="[
-                                'flex shrink-0 items-center gap-1 px-4 py-2.5 text-[11px] font-black uppercase tracking-wide transition',
+                                'flex shrink-0 items-center gap-1 px-4 py-2.5 text-[11px] font-black uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40',
                                 Number(s.id) === Number(o.stage_id)
                                     ? 'bg-white text-indigo-700 shadow'
                                     : 'bg-white/15 text-white hover:bg-white/25',
@@ -142,10 +157,6 @@ const cancelAct = (a) => router.post(route('crm.activities.cancel', a.id), {}, {
                         <div>
                             <label class="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-gray-400">Phone</label>
                             <input v-model="form.phone" :disabled="!canEditOpp" class="w-full rounded-xl bg-gray-50 px-4 py-2.5 text-sm outline-none dark:bg-zinc-800 dark:text-white" />
-                        </div>
-                        <div>
-                            <label class="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-gray-400">Expected revenue (₱) * — updates the stage total</label>
-                            <input v-model.number="form.value" type="number" min="0" step="0.01" required :disabled="!canEditOpp" class="w-full rounded-xl bg-gray-50 px-4 py-2.5 text-sm font-black text-indigo-600 outline-none dark:bg-zinc-800" />
                         </div>
                         <div>
                             <label class="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-gray-400">Probability — {{ form.probability }}% (stage default, editable)</label>
@@ -203,9 +214,12 @@ const cancelAct = (a) => router.post(route('crm.activities.cancel', a.id), {}, {
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                     <div class="mb-3 flex items-center justify-between">
                         <h3 class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Chatter · {{ o.activities?.length ?? 0 }} activities</h3>
-                        <button v-if="canEditOpp" @click="showActivity = true" class="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-[11px] font-black uppercase text-white hover:bg-indigo-700">
+                        <button v-if="canEditOpp && !isTerminal" @click="showActivity = true" class="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-[11px] font-black uppercase text-white hover:bg-indigo-700">
                             <Plus class="h-3.5 w-3.5" /> Schedule activity
                         </button>
+                        <span v-else-if="isTerminal" class="rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400 dark:bg-zinc-800 dark:text-zinc-500">
+                            {{ currentStage?.is_won ? 'Closed — create client account' : 'Closed — archive to finish' }}
+                        </span>
                     </div>
                     <div v-if="o.activities?.length" class="space-y-2">
                         <div v-for="a in o.activities" :key="a.id" class="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 dark:bg-zinc-800">

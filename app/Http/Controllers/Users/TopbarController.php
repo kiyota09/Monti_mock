@@ -162,6 +162,7 @@ class TopbarController extends Controller
             ['Approvals', 'crm.approval.index', 'CRM', 'approvals'],
             ['Customer Profiles', 'crm.customerprofile.index', 'CRM', 'customer_profiles'],
             ['Inquiries', 'crm.inquiries', 'CRM', 'inquiry'],
+            ['Messaging', 'crm.messages', 'CRM', 'messaging'],
             ['Investigations', 'crm.investigation.index', 'CRM', 'investigation'],
             ['SCM Dashboard', 'scm.dashboard', 'SCM', 'dashboard'],
             ['Sales Orders', 'scm.sales-orders', 'SCM', 'sales'],

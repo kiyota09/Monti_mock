@@ -24,13 +24,26 @@ class CrmOpportunity extends Model
         'client_id', 'lead_id', 'contact_id', 'stage_id', 'title', 'stage', 'value',
         'probability', 'priority', 'expected_close', 'owner_id', 'lost_reason',
         'internal_notes', 'source', 'medium', 'campaign', 'referred_by', 'email', 'phone',
+        'archived_at',
     ];
 
     protected $casts = [
         'value' => 'decimal:2',
         'expected_close' => 'date',
         'priority' => 'integer',
+        'archived_at' => 'datetime',
     ];
+
+    /** Archived deals are "totally failed" — hidden from the board. */
+    public function scopeNotArchived($query)
+    {
+        return $query->whereNull('archived_at');
+    }
+
+    public function scopeArchived($query)
+    {
+        return $query->whereNotNull('archived_at');
+    }
 
     public function stageRef(): BelongsTo
     {
@@ -65,6 +78,12 @@ class CrmOpportunity extends Model
     public function activities(): HasMany
     {
         return $this->hasMany(CrmActivity::class, 'opportunity_id')->latest();
+    }
+
+    /** Files/images uploaded from this deal's card (see stage allows_uploads). */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(CrmOpportunityDocument::class, 'opportunity_id')->latest('id');
     }
 
     /** Activity state for the pipeline card icon / stage bar. */

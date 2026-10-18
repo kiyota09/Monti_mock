@@ -4,6 +4,10 @@ import { X, Check } from 'lucide-vue-next';
 
 // Minimal calendar: 14-day strip + working-hour slots (8:00–17:00).
 // Click a slot → small confirm popup (Save & Close) → emits pick { at }.
+const props = defineProps({
+    // Hide the X when the calendar is embedded permanently (no toggle).
+    hideClose: { type: Boolean, default: false },
+});
 const emit = defineEmits(['pick', 'close']);
 
 const days = computed(() => {
@@ -35,6 +39,14 @@ const choose = (day, slot) => {
     pending.value = { at: at.toISOString(), label: `${at.toLocaleDateString()} ${slot}` };
 };
 
+// Confirm the pending slot: emit it and close the small popup. The chosen
+// slot stays highlighted so the selection remains visible.
+const confirmPick = () => {
+    if (!pending.value) return;
+    emit('pick', pending.value);
+    pending.value = null;
+};
+
 const fmtDay = (d) => d.toLocaleDateString('en-US', { weekday: 'short' });
 const fmtNum = (d) => d.getDate();
 </script>
@@ -43,7 +55,7 @@ const fmtNum = (d) => d.getDate();
     <div class="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 dark:border-indigo-900/40 dark:bg-indigo-950/20">
         <div class="mb-2 flex items-center justify-between">
             <p class="text-[11px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-300">Pick a slot — next 14 days</p>
-            <button @click="emit('close')" class="rounded-full p-0.5 text-gray-400 hover:bg-white hover:text-gray-600" aria-label="Hide calendar"><X class="h-4 w-4" /></button>
+            <button v-if="!hideClose" @click="emit('close')" class="rounded-full p-0.5 text-gray-400 hover:bg-white hover:text-gray-600" aria-label="Hide calendar"><X class="h-4 w-4" /></button>
         </div>
         <div class="flex gap-1.5 overflow-x-auto pb-2" role="listbox" aria-label="Day">
             <button
@@ -85,7 +97,7 @@ const fmtNum = (d) => d.getDate();
             <p class="text-[11px] text-gray-400">Default settings · linked to this opportunity</p>
             <div class="mt-2 flex gap-2">
                 <button @click="pending = null; selKey = null" class="flex-1 rounded-lg bg-gray-100 py-2 text-[11px] font-black uppercase text-gray-500 hover:bg-gray-200 dark:bg-zinc-800">Back</button>
-                <button @click="emit('pick', pending)" class="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-indigo-600 py-2 text-[11px] font-black uppercase text-white hover:bg-indigo-700">
+                <button @click="confirmPick" class="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-indigo-600 py-2 text-[11px] font-black uppercase text-white hover:bg-indigo-700">
                     <Check class="h-3.5 w-3.5" /> Save &amp; Close
                 </button>
             </div>

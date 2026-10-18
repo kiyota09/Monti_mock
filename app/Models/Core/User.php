@@ -369,6 +369,40 @@ class User extends Authenticatable
         return $this->hasMany(PagePermission::class);
     }
 
+    /**
+     * Whether this user can reach the CRM Messaging page (and therefore be
+     * called by another CRM user). Mirrors CheckPagePermission's shortcuts:
+     * executives have full CRM, module-native CRM staff with no explicit
+     * grants do too, and an explicit 'disabled' row always wins.
+     */
+    public function canAccessCrmMessaging(): bool
+    {
+        $rows = $this->pagePermissions()
+            ->whereIn('module', ['CRM', 'crm', 'Crm'])
+            ->get(['page', 'permission_level']);
+
+        $messaging = $rows->first(fn ($row) => strtolower((string) $row->page) === 'messaging');
+        if ($messaging !== null) {
+            return strtolower((string) ($messaging->permission_level ?? 'edit')) !== 'disabled';
+        }
+
+        $role = strtoupper((string) $this->role);
+        if (in_array($role, ['CEO', 'COO'], true) || ($this->position ?? '') === 'vice_president') {
+            return true;
+        }
+
+        // Native CRM staff have full access unless explicit grants exist.
+        if ($role === 'CRM') {
+            return $rows->isEmpty();
+        }
+
+        if ($this->position === 'secretary' && str_contains($role, 'CRM')) {
+            return true;
+        }
+
+        return false;
+    }
+
     // HRM_NEW dynamic org links (nullable for BC rollout)
     public function hrmRole()
     {

@@ -1,14 +1,14 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useForm, router, Link } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import {
-    Plus, X, Search, Inbox, KanbanSquare, ArrowRight, UserCheck,
-    Building2, Check, Ban,
+    Plus, X, Search, Inbox, ArrowRight,
+    Ban, Mail, FileSearch, Flag, StickyNote, Paperclip, Trash2,
 } from 'lucide-vue-next';
 
-// Slim intake inbox: qualify here, work deals in Opportunities.
+// Intake inbox: new leads live here, deals are worked in Opportunities.
 // Negotiation/approvals/close happen on the pipeline — never duplicated here.
 const props = defineProps({
     leads: { type: Array, default: () => [] },
@@ -18,7 +18,6 @@ const canEdit = computed(() => props.permissions?.leads === 'edit');
 
 const searchQuery = ref('');
 const inPipeline = (l) => (l.opportunities_count || 0) > 0 || (l.opportunities?.length || 0) > 0;
-const firstOpp = (l) => (l.opportunities?.length ? l.opportunities[0] : null);
 
 const filtered = computed(() => {
     const q = searchQuery.value.trim().toLowerCase();
@@ -33,88 +32,95 @@ const filtered = computed(() => {
     return list;
 });
 const freshLeads = computed(() => filtered.value.filter((l) => !inPipeline(l) && l.status !== 'Lost'));
-const pipedLeads = computed(() => filtered.value.filter((l) => inPipeline(l)));
 const lostLeads = computed(() => filtered.value.filter((l) => !inPipeline(l) && l.status === 'Lost'));
 
-const peso = (v) => '₱' + Number(v || 0).toLocaleString('en-PH', { maximumFractionDigits: 0 });
+// ── Tabs: New / Lost (pipeline deals live only in Opportunities) ──
+const activeTab = ref('new');
 
 // ── New lead ──
 const showCreate = ref(false);
 const form = useForm({
     company_name: '', contact_person: '', email: '', phone: '',
-    interest_fabric: '', estimated_value: null,
 });
+
+// Inline warnings for the New Lead modal (auto-clears after 3s)
+const createWarnings = ref({});
+let createWarningTimeouts = {};
+const warnCreate = (field, message) => {
+    createWarnings.value[field] = message;
+    if (createWarningTimeouts[field]) clearTimeout(createWarningTimeouts[field]);
+    createWarningTimeouts[field] = setTimeout(() => {
+        createWarnings.value[field] = '';
+    }, 3000);
+};
+
+// Letters + spaces only (contact person)
+const blockNumbersAndSpecialCreate = (e) => {
+    if (e.key.length === 1 && !/^[a-zA-Z\s]$/.test(e.key)) {
+        e.preventDefault();
+        warnCreate('contact_person', 'Numbers and special characters are not allowed.');
+    }
+};
+
+// Digits only, max 11 (phone, e.g. 09171234567)
+const blockNonNumericCreate = (e) => {
+    if (e.key.length === 1 && !/^\d$/.test(e.key)) {
+        e.preventDefault();
+        warnCreate('phone', 'Letters and special characters are not allowed. Numbers only.');
+    }
+};
+
+// Email-safe characters only
+const blockSpecialForEmailCreate = (e) => {
+    if (e.key.length === 1 && !/^[a-zA-Z0-9@.\-]$/.test(e.key)) {
+        e.preventDefault();
+        warnCreate('email', 'Invalid character. Only letters, numbers, @, ., and - are allowed.');
+    }
+};
+
+// Paste/autofill/mobile-keyboard safety nets
+watch(() => form.contact_person, (val) => {
+    const filtered = (val || '').replace(/[^a-zA-Z\s]/g, '');
+    if (val !== filtered) form.contact_person = filtered;
+});
+watch(() => form.phone, (val) => {
+    const filtered = (val || '').replace(/\D/g, '').substring(0, 11);
+    if (val !== filtered) form.phone = filtered;
+});
+watch(() => form.email, (val) => {
+    const filtered = (val || '').replace(/[^a-zA-Z0-9@.\-]/g, '');
+    if (val !== filtered) form.email = filtered;
+    if (form.errors.email_conflict) form.clearErrors('email_conflict');
+});
+
 const submitCreate = () => {
+    if (!/^\d{11}$/.test(form.phone || '')) {
+        warnCreate('phone', 'Phone number must be exactly 11 digits (e.g. 09171234567).');
+        return;
+    }
     form.post(route('crm.lead.store'), {
         preserveScroll: true,
-        onSuccess: () => { showCreate.value = false; form.reset(); },
+        onSuccess: () => { showCreate.value = false; form.reset(); createWarnings.value = {}; },
     });
 };
 
-// ── BANT qualify ──
-const showQualify = ref(false);
-const current = ref(null);
-const qualifyForm = useForm({
-    budget: '', authority: '', need_summary: '', timeline: '', next_step: '', next_step_due: '',
-});
-const openQualify = (lead) => {
-    if (!canEdit.value) return;
-    current.value = lead;
-    qualifyForm.reset();
-    qualifyForm.clearErrors();
-    for (const k of ['budget', 'authority', 'need_summary', 'timeline', 'next_step', 'next_step_due']) {
-        qualifyForm[k] = lead[k] || '';
-    }
-    showQualify.value = true;
-};
-const submitQualify = () => {
-    qualifyForm.post(route('crm.lead.qualify', current.value.id), {
-        preserveScroll: true,
-        onSuccess: () => { showQualify.value = false; },
-    });
-};
-
-// ── Send to pipeline ──
+// ── Send to pipeline (confirm → deal lands in Opportunities' New stage) ──
 const showPipeline = ref(false);
-const pipeForm = useForm({ title: '', value: null });
+const current = ref(null);
+const pipeForm = useForm({});
 const openPipeline = (lead) => {
     if (!canEdit.value) return;
     current.value = lead;
-    pipeForm.reset();
     pipeForm.clearErrors();
-    pipeForm.title = `${lead.company_name}${lead.interest_fabric ? ` — ${lead.interest_fabric}` : ''}`;
-    pipeForm.value = lead.estimated_value ?? null;
     showPipeline.value = true;
 };
 const submitPipeline = () => {
     pipeForm.post(route('crm.lead.pipeline', current.value.id), {
         preserveScroll: true,
-        onSuccess: () => { showPipeline.value = false; },
-    });
-};
-
-// ── Convert to client ──
-const showConvert = ref(false);
-const conversionForm = useForm({
-    lead_id: null, company_name: '', contact_person: '', email: '', phone: '',
-    business_type: 'wholesaler', tin_number: '', company_address: '', password: 'password123',
-});
-const openConvert = (lead) => {
-    if (!canEdit.value) return;
-    current.value = lead;
-    conversionForm.reset();
-    conversionForm.clearErrors();
-    conversionForm.lead_id = lead.id;
-    conversionForm.company_name = lead.company_name || '';
-    conversionForm.contact_person = lead.contact_person || '';
-    conversionForm.email = lead.email || '';
-    conversionForm.phone = lead.phone || '';
-    showConvert.value = true;
-};
-const submitConvert = () => {
-    conversionForm.post(route('crm.lead.convert'), {
-        preserveScroll: true,
-        onSuccess: () => { showConvert.value = false; },
+        onSuccess: () => {
+            showPipeline.value = false;
+            router.visit(route('crm.opportunities'));
+        },
     });
 };
 
@@ -135,8 +141,69 @@ const submitLost = () => {
     });
 };
 
-const inputCls = 'w-full rounded-xl bg-gray-50 px-4 py-2.5 text-sm outline-none focus:border-indigo-400 dark:bg-zinc-800 dark:text-white';
+const inputCls = 'w-full rounded-xl bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 dark:bg-zinc-800 dark:text-white';
 const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest text-gray-400';
+
+// ── Investigation log: notes / flags / files gathered before the pipeline ──
+const showInvestigation = ref(false);
+const investigationId = ref(null);
+const investigationLead = computed(() =>
+    (props.leads || []).find((l) => l.id === investigationId.value) || null,
+);
+const investigations = computed(() => investigationLead.value?.investigations || []);
+
+const noteForm = useForm({ type: 'note', note: '' });
+const fileForm = useForm({ files: [] });
+const fileInput = ref(null);
+const imagePreview = ref(null);
+
+const openInvestigation = (lead) => {
+    investigationId.value = lead.id;
+    noteForm.reset();
+    noteForm.clearErrors();
+    noteForm.type = 'note';
+    fileForm.reset();
+    fileForm.clearErrors();
+    if (fileInput.value) fileInput.value.value = '';
+    imagePreview.value = null;
+    showInvestigation.value = true;
+};
+
+const submitNote = () => {
+    if (!noteForm.note.trim()) return;
+    noteForm.post(route('crm.lead.investigations.store', investigationId.value), {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => noteForm.reset('note'),
+    });
+};
+
+const onFilePick = (e) => {
+    fileForm.files = Array.from(e.target.files || []);
+};
+
+const submitFiles = () => {
+    if (!fileForm.files.length) return;
+    fileForm.post(route('crm.lead.investigations.files', investigationId.value), {
+        preserveScroll: true,
+        preserveState: true,
+        forceFormData: true,
+        onSuccess: () => {
+            fileForm.reset();
+            if (fileInput.value) fileInput.value.value = '';
+        },
+    });
+};
+
+const removeInvestigation = (entry) => {
+    router.delete(route('crm.lead.investigations.destroy', entry.id), {
+        preserveScroll: true,
+        preserveState: true,
+    });
+};
+
+const whenLabel = (v) =>
+    v ? new Date(v).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 </script>
 
 <template>
@@ -153,7 +220,7 @@ const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest 
                         <div class="min-w-0 flex-1">
                             <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">CRM · Intake</p>
                             <h1 class="text-2xl font-black tracking-tight sm:text-3xl">Leads</h1>
-                            <p class="text-sm text-blue-100/90">Qualify here — deals are worked in <Link :href="route('crm.opportunities')" class="font-bold underline">Opportunities</Link>.</p>
+                            <p class="text-sm text-blue-100/90">New leads live here — deals are worked in <Link :href="route('crm.opportunities')" class="font-bold underline">Opportunities</Link>.</p>
                         </div>
                         <button
                             v-if="canEdit"
@@ -173,8 +240,26 @@ const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest 
                     </div>
                 </div>
 
+                <!-- Tabs -->
+                <div class="flex gap-1 rounded-2xl border border-gray-100 bg-white/70 p-1.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
+                    <button
+                        @click="activeTab = 'new'"
+                        :class="activeTab === 'new' ? 'bg-indigo-600 text-white shadow' : 'text-gray-500 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-zinc-800'"
+                        class="flex-1 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest transition"
+                    >
+                        New ({{ freshLeads.length }})
+                    </button>
+                    <button
+                        @click="activeTab = 'lost'"
+                        :class="activeTab === 'lost' ? 'bg-indigo-600 text-white shadow' : 'text-gray-500 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-zinc-800'"
+                        class="flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest transition"
+                    >
+                        <Ban class="h-3.5 w-3.5" /> Lost ({{ lostLeads.length }})
+                    </button>
+                </div>
+
                 <!-- Fresh leads -->
-                <section>
+                <section v-if="activeTab === 'new'">
                     <h2 class="mb-3 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                         New — needs qualification ({{ freshLeads.length }})
                     </h2>
@@ -184,12 +269,9 @@ const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest 
                             :key="l.id"
                             class="rounded-3xl border border-gray-100 bg-white/70 p-5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70"
                         >
-                            <div class="flex items-start justify-between gap-2">
-                                <div class="min-w-0">
-                                    <p class="truncate font-black dark:text-white">{{ l.company_name }}</p>
-                                    <p class="text-xs text-gray-400">{{ l.contact_person }} · {{ l.email }} · {{ l.phone }}</p>
-                                </div>
-                                <span v-if="l.estimated_value" class="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-black text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">{{ peso(l.estimated_value) }}</span>
+                            <div class="min-w-0">
+                                <p class="truncate font-black dark:text-white">{{ l.company_name }}</p>
+                                <p class="text-xs text-gray-400">{{ l.contact_person }} · {{ l.email }} · {{ l.phone }}</p>
                             </div>
                             <p v-if="l.interest_fabric" class="mt-1 text-xs font-bold text-gray-500">Interested: {{ l.interest_fabric }}</p>
                             <p v-if="l.need_summary || l.next_step" class="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-gray-500 dark:bg-zinc-800 dark:text-slate-300">
@@ -198,12 +280,12 @@ const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest 
                             </p>
                             <p class="mt-1 text-[10px] text-gray-300">Assigned: {{ l.assigned_staff?.name ?? '—' }}</p>
                             <div v-if="canEdit" class="mt-3 flex flex-wrap gap-1.5">
-                                <button @click="openQualify(l)" class="rounded-lg bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-200 dark:bg-zinc-800 dark:text-slate-300">Qualify</button>
                                 <button @click="openPipeline(l)" class="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[10px] font-black uppercase text-white hover:bg-indigo-700">
                                     To Pipeline <ArrowRight class="h-3 w-3" />
                                 </button>
-                                <button @click="openConvert(l)" class="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300">
-                                    <UserCheck class="h-3 w-3" /> Convert
+                                <button @click="openInvestigation(l)" class="inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1.5 text-[10px] font-black uppercase text-white hover:bg-amber-600">
+                                    <FileSearch class="h-3 w-3" /> Investigation
+                                    <span v-if="(l.investigations || []).length" class="rounded-full bg-white/25 px-1.5 py-0.5 text-[9px]">{{ l.investigations.length }}</span>
                                 </button>
                                 <button @click="openLost(l)" class="rounded-lg px-3 py-1.5 text-[10px] font-black uppercase text-gray-300 hover:bg-rose-50 hover:text-rose-500">Lost</button>
                             </div>
@@ -212,32 +294,12 @@ const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest 
                     <p v-if="!freshLeads.length" class="rounded-2xl border border-dashed border-gray-200 py-8 text-center text-xs font-bold text-gray-300">Inbox zero — every lead is qualified or in the pipeline.</p>
                 </section>
 
-                <!-- In pipeline -->
-                <section v-if="pipedLeads.length">
-                    <h2 class="mb-3 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
-                        <KanbanSquare class="h-3.5 w-3.5" /> In pipeline ({{ pipedLeads.length }}) — worked in Opportunities
-                    </h2>
-                    <div class="grid gap-3 md:grid-cols-2">
-                        <Link
-                            v-for="l in pipedLeads"
-                            :key="l.id"
-                            :href="firstOpp(l) ? route('crm.opportunities.show', firstOpp(l).id) : route('crm.opportunities')"
-                            class="flex items-center gap-3 rounded-3xl border border-emerald-100 bg-emerald-50/50 p-4 transition hover:shadow-md dark:border-emerald-900/30 dark:bg-emerald-950/20"
-                        >
-                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white"><Check class="h-4 w-4" /></span>
-                            <span class="min-w-0">
-                                <span class="block truncate text-sm font-black dark:text-white">{{ l.company_name }}</span>
-                                <span class="block truncate text-[11px] text-gray-400">→ {{ firstOpp(l)?.title ?? 'pipeline deal' }}</span>
-                            </span>
-                        </Link>
-                    </div>
-                </section>
-
                 <!-- Lost -->
-                <section v-if="lostLeads.length">
+                <section v-if="activeTab === 'lost'">
                     <h2 class="mb-3 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                         <Ban class="h-3.5 w-3.5" /> Lost ({{ lostLeads.length }})
                     </h2>
+                    <p v-if="!lostLeads.length" class="rounded-2xl border border-dashed border-gray-200 py-8 text-center text-xs font-bold text-gray-300">No lost leads.</p>
                     <div class="space-y-2">
                         <div v-for="l in lostLeads" :key="l.id" class="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2.5 text-xs opacity-70 dark:bg-zinc-800/60">
                             <span class="font-bold dark:text-slate-300">{{ l.company_name }} <span class="font-normal text-gray-400">· {{ l.lost_reason || 'no reason' }}</span></span>
@@ -257,13 +319,22 @@ const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest 
                     </div>
                     <div><label :class="labelCls">Company *</label><input v-model="form.company_name" required :class="inputCls" /></div>
                     <div class="grid grid-cols-2 gap-3">
-                        <div><label :class="labelCls">Contact person *</label><input v-model="form.contact_person" required :class="inputCls" /></div>
-                        <div><label :class="labelCls">Phone *</label><input v-model="form.phone" required :class="inputCls" /></div>
+                        <div>
+                            <label :class="labelCls">Contact person *</label>
+                            <input v-model="form.contact_person" required :class="inputCls" @keypress="blockNumbersAndSpecialCreate" />
+                            <p v-if="createWarnings.contact_person" class="mt-1 text-[11px] font-bold text-rose-500">{{ createWarnings.contact_person }}</p>
+                        </div>
+                        <div>
+                            <label :class="labelCls">Phone * (11 digits)</label>
+                            <input v-model="form.phone" required :class="inputCls" type="tel" inputmode="numeric" maxlength="11" minlength="11" placeholder="09171234567" @keypress="blockNonNumericCreate" />
+                            <p v-if="createWarnings.phone" class="mt-1 text-[11px] font-bold text-rose-500">{{ createWarnings.phone }}</p>
+                            <p :class="form.phone.length === 11 ? 'text-emerald-500' : 'text-gray-400'" class="mt-1 text-[11px] font-bold transition-colors">{{ form.phone.length }} / 11 digits</p>
+                        </div>
                     </div>
-                    <div><label :class="labelCls">Email *</label><input v-model="form.email" type="email" required :class="inputCls" /></div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label :class="labelCls">Interest / fabric</label><input v-model="form.interest_fabric" :class="inputCls" /></div>
-                        <div><label :class="labelCls">Est. value (₱)</label><input v-model.number="form.estimated_value" type="number" min="0" :class="inputCls" /></div>
+                    <div>
+                        <label :class="labelCls">Email *</label>
+                        <input v-model="form.email" type="email" required :class="inputCls" @keypress="blockSpecialForEmailCreate" />
+                        <p v-if="createWarnings.email" class="mt-1 text-[11px] font-bold text-rose-500">{{ createWarnings.email }}</p>
                     </div>
                     <p v-if="form.errors.error" class="text-[11px] font-bold text-rose-500">{{ form.errors.error }}</p>
                     <button :disabled="form.processing" class="w-full rounded-xl bg-indigo-600 py-3 text-xs font-black uppercase text-white hover:bg-indigo-700 disabled:opacity-50">Add to inbox</button>
@@ -271,66 +342,34 @@ const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest 
             </div>
         </Teleport>
 
-        <!-- BANT qualify -->
+        <!-- Duplicate email: friendly modal instead of a raw SQL error -->
         <Teleport to="body">
-            <div v-if="showQualify && current" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showQualify = false">
-                <form @submit.prevent="submitQualify" class="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
-                    <div class="flex items-center justify-between">
-                        <h3 class="font-black dark:text-white">Qualify — {{ current.company_name }}</h3>
-                        <button type="button" @click="showQualify = false"><X class="h-5 w-5 text-gray-400" /></button>
+            <div v-if="form.errors.email_conflict" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="form.clearErrors('email_conflict')">
+                <div class="w-full max-w-sm space-y-4 rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900">
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300">
+                        <Mail class="h-6 w-6" />
                     </div>
-                    <div><label :class="labelCls">Budget</label><input v-model="qualifyForm.budget" :class="inputCls" /></div>
-                    <div><label :class="labelCls">Authority</label><input v-model="qualifyForm.authority" :class="inputCls" /></div>
-                    <div><label :class="labelCls">Need summary</label><textarea v-model="qualifyForm.need_summary" rows="2" :class="inputCls" /></div>
-                    <div><label :class="labelCls">Timeline</label><input v-model="qualifyForm.timeline" :class="inputCls" /></div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label :class="labelCls">Next step</label><input v-model="qualifyForm.next_step" :class="inputCls" /></div>
-                        <div><label :class="labelCls">Next step due</label><input v-model="qualifyForm.next_step_due" type="date" :class="inputCls" /></div>
-                    </div>
-                    <button :disabled="qualifyForm.processing" class="w-full rounded-xl bg-slate-900 py-3 text-xs font-black uppercase text-white hover:bg-slate-700 disabled:opacity-50">Save qualification</button>
-                </form>
+                    <h3 class="font-black dark:text-white">Email already in use</h3>
+                    <p class="text-xs text-gray-400">{{ form.errors.email_conflict }}</p>
+                    <button type="button" @click="form.clearErrors('email_conflict')" class="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-black uppercase text-white hover:bg-indigo-700">Got it</button>
+                </div>
             </div>
         </Teleport>
 
-        <!-- Send to pipeline -->
+        <!-- Send to pipeline (confirmation — no deal fields) -->
         <Teleport to="body">
             <div v-if="showPipeline && current" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showPipeline = false">
-                <form @submit.prevent="submitPipeline" class="w-full max-w-sm space-y-4 rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
-                    <h3 class="font-black dark:text-white">Send to Pipeline</h3>
-                    <p class="text-xs text-gray-400">Creates the deal in the first stage, linked to this lead. Further work happens in Opportunities.</p>
-                    <div><label :class="labelCls">Deal title</label><input v-model="pipeForm.title" :class="inputCls" /></div>
-                    <div><label :class="labelCls">Value (₱)</label><input v-model.number="pipeForm.value" type="number" min="0" :class="inputCls" /></div>
+                <form @submit.prevent="submitPipeline" class="w-full max-w-sm space-y-4 rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900">
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
+                        <ArrowRight class="h-6 w-6" />
+                    </div>
+                    <h3 class="font-black dark:text-white">Send to Pipeline?</h3>
+                    <p class="text-xs text-gray-400">Are you sure you want to send <span class="font-black text-gray-600 dark:text-slate-200">{{ current.company_name }}</span> to the pipeline? It will appear as a <span class="font-black">New</span> deal in Opportunities.</p>
                     <p v-if="pipeForm.errors.error" class="text-[11px] font-bold text-rose-500">{{ pipeForm.errors.error }}</p>
                     <div class="flex gap-2">
                         <button type="button" @click="showPipeline = false" class="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-black uppercase text-gray-500 dark:bg-zinc-800">Cancel</button>
-                        <button :disabled="pipeForm.processing" class="flex-1 rounded-xl bg-indigo-600 py-2.5 text-xs font-black uppercase text-white hover:bg-indigo-700 disabled:opacity-50">Create deal</button>
+                        <button :disabled="pipeForm.processing" class="flex-1 rounded-xl bg-indigo-600 py-2.5 text-xs font-black uppercase text-white hover:bg-indigo-700 disabled:opacity-50">Confirm</button>
                     </div>
-                </form>
-            </div>
-        </Teleport>
-
-        <!-- Convert to client -->
-        <Teleport to="body">
-            <div v-if="showConvert && current" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showConvert = false">
-                <form @submit.prevent="submitConvert" class="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
-                    <div class="flex items-center justify-between">
-                        <h3 class="flex items-center gap-2 font-black dark:text-white"><Building2 class="h-4 w-4" /> Convert to Client</h3>
-                        <button type="button" @click="showConvert = false"><X class="h-5 w-5 text-gray-400" /></button>
-                    </div>
-                    <div><label :class="labelCls">Company *</label><input v-model="conversionForm.company_name" required :class="inputCls" /></div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label :class="labelCls">Contact *</label><input v-model="conversionForm.contact_person" required :class="inputCls" /></div>
-                        <div><label :class="labelCls">Phone *</label><input v-model="conversionForm.phone" required :class="inputCls" /></div>
-                    </div>
-                    <div><label :class="labelCls">Email *</label><input v-model="conversionForm.email" type="email" required :class="inputCls" /></div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label :class="labelCls">Business type *</label><input v-model="conversionForm.business_type" required :class="inputCls" /></div>
-                        <div><label :class="labelCls">TIN *</label><input v-model="conversionForm.tin_number" required :class="inputCls" /></div>
-                    </div>
-                    <div><label :class="labelCls">Address *</label><input v-model="conversionForm.company_address" required :class="inputCls" /></div>
-                    <div><label :class="labelCls">Portal password *</label><input v-model="conversionForm.password" required minlength="8" :class="inputCls" /></div>
-                    <p v-if="conversionForm.errors.error" class="text-[11px] font-bold text-rose-500">{{ conversionForm.errors.error }}</p>
-                    <button :disabled="conversionForm.processing" class="w-full rounded-xl bg-emerald-600 py-3 text-xs font-black uppercase text-white hover:bg-emerald-700 disabled:opacity-50">Convert</button>
                 </form>
             </div>
         </Teleport>
@@ -346,6 +385,122 @@ const labelCls = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest 
                         <button :disabled="lostForm.processing" class="flex-1 rounded-xl bg-rose-600 py-2.5 text-xs font-black uppercase text-white hover:bg-rose-700 disabled:opacity-50">Mark lost</button>
                     </div>
                 </form>
+            </div>
+        </Teleport>
+
+        <!-- Investigation log — document the prospect before the pipeline -->
+        <Teleport to="body">
+            <div v-if="showInvestigation && investigationLead" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showInvestigation = false">
+                <div class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900">
+                    <!-- Header -->
+                    <div class="flex items-center gap-3 border-b border-gray-100 px-6 py-4 dark:border-zinc-800">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+                            <FileSearch class="h-5 w-5" />
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <h3 class="truncate font-black text-gray-900 dark:text-white">Investigation — {{ investigationLead.company_name }}</h3>
+                            <p class="truncate text-[11px] font-bold text-gray-500 dark:text-slate-400">Notes, flags &amp; files gathered before this lead enters the pipeline.</p>
+                        </div>
+                        <button type="button" @click="showInvestigation = false"><X class="h-5 w-5 text-gray-400" /></button>
+                    </div>
+
+                    <!-- Compose -->
+                    <div class="space-y-3 border-b border-gray-100 px-6 py-4 dark:border-zinc-800">
+                        <div class="flex gap-1.5">
+                            <button type="button" @click="noteForm.type = 'note'"
+                                :class="noteForm.type === 'note' ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-slate-300'"
+                                class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition">
+                                <StickyNote class="h-3.5 w-3.5" /> Note
+                            </button>
+                            <button type="button" @click="noteForm.type = 'flag'"
+                                :class="noteForm.type === 'flag' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-slate-300'"
+                                class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition">
+                                <Flag class="h-3.5 w-3.5" /> Flag
+                            </button>
+                        </div>
+                        <textarea v-model="noteForm.note" rows="3"
+                            :placeholder="noteForm.type === 'flag' ? 'What should the team watch out for?' : 'Document your findings on this prospect…'"
+                            :class="inputCls" class="resize-none"></textarea>
+                        <p v-if="noteForm.errors.note" class="text-[11px] font-bold text-rose-500">{{ noteForm.errors.note }}</p>
+                        <div class="flex justify-end">
+                            <button type="button" @click="submitNote" :disabled="noteForm.processing || !noteForm.note.trim()"
+                                class="rounded-xl bg-indigo-600 px-4 py-2 text-[10px] font-black uppercase tracking-wide text-white transition hover:bg-indigo-700 disabled:opacity-50">
+                                {{ noteForm.type === 'flag' ? 'Add flag' : 'Add note' }}
+                            </button>
+                        </div>
+
+                        <!-- Files / images -->
+                        <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 p-3 dark:bg-zinc-800/60">
+                            <input ref="fileInput" type="file" multiple @change="onFilePick"
+                                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+                                class="flex-1 text-[11px] text-gray-500 file:mr-2 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-[10px] file:font-black file:uppercase file:text-gray-500 dark:file:bg-zinc-700" />
+                            <button type="button" @click="submitFiles" :disabled="fileForm.processing || !fileForm.files.length"
+                                class="inline-flex items-center gap-1 rounded-xl bg-sky-600 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-white transition hover:bg-sky-700 disabled:opacity-50">
+                                <Paperclip class="h-3.5 w-3.5" /> Upload
+                            </button>
+                        </div>
+                        <p v-if="fileForm.errors.files" class="text-[11px] font-bold text-rose-500">{{ fileForm.errors.files }}</p>
+                        <p v-else-if="fileForm.errors['files.0']" class="text-[11px] font-bold text-rose-500">{{ fileForm.errors['files.0'] }}</p>
+                    </div>
+
+                    <!-- Timeline -->
+                    <div class="flex-1 space-y-2 overflow-y-auto px-6 py-4">
+                        <p v-if="!investigations.length" class="rounded-2xl border border-dashed border-gray-200 py-8 text-center text-xs font-bold text-gray-400 dark:border-zinc-700 dark:text-slate-500">No investigation entries yet — document your findings above.</p>
+                        <div v-for="entry in investigations" :key="entry.id"
+                            class="group flex gap-3 rounded-2xl border border-gray-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                                :class="entry.type === 'flag' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30' : entry.type === 'file' ? 'bg-sky-100 text-sky-600 dark:bg-sky-900/30' : 'bg-slate-100 text-slate-500 dark:bg-zinc-800'">
+                                <Flag v-if="entry.type === 'flag'" class="h-4 w-4" />
+                                <Paperclip v-else-if="entry.type === 'file'" class="h-4 w-4" />
+                                <StickyNote v-else class="h-4 w-4" />
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-black uppercase tracking-wide"
+                                        :class="entry.type === 'flag' ? 'text-amber-600' : entry.type === 'file' ? 'text-sky-600' : 'text-slate-500'">
+                                        {{ entry.type === 'file' ? 'File' : entry.type }}
+                                    </span>
+                                    <span class="text-[10px] text-gray-400 dark:text-slate-500">{{ whenLabel(entry.created_at) }}</span>
+                                </div>
+
+                                <!-- Note / flag body -->
+                                <p v-if="entry.type !== 'file'" class="mt-1 whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-slate-200">{{ entry.note }}</p>
+
+                                <!-- File -->
+                                <template v-else>
+                                    <button v-if="entry.is_image" type="button" @click="imagePreview = entry.file_url"
+                                        class="mt-1 inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline">
+                                        <Paperclip class="h-3.5 w-3.5" /> {{ entry.original_name }}
+                                    </button>
+                                    <a v-else :href="entry.file_url" target="_blank" class="mt-1 inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline">
+                                        <Paperclip class="h-3.5 w-3.5" /> {{ entry.original_name }}
+                                    </a>
+                                    <button v-if="entry.is_image" type="button" @click="imagePreview = entry.file_url" class="mt-2 block" title="Click to enlarge">
+                                        <img :src="entry.file_url" :alt="entry.original_name" class="max-h-40 rounded-xl border border-gray-100 object-contain dark:border-zinc-800" />
+                                    </button>
+                                </template>
+
+                                <p class="mt-1 text-[10px] font-bold text-gray-400 dark:text-slate-500">by {{ entry.user?.name || 'System' }}</p>
+                            </div>
+                            <button type="button" @click="removeInvestigation(entry)"
+                                class="h-6 w-6 shrink-0 self-start rounded-lg text-gray-400 opacity-0 transition hover:bg-rose-50 hover:text-rose-500 group-hover:opacity-100"
+                                title="Remove entry">
+                                <Trash2 class="mx-auto h-3.5 w-3.5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- Image lightbox — larger view without leaving the investigation modal -->
+        <Teleport to="body">
+            <div v-if="imagePreview" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm" @click.self="imagePreview = null">
+                <button type="button" @click="imagePreview = null"
+                    class="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white transition hover:rotate-90 hover:bg-white/30">
+                    <X class="h-5 w-5" />
+                </button>
+                <img :src="imagePreview" alt="Image preview" class="max-h-[88vh] max-w-[92vw] rounded-2xl object-contain shadow-2xl" />
             </div>
         </Teleport>
     </AuthenticatedLayout>

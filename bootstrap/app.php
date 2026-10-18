@@ -35,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'can.access.man.manager' => \App\Http\Middleware\CheckManufacturingManagerAccess::class,
             'page.permission' => \App\Http\Middleware\CheckPagePermission::class,
             'man.role' => \App\Http\Middleware\CheckManufacturingRoleAccess::class,
+            'client.access' => \App\Http\Middleware\EnsureRepresentativeAccess::class,
         ]);
 
         /**
@@ -79,7 +80,15 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
             $user = $request->user();
-            if (! $user) {
+
+            // Portal guards (client / supplier / applicant / agency) authenticate
+            // with their own models and are NOT part of the employee page-
+            // permission / AwaitingAccess flow. `auth:client` sets the resolved
+            // guard to `client`, so $request->user() is the Client here — sending
+            // them to /awaiting-access bounced through /login (guest:web,client →
+            // client.dashboard) straight back into this 403 → infinite loop.
+            // Their real 403 must pass through untouched.
+            if (! $user instanceof \App\Models\Core\User) {
                 return null;
             }
             if (\App\Support\AccessGate::hasAnyAccess($user)) {

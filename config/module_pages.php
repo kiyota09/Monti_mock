@@ -33,6 +33,7 @@ return [
         'customer_profiles'  => 'Accounts',
         'opportunities'      => 'Opportunities',
         'inquiry'            => 'Inquiries',
+        'messaging'          => 'Messaging',
         'approvals'          => 'Approvals',
         'quotations'         => 'Quotations',
         'activities'         => 'Activities',

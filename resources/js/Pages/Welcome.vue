@@ -180,11 +180,10 @@ const filteredJobs = computed(() => {
     return result;
 });
 
-// FIXED: Apply function - redirect to apply page with position
+// Job applications go through the Applicant Portal (register/login, then apply from Jobs)
 const applyForJob = (job: any) => {
-    // Redirect to apply page with position as parameter
     const positionName = job.position_name || job.title;
-    router.visit('/apply?position=' + encodeURIComponent(positionName));
+    router.visit('/applicant/register?position=' + encodeURIComponent(positionName));
 };
 
 const viewJobDetail = (job: any) => {
@@ -583,9 +582,6 @@ const coreValues = [
                         <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Be our Partner
                         </Link>
-                        <Link :href="getSafeRoute('apply', '/apply')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Send Application
-                        </Link>
                         <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Applicant Registration
                         </Link>
@@ -721,9 +717,6 @@ const coreValues = [
                         <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Be our Partner
                         </Link>
-                        <Link :href="getSafeRoute('apply', '/apply')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Send Application
-                        </Link>
                         <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Applicant Registration
                         </Link>
@@ -820,9 +813,6 @@ const coreValues = [
                         </Link>
                         <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Be our Partner
-                        </Link>
-                        <Link :href="getSafeRoute('apply', '/apply')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Send Application
                         </Link>
                         <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Applicant Registration
@@ -994,9 +984,6 @@ const coreValues = [
                         <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Be our Partner
                         </Link>
-                        <Link :href="getSafeRoute('apply', '/apply')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Send Application
-                        </Link>
                         <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Applicant Registration
                         </Link>
@@ -1144,9 +1131,6 @@ const coreValues = [
                         </Link>
                         <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Be our Partner
-                        </Link>
-                        <Link :href="getSafeRoute('apply', '/apply')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Send Application
                         </Link>
                         <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
                             Applicant Registration

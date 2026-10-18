@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
+use App\Models\Crm\CrmContact;
 use App\Models\Crm\CrmLogoPartner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -76,6 +77,20 @@ class ClientProfileController extends Controller
         $logoFile = $validated['logo'] ?? null;
 
         $client->update($data);
+
+        // Keep the CRM account's primary contact aligned with the
+        // representative the client set on their own profile.
+        if (array_key_exists('contact_person', $data)) {
+            $contacts = CrmContact::where('client_id', $client->id)
+                ->orderByDesc('is_primary')
+                ->orderBy('id')
+                ->get();
+            $primary = $contacts->firstWhere('is_primary', true)
+                ?? ($contacts->count() === 1 ? $contacts->first() : null);
+            if ($primary && $primary->name !== $data['contact_person']) {
+                $primary->update(['name' => $data['contact_person']]);
+            }
+        }
 
         if ($logoFile) {
             $existing = CrmLogoPartner::where('client_id', $client->id)->get();

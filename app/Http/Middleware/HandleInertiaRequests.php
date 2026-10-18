@@ -8,6 +8,7 @@ use App\Models\Work\WorkforcePermission;
 use App\Models\Crm\CrmPagePermission;
 use App\Models\Core\UserModuleAccess;
 use App\Models\Crm\CrmClientAssignment;
+use App\Support\ClientAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Middleware;
@@ -132,6 +133,8 @@ class HandleInertiaRequests extends Middleware
                 'page_permissions'    => $pagePermissionsList,
                 'assigned_client_ids' => $assignedClientIds,
                 'client'              => $this->getGuardUser('client'),
+                'representative'      => $this->representative($request),
+                'client_portal'       => fn () => $this->clientPortal($request),
                 'supplier'            => $this->getGuardUser('supplier'),
                 'applicant'           => $this->getGuardUser('applicant'),
                 'agency'              => $this->getGuardUser('agency'),
@@ -161,6 +164,59 @@ class HandleInertiaRequests extends Middleware
         } catch (\InvalidArgumentException $e) {
             return null;
         }
+    }
+
+    /**
+     * The representative currently driving a shared partner session (null when
+     * the primary owner is signed in). Drives the sidebar's page filtering.
+     */
+    protected function representative(Request $request): ?array
+    {
+        if (! Auth::guard('client')->check()) {
+            return null;
+        }
+
+        $id = $request->session()->get('representative_id');
+        if (! $id) {
+            return null;
+        }
+
+        $rep = \App\Models\Crm\CrmContact::find($id);
+        if (! $rep) {
+            return null;
+        }
+
+        return [
+            'id'           => $rep->id,
+            'name'         => $rep->name,
+            'email'        => $rep->email,
+            'client_id'    => $rep->client_id,
+            'is_primary'   => (bool) $rep->is_primary,
+            'access_pages' => $rep->access_pages ?: [],
+        ];
+    }
+
+    /**
+     * The effective partner-portal identity for the signed-in client session:
+     * whether it is the primary and which pages it may open (null = every page).
+     * Works for both representative sessions and the account owner login.
+     */
+    protected function clientPortal(Request $request): ?array
+    {
+        if (! Auth::guard('client')->check()) {
+            return null;
+        }
+
+        $client = Auth::guard('client')->user();
+        $id = $request->session()->get('representative_id');
+        $rep = $id ? \App\Models\Crm\CrmContact::find($id) : null;
+
+        $isPrimary = ClientAccess::isPrimary($client, $rep);
+
+        return [
+            'is_primary'   => $isPrimary,
+            'access_pages' => $isPrimary ? null : ClientAccess::accessPages($client, $rep),
+        ];
     }
 
     /**
@@ -313,7 +369,7 @@ class HandleInertiaRequests extends Middleware
     {
         $map = [
             'HRM' => ['dashboard', 'employee', 'application', 'interview', 'trainee', 'onboarding', 'payroll', 'analytics'],
-            'CRM' => ['dashboard', 'leads', 'customer_profiles', 'opportunities', 'inquiry', 'approvals', 'quotations', 'activities', 'cases', 'campaigns', 'investigation'],
+            'CRM' => ['dashboard', 'leads', 'customer_profiles', 'opportunities', 'inquiry', 'messaging', 'approvals', 'quotations', 'activities', 'cases', 'campaigns', 'investigation'],
             'SCM' => ['dashboard', 'sales', 'procurement', 'planning', 'purchase', 'deliveries', 'vendor', 'analytics'],
             'FIN' => ['dashboard', 'receivables', 'payables', 'expenses', 'payroll', 'reports', 'approvals'],
             'MAN' => ['dashboard', 'production', 'reject', 'inventory'],

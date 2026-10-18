@@ -353,6 +353,16 @@ class B2BOrderToCashTest extends TestCase
             $t->decimal('credit_limit', 12, 2)->default(0);
             $t->rememberToken(); $t->timestamps(); $t->softDeletes();
         });
+        // Read by HandleInertiaRequests to resolve the account's primary login.
+        Schema::create('crm_contacts', function (Blueprint $t) {
+            $t->id(); $t->unsignedBigInteger('client_id')->nullable();
+            $t->string('name')->nullable(); $t->string('email')->nullable();
+            $t->boolean('is_primary')->default(false);
+            $t->string('status')->default('active');
+            $t->boolean('has_account')->default(false);
+            $t->json('access_pages')->nullable();
+            $t->timestamps();
+        });
         Schema::create('client_quotations', function (Blueprint $t) {
             $t->id(); $t->foreignId('client_id');
             $t->string('quotation_number')->nullable(); $t->string('status')->default('sent');

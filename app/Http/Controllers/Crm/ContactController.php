@@ -3,12 +3,18 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Mail\RepresentativeWelcomeMail;
 use App\Models\Crm\Client;
 use App\Models\Crm\CrmClientAssignment;
 use App\Models\Crm\CrmContact;
 use App\Models\Crm\CrmLead;
+use App\Support\ClientPortal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class ContactController extends Controller
@@ -68,6 +74,8 @@ class ContactController extends Controller
             'is_primary' => (bool) ($data['is_primary'] ?? false),
         ]);
 
+        $this->syncPrimaryContactToClient($data['client_id'] ?? null);
+
         return back()->with('message', 'Contact added.');
     }
 
@@ -99,20 +107,9 @@ class ContactController extends Controller
             'is_primary' => (bool) ($data['is_primary'] ?? false),
         ]);
 
+        $this->syncPrimaryContactToClient($contact->client_id);
+
         return back()->with('message', 'Contact updated.');
-    }
-
-    public function destroy(CrmContact $contact)
-    {
-        if ($contact->client_id) {
-            $this->account($contact->client_id);
-        } else {
-            $this->prospect($contact->lead);
-        }
-
-        $contact->delete();
-
-        return back()->with('message', 'Contact removed.');
     }
 
     public function makePrimary(CrmContact $contact)
@@ -126,7 +123,100 @@ class ContactController extends Controller
         $this->clearPrimary($contact->only('client_id', 'lead_id'));
         $contact->update(['is_primary' => true]);
 
+        $this->syncPrimaryContactToClient($contact->client_id);
+
         return back()->with('message', 'Primary contact set.');
+    }
+
+    /**
+     * Approve a partner-registered representative: create their portal login
+     * with a system-generated temporary password and a full default page grant.
+     */
+    public function createAccount(CrmContact $contact)
+    {
+        abort_unless($contact->client_id, 422, 'Representative must belong to an account.');
+
+        $this->account($contact->client_id);
+
+        $temporary = Str::password(10, true, true, false, false);
+
+        $contact->update([
+            'status'             => 'active',
+            'has_account'        => true,
+            'password'           => Hash::make($temporary),
+            'account_created_at' => now(),
+            'access_pages'       => $contact->access_pages ?: ClientPortal::keys(),
+        ]);
+
+        $client = Client::find($contact->client_id);
+
+        // Email the representative their sign-in details — best-effort so a mail
+        // hiccup never blocks the account from being created.
+        if ($contact->email && $client) {
+            try {
+                Mail::to($contact->email)->send(new RepresentativeWelcomeMail(
+                    representativeName: $contact->name,
+                    companyName: $client->company_name,
+                    email: $contact->email,
+                    password: $temporary,
+                    portalUrl: route('client.login'),
+                ));
+
+                return back()->with('message', 'Account created for '.$contact->name.'. Sign-in details emailed to '.$contact->email.'.');
+            } catch (\Throwable $e) {
+                Log::warning('Representative welcome email failed for contact #'.$contact->id.': '.$e->getMessage());
+            }
+        }
+
+        return back()->with('message', 'Account created for '.$contact->name.'. Temporary password: '.$temporary);
+    }
+
+    /** Reject a partner-registered representative (no login granted). */
+    public function rejectAccount(CrmContact $contact)
+    {
+        if ($contact->client_id) {
+            $this->account($contact->client_id);
+        }
+
+        $contact->update([
+            'status'      => 'rejected',
+            'has_account' => false,
+            'password'    => null,
+            'access_pages' => null,
+        ]);
+
+        return back()->with('message', $contact->name."'s registration was rejected.");
+    }
+
+    /**
+     * Keep the client record's representative ("contact_person") in lock-step
+     * with the account's primary contact so the Accounts page, the ECO client
+     * directory and the client portal Profile all show the same person.
+     */
+    protected function syncPrimaryContactToClient(?int $clientId): void
+    {
+        if (empty($clientId)) {
+            return;
+        }
+
+        $primary = CrmContact::where('client_id', $clientId)
+            ->orderByDesc('is_primary')
+            ->orderBy('id')
+            ->get();
+
+        // Only mirror an unambiguous representative: the marked primary
+        // contact, or the lone contact when none is flagged.
+        $contact = $primary->firstWhere('is_primary', true)
+            ?? ($primary->count() === 1 ? $primary->first() : null);
+
+        if (! $contact || ! $contact->name) {
+            return;
+        }
+
+        $client = Client::find($clientId);
+        if ($client && $client->contact_person !== $contact->name) {
+            $client->update(['contact_person' => $contact->name]);
+        }
     }
 
     protected function clearPrimary(array $scope): void
@@ -137,6 +227,7 @@ class ContactController extends Controller
         } else {
             $q->where('lead_id', $scope['lead_id']);
         }
+
         $q->update(['is_primary' => false]);
     }
 }

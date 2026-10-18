@@ -33,11 +33,11 @@ class CrmPipelineSeeder extends Seeder
 
         // ── 5 stages ──────────────────────────────────────────────
         $stageDefs = [
-            ['name' => 'New', 'sequence' => 0, 'default_probability' => 10, 'is_folded' => false, 'is_won' => false],
-            ['name' => 'Qualified', 'sequence' => 1, 'default_probability' => 30, 'is_folded' => false, 'is_won' => false],
-            ['name' => 'First Proposition', 'sequence' => 2, 'default_probability' => 60, 'is_folded' => false, 'is_won' => false],
-            ['name' => 'Won', 'sequence' => 3, 'default_probability' => 100, 'is_folded' => false, 'is_won' => true],
-            ['name' => 'Lost', 'sequence' => 4, 'default_probability' => 0, 'is_folded' => true, 'is_won' => false],
+            ['name' => 'New', 'sequence' => 0, 'default_probability' => 10, 'is_folded' => false, 'is_won' => false, 'is_lost' => false],
+            ['name' => 'Qualified', 'sequence' => 1, 'default_probability' => 30, 'is_folded' => false, 'is_won' => false, 'is_lost' => false],
+            ['name' => 'First Proposition', 'sequence' => 2, 'default_probability' => 60, 'is_folded' => false, 'is_won' => false, 'is_lost' => false],
+            ['name' => 'Won', 'sequence' => 3, 'default_probability' => 100, 'is_folded' => false, 'is_won' => true, 'is_lost' => false],
+            ['name' => 'Lost', 'sequence' => 4, 'default_probability' => 0, 'is_folded' => true, 'is_won' => false, 'is_lost' => true],
         ];
         $stages = [];
         foreach ($stageDefs as $def) {

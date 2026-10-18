@@ -77,6 +77,7 @@ const portalItems = computed(() => {
             { id: 'client_dashboard', label: 'Dashboard', icon: LayoutDashboard, href: safeRoute('client.dashboard', '/client/dashboard') },
             { id: 'client_products', label: 'Products', icon: ShoppingBag, href: safeRoute('client.products', '/client/products') },
             { id: 'client_conversations', label: 'Conversations', icon: MessageSquare, href: safeRoute('client.conversations', '/client/conversations') },
+            { id: 'client_messages', label: 'Messages', icon: MessageSquare, href: safeRoute('client.messages', '/client/messages') },
             { id: 'client_orders', label: 'Orders', icon: ShoppingCart, href: safeRoute('client.orders', '/client/orders') },
             { id: 'client_tracking', label: 'Order Tracking', icon: Navigation, href: safeRoute('client.tracking', '/client/tracking') },
             { id: 'client_invoices', label: 'Invoices', icon: Receipt, href: safeRoute('client.invoices', '/client/invoices') },
@@ -286,11 +287,15 @@ const displayName = computed(() => {
 })
 const displayInitial = computed(() => displayName.value?.charAt(0) ?? '?')
 const userPhotoUrl = computed(() => {
+    if (photoBroken.value) return null
     if (user.value?.profile_photo_path) return `/storage/${user.value.profile_photo_path}`
     if (supplier.value?.profile_photo_path) return `/storage/${supplier.value.profile_photo_path}`
     if (client.value?.profile_photo_path) return `/storage/${client.value.profile_photo_path}`
     return null
 })
+// If the stored photo is missing on disk, fall back to initials instead of a broken image
+const photoBroken = ref(false)
+watch(userPhotoUrl, () => { photoBroken.value = false })
 const displayDepartment = computed(() => {
     if (isApplicant.value) return 'Applicant'
     if (isAgency.value) return 'Agency'
@@ -358,7 +363,7 @@ watch(mobileOpen, (open) => {
             </div>
             <div class="flex items-center gap-2">
                 <div v-if="userPhotoUrl" class="h-8 w-8 rounded-full overflow-hidden border-2 border-indigo-200 dark:border-indigo-800">
-                    <img :src="userPhotoUrl" alt="Profile" class="h-full w-full object-cover" />
+                    <img :src="userPhotoUrl" alt="Profile" @error="photoBroken = true" class="h-full w-full object-cover" />
                 </div>
                 <div v-else class="h-8 w-8 rounded-full bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 flex items-center justify-center text-white text-xs font-bold">
                     {{ displayInitial }}
@@ -442,7 +447,7 @@ watch(mobileOpen, (open) => {
                         <div class="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/50 flex-shrink-0">
                             <div class="flex items-center gap-3">
                                 <div v-if="userPhotoUrl" class="h-9 w-9 rounded-full overflow-hidden border-2 border-indigo-200 dark:border-indigo-800 flex-shrink-0">
-                                    <img :src="userPhotoUrl" alt="Profile" class="h-full w-full object-cover" />
+                                    <img :src="userPhotoUrl" alt="Profile" @error="photoBroken = true" class="h-full w-full object-cover" />
                                 </div>
                                 <div v-else class="h-9 w-9 rounded-full bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                                     {{ displayInitial }}

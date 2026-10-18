@@ -4,8 +4,12 @@ use App\Http\Controllers\Auth\ClientAuthController;
 use App\Http\Controllers\Client\ClientConversationController;
 use App\Http\Controllers\Client\ClientDashboardController;
 use App\Http\Controllers\Client\ClientInvoiceController;
+use App\Http\Controllers\Client\ClientMessageController;
 use App\Http\Controllers\Client\ClientProductsController;
+use App\Http\Controllers\Client\ClientPasswordController;
 use App\Http\Controllers\Client\ClientProfileController;
+use App\Http\Controllers\Client\RepresentativeController;
+use App\Http\Controllers\Client\AccessControlController;
 use App\Http\Controllers\Client\ClientReceivingController;
 use App\Http\Controllers\Client\ClientSupportController;
 use App\Http\Controllers\Client\ClientTrackingController;
@@ -33,7 +37,7 @@ Route::post('client/logout', [ClientAuthController::class, 'logout'])
 | Protected Client B2B Portal Routes (Restructured)
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth:client')->prefix('partner')->name('client.')->group(function () {
+Route::middleware(['auth:client', 'client.access'])->prefix('partner')->name('client.')->group(function () {
     // Dashboard
     Route::get('/dashboard', [ClientDashboardController::class, 'index'])->name('dashboard');
     // Products & Inquiries
@@ -64,6 +68,20 @@ Route::middleware('auth:client')->prefix('partner')->name('client.')->group(func
     Route::post('/sample-requests/{sampleRequest}/adjust', [ClientConversationController::class, 'adjustSample'])
         ->name('sample.adjust');
 
+    // Direct line to Monti Textiles (no inquiry needed)
+    Route::get('/messages', [ClientMessageController::class, 'index'])->name('messages');
+    Route::get('/messages/incoming-calls', [ClientMessageController::class, 'incomingCalls'])->name('messages.incoming-calls');
+    Route::get('/messages/feed', [ClientMessageController::class, 'feed'])->name('messages.feed');
+    Route::post('/messages', [ClientMessageController::class, 'store'])->name('messages.store');
+    Route::post('/messages/{message}/unsend-for-me', [ClientMessageController::class, 'unsendForMe'])->name('messages.unsend-for-me');
+    Route::post('/messages/{message}/unsend-for-everyone', [ClientMessageController::class, 'unsendForEveryone'])->name('messages.unsend-for-everyone');
+    Route::post('/messages/{message}/react', [ClientMessageController::class, 'toggleReaction'])->name('messages.react');
+    Route::post('/messages/calls/start', [ClientMessageController::class, 'startCall'])->name('messages.calls.start');
+    Route::post('/messages/calls/{message}/end', [ClientMessageController::class, 'endCall'])->name('messages.calls.end');
+    Route::post('/messages/calls/{message}/answer', [ClientMessageController::class, 'answerCall'])->name('messages.calls.answer');
+    Route::post('/messages/calls/{message}/signal', [ClientMessageController::class, 'signalCall'])->name('messages.calls.signal');
+    Route::get('/messages/calls/{message}/signals', [ClientMessageController::class, 'callSignals'])->name('messages.calls.signals');
+
     // Orders & Invoices (legacy support)
     Route::get('/orders', [OrdersController::class, 'orders'])->name('orders');
     Route::post('/orders/{order}/accept', [OrdersController::class, 'acceptPurchaseOrder'])->name('orders.accept');
@@ -80,11 +98,25 @@ Route::middleware('auth:client')->prefix('partner')->name('client.')->group(func
     // Receiving (delivery confirmation)
     Route::get('/receiving', [ClientReceivingController::class, 'index'])->name('receiving');
     Route::post('/receiving/{order}/mark', [ClientReceivingController::class, 'markReceived'])->name('receiving.mark');
+    // Change password (available to every sign-in, even when the Profile page
+    // has been removed from a representative's granted pages).
+    Route::post('/password', [ClientPasswordController::class, 'update'])->name('password.update');
+
     // Profile
     Route::get('/profile', [ClientProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ClientProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile/logo', [ClientProfileController::class, 'destroyLogo'])->name('profile.logo.destroy');
     Route::post('/profile/logo', [ClientProfileController::class, 'storeLogo'])->name('profile.logo.store');
+
+    // Representatives (primary-only): the business partner registers its
+    // delegated officers; CRM approves/creates their accounts.
+    Route::get('/representatives', [RepresentativeController::class, 'index'])->name('representatives');
+    Route::post('/representatives', [RepresentativeController::class, 'store'])->name('representatives.store');
+    Route::delete('/representatives/{contact}', [RepresentativeController::class, 'destroy'])->name('representatives.destroy');
+
+    // Access Control (primary-only): grant each representative their pages.
+    Route::get('/access-control', [AccessControlController::class, 'index'])->name('access-control');
+    Route::post('/access-control', [AccessControlController::class, 'update'])->name('access-control.update');
     // Support
     Route::get('/support', [ClientSupportController::class, 'index'])->name('support');
     Route::post('/support/complaint', [ClientSupportController::class, 'storeComplaint'])->name('support.complaint');

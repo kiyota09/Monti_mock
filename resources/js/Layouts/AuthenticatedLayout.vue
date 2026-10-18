@@ -2,6 +2,8 @@
 import Sidebar from './Sidebar.vue'
 import MobileSidebar from './MobileSidebar.vue'
 import TopBar from './Navbar/TopBar.vue'
+import CallCenterOverlay from '@/Components/crm/messaging/CallCenterOverlay.vue'
+import PartnerCallOverlay from '@/Components/crm/messaging/PartnerCallOverlay.vue'
 import { usePage } from '@inertiajs/vue3'
 import { computed, onMounted, ref, watch, onErrorCaptured } from 'vue'
 import axios from 'axios'
@@ -127,5 +129,10 @@ const reloadPage = () => {
                 </div>
             </main>
         </div>
+
+        <!-- Global incoming-call listener (visible on every dashboard page) -->
+        <CallCenterOverlay v-if="!hasError" />
+        <!-- Global partner-call listener (staff or portal, any page) -->
+        <PartnerCallOverlay v-if="!hasError" />
     </div>
 </template>

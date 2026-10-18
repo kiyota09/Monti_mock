@@ -56,6 +56,7 @@ export const MODULES = [
             { id: 'crm_accounts', label: 'Accounts', icon: Users, route: 'crm.customerprofile.index', permission: 'crm.customer_profiles', priority: 85 },
             { id: 'crm_opportunities', label: 'Opportunities', icon: KanbanSquare, route: 'crm.opportunities', permission: 'crm.opportunities', priority: 80 },
             { id: 'crm_inquiries', label: 'Inquiries', icon: MessageSquare, route: 'crm.inquiries', permission: 'crm.inquiry', priority: 75 },
+            { id: 'crm_messaging', label: 'Messaging', icon: MessageSquare, route: 'crm.messages', permission: 'crm.messaging', priority: 74 },
             { id: 'crm_approvals', label: 'Approvals', icon: ClipboardCheck, route: 'crm.approval.index', permission: 'crm.approvals', priority: 70 },
             { id: 'crm_quotations', label: 'Quotations', icon: FileText, route: 'crm.quotations', permission: 'crm.quotations', priority: 65 },
             { id: 'crm_activities', label: 'Activities', icon: Activity, route: 'crm.activities', permission: 'crm.activities', priority: 60 },

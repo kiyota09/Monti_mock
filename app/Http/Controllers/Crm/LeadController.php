@@ -37,6 +37,7 @@ class LeadController extends Controller
             'logo',
             'contacts' => fn ($q) => $q->where('is_primary', true)->limit(1),
             'opportunities' => fn ($q) => $q->select('id', 'lead_id', 'title', 'stage_id')->latest('id')->limit(1),
+            'investigations' => fn ($q) => $q->with('user:id,name')->latest(),
         ])
             ->withCount('opportunities')
             ->whereNotIn('status', ['Converted', 'Archived'])
@@ -66,6 +67,16 @@ class LeadController extends Controller
             'logo' => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:5120',
         ]);
 
+        // The email must be unique across the whole CRM — a lead already here
+        // (any status) or an existing client account both count. We surface a
+        // dedicated error key so the UI can show a friendly modal instead of
+        // the raw duplicate-key SQL error.
+        if ($this->emailAlreadyExists($validated['email'])) {
+            return back()->withErrors([
+                'email_conflict' => 'This email is already registered in the system. Please use a different email address.',
+            ])->withInput();
+        }
+
         $dupe = CrmLead::whereNotIn('status', ['Converted', 'Archived', 'Lost'])
             ->where(fn ($q) => $q
                 ->where('company_name', $validated['company_name'])
@@ -73,18 +84,27 @@ class LeadController extends Controller
             ->first(['id', 'company_name', 'status']);
         if ($dupe) {
             return back()->withErrors(['error' => "Possible duplicate: {$dupe->company_name} is already an open lead ({$dupe->status})."]);
+
         }
 
-        $lead = CrmLead::create([
-            'company_name' => $validated['company_name'],
-            'contact_person' => $validated['contact_person'],
-            'email' => $validated['email'],
-            'phone' => $validated['phone'],
-            'interest_fabric' => $validated['interest_fabric'] ?? null,
-            'estimated_value' => $validated['estimated_value'] ?? 0,
-            'status' => 'Inquiry',
-            'assigned_staff_id' => Auth::id(),
-        ]);
+        try {
+            $lead = CrmLead::create([
+                'company_name' => $validated['company_name'],
+                'contact_person' => $validated['contact_person'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'],
+                'interest_fabric' => $validated['interest_fabric'] ?? null,
+                'estimated_value' => $validated['estimated_value'] ?? 0,
+                'status' => 'Inquiry',
+                'assigned_staff_id' => Auth::id(),
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Safety net: anything that still trips a unique constraint gets
+            // the same friendly message rather than a 500 error page.
+            return back()->withErrors([
+                'email_conflict' => 'This email is already registered in the system. Please use a different email address.',
+            ])->withInput();
+        }
 
         // Seed the prospect's primary contact from the intake details.
         $lead->contacts()->create([
@@ -106,6 +126,19 @@ class LeadController extends Controller
         }
 
         return back()->with('message', 'New lead created.');
+    }
+
+    /**
+     * Is this email already taken anywhere in the CRM (a lead of any status,
+     * or an existing client account)? Used to block duplicates before the
+     * database's unique index throws.
+     */
+    private function emailAlreadyExists(string $email): bool
+    {
+        $email = trim($email);
+
+        return CrmLead::where('email', $email)->exists()
+            || Client::where('email', $email)->exists();
     }
 
     /**
@@ -153,7 +186,7 @@ class LeadController extends Controller
         $primary = $lead->contacts->where('is_primary', true)->first() ?? $lead->contacts->first();
 
         $opp = CrmOpportunity::create([
-            'title' => $data['title'] ?: trim(($lead->company_name ?? 'Untitled') . ($lead->interest_fabric ? " — {$lead->interest_fabric}" : '')),
+            'title' => ($data['title'] ?? null) ?: trim(($lead->company_name ?? 'Untitled') . ($lead->interest_fabric ? " — {$lead->interest_fabric}" : '')),
             'stage_id' => $stage->id,
             'stage' => 'qualification',
             'lead_id' => $lead->id,

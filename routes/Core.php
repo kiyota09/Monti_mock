@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HelpController;
-use App\Http\Controllers\Hrm\ApplicantController as HrmApplicantController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Trainee\TraineeAttendanceController;
 use App\Http\Controllers\Trainee\TraineePayslipController;
@@ -22,17 +21,6 @@ Route::get('/', function () {
         'phpVersion' => PHP_VERSION,
     ]);
 });
-
-/*
-|--------------------------------------------------------------------------
-| Public Career Application Routes
-|--------------------------------------------------------------------------
-*/
-Route::get('/apply', function () {
-    return inertia('Auth/apply');
-})->name('apply');
-
-Route::post('/apply/store', [HrmApplicantController::class, 'store'])->name('applicants.public.store');
 
 /*
 |--------------------------------------------------------------------------

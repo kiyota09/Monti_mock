@@ -22,17 +22,25 @@ class StageController extends Controller
             'name' => 'required|string|max:120',
             'default_probability' => 'nullable|integer|min:0|max:100',
             'is_won' => 'nullable|boolean',
+            'is_lost' => 'nullable|boolean',
+            'allows_uploads' => 'nullable|boolean',
         ]);
+
+        // Won and Lost are mutually exclusive terminal states.
+        $isWon = (bool) ($data['is_won'] ?? false);
+        $isLost = (bool) ($data['is_lost'] ?? false) && ! $isWon;
 
         $stage = CrmStage::create([
             'name' => $data['name'],
             'sequence' => (CrmStage::max('sequence') ?? 0) + 1,
             'default_probability' => $data['default_probability'] ?? 10,
-            'is_won' => $data['is_won'] ?? false,
+            'is_won' => $isWon,
+            'is_lost' => $isLost,
+            'allows_uploads' => (bool) ($data['allows_uploads'] ?? false),
             'created_by' => Auth::id(),
         ]);
 
-        return back()->with('message', "Stage “{$stage->name}” added. Drag it anywhere.");
+        return back()->with('message', "Stage “{$stage->name}” added.");
     }
 
     public function update(Request $request, CrmStage $stage)
@@ -42,25 +50,20 @@ class StageController extends Controller
             'default_probability' => 'sometimes|required|integer|min:0|max:100',
             'is_folded' => 'sometimes|required|boolean',
             'is_won' => 'sometimes|required|boolean',
+            'is_lost' => 'sometimes|required|boolean',
+            'allows_uploads' => 'sometimes|required|boolean',
         ]);
+
+        // Keep Won and Lost mutually exclusive: the most recent tick wins.
+        if (array_key_exists('is_won', $data) && $data['is_won']) {
+            $data['is_lost'] = false;
+        } elseif (array_key_exists('is_lost', $data) && $data['is_lost']) {
+            $data['is_won'] = false;
+        }
 
         $stage->update($data);
 
         return back()->with('message', "Stage “{$stage->name}” updated.");
-    }
-
-    public function reorder(Request $request)
-    {
-        $data = $request->validate([
-            'ordered_ids' => 'required|array|min:1',
-            'ordered_ids.*' => 'integer|exists:crm_stages,id',
-        ]);
-
-        foreach ($data['ordered_ids'] as $i => $id) {
-            CrmStage::where('id', $id)->update(['sequence' => $i]);
-        }
-
-        return back()->with('message', 'Stage order saved.');
     }
 
     public function destroy(Request $request, CrmStage $stage)

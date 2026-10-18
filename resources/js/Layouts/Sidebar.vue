@@ -1,12 +1,12 @@
 <script setup>
 import { usePage, Link } from '@inertiajs/vue3'
 import { route } from 'ziggy-js'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
     LayoutDashboard, ShoppingCart, ShoppingBag, MessageSquare,
     Receipt, HelpCircle, User, Truck, Navigation, Clock, CalendarDays,
     History, HandCoins, Building2, UserCog2, ShieldCheck,
-    FileText, Megaphone, Stamp, Bell, Printer, Target, Wrench, Repeat, ClipboardList, Zap, ScanSearch,
+    FileText, Megaphone, Stamp, Bell, Printer, Target, Wrench, Repeat, ClipboardList, Zap, ScanSearch, Users,
 } from 'lucide-vue-next'
 
 import { useDropdown, useDynamicDropdowns, useSidebarScroll } from './composables/useSidebarPersistence'
@@ -20,6 +20,7 @@ const page = usePage()
     const user = computed(() => page.props.auth.user)
     const unreadCount = computed(() => page.props.notifications_unread || 0)
 const client = computed(() => page.props.auth.client)
+const representative = computed(() => page.props.auth.representative || null)
 const supplier = computed(() => page.props.auth.supplier || (page.props.auth.user?.business_name ? page.props.auth.user : null))
 const applicantUser = computed(() => page.props.auth.applicant)
 const agencyUser = computed(() => page.props.auth.agency)
@@ -84,17 +85,36 @@ const navItems = computed(() => {
     }
 
     if (isClient.value) {
-        return [
-            { label: 'Dashboard', href: route('client.dashboard'), icon: LayoutDashboard },
-            { label: 'Products', href: route('client.products'), icon: ShoppingBag },
-            { label: 'Conversations', href: route('client.conversations'), icon: MessageSquare },
-            { label: 'Orders', href: route('client.orders'), icon: ShoppingCart },
-            { label: 'Order Tracking', href: route('client.tracking'), icon: Navigation },
-            { label: 'Invoices', href: route('client.invoices'), icon: Receipt },
-            { label: 'Receiving', href: route('client.receiving'), icon: Truck },
-            { label: 'Profile', href: route('client.profile.edit'), icon: User },
-            { label: 'Support', href: route('client.support'), icon: HelpCircle },
+        const portalPages = [
+            { key: 'dashboard', label: 'Dashboard', href: route('client.dashboard'), icon: LayoutDashboard },
+            { key: 'products', label: 'Products', href: route('client.products'), icon: ShoppingBag },
+            { key: 'conversations', label: 'Conversations', href: route('client.conversations'), icon: MessageSquare },
+            { key: 'messages', label: 'Messages', href: route('client.messages'), icon: MessageSquare },
+            { key: 'orders', label: 'Orders', href: route('client.orders'), icon: ShoppingCart },
+            { key: 'tracking', label: 'Order Tracking', href: route('client.tracking'), icon: Navigation },
+            { key: 'invoices', label: 'Invoices', href: route('client.invoices'), icon: Receipt },
+            { key: 'receiving', label: 'Receiving', href: route('client.receiving'), icon: Truck },
+            { key: 'profile', label: 'Profile', href: route('client.profile.edit'), icon: User },
+            { key: 'support', label: 'Support', href: route('client.support'), icon: HelpCircle },
         ]
+
+        const portal = page.props.auth.client_portal || null
+        const allowed = portal ? portal.access_pages : null
+        // A non-primary login — delegated representative or the owner account
+        // itself — only sees the pages granted to it; null means "every page".
+        const visible = allowed ? portalPages.filter((p) => allowed.includes(p.key)) : portalPages
+
+        // The current primary — and only the primary — manages representatives
+        // and their page access.
+        if (portal && portal.is_primary) {
+            return [
+                ...visible,
+                { label: 'Representatives', href: route('client.representatives'), icon: Users },
+                { label: 'Access Control', href: route('client.access-control'), icon: ShieldCheck },
+            ]
+        }
+
+        return visible
     }
 
     if (isAgency.value) {
@@ -246,11 +266,15 @@ const displayName = computed(() => {
 })
 const displayInitial = computed(() => displayName.value?.charAt(0) ?? '?')
 const userPhotoUrl = computed(() => {
+    if (photoBroken.value) return null
     if (user.value?.profile_photo_path) return `/storage/${user.value.profile_photo_path}`
     if (supplier.value?.profile_photo_path) return `/storage/${supplier.value.profile_photo_path}`
     if (client.value?.profile_photo_path) return `/storage/${client.value.profile_photo_path}`
     return null
 })
+// If the stored photo is missing on disk, fall back to initials instead of a broken image
+const photoBroken = ref(false)
+watch(userPhotoUrl, () => { photoBroken.value = false })
 const displayDepartment = computed(() => {
     if (isApplicant.value) return 'Applicant'
     if (isAgency.value) return 'Agency'
@@ -400,7 +424,7 @@ const sidebarLabel = computed(() => {
                 <div class="flex items-center gap-3">
                     <div class="relative flex-shrink-0">
                         <div class="w-9 h-9 rounded-full p-0.5 bg-gradient-to-tr from-blue-700 via-indigo-700 to-violet-800 shadow-md shadow-indigo-500/25">
-                            <img v-if="userPhotoUrl" :src="userPhotoUrl"
+                            <img v-if="userPhotoUrl" :src="userPhotoUrl" @error="photoBroken = true"
                                 class="w-full h-full rounded-full object-cover" />
                             <div v-else
                                 class="w-full h-full bg-gradient-to-br from-blue-700 to-violet-800 rounded-full flex items-center justify-center font-bold text-xs text-white uppercase">

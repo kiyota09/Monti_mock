@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\Client\ClientQuotation;
 use App\Models\Eco\CreditAccount;
 use App\Models\Ord\PurchaseOrder;
 
@@ -32,6 +33,8 @@ class Client extends Authenticatable
         'province',
         'postal_code',
         'status',
+        'notes',
+        'rejection_reason',
         'credit_limit',
         'payment_terms_days',
         'latitude',   // ← ADDED
@@ -123,6 +126,18 @@ class Client extends Authenticatable
         return $this->hasMany(PurchaseOrder::class);
     }
 
+    /** Quotations issued to this client (Sales/Client module). */
+    public function quotations()
+    {
+        return $this->hasMany(ClientQuotation::class)->latest('id');
+    }
+
+    /** Meeting/call request emails (approval-page feedback) for this client. */
+    public function meetingRequests()
+    {
+        return $this->hasMany(CrmMeetingRequest::class)->latest('id');
+    }
+
     public function logos()
     {
         return $this->hasMany(CrmLogoPartner::class);
@@ -146,6 +161,12 @@ class Client extends Authenticatable
     public function activities()
     {
         return $this->hasMany(CrmActivity::class)->latest();
+    }
+
+    /** Files/images uploaded from this client's pipeline cards. */
+    public function documents()
+    {
+        return $this->hasMany(CrmOpportunityDocument::class, 'client_id')->latest('id');
     }
 
     public function cases()

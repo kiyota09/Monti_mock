@@ -16,7 +16,7 @@ class SecurityHeaders
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-XSS-Protection', '1; mode=block');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $response->headers->set('Permissions-Policy', 'geolocation=(self), microphone=(), camera=()');
+        $response->headers->set('Permissions-Policy', 'geolocation=(self), microphone=(self), camera=(self)');
 
         // Content-Security-Policy is only enforced in production. During local
         // development the Vite dev server serves the JS/CSS bundle from a

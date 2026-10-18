@@ -290,6 +290,7 @@ class DashboardController extends Controller
                 'customer_profiles' => 'crm.customerprofile.index',
                 'opportunities' => 'crm.opportunities',
                 'inquiry' => 'crm.inquiries',
+                'messaging' => 'crm.messages',
                 'approvals' => 'crm.approval.index',
                 'quotations' => 'crm.quotations',
                 'activities' => 'crm.activities',

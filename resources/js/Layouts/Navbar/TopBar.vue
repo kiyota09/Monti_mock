@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
-import { usePage, Link, router } from '@inertiajs/vue3';
+import { usePage, Link, router, useForm } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import axios from 'axios';
 import { useTheme, initTheme, THEMES } from '@/composables/useTheme';
@@ -8,19 +8,31 @@ import {
     MessageSquare, Megaphone, Bell, Settings, X, Send, Search,
     User, LogOut, Palette, Check, ChevronLeft, Plus, CheckCheck,
     Users, Paperclip, ImagePlus, LogOut as LeaveIcon, Trash2, Pencil,
-    PanelLeft, ChevronRight, LifeBuoy, Info,
+    PanelLeft, ChevronRight, LifeBuoy, Info, KeyRound,
 } from 'lucide-vue-next';
 import { useSidebarToggle } from '@/Layouts/composables/useSidebarToggle';
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
 const client = computed(() => page.props.auth.client);
+const representative = computed(() => page.props.auth.representative || null);
 const supplier = computed(() => page.props.auth.supplier || (page.props.auth.user?.business_name ? page.props.auth.user : null));
 const applicantUser = computed(() => page.props.auth.applicant);
 const agencyUser = computed(() => page.props.auth.agency);
 const currentUrl = computed(() => page.url);
 
 const isClient = computed(() => !!client.value);
+const isRepresentative = computed(() => isClient.value && !!representative.value);
+const clientPortal = computed(() => page.props.auth.client_portal || null);
+// Any non-primary partner login — a delegated representative or the owner
+// account — only sees the "My Profile" entry when the Profile page was granted
+// to it. The primary is always unrestricted.
+const canViewProfile = computed(() => {
+    if (!isClient.value) return true;
+    const portal = clientPortal.value;
+    if (!portal || portal.is_primary || portal.access_pages === null) return true;
+    return portal.access_pages.includes('profile');
+});
 const isSupplier = computed(() => !!supplier.value || currentUrl.value.startsWith('/supplier'));
 const isApplicant = computed(() => !!applicantUser.value || currentUrl.value.startsWith('/applicant'));
 const isAgency = computed(() => !!agencyUser.value || currentUrl.value.startsWith('/agency'));
@@ -114,6 +126,43 @@ const submitLogout = async () => {
     } finally {
         loggingOut.value = false;
     }
+};
+
+// ─── Change password (partner portal) ───────────────────────────────
+// Always reachable for signed-in client users — including representatives
+// whose Profile page has been removed from their granted pages.
+const showPasswordModal = ref(false);
+const pwForm = useForm({
+    current_password: '',
+    password: '',
+    password_confirmation: '',
+});
+const openPasswordModal = () => {
+    pwForm.reset();
+    pwForm.clearErrors();
+    showPasswordModal.value = true;
+    closePanels();
+};
+const closePasswordModal = () => {
+    showPasswordModal.value = false;
+    pwForm.reset();
+    pwForm.clearErrors();
+};
+const submitPassword = () => {
+    pwForm.post(route('client.password.update'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            closePasswordModal();
+            showToastMsg('Password updated successfully.');
+        },
+    });
+};
+
+// Lightweight transient toast (password-change confirmation).
+const toastMsg = ref('');
+const showToastMsg = (msg) => {
+    toastMsg.value = msg;
+    setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 4000);
 };
 
 // ─── Panel plumbing ─────────────────────────────────────────────────
@@ -679,11 +728,34 @@ onMounted(() => {
                 <!-- SETTINGS -->
                 <div v-if="openPanel === 'settings'">
                     <div class="border-b border-gray-100 px-5 py-4 dark:border-zinc-800">
-                        <p class="text-sm font-black text-gray-900 dark:text-white">{{ displayName }}</p>
-                        <p class="text-[11px] font-bold uppercase tracking-widest text-gray-400">{{ displaySub }}</p>
+                        <!-- Partner portal: show exactly which business account is
+                             being accessed (name + email), plus the signed-in
+                             representative when the owner delegated access. -->
+                        <div v-if="isClient" class="flex items-center gap-3">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-700 text-sm font-black text-white">
+                                {{ (displayName || '?').charAt(0).toUpperCase() }}
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Business account</p>
+                                <p class="truncate text-sm font-black text-gray-900 dark:text-white">{{ displayName }}</p>
+                                <p class="truncate text-[11px] font-bold text-indigo-500">{{ displaySub }}</p>
+                            </div>
+                        </div>
+                        <div v-else>
+                            <p class="text-sm font-black text-gray-900 dark:text-white">{{ displayName }}</p>
+                            <p class="text-[11px] font-bold uppercase tracking-widest text-gray-400">{{ displaySub }}</p>
+                        </div>
+                        <div v-if="isRepresentative" class="mt-3 rounded-xl bg-gray-50 px-3 py-2.5 dark:bg-zinc-800/60">
+                            <p class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                Signed in as
+                                <span v-if="representative.is_primary" class="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-normal text-white">Primary</span>
+                            </p>
+                            <p class="truncate text-sm font-black text-gray-900 dark:text-white">{{ representative.name }}</p>
+                            <p class="truncate text-[11px] font-bold text-gray-400">{{ representative.email }}</p>
+                        </div>
                     </div>
                     <div class="space-y-1 p-3">
-                        <Link v-if="profileHref" :href="profileHref" @click="closePanels"
+                        <Link v-if="profileHref && canViewProfile" :href="profileHref" @click="closePanels"
                             class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
                             <User class="h-4 w-4 text-indigo-500" /> My Profile
                         </Link>
@@ -715,6 +787,10 @@ onMounted(() => {
                             </div>
                             <p class="mt-2 text-[10px] font-semibold text-gray-400">Applies across the whole ERP system.</p>
                         </div>
+                        <button v-if="isClient" @click="openPasswordModal"
+                            class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
+                            <KeyRound class="h-4 w-4 text-indigo-500" /> Change Password
+                        </button>
                         <button @click="showLogoutConfirm = true"
                             class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20">
                             <LogOut class="h-4 w-4" /> Log Out
@@ -1060,6 +1136,57 @@ onMounted(() => {
                                 </form>
                             </div>
                         </div>
+                    </div>
+                </Teleport>
+
+                <!-- Change password (partner portal) -->
+                <Teleport to="body">
+                    <div v-if="showPasswordModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="closePasswordModal">
+                        <div class="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900">
+                            <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-zinc-800">
+                                <h4 class="text-sm font-black text-gray-900 dark:text-white">Change Password</h4>
+                                <button type="button" @click="closePasswordModal" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"><X class="h-4 w-4" /></button>
+                            </div>
+                            <form @submit.prevent="submitPassword" class="space-y-3.5 p-5">
+                                <p v-if="isRepresentative" class="rounded-xl bg-indigo-50 px-3 py-2 text-[11px] font-bold text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300">
+                                    Changing the password for {{ representative.email }}.
+                                </p>
+                                <div>
+                                    <label class="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Current password</label>
+                                    <input v-model="pwForm.current_password" type="password" autocomplete="current-password" required
+                                        class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
+                                    <p v-if="pwForm.errors.current_password" class="mt-1 text-[11px] font-bold text-rose-500">{{ pwForm.errors.current_password }}</p>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">New password</label>
+                                    <input v-model="pwForm.password" type="password" autocomplete="new-password" required
+                                        class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
+                                    <p v-if="pwForm.errors.password" class="mt-1 text-[11px] font-bold text-rose-500">{{ pwForm.errors.password }}</p>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Confirm new password</label>
+                                    <input v-model="pwForm.password_confirmation" type="password" autocomplete="new-password" required
+                                        class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
+                                </div>
+                                <div class="flex gap-2 pt-1">
+                                    <button type="button" @click="closePasswordModal"
+                                        class="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-black uppercase text-gray-500 hover:bg-gray-200 dark:bg-zinc-800 dark:text-gray-300">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" :disabled="pwForm.processing"
+                                        class="flex-1 rounded-xl bg-indigo-600 py-2.5 text-xs font-black uppercase text-white hover:bg-indigo-700 active:scale-95 disabled:opacity-60">
+                                        {{ pwForm.processing ? 'Saving…' : 'Update password' }}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </Teleport>
+
+                <!-- Transient success toast -->
+                <Teleport to="body">
+                    <div v-if="toastMsg" class="fixed right-5 top-20 z-[210] flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-2xl">
+                        <Check class="h-4 w-4" /> {{ toastMsg }}
                     </div>
                 </Teleport>
 

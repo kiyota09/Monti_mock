@@ -6,6 +6,7 @@ use App\Models\Crm\CrmInteraction;
 use App\Models\Crm\LeadNote;
 use App\Models\Crm\LeadInterview;
 use App\Models\Crm\LeadApprovalFile;
+use App\Models\Crm\CrmLeadInvestigation;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -63,6 +64,11 @@ class CrmLead extends Model
     public function approvalFiles()
     {
         return $this->hasMany(LeadApprovalFile::class, 'lead_id');
+    }
+
+    public function investigations()
+    {
+        return $this->hasMany(CrmLeadInvestigation::class, 'lead_id');
     }
 
     public function assignedStaff()
