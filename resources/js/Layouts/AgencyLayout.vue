@@ -2,6 +2,7 @@
 import Sidebar from './Sidebar.vue'
 import MobileSidebar from './MobileSidebar.vue'
 import TopBar from './Navbar/TopBar.vue'
+import ForcePasswordChangeModal from '@/Components/Auth/ForcePasswordChangeModal.vue'
 import { usePage } from '@inertiajs/vue3'
 import { computed, ref, onErrorCaptured } from 'vue'
 
@@ -60,5 +61,8 @@ const reloadPage = () => {
                 </div>
             </main>
         </div>
+
+        <!-- Forced password change for system-issued passwords (any page) -->
+        <ForcePasswordChangeModal />
     </div>
 </template>

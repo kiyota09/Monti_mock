@@ -27,6 +27,7 @@ class Client extends Authenticatable
         'contact_person',
         'email',
         'password',
+        'must_change_password',
         'phone',
         'company_address',
         'city',
@@ -59,6 +60,7 @@ class Client extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'must_change_password' => 'boolean',
         'credit_limit' => 'decimal:2',
         'payment_terms_days' => 'integer',
         'latitude' => 'float',  // ← ADDED

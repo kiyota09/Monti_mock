@@ -9,6 +9,8 @@ use App\Http\Controllers\Applicants\Portal\NotificationsController as PortalNoti
 use App\Http\Controllers\Applicants\Portal\OnboardingController as PortalOnboardingController;
 use App\Http\Controllers\Applicants\Portal\ProfileController as PortalProfileController;
 use App\Http\Controllers\Auth\ApplicantAuthController;
+use App\Http\Controllers\Auth\ForcedPasswordController;
+use App\Http\Controllers\Auth\PasswordRecoveryController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,6 +27,7 @@ Route::middleware('guest:applicant')->group(function () {
     Route::get('applicant/login', [ApplicantAuthController::class, 'showLogin'])->name('applicant.login');
     Route::post('applicant/login', [ApplicantAuthController::class, 'login'])->middleware('throttle:10,1')->name('applicant.login.store');
     Route::post('applicant/reactivate', [PortalProfileController::class, 'reactivate'])->middleware('throttle:6,1')->name('applicant.reactivate');
+    Route::post('applicant/password/recover', [PasswordRecoveryController::class, 'applicant'])->middleware('throttle:6,1')->name('applicant.password.recover');
 });
 
 Route::post('applicant/logout', [ApplicantAuthController::class, 'logout'])
@@ -72,6 +75,8 @@ Route::middleware('auth:applicant')->prefix('applicant')->name('applicant.')->gr
     Route::get('/account/activity', [PortalProfileController::class, 'activity'])->name('account.activity');
     Route::post('/account/email', [PortalProfileController::class, 'updateEmail'])->name('account.email.update');
     Route::post('/account/password', [PortalProfileController::class, 'password'])->name('account.password.update');
+    // Forced password change (first login / after a recovery password).
+    Route::post('/password/force', [ForcedPasswordController::class, 'applicant'])->name('password.force');
     Route::post('/account/verify-email', [PortalProfileController::class, 'verify'])->name('account.email.verify');
     Route::post('/account/deactivate', [PortalProfileController::class, 'deactivate'])->name('account.deactivate');
 });

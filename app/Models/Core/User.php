@@ -62,6 +62,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'must_change_password',
         'profile_photo_path',
         'employee_id',
         'department',
@@ -110,6 +111,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
             // Casting new fields for proper data handling
             'promotion_suggested' => 'boolean',
             'suggested_at' => 'datetime',

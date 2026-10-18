@@ -217,6 +217,7 @@ class OpportunityController extends Controller
                 'phone' => $validated['phone'],
                 'company_address' => $validated['company_address'],
                 'password' => bcrypt($validated['password']),
+                'must_change_password' => true,
                 'status' => 'active',
             ]);
 

@@ -59,6 +59,7 @@ class Applicant extends Authenticatable
         'email_otp_locked_until', 'email_otp_lock_count', 'email_otp_sent_at',
         // Applicant portal credentials
         'password',
+        'must_change_password',
     ];
 
     /**
@@ -75,6 +76,7 @@ class Applicant extends Authenticatable
      */
     protected $casts = [
         'password' => 'hashed',
+        'must_change_password' => 'boolean',
         'email_verified_at' => 'datetime',
         'email_otp_expires_at' => 'datetime',
         'email_otp_attempts' => 'integer',

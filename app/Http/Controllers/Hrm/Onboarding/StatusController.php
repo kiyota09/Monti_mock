@@ -627,6 +627,7 @@ class StatusController extends Controller
             'name' => trim("{$first} {$last}"),
             'first_name' => $first, 'middle_name' => $middle, 'last_name' => $last,
             'password' => Hash::make($tempPassword),
+            'must_change_password' => true,
             'role' => $role, 'position' => $systemPosition, 'is_active' => true,
             'employee_id' => 'EMP-' . str_pad((string) (User::max('id') + 1), 4, '0', STR_PAD_LEFT),
             'department' => $departmentName,

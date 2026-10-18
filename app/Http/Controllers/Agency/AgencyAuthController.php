@@ -52,11 +52,9 @@ class AgencyAuthController extends Controller
             RateLimiter::clear($this->throttleKey($request));
             $request->session()->regenerate();
 
-            // First login (or fresh temp password) forces a password change.
-            if ($agencyUser->must_change_password) {
-                return redirect()->route('agency.password.edit');
-            }
-
+            // A system-issued password (must_change_password) is handled by the
+            // global forced-change modal rendered from the portal layout, so
+            // login always lands on the dashboard.
             return redirect()->route('agency.dashboard');
         }
 

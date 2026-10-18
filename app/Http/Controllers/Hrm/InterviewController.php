@@ -66,6 +66,7 @@ class InterviewController extends Controller
         $user = User::firstOrCreate(['email' => $applicant->email], [
             'name' => $applicant->first_name.' '.$applicant->last_name,
             'password' => Hash::make('password'),
+            'must_change_password' => true,
             'role' => $module,
             'position' => 'trainee',
             'is_active' => true,

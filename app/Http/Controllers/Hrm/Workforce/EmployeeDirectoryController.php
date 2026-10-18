@@ -201,7 +201,7 @@ class EmployeeDirectoryController extends Controller
             return back()->withErrors(['email' => 'This account is deactivated. Reactivate it before issuing credentials.']);
         }
         $tempPassword = 'Monti-' . Str::upper(Str::random(6));
-        $employee->update(['password' => Hash::make($tempPassword)]);
+        $employee->update(['password' => Hash::make($tempPassword), 'must_change_password' => true]);
 
         $employee->loadMissing(['hrmDepartment:id,name', 'hrmOrgPosition:id,name']);
         $personalEmail = $employee->personal_email;

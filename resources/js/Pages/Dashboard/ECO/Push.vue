@@ -589,7 +589,7 @@
                     class="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm"
                     @click.self="confirmModal.show = false">
                     <div
-                        class="bg-white dark:bg-zinc-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-pop flex flex-col">
+                        class="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-pop flex flex-col max-h-[90vh]">
 
                         <!-- Modal Header -->
                         <div class="relative overflow-hidden px-6 py-5 bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 text-white flex justify-between items-start">
@@ -613,7 +613,7 @@
                         </div>
 
                         <!-- Modal Body -->
-                        <div class="p-6 space-y-4">
+                        <div class="p-6 space-y-4 overflow-y-auto">
                             <p class="text-sm text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
                                 You are about to forward this Job Order to
                                 <strong class="text-gray-900 dark:text-white">{{ confirmModal.module === 'scm' ? 'Supply Chain Management (SCM)' : 'Order Management' }}</strong>.
@@ -640,6 +640,64 @@
                                 <label class="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Scheduled delivery date</label>
                                 <input v-model="deliveryDate" type="date" :min="todayStr"
                                     class="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                            </div>
+
+                            <!-- ══ Load-balancing calendar: every JO already scheduled per
+                                 delivery date (+ that day's total load), so this JO's date
+                                 can be picked where the loads are balanced ══ -->
+                            <div class="rounded-2xl border border-gray-100 dark:border-zinc-700 p-3 sm:p-4">
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Delivery calendar</p>
+                                        <p class="text-xs font-black text-gray-800 dark:text-zinc-100 truncate">
+                                            {{ calendarTitle }} · {{ Math.round(monthLoad) }} kg scheduled
+                                        </p>
+                                    </div>
+                                    <div class="flex items-center gap-1 flex-shrink-0">
+                                        <button type="button" @click="calOffset--"
+                                            class="p-1.5 rounded-lg bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">
+                                            <ChevronLeft class="h-4 w-4" />
+                                        </button>
+                                        <button type="button" @click="calOffset = 0"
+                                            class="px-2 py-1.5 rounded-lg bg-gray-100 dark:bg-zinc-800 text-[9px] font-black uppercase hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">Today</button>
+                                        <button type="button" @click="calOffset++"
+                                            class="p-1.5 rounded-lg bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">
+                                            <ChevronRight class="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-7 gap-1 text-center text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">
+                                    <span v-for="d in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="d">{{ d }}</span>
+                                </div>
+                                <div class="grid grid-cols-7 gap-1">
+                                    <button v-for="cell in calendarCells" :key="cell.key" type="button"
+                                        :disabled="!cell.inMonth || cell.past"
+                                        @click="pickDeliveryDate(cell)"
+                                        :title="cell.orders.length ? cell.orders.map((o) => o.jo_number + ' · ' + (o.client?.company_name ?? '')).join('  |  ') : ''"
+                                        :class="[
+                                            'min-h-16 rounded-xl border p-1 text-left align-top transition flex flex-col',
+                                            cell.inMonth ? 'border-gray-100 dark:border-zinc-800 bg-gray-50/60 dark:bg-zinc-800/40' : 'border-transparent opacity-40',
+                                            cell.isToday ? 'border-indigo-400 ring-2 ring-indigo-200 dark:ring-indigo-900/50' : '',
+                                            cell.key === deliveryDate ? 'border-indigo-500 ring-2 ring-indigo-300 bg-indigo-50 dark:bg-indigo-900/30' : '',
+                                            (cell.inMonth && !cell.past) ? 'hover:border-indigo-300 hover:bg-indigo-50/60 dark:hover:bg-indigo-900/10 cursor-pointer' : 'cursor-default',
+                                        ]">
+                                        <div class="flex items-center justify-between gap-1">
+                                            <span class="text-[10px] font-black"
+                                                :class="cell.isToday ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-500 dark:text-zinc-400'">{{ cell.day }}</span>
+                                            <span v-if="cell.load"
+                                                class="rounded-full bg-indigo-600 text-white px-1.5 py-0.5 text-[8px] font-black leading-none">{{ Math.round(cell.load) }}</span>
+                                        </div>
+                                        <div class="mt-0.5 space-y-0.5 overflow-hidden">
+                                            <span v-for="o in cell.orders.slice(0, 2)" :key="o.id"
+                                                class="block truncate rounded bg-indigo-100 dark:bg-indigo-900/40 px-1 py-0.5 text-[8px] font-bold text-indigo-700 dark:text-indigo-200">{{ o.jo_number }}</span>
+                                            <span v-if="cell.orders.length > 2"
+                                                class="block text-[8px] font-black text-indigo-500 dark:text-indigo-300">+{{ cell.orders.length - 2 }} more</span>
+                                        </div>
+                                    </button>
+                                </div>
+                                <p class="mt-2 text-[10px] font-bold text-gray-400">
+                                    Badge = total kg scheduled that day. Click a future date to set this JO's delivery date.
+                                </p>
                             </div>
 
                             <!-- Order Summary Card -->
@@ -933,18 +991,51 @@ const calendarCells = computed(() => {
         const k = String(o.expected_ship_date).slice(0, 10);
         (byDate[k] = byDate[k] || []).push(o);
     });
+    const build = (key, realKey, day, inMonth) => {
+        const orders = byDate[realKey] || [];
+        return {
+            key,
+            day,
+            inMonth,
+            orders,
+            dateKey: realKey,
+            isToday: realKey === todayKey,
+            past: inMonth && realKey < todayKey,
+            load: orders.reduce((sum, o) => sum + Number(o.quantity || 0), 0),
+        };
+    };
     const cells = [];
     for (let i = 0; i < first; i++) {
         const d = new Date(y, m, -first + i + 1);
         const k = d.toISOString().slice(0, 10);
-        cells.push({ key: 'pad-' + i, day: d.getDate(), inMonth: false, isToday: k === todayKey, orders: byDate[k] || [] });
+        cells.push(build('pad-' + i, k, d.getDate(), false));
     }
     for (let d = 1; d <= days; d++) {
         const k = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        cells.push({ key: k, day: d, inMonth: true, isToday: k === todayKey, orders: byDate[k] || [] });
+        cells.push(build(k, k, d, true));
     }
     return cells;
 });
+
+const monthLoad = computed(() =>
+    calendarCells.value.filter((c) => c.inMonth).reduce((sum, c) => sum + c.load, 0)
+);
+
+const pickDeliveryDate = (cell) => {
+    if (!cell.inMonth || cell.past) return;
+    deliveryDate.value = cell.dateKey;
+};
+
+// Jump the calendar to the month of a given date (or back to the current month).
+const focusCalendarOn = (dateStr) => {
+    if (!dateStr) {
+        calOffset.value = 0;
+        return;
+    }
+    const now = new Date();
+    const d = new Date(String(dateStr).slice(0, 10) + 'T00:00:00');
+    calOffset.value = (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth());
+};
 
 // Inventory-check state (THE single stock check for ECO + SCM, run before acceptance)
 const dssModal = ref({ show: false, loading: false, order: null, result: null });
@@ -977,6 +1068,7 @@ const pushFromDss = () => {
     const order = dssModal.value.order;
     dssModal.value.show = false;
     deliveryDate.value = order?.expected_ship_date ? String(order.expected_ship_date).slice(0, 10) : '';
+    focusCalendarOn(deliveryDate.value);
     confirmModal.value = { show: true, order, module: 'scm' };
 };
 
@@ -1056,12 +1148,14 @@ const openConfirmFromSummary = () => {
     const order = summaryModal.value.data;
     summaryModal.value.show = false;
     deliveryDate.value = order?.expected_ship_date ? String(order.expected_ship_date).slice(0, 10) : '';
+    focusCalendarOn(deliveryDate.value);
     confirmModal.value = { show: true, order, module: 'scm' };
 };
 
 // Open confirmation modal (from table / card buttons)
 const openConfirm = (order, module) => {
     deliveryDate.value = order?.expected_ship_date ? String(order.expected_ship_date).slice(0, 10) : '';
+    focusCalendarOn(deliveryDate.value);
     confirmModal.value = { show: true, order, module };
 };
 
