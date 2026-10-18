@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Hrm\HrmOnboarding;
 use App\Models\Hrm\HrmOnboardingActivity;
 use App\Models\Hrm\HrmOnboardingItem;
+use App\Support\NotifiesApplicant;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
@@ -35,6 +37,11 @@ class OnboardingController extends Controller
 
         // Per-job table rows: one row per onboarding record (each tied to the
         // job the applicant applied for via job_posting_id / position).
+        // Kick off each countdown on first portal visit + remind when close.
+        foreach ($all as $record) {
+            $this->syncDuration($record, $applicant);
+        }
+
         $rows = $all->map(fn ($o) => [
             'id' => $o->id,
             'job' => $o->jobPosting?->title ?? $o->position ?? '—',
@@ -125,6 +132,12 @@ class OnboardingController extends Controller
             'assigned_manager' => $onboarding->assigned_manager,
             'status' => $onboarding->status,
             'progress' => (int) $onboarding->progress,
+            'duration_days' => $onboarding->duration_days,
+            'duration_started_at' => optional($onboarding->duration_started_at)?->toDateTimeString(),
+            'duration_end_date' => $onboarding->duration_days && $onboarding->duration_started_at
+                ? Carbon::parse($onboarding->duration_started_at)->addDays((int) $onboarding->duration_days)->toDateString()
+                : null,
+            'duration_days_left' => $this->durationDaysLeft($onboarding),
             'activities' => $onboarding->activities->map(fn ($a) => [
                 'id' => $a->id,
                 'title' => $a->title,
@@ -143,6 +156,57 @@ class OnboardingController extends Controller
             ])->values()->all(),
             'sections' => $sections,
         ];
+    }
+
+    /**
+     * Applicant portal onboarding countdown.
+     *
+     * The template sets a duration in days. The clock starts the first time
+     * the applicant opens the onboarding portal, and once fewer than 4 days
+     * remain (i.e. within 3 days of the end) a single reminder notification
+     * is pushed to the applicant portal.
+     */
+    private function syncDuration(HrmOnboarding $onboarding, $applicant): void
+    {
+        if (! $onboarding->duration_days) {
+            return;
+        }
+        if (! $onboarding->duration_started_at) {
+            $onboarding->duration_started_at = now();
+            $onboarding->save();
+        }
+        if ($onboarding->status === 'Completed' || $onboarding->duration_reminder_sent_at) {
+            return;
+        }
+        $end = Carbon::parse($onboarding->duration_started_at)->addDays((int) $onboarding->duration_days);
+        $daysLeft = now()->startOfDay()->diffInDays($end->startOfDay(), false);
+        if ($daysLeft <= 3) {
+            NotifiesApplicant::push(
+                $applicant,
+                'onboarding',
+                'Onboarding Ending Soon',
+                'Your onboarding is about to reach the end of its ' . $onboarding->duration_days
+                    . '-day duration (ends ' . $end->toFormattedDateString() . '). Please complete any remaining requirements.',
+                [
+                    'onboarding_id' => $onboarding->id,
+                    'end_date' => $end->toDateString(),
+                    'days_left' => max(0, $daysLeft),
+                    'status' => 'Onboarding',
+                ]
+            );
+            $onboarding->duration_reminder_sent_at = now();
+            $onboarding->save();
+        }
+    }
+
+    private function durationDaysLeft(HrmOnboarding $onboarding): ?int
+    {
+        if (! $onboarding->duration_days || ! $onboarding->duration_started_at) {
+            return null;
+        }
+        $end = Carbon::parse($onboarding->duration_started_at)->addDays((int) $onboarding->duration_days);
+
+        return (int) now()->startOfDay()->diffInDays($end->startOfDay(), false);
     }
 
     public function submitItem(Request $request, HrmOnboardingItem $item)

@@ -7,7 +7,7 @@ namespace App\Support;
  *
  * Field/Value table:
  *   Days worked × Daily rate = Basic total
- *   Night rate   = daily × 1.10,  Night amount   = night_hours × hourly × 1.10
+ *   Night rate   = hourly × 1.10, Night amount   = night_hours × hourly × 1.10
  *   O.T. rate    = hourly × 1.25, O.T. amount    = ot_hours × hourly × 1.25
  *   Sun/SP rate  = hourly × 1.30, Sun/SP amount  = sun_hours × hourly × 1.30
  *   Late rate    = hourly / 60,   Late total     = late_minutes × late_rate
@@ -61,7 +61,9 @@ class PayrollCalc
         $lateM = max(0, (float) ($e['late_minutes'] ?? $e['late'] ?? 0));
 
         // Derived rates (always from daily, even when hours are blank).
-        $nightRate = $daily * $nightMult;
+        // night_rate is hourly-based (hourly × multiplier), consistent with
+        // ot_rate / sun_rate. night_amt = night_hours × hourly × multiplier.
+        $nightRate = $hourly * $nightMult;
         $otRate    = $hourly * $otMult;
         $sunRate   = $hourly * $sunMult;
         $lateRate  = $hourly > 0 ? $hourly / $lateDiv : 0;

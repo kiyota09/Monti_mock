@@ -36,7 +36,8 @@ class EmployeeDirectoryController extends Controller
 
     public function index(Request $request)
     {
-        $q = User::with(['hrmDepartment', 'hrmOrgPosition.reportsTo', 'hrmEmploymentType', 'hrmRole', 'manager']);
+        $q = User::with(['hrmDepartment', 'hrmOrgPosition.reportsTo', 'hrmEmploymentType', 'hrmRole', 'manager'])
+            ->whereNull('worker_id');
 
         if ($s = $request->get('search')) {
             $q->where(fn ($w) => $w->where('name', 'like', "%{$s}%")
@@ -59,7 +60,7 @@ class EmployeeDirectoryController extends Controller
         $employees = collect($paginated->items())->filter(fn ($u) => $u !== null)
             ->map(fn ($u) => $this->record($u))->values()->all();
 
-        $deptCounts = User::selectRaw('role, count(*) as c')->groupBy('role')->pluck('c', 'role');
+        $deptCounts = User::whereNull('worker_id')->selectRaw('role, count(*) as c')->groupBy('role')->pluck('c', 'role');
 
         return Inertia::render('Dashboard/HRM_NEW/Employee', [
             'employees' => $employees,
@@ -70,9 +71,9 @@ class EmployeeDirectoryController extends Controller
                 'total' => $paginated->total(),
             ],
             'stats' => [
-                'total' => User::count(),
-                'active' => User::where('is_active', true)->count(),
-                'inactive' => User::where('is_active', false)->count(),
+                'total' => User::whereNull('worker_id')->count(),
+                'active' => User::whereNull('worker_id')->where('is_active', true)->count(),
+                'inactive' => User::whereNull('worker_id')->where('is_active', false)->count(),
                 'byDepartment' => $deptCounts,
             ],
             'filters' => $request->only(['search', 'department', 'role', 'status']),
@@ -103,9 +104,9 @@ class EmployeeDirectoryController extends Controller
                 'total' => 1,
             ],
             'stats' => [
-                'total' => User::count(),
-                'active' => User::where('is_active', true)->count(),
-                'inactive' => User::where('is_active', false)->count(),
+                'total' => User::whereNull('worker_id')->count(),
+                'active' => User::whereNull('worker_id')->where('is_active', true)->count(),
+                'inactive' => User::whereNull('worker_id')->where('is_active', false)->count(),
                 'byDepartment' => [],
             ],
             'filters' => [],
@@ -244,7 +245,7 @@ class EmployeeDirectoryController extends Controller
         return response()->streamDownload(function () {
             $out = fopen('php://output', 'w');
             fputcsv($out, ['employee_id', 'name', 'email', 'role', 'position', 'department', 'status', 'join_date']);
-            User::orderBy('name')->chunk(500, function ($rows) use ($out) {
+            User::whereNull('worker_id')->orderBy('name')->chunk(500, function ($rows) use ($out) {
                 foreach ($rows as $u) {
                     fputcsv($out, [
                         $u->employee_id ?: ('EMP-' . $u->id), $u->name, $u->email,

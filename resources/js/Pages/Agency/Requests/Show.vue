@@ -9,6 +9,7 @@ import 'vue3-toastify/dist/index.css';
 const props = defineProps<{
     request: {
         id: number; code: string; department: string; position_skill: string;
+        agency?: string | null;
         needed: number; filled: number; start_date: string | null; end_date: string | null;
         shift: string | null; notes: string | null; status: string; stored_status: string;
         accepted: Array<{ worker_code: string | null; worker_name: string | null }>;
@@ -59,6 +60,29 @@ function progressPct(): number {
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+                <h2 class="text-sm font-black uppercase tracking-wider mb-3">Request</h2>
+                <dl class="space-y-2 text-sm">
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Department</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.department }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Position / skill</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.position_skill }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Headcount</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.needed }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Start date</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.start_date || '—' }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">End date</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.end_date || '—' }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Shift</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.shift || '—' }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Agency</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ request.agency || '—' }}</dd></div>
+                    <div v-if="request.notes"><dt class="text-slate-400">Notes</dt><dd class="mt-1 text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{{ request.notes }}</dd></div>
+                </dl>
+                <div class="mt-4">
+                    <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                        <span>{{ request.filled }} of {{ request.needed }} filled</span>
+                        <span>{{ progressPct() }}%</span>
+                    </div>
+                    <div class="h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        <div class="h-full rounded-full bg-blue-600 transition-all" :style="{ width: progressPct() + '%' }"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
                 <h2 class="text-sm font-black uppercase tracking-wider mb-3">Propose a worker</h2>
                 <p class="text-xs text-slate-500 mb-3">Pick from your Available workers. HR approves or rejects each proposal.</p>

@@ -53,6 +53,25 @@ class MyAttendanceController extends Controller
         // Non-working holidays (Holiday Management): never Absent on these days.
         $holidays = \App\Models\Hrm\Holiday::nonWorkingMap($monthStart->toDateString(), $monthEnd->toDateString());
 
+        // Employment start (deployment): days before this are not Absent.
+        // Deployed worker logins carry join_date = deployment date; fall back
+        // to the account creation date so pre-deployment days show '—'.
+        $employmentStart = null;
+        try {
+            $joinDate = $user->join_date
+                ? substr((string) ($user->join_date instanceof \Carbon\Carbon ? $user->join_date->toDateString() : $user->join_date), 0, 10)
+                : null;
+            $createdDate = $user->created_at
+                ? substr((string) ($user->created_at instanceof \Carbon\Carbon ? $user->created_at->toDateString() : $user->created_at), 0, 10)
+                : null;
+            $employmentStart = $joinDate ?: $createdDate;
+            if ($employmentStart && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $employmentStart)) {
+                $employmentStart = null;
+            }
+        } catch (\Throwable) {
+            $employmentStart = null;
+        }
+
         // ---- Day-by-day rows (1st → today for the current month) ----
         $rows = [];
         if ($monthStart->toDateString() <= $today) {
@@ -65,7 +84,10 @@ class MyAttendanceController extends Controller
 
                 $schedule = $shift ? trim(($shift->shift_type ?? '') . ($shift->schedule_range ? ' (' . $shift->schedule_range . ')' : '')) : '—';
 
-                if ($log) {
+                if ($employmentStart && $key < $employmentStart) {
+                    $status = '—';
+                    $remark = '';
+                } elseif ($log) {
                     $status = self::display($log->status);
                     if (! $log->clock_out && $key < $today) {
                         $status = 'Incomplete';

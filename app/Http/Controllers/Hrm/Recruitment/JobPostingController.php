@@ -10,10 +10,12 @@ use App\Models\Hrm\HrmDepartment;
 use App\Models\Hrm\HrmEmploymentType;
 use App\Models\Hrm\HrmJobPosting;
 use App\Models\Hrm\HrmPosition;
+use App\Models\Hrm\HrmShift;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class JobPostingController extends Controller
@@ -98,8 +100,8 @@ class JobPostingController extends Controller
                 ])->values()->all(),
             // Hiring Manager picker: manager level or higher only
             // (manager / secretary / special_officer / vice_president),
-            // with department ids so the form can filter by position department.
-            // Company-level (NULL department) managers show for every department.
+            // with department ids so the form can restrict the list to the
+            // selected position's department (no other-department managers).
             'hiringManagers' => User::with(['hrmOrgPosition:id,name,code,management_level', 'hrmDepartment:id,name'])
                 ->where('is_active', '!=', 0)
                 ->whereIn('position', ['manager', 'secretary', 'special_officer', 'vice_president'])
@@ -119,6 +121,9 @@ class JobPostingController extends Controller
                 ])->values()->all(),
             'workLocation' => 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite',
             'employmentTypes' => HrmEmploymentType::select('id', 'name')->get(),
+            // Shift options come from Shift management (active definitions).
+            'shifts' => HrmShift::where('is_active', true)->orderBy('code')
+                ->get(['id', 'code', 'name', 'shift_type', 'start_time', 'end_time']),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
     }
@@ -132,7 +137,7 @@ class JobPostingController extends Controller
             'hiring_priority' => 'nullable|in:Normal,High,Urgent',
             'work_mode' => 'nullable|in:On-site,Remote,Hybrid',
             'work_schedule' => 'nullable|string',
-            'shift' => 'nullable|in:Morning Shift,Afternoon Shift,Night Shift,Rotating Shift,Flexible Shift',
+            'shift' => 'nullable|string|max:100',
             'salary_visibility' => 'nullable|string',
             'recruitment_notes' => 'nullable|string',
             'internal_notes' => 'nullable|string',
@@ -148,6 +153,9 @@ class JobPostingController extends Controller
         ]);
         // Title + salary are derived from the selected position (read-only).
         $position = HrmPosition::findOrFail($data['position_id']);
+        // Work mode is fixed to on-site company policy.
+        $data['work_mode'] = 'On-site';
+        $this->assertVacanciesWithinHeadcount($position->id, (int) $data['vacancies']);
         $data['title'] = $position->name;
         $data['salary_min'] = $position->salary_min;
         $data['salary_max'] = $position->salary_max;
@@ -174,7 +182,7 @@ class JobPostingController extends Controller
             'hiring_priority' => 'nullable|in:Normal,High,Urgent',
             'work_mode' => 'nullable|in:On-site,Remote,Hybrid',
             'work_schedule' => 'nullable|string',
-            'shift' => 'nullable|in:Morning Shift,Afternoon Shift,Night Shift,Rotating Shift,Flexible Shift',
+            'shift' => 'nullable|string|max:100',
             'salary_visibility' => 'nullable|string',
             'recruitment_notes' => 'nullable|string',
             'internal_notes' => 'nullable|string',
@@ -188,6 +196,8 @@ class JobPostingController extends Controller
             'hiring_manager' => 'nullable|string',
             'work_location' => 'nullable|string',
         ]);
+        // Work mode is fixed to on-site company policy.
+        $validated['work_mode'] = 'On-site';
         // When the position changes, re-derive title + salary (read-only).
         if (! empty($validated['position_id'])) {
             $position = HrmPosition::findOrFail($validated['position_id']);
@@ -195,9 +205,34 @@ class JobPostingController extends Controller
             $validated['salary_min'] = $position->salary_min;
             $validated['salary_max'] = $position->salary_max;
         }
+        if (isset($validated['vacancies'])) {
+            $this->assertVacanciesWithinHeadcount(
+                (int) ($validated['position_id'] ?? $jobPosting->position_id),
+                (int) $validated['vacancies']
+            );
+        }
         $jobPosting->update($validated);
 
         return back()->with('success', 'Job posting updated.');
+    }
+
+    /**
+     * Number of vacancies may never exceed a position's available headcount
+     * (approved headcount minus employees already assigned to the position).
+     */
+    private function assertVacanciesWithinHeadcount(int $positionId, int $vacancies): void
+    {
+        $position = HrmPosition::find($positionId);
+        if (! $position) {
+            return;
+        }
+        $available = (int) ($position->approved_headcount ?? 0)
+            - User::where('hrm_position_id', $positionId)->count();
+        if ($available > 0 && $vacancies > $available) {
+            throw ValidationException::withMessages([
+                'vacancies' => "Number of vacancies cannot exceed the available headcount ({$available}) for {$position->name}.",
+            ]);
+        }
     }
 
     public function destroy(HrmJobPosting $jobPosting)

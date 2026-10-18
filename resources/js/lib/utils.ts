@@ -8,6 +8,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Format a decimal hour count (e.g. 3.65) as a readable "3h 39m".
+export function formatHours(value: number | string | null | undefined): string {
+    const total = Number(value ?? 0);
+    if (!isFinite(total) || total <= 0) return '0h';
+    let hours = Math.floor(total);
+    let minutes = Math.round((total - hours) * 60);
+    if (minutes === 60) {
+        hours += 1;
+        minutes = 0;
+    }
+    return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
+
 // Role-based utilities
 export const ROLES = {
     HRM: 'HRM',

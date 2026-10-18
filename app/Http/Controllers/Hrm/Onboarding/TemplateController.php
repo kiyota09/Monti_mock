@@ -12,6 +12,7 @@ use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\HrmRole;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class TemplateController extends Controller
@@ -89,7 +90,7 @@ class TemplateController extends Controller
         return Inertia::render('Dashboard/HRM_NEW/OnboardingTemplateBuilder', [
             'template' => $template,
             'inputTypes' => ['text', 'file', 'date', 'checkbox', 'select'],
-            'categories' => ['Applicant Requirements', 'HR Processing', 'Company Preparation'],
+            'categories' => ['Applicant Requirements', 'HR Processing'],
             'responsibleParties' => ['Applicant', 'HR', 'Manager', 'IT', 'Facilities'],
             'activityTypes' => ['Orientation', 'Training', 'Tour', 'Meeting', 'Assessment'],
             'activityMethods' => ['On-site', 'Online', 'Hybrid'],
@@ -124,6 +125,7 @@ class TemplateController extends Controller
             'position_id' => 'nullable|exists:hrm_positions,id',
             'employment_type_id' => 'nullable|exists:hrm_employment_types,id',
             'work_mode' => 'nullable|string',
+            'duration_days' => 'nullable|integer|min:1|max:3650',
             'is_default' => 'nullable|boolean',
         ]);
         $data['code'] ??= 'STD-' . str_pad((string) (HrmOnboardingTemplate::count() + 1), 3, '0', STR_PAD_LEFT);
@@ -147,6 +149,7 @@ class TemplateController extends Controller
             'position_id' => 'nullable|exists:hrm_positions,id',
             'employment_type_id' => 'nullable|exists:hrm_employment_types,id',
             'work_mode' => 'nullable|string',
+            'duration_days' => 'nullable|integer|min:1|max:3650',
             'is_default' => 'nullable|boolean',
         ]);
         $template->update($data);
@@ -200,9 +203,11 @@ class TemplateController extends Controller
             'is_required' => 'nullable|boolean', 'applicant_visible' => 'nullable|boolean',
             'is_active' => 'nullable|boolean', 'due_rule_type' => 'nullable|string',
             'due_rule_value' => 'nullable|string', 'sort_order' => 'nullable|integer',
+            'attachment' => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
         ]);
         // Normalise select options: trim, drop empties, re-index. Non-select types store null.
         $data['options'] = $this->normaliseOptions($data['input_type'] ?? null, $data['options'] ?? null);
+        $data = $this->storeAttachment($request, $data);
         $template->items()->create($data);
 
         return back()->with('success', 'Item added.');
@@ -218,6 +223,8 @@ class TemplateController extends Controller
             'is_required' => 'nullable|boolean', 'applicant_visible' => 'nullable|boolean',
             'is_active' => 'nullable|boolean', 'due_rule_type' => 'nullable|string',
             'due_rule_value' => 'nullable|string', 'sort_order' => 'nullable|integer',
+            'attachment' => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
+            'remove_attachment' => 'nullable|boolean',
         ]);
         $inputType = $data['input_type'] ?? $item->input_type;
         $options = array_key_exists('options', $data) ? $data['options'] : $item->options;
@@ -226,9 +233,32 @@ class TemplateController extends Controller
         if ($inputType !== 'select') {
             $data['options'] = null;
         }
+        if (! empty($data['remove_attachment']) && $item->attachment_path) {
+            Storage::disk('public')->delete($item->attachment_path);
+            $data['attachment_path'] = null;
+            $data['attachment_name'] = null;
+        }
+        $data = $this->storeAttachment($request, $data, $item);
+        unset($data['remove_attachment']);
         $item->update($data);
 
         return back()->with('success', 'Item updated.');
+    }
+
+    private function storeAttachment(Request $request, array $data, ?HrmOnboardingTemplateItem $item = null): array
+    {
+        unset($data['attachment']);
+        if (! $request->hasFile('attachment')) {
+            return $data;
+        }
+        if ($item && $item->attachment_path) {
+            Storage::disk('public')->delete($item->attachment_path);
+        }
+        $file = $request->file('attachment');
+        $data['attachment_path'] = $file->store('onboarding/template-items', 'public');
+        $data['attachment_name'] = $file->getClientOriginalName();
+
+        return $data;
     }
 
     private function normaliseOptions(?string $inputType, mixed $options): ?array

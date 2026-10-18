@@ -10,7 +10,7 @@ class HrmOnboardingTemplate extends Model
     protected $table = 'hrm_onboarding_templates';
     protected $fillable = [
         'code', 'name', 'description', 'department_id', 'position_id',
-        'employment_type_id', 'work_mode', 'status', 'version', 'is_default', 'created_by',
+        'employment_type_id', 'work_mode', 'duration_days', 'status', 'version', 'is_default', 'created_by',
     ];
     protected $casts = ['is_default' => 'boolean'];
 

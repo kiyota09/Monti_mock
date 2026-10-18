@@ -4,6 +4,7 @@ import { ref, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Pencil, FileDown, FileSpreadsheet } from 'lucide-vue-next';
+import { formatHours } from '@/lib/utils';
 
 const props = defineProps<{
     statement: {
@@ -176,7 +177,7 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                                 <td class="py-2 px-3 text-sm font-bold text-slate-900 dark:text-white">{{ l.worker_name }} <span class="font-mono text-[10px] text-slate-400">({{ l.worker_code }})</span></td>
                                 <td class="py-2 px-3 text-xs font-mono text-slate-600 dark:text-slate-300">{{ l.request_code }}</td>
                                 <td class="py-2 px-3 text-center text-xs text-slate-600 dark:text-slate-300">{{ l.days }}</td>
-                                <td class="py-2 px-3 text-center text-xs text-slate-600 dark:text-slate-300">{{ l.hours }}<span v-if="l.overtime_hours">+{{ l.overtime_hours }} OT</span></td>
+                                <td class="py-2 px-3 text-center text-xs text-slate-600 dark:text-slate-300">{{ formatHours(l.hours) }}<span v-if="l.overtime_hours">+{{ formatHours(l.overtime_hours) }} OT</span></td>
                                 <td class="py-2 px-3 text-right text-xs font-bold text-slate-900 dark:text-white">{{ money(l.labor) }}</td>
                             </tr>
                         </tbody>
@@ -189,7 +190,7 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                     <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Totals</h2>
                     <dl class="space-y-2 text-sm">
                         <div class="flex justify-between"><dt class="text-slate-400">Records</dt><dd class="font-bold text-slate-700 dark:text-slate-200">{{ statement.record_count }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-400">Days / Hours</dt><dd class="font-bold text-slate-700 dark:text-slate-200">{{ statement.total_days }} / {{ statement.total_hours }}</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-400">Days / Hours</dt><dd class="font-bold text-slate-700 dark:text-slate-200">{{ statement.total_days }} / {{ formatHours(statement.total_hours) }}</dd></div>
                         <div class="flex justify-between"><dt class="text-slate-400">Labor cost</dt><dd class="font-bold text-slate-700 dark:text-slate-200">{{ money(statement.labor_cost) }}</dd></div>
                         <div class="flex justify-between"><dt class="text-slate-400">Service fee</dt><dd class="font-bold text-slate-700 dark:text-slate-200">{{ money(statement.service_fee) }}</dd></div>
                         <div class="flex justify-between text-base"><dt class="font-black text-slate-900 dark:text-white">Total</dt><dd class="font-black text-slate-900 dark:text-white">{{ money(statement.total) }}</dd></div>

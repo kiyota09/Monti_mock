@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Hrm\Workforce;
 use App\Http\Controllers\Controller;
 use App\Models\Core\User;
 use App\Models\Hrm\HrmShift;
+use App\Models\Hrm\Worker;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,7 +16,7 @@ class ShiftController extends Controller
 
     public function index(Request $request)
     {
-        $q = HrmShift::withCount('employees');
+        $q = HrmShift::withCount(['employees', 'workers']);
         if ($s = trim((string) $request->get('search', ''))) {
             $q->where(fn ($w) => $w->where('code', 'like', "%{$s}%")->orWhere('name', 'like', "%{$s}%"));
         }
@@ -28,11 +29,16 @@ class ShiftController extends Controller
 
         $shifts = $q->orderBy('code')->get()->map(fn ($sh) => $this->row($sh))->values();
 
-        $assigned = (int) \DB::table('hrm_shift_user')->distinct('user_id')->count('user_id');
+        $assigned = (int) \DB::table('hrm_shift_user as su')
+            ->join('users as u', 'u.id', '=', 'su.user_id')
+            ->whereNull('u.worker_id')
+            ->distinct('su.user_id')
+            ->count('su.user_id');
 
         // Employee roster: one row per user with their current (first) shift.
         // Powers the main table: name / department / position / shift / action.
         $raw = \DB::table('users as u')
+            ->whereNull('u.worker_id')
             ->leftJoin('hrm_departments as d', 'd.id', '=', 'u.hrm_department_id')
             ->leftJoin('hrm_positions as p', 'p.id', '=', 'u.hrm_position_id')
             ->leftJoin('hrm_shift_user as su', 'su.user_id', '=', 'u.id')
@@ -146,14 +152,79 @@ class ShiftController extends Controller
             ->values()
             ->all();
 
+        // Agency workers roster: one row per worker with their first shift
+        // (hrm_shift_worker → hrm_shifts). Powers the "Worker" tab.
+        // Only actively deployed workers are schedulable — a worker must be
+        // Deployed AND hold an unreleased assignment (same rule as the
+        // Workers page), so merely registered workers are excluded.
+        $workersRaw = \DB::table('workers as w')
+            ->where('w.status', Worker::STATUS_DEPLOYED)
+            ->whereExists(function ($sub) {
+                $sub->select(\DB::raw(1))
+                    ->from('manpower_assignments as ma')
+                    ->whereColumn('ma.worker_id', 'w.id')
+                    ->whereNull('ma.released_at');
+            })
+            ->leftJoin('agencies as ag', 'ag.id', '=', 'w.agency_id')
+            ->leftJoin('hrm_shift_worker as sw', 'sw.worker_id', '=', 'w.id')
+            ->leftJoin('hrm_shifts as ws', 'ws.id', '=', 'sw.shift_id')
+            ->select(
+                'w.id', 'w.code', 'w.name', 'w.position_skill', 'w.proposed_department', 'w.status',
+                'ag.name as agency_name',
+                'ws.id as shift_id', 'ws.name as shift_name',
+                'ws.start_time as shift_start', 'ws.end_time as shift_end',
+                'sw.effective_date as shift_effective_date'
+            )
+            ->orderBy('w.name')
+            ->take(1000)
+            ->get();
+
+        $wseen = [];
+        foreach ($workersRaw as $r) {
+            if (isset($wseen[$r->id])) {
+                if ($wseen[$r->id]['shift_id'] === null && $r->shift_id !== null) {
+                    $wseen[$r->id]['shift_id'] = (int) $r->shift_id;
+                    $wseen[$r->id]['shift_name'] = $r->shift_name;
+                    $wseen[$r->id]['start_time'] = $r->shift_start ?: '—';
+                    $wseen[$r->id]['end_time'] = $r->shift_end ?: '—';
+                    $wseen[$r->id]['effective_date'] = $r->shift_effective_date ? substr((string) $r->shift_effective_date, 0, 10) : null;
+                }
+                continue;
+            }
+            $wseen[$r->id] = [
+                'id' => (int) $r->id,
+                'code' => $r->code ?: ('WRK-' . str_pad((string) $r->id, 4, '0', STR_PAD_LEFT)),
+                'name' => $r->name,
+                'agency' => $r->agency_name,
+                'department' => $r->proposed_department ?: '—',
+                'position' => $r->position_skill ?: '—',
+                'status' => $r->status,
+                'shift_id' => $r->shift_id !== null ? (int) $r->shift_id : null,
+                'shift_name' => $r->shift_name,
+                'start_time' => $r->shift_start ?: '—',
+                'end_time' => $r->shift_end ?: '—',
+                'effective_date' => $r->shift_effective_date ? substr((string) $r->shift_effective_date, 0, 10) : null,
+            ];
+        }
+        $workers = array_values($wseen);
+
+        $totalEmployees = count($roster);
+        $totalWorkers = count($workers);
+        $workersAssigned = count(array_filter($workers, fn ($w) => $w['shift_id'] !== null));
+
         return Inertia::render('Dashboard/HRM_NEW/Shift', [
             'shifts' => $shifts,
             'roster' => $roster,
+            'workers' => $workers,
             'departments' => $departments,
             'summary' => [
                 'total' => HrmShift::count(),
                 'active' => HrmShift::where('is_active', true)->count(),
                 'inactive' => HrmShift::where('is_active', false)->count(),
+                'employees' => $totalEmployees,
+                'workers' => $totalWorkers,
+                'employees_assigned' => $assigned,
+                'workers_assigned' => $workersAssigned,
                 'assigned' => $assigned,
             ],
             'filters' => $request->only(['search', 'status', 'type']),
@@ -166,7 +237,10 @@ class ShiftController extends Controller
 
     public function show(HrmShift $shift)
     {
-        $shift->load(['employees' => fn ($q) => $q->select('users.id', 'users.name', 'users.email', 'users.employee_id', 'users.position', 'users.department', 'users.role', 'users.work_schedule', 'users.is_active', 'users.hrm_position_id', 'users.hrm_department_id', 'users.manufacturing_role', 'users.is_manufacturing_supervisor')->with(['hrmOrgPosition:id,name', 'hrmDepartment:id,name'])]);
+        $shift->load([
+            'employees' => fn ($q) => $q->select('users.id', 'users.name', 'users.email', 'users.employee_id', 'users.position', 'users.department', 'users.role', 'users.work_schedule', 'users.is_active', 'users.hrm_position_id', 'users.hrm_department_id', 'users.manufacturing_role', 'users.is_manufacturing_supervisor')->with(['hrmOrgPosition:id,name', 'hrmDepartment:id,name']),
+            'workers' => fn ($q) => $q->select('workers.id', 'workers.code', 'workers.name', 'workers.position_skill', 'workers.proposed_department', 'workers.status')->with('agency:id,name'),
+        ]);
 
         // Same job-title chain as the roster.
         $appliedByEmail = [];
@@ -222,6 +296,16 @@ class ShiftController extends Controller
                     'status' => $u->is_active ? 'Active' : 'Inactive',
                 ];
             })->values()->all(),
+            'workers' => $shift->workers->map(fn ($w) => [
+                'id' => $w->id,
+                'name' => $w->name,
+                'employee_id' => $w->code ?: ('WRK-' . str_pad((string) $w->id, 4, '0', STR_PAD_LEFT)),
+                'position' => $w->position_skill ?: '—',
+                'department' => $w->proposed_department ?: '—',
+                'agency' => $w->agency?->name,
+                'work_schedule' => '—',
+                'status' => $w->status,
+            ])->values()->all(),
         ]);
     }
 
@@ -285,17 +369,35 @@ class ShiftController extends Controller
     public function assign(Request $request, HrmShift $shift)
     {
         $data = $request->validate([
-            'user_ids' => 'required|array|min:1',
+            'user_ids' => 'nullable|array',
             'user_ids.*' => 'exists:users,id',
+            'worker_ids' => 'nullable|array',
+            'worker_ids.*' => 'exists:workers,id',
             'effective_date' => 'nullable|date',
         ]);
-        $pivot = [];
-        foreach ($data['user_ids'] as $id) {
-            $pivot[$id] = ['effective_date' => $data['effective_date'] ?? null];
+        $effective = $data['effective_date'] ?? null;
+        $userIds = $data['user_ids'] ?? [];
+        $workerIds = $data['worker_ids'] ?? [];
+        if (empty($userIds) && empty($workerIds)) {
+            return back()->with('error', 'Select at least one employee or worker to assign.');
         }
-        $shift->employees()->syncWithoutDetaching($pivot);
 
-        return back()->with('message', count($data['user_ids']) . ' employee(s) assigned to ' . $shift->code . '.');
+        if ($userIds) {
+            $pivot = [];
+            foreach ($userIds as $id) {
+                $pivot[$id] = ['effective_date' => $effective];
+            }
+            $shift->employees()->syncWithoutDetaching($pivot);
+        }
+        if ($workerIds) {
+            $pivot = [];
+            foreach ($workerIds as $id) {
+                $pivot[$id] = ['effective_date' => $effective];
+            }
+            $shift->workers()->syncWithoutDetaching($pivot);
+        }
+
+        return back()->with('message', (count($userIds) + count($workerIds)) . ' assignee(s) assigned to ' . $shift->code . '.');
     }
 
     public function unassign(HrmShift $shift, User $user)
@@ -303,6 +405,13 @@ class ShiftController extends Controller
         $shift->employees()->detach($user->id);
 
         return back()->with('message', $user->name . ' removed from ' . $shift->code . '.');
+    }
+
+    public function unassignWorker(HrmShift $shift, Worker $worker)
+    {
+        $shift->workers()->detach($worker->id);
+
+        return back()->with('message', $worker->name . ' removed from ' . $shift->code . '.');
     }
 
     /**
@@ -331,34 +440,98 @@ class ShiftController extends Controller
     }
 
     /**
-     * Group-assign: move many employees to the same shift at once
-     * (driven by the roster checkboxes).
+     * Move one agency worker to a new shift (single-shift roster model).
+     * Time always follows the selected shift definition.
+     */
+    public function reassignWorker(Request $request, Worker $worker)
+    {
+        $data = $request->validate([
+            'shift_id' => 'nullable|exists:hrm_shifts,id',
+            'effective_date' => 'nullable|date',
+        ]);
+
+        \DB::table('hrm_shift_worker')->where('worker_id', $worker->id)->delete();
+
+        if (! empty($data['shift_id'])) {
+            $shift = HrmShift::findOrFail($data['shift_id']);
+            $shift->workers()->syncWithoutDetaching([
+                $worker->id => ['effective_date' => $data['effective_date'] ?? null],
+            ]);
+
+            return back()->with('message', $worker->name . ' moved to ' . $shift->code . '.');
+        }
+
+        return back()->with('message', $worker->name . ' unassigned from all shifts.');
+    }
+
+    /**
+     * Group-assign: move many employees and/or agency workers to the same
+     * shift at once (driven by the roster checkboxes).
      */
     public function bulkAssign(Request $request)
     {
         $data = $request->validate([
             'shift_id' => 'required|exists:hrm_shifts,id',
-            'user_ids' => 'required|array|min:1',
+            'user_ids' => 'nullable|array',
             'user_ids.*' => 'exists:users,id',
+            'worker_ids' => 'nullable|array',
+            'worker_ids.*' => 'exists:workers,id',
             'effective_date' => 'nullable|date',
         ]);
 
         $shift = HrmShift::findOrFail($data['shift_id']);
+        $effective = $data['effective_date'] ?? null;
+        $userIds = $data['user_ids'] ?? [];
+        $workerIds = $data['worker_ids'] ?? [];
 
-        foreach (array_chunk($data['user_ids'], 200) as $chunk) {
+        if (empty($userIds) && empty($workerIds)) {
+            return back()->with('error', 'Select at least one employee or worker to group into a shift.');
+        }
+
+        foreach (array_chunk($userIds, 200) as $chunk) {
             \DB::table('hrm_shift_user')->whereIn('user_id', $chunk)->delete();
             $pivot = [];
             foreach ($chunk as $id) {
-                $pivot[$id] = ['effective_date' => $data['effective_date'] ?? null];
+                $pivot[$id] = ['effective_date' => $effective];
             }
             $shift->employees()->syncWithoutDetaching($pivot);
         }
 
-        return back()->with('message', count($data['user_ids']) . ' employee(s) grouped into ' . $shift->code . '.');
+        foreach (array_chunk($workerIds, 200) as $chunk) {
+            \DB::table('hrm_shift_worker')->whereIn('worker_id', $chunk)->delete();
+            $pivot = [];
+            foreach ($chunk as $id) {
+                $pivot[$id] = ['effective_date' => $effective];
+            }
+            $shift->workers()->syncWithoutDetaching($pivot);
+        }
+
+        return back()->with('message', (count($userIds) + count($workerIds)) . ' assignee(s) grouped into ' . $shift->code . '.');
     }
 
     public function employees(Request $request)
     {
+        // Typeahead for the assign dialog: employees (default) or agency workers.
+        if ($request->get('type') === 'worker') {
+            $q = Worker::select('id', 'code', 'name', 'position_skill')
+                ->whereNotNull('name')
+                ->where('status', Worker::STATUS_DEPLOYED)
+                ->whereHas('activeAssignments')
+                ->orderBy('name');
+            if ($s = trim((string) $request->get('search', ''))) {
+                $q->where(fn ($w) => $w->where('name', 'like', "%{$s}%")->orWhere('code', 'like', "%{$s}%"));
+            }
+
+            return response()->json([
+                'employees' => $q->take(50)->get()->map(fn ($w) => [
+                    'id' => $w->id,
+                    'name' => $w->name,
+                    'employee_id' => $w->code ?: ('WRK-' . str_pad((string) $w->id, 4, '0', STR_PAD_LEFT)),
+                    'kind' => 'worker',
+                ])->values()->all(),
+            ]);
+        }
+
         $q = User::select('id', 'name', 'employee_id', 'position', 'department', 'role')
             ->where('is_active', true)
             ->orderBy('name');
@@ -371,6 +544,7 @@ class ShiftController extends Controller
                 'id' => $u->id,
                 'name' => $u->name,
                 'employee_id' => $u->employee_id ?: ('EMP-' . str_pad((string) $u->id, 4, '0', STR_PAD_LEFT)),
+                'kind' => 'employee',
             ])->values()->all(),
         ]);
     }
@@ -391,6 +565,8 @@ class ShiftController extends Controller
             'working_days' => $sh->working_days ?? [],
             'working_days_label' => $sh->workingDaysLabel(),
             'assigned' => (int) ($sh->employees_count ?? $sh->employees()->count()),
+            'assigned_workers' => (int) ($sh->workers_count ?? $sh->workers()->count()),
+            'assigned_total' => (int) ($sh->employees_count ?? 0) + (int) ($sh->workers_count ?? 0),
             'status' => $sh->is_active ? 'Active' : 'Inactive',
             'is_active' => (bool) $sh->is_active,
         ];

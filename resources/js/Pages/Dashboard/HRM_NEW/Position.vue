@@ -338,11 +338,6 @@
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Position Code</label>
-                    <input v-model="form.code" type="text" disabled placeholder="Auto-generated on save" class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 cursor-not-allowed opacity-75" />
-                    <p class="text-[10px] text-slate-400 mt-1">Auto-generated</p>
-                  </div>
-                  <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Position Name <span class="text-rose-500">*</span></label>
                     <input v-model="form.name" type="text" placeholder="e.g., Senior Software Engineer" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.name }" />
                     <p v-if="validationErrors.name" class="text-[10px] text-rose-500 mt-1">{{ validationErrors.name }}</p>

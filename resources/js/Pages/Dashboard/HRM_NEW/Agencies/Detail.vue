@@ -16,8 +16,12 @@ const props = defineProps<{
         dole_expiry: string | null;
         contract_start: string | null;
         contract_end: string | null;
+        billing_cycle: string | null;
+        payment_terms: string | null;
+        payment_custom_terms: string | null;
         service_fee_type: string;
         service_fee_value: string | number | null;
+        ot_multiplier: number | string | null;
         contact_name: string | null;
         contact_email: string | null;
         contact_phone: string | null;
@@ -271,7 +275,10 @@ function actionLabel(a: string): string {
                 <dl class="space-y-2 text-sm">
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Contract start</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ agency.contract_start || '—' }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Contract end</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ agency.contract_end || '—' }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Billing cycle</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ agency.billing_cycle || '—' }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Payment terms</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ agency.payment_terms === 'Custom terms' && agency.payment_custom_terms ? agency.payment_custom_terms : (agency.payment_terms || '—') }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Service fee</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ feeLabel() }}</dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Overtime rate</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">×{{ Number(agency.ot_multiplier || 1.25) }} of hourly</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">DOLE number</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ agency.dole_number || '—' }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">DOLE expiry</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ agency.dole_expiry || '—' }}</dd></div>
                 </dl>

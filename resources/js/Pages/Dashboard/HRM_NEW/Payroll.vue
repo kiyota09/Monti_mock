@@ -265,7 +265,7 @@ const exportCsv = async () => {
                             </select>
                             <Link :href="route('hrm.payroll.generate')" :class="canEdit ? '' : 'opacity-50 pointer-events-none'"
                                 class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5">
-                                <Plus class="w-4 h-4" /> Add employee
+                                <Plus class="w-4 h-4" /> Generate Payroll
                             </Link>
                         </div>
                     </div>

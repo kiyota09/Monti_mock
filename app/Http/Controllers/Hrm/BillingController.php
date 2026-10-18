@@ -11,6 +11,7 @@ use App\Support\BillingCalc;
 use App\Support\StatementExportService;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -26,6 +27,9 @@ use Inertia\Inertia;
 class BillingController extends Controller
 {
     use HasPagePermissions;
+
+    /** Shown when a period has no eligible, unbilled attendance to bill. */
+    protected const NO_ELIGIBLE_MESSAGE = 'No eligible, unbilled attendance records were found for the selected agency and period.';
 
     // ------------------------------------------------------------------
     // Page 14: Billing statements list
@@ -87,6 +91,7 @@ class BillingController extends Controller
             'agency_id' => $agency?->id,
             'from' => $from,
             'to' => $to,
+            'today' => today()->toDateString(),
             'preview' => $preview,
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
@@ -98,31 +103,46 @@ class BillingController extends Controller
         $issue = $request->boolean('issue');
         $data = $this->validated($request);
 
-        $agency = Agency::findOrFail($data['agency_id']);
-        $this->assertBillableAgency($agency, $data['period_start'], $data['period_end']);
+        $statement = DB::transaction(function () use ($data, $issue) {
+            // Lock the agency row so two concurrent requests for the same
+            // agency cannot both pass the overlap check and double-bill.
+            $agency = Agency::whereKey($data['agency_id'])->lockForUpdate()->firstOrFail();
+            $this->assertBillableAgency($agency, $data['period_start'], $data['period_end']);
 
-        $calc = BillingCalc::preview($agency, $data['period_start'], $data['period_end']);
-        if ($calc['count'] === 0) {
-            throw ValidationException::withMessages([
-                'period_start' => 'Nothing billable: no approved, unbilled attendance in this period.',
+            if ($issue) {
+                $clash = $this->overlappingIssued($agency, $data['period_start'], $data['period_end']);
+                if ($clash) {
+                    throw ValidationException::withMessages([
+                        'period_start' => "This period overlaps already-issued statement {$clash->code}. Choose a different period.",
+                    ]);
+                }
+            }
+
+            $calc = BillingCalc::preview($agency, $data['period_start'], $data['period_end']);
+            if ($calc['count'] === 0) {
+                throw ValidationException::withMessages([
+                    'period_start' => self::NO_ELIGIBLE_MESSAGE,
+                ]);
+            }
+
+            if (empty($data['code'])) {
+                $data['code'] = self::nextCode();
+            }
+
+            $statement = BillingStatement::create($data + [
+                'status' => $issue ? BillingStatement::STATUS_ISSUED : BillingStatement::STATUS_DRAFT,
+                'labor_cost' => $calc['labor_cost'],
+                'service_fee' => $calc['service_fee'],
+                'total' => $calc['total'],
             ]);
-        }
 
-        if (empty($data['code'])) {
-            $data['code'] = self::nextCode();
-        }
+            if ($issue) {
+                $this->markBilled($statement);
+            }
+            $this->log($statement, $issue ? 'statement_issued' : 'statement_created', "Statement {$statement->code} " . ($issue ? "issued ({$calc['count']} records)." : 'saved as draft.'), null);
 
-        $statement = BillingStatement::create($data + [
-            'status' => $issue ? BillingStatement::STATUS_ISSUED : BillingStatement::STATUS_DRAFT,
-            'labor_cost' => $calc['labor_cost'],
-            'service_fee' => $calc['service_fee'],
-            'total' => $calc['total'],
-        ]);
-
-        if ($issue) {
-            $this->markBilled($statement);
-        }
-        $this->log($statement, $issue ? 'statement_issued' : 'statement_created', "Statement {$statement->code} " . ($issue ? "issued ({$calc['count']} records)." : 'saved as draft.'), null);
+            return $statement;
+        });
 
         return redirect()->route('hrm.billing.show', $statement)
             ->with('success', $issue ? "Statement {$statement->code} issued." : "Statement {$statement->code} saved as draft.");
@@ -144,6 +164,7 @@ class BillingController extends Controller
             'agency_id' => $statement->agency_id,
             'from' => $statement->period_start->toDateString(),
             'to' => $statement->period_end->toDateString(),
+            'today' => today()->toDateString(),
             'preview' => BillingCalc::preview($statement->agency, $statement->period_start->toDateString(), $statement->period_end->toDateString()),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
@@ -161,27 +182,39 @@ class BillingController extends Controller
             $data['code'] = $statement->code;
         }
 
-        $agency = Agency::findOrFail($data['agency_id']);
-        $this->assertBillableAgency($agency, $data['period_start'], $data['period_end']);
+        DB::transaction(function () use ($statement, $data, $issue) {
+            // Serialize concurrent issuance for the same agency.
+            $agency = Agency::whereKey($data['agency_id'])->lockForUpdate()->firstOrFail();
+            $this->assertBillableAgency($agency, $data['period_start'], $data['period_end']);
 
-        $calc = BillingCalc::preview($agency, $data['period_start'], $data['period_end']);
-        if ($calc['count'] === 0) {
-            throw ValidationException::withMessages([
-                'period_start' => 'Nothing billable: no approved, unbilled attendance in this period.',
+            if ($issue) {
+                $clash = $this->overlappingIssued($agency, $data['period_start'], $data['period_end'], $statement->id);
+                if ($clash) {
+                    throw ValidationException::withMessages([
+                        'period_start' => "This period overlaps already-issued statement {$clash->code}. Choose a different period.",
+                    ]);
+                }
+            }
+
+            $calc = BillingCalc::preview($agency, $data['period_start'], $data['period_end']);
+            if ($calc['count'] === 0) {
+                throw ValidationException::withMessages([
+                    'period_start' => self::NO_ELIGIBLE_MESSAGE,
+                ]);
+            }
+
+            $statement->update($data + [
+                'status' => $issue ? BillingStatement::STATUS_ISSUED : BillingStatement::STATUS_DRAFT,
+                'labor_cost' => $calc['labor_cost'],
+                'service_fee' => $calc['service_fee'],
+                'total' => $calc['total'],
             ]);
-        }
 
-        $statement->update($data + [
-            'status' => $issue ? BillingStatement::STATUS_ISSUED : BillingStatement::STATUS_DRAFT,
-            'labor_cost' => $calc['labor_cost'],
-            'service_fee' => $calc['service_fee'],
-            'total' => $calc['total'],
-        ]);
-
-        if ($issue) {
-            $this->markBilled($statement->fresh());
-        }
-        $this->log($statement, $issue ? 'statement_issued' : 'statement_updated', "Statement {$statement->code} " . ($issue ? "issued ({$calc['count']} records)." : 'updated.'), null);
+            if ($issue) {
+                $this->markBilled($statement->fresh());
+            }
+            $this->log($statement, $issue ? 'statement_issued' : 'statement_updated', "Statement {$statement->code} " . ($issue ? "issued ({$calc['count']} records)." : 'updated.'), null);
+        });
 
         return redirect()->route('hrm.billing.show', $statement)
             ->with('success', $issue ? "Statement {$statement->code} issued." : "Statement {$statement->code} updated.");
@@ -206,22 +239,43 @@ class BillingController extends Controller
             return back()->with('error', 'Only Draft statements can be issued.');
         }
 
-        $statement->loadMissing('agency');
-        $this->assertBillableAgency($statement->agency, $statement->period_start->toDateString(), $statement->period_end->toDateString());
+        try {
+            DB::transaction(function () use ($statement) {
+                // Serialize concurrent issuance for the same agency so a period
+                // cannot be billed twice under parallel requests.
+                $statement->loadMissing('agency');
+                $agency = Agency::whereKey($statement->agency_id)->lockForUpdate()->firstOrFail();
+                $from = $statement->period_start->toDateString();
+                $to = $statement->period_end->toDateString();
 
-        $calc = BillingCalc::preview($statement->agency, $statement->period_start->toDateString(), $statement->period_end->toDateString());
-        if ($calc['count'] === 0) {
-            return back()->with('error', 'Nothing billable: no approved, unbilled attendance in this period.');
+                $this->assertBillableAgency($agency, $from, $to);
+
+                $clash = $this->overlappingIssued($agency, $from, $to, $statement->id);
+                if ($clash) {
+                    throw ValidationException::withMessages([
+                        'period_start' => "Statement {$statement->code} cannot be issued: this period is already covered by issued statement {$clash->code} ({$clash->period_start->toDateString()} – {$clash->period_end->toDateString()}).",
+                    ]);
+                }
+
+                $calc = BillingCalc::preview($agency, $from, $to);
+                if ($calc['count'] === 0) {
+                    throw ValidationException::withMessages([
+                        'period_start' => self::NO_ELIGIBLE_MESSAGE,
+                    ]);
+                }
+
+                $statement->update([
+                    'status' => BillingStatement::STATUS_ISSUED,
+                    'labor_cost' => $calc['labor_cost'],
+                    'service_fee' => $calc['service_fee'],
+                    'total' => $calc['total'],
+                ]);
+                $this->markBilled($statement->fresh());
+                $this->log($statement, 'statement_issued', "Statement {$statement->code} issued ({$calc['count']} records).", null);
+            });
+        } catch (ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
         }
-
-        $statement->update([
-            'status' => BillingStatement::STATUS_ISSUED,
-            'labor_cost' => $calc['labor_cost'],
-            'service_fee' => $calc['service_fee'],
-            'total' => $calc['total'],
-        ]);
-        $this->markBilled($statement->fresh());
-        $this->log($statement, 'statement_issued', "Statement {$statement->code} issued ({$calc['count']} records).", null);
 
         return back()->with('success', "Statement {$statement->code} issued.");
     }
@@ -349,9 +403,20 @@ class BillingController extends Controller
         $data = $request->validate([
             'code' => ['nullable', 'string', 'max:30', Rule::unique('billing_statements', 'code')->ignore($ignoreId)],
             'agency_id' => 'required|exists:agencies,id',
-            'period_start' => 'required|date',
-            'period_end' => 'required|date|after_or_equal:period_start',
+            // Billing periods may be in the past (work already completed) but
+            // never in the future, and the range must be well formed. `today`
+            // resolves against the app timezone (Asia/Manila).
+            'period_start' => 'required|date|before_or_equal:today',
+            'period_end' => 'required|date|before_or_equal:today|after_or_equal:period_start',
             'issue' => 'nullable|boolean',
+        ], [
+            'period_start.required' => 'Period from is required.',
+            'period_start.date' => 'Period from must be a valid date.',
+            'period_start.before_or_equal' => 'Period from cannot be later than today.',
+            'period_end.required' => 'Period to is required.',
+            'period_end.date' => 'Period to must be a valid date.',
+            'period_end.before_or_equal' => 'Period to cannot be later than today.',
+            'period_end.after_or_equal' => 'Period to must be on or after Period from.',
         ]);
         unset($data['issue']);
 
@@ -379,13 +444,39 @@ class BillingController extends Controller
         }
     }
 
+    /**
+     * Returns an Issued/Paid statement for the same agency whose period
+     * overlaps [$from, $to], or null when the period is free to bill.
+     */
+    protected function overlappingIssued(Agency $agency, string $from, string $to, ?int $ignoreId = null): ?BillingStatement
+    {
+        return BillingStatement::where('agency_id', $agency->id)
+            ->whereIn('status', [BillingStatement::STATUS_ISSUED, BillingStatement::STATUS_PAID])
+            ->whereDate('period_start', '<=', $to)
+            ->whereDate('period_end', '>=', $from)
+            ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+            ->orderBy('id')
+            ->first();
+    }
+
     protected function markBilled(BillingStatement $statement): void
     {
-        Attendance::where('approval', Attendance::APPROVAL_APPROVED)
-            ->whereNull('billed_statement_id')
+        $statement->loadMissing('agency');
+        $from = $statement->period_start->toDateString();
+        $to = $statement->period_end->toDateString();
+
+        // Persist any clock-log days as real attendance records first, so
+        // days worked via the time clock (My Attendance) are billed and
+        // marked as billed like any other record.
+        BillingCalc::persistLogAttendance($statement->agency, $from, $to);
+
+        // Mark every in-period attendance record for the agency as billed
+        // (any approval state — the preview now includes all of them) so it
+        // can never be billed twice.
+        Attendance::whereNull('billed_statement_id')
             ->whereHas('worker', fn ($q) => $q->where('agency_id', $statement->agency_id))
-            ->whereDate('date', '>=', $statement->period_start->toDateString())
-            ->whereDate('date', '<=', $statement->period_end->toDateString())
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
             ->update(['billed_statement_id' => $statement->id]);
     }
 

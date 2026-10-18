@@ -11,7 +11,6 @@ use App\Http\Controllers\Hrm\BillingController;
 use App\Http\Controllers\Hrm\CompensationController;
 use App\Http\Controllers\Hrm\HrmDashboardController;
 use App\Http\Controllers\Hrm\InterviewController;
-use App\Http\Controllers\Hrm\OnboardingController;
 use App\Http\Controllers\Hrm\PayrollController;
 use App\Http\Controllers\Hrm\PayrollRatesController;
 use App\Http\Controllers\Hrm\PayrollSettingsController;
@@ -297,13 +296,10 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
         ->middleware('page.permission:trainee,edit')
         ->name('assigned-trainees.observation');
 
-    // Onboarding (page: onboarding)
-    Route::get('/onboarding', [OnboardingController::class, 'index'])
+    // Bare onboarding URL (e.g. top-bar breadcrumb) → current onboarding page.
+    Route::redirect('/onboarding', '/dashboard/hrm/onboarding/status')
         ->middleware('page.permission:onboarding,view')
-        ->name('onboarding.index');
-    Route::post('/onboarding/{id}/convert', [OnboardingController::class, 'convert'])
-        ->middleware('page.permission:onboarding,edit')
-        ->name('onboarding.convert');
+        ->name('onboarding.redirect');
 
     // Payroll (page: payroll)
     Route::get('/payroll', [PayrollController::class, 'index'])
@@ -552,13 +548,13 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
             ->middleware('page.permission:attendance,edit')->name('holidays.destroy');
 
         Route::get('/my-attendance', [NewMyAttendanceController::class, 'index'])
-            ->middleware('page.permission:attendance,view')->name('my-attendance.index');
+            ->name('my-attendance.index');
         Route::post('/my-attendance/clock-in', [NewMyAttendanceController::class, 'clockIn'])
-            ->middleware('page.permission:attendance,view')->name('my-attendance.clock-in');
+            ->name('my-attendance.clock-in');
         Route::post('/my-attendance/clock-out', [NewMyAttendanceController::class, 'clockOut'])
-            ->middleware('page.permission:attendance,view')->name('my-attendance.clock-out');
+            ->name('my-attendance.clock-out');
         Route::post('/my-attendance/leave', [NewMyAttendanceController::class, 'requestLeave'])
-            ->middleware('page.permission:attendance,view')->name('my-attendance.leave.store');
+            ->name('my-attendance.leave.store');
 
         Route::get('/shifts', [\App\Http\Controllers\Hrm\Workforce\ShiftController::class, 'index'])
             ->middleware('page.permission:attendance,view')->name('shifts.index');
@@ -568,6 +564,8 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
             ->middleware('page.permission:attendance,view')->name('shifts.employees');
         Route::post('/shifts/reassign/{user}', [\App\Http\Controllers\Hrm\Workforce\ShiftController::class, 'reassign'])
             ->middleware('page.permission:attendance,edit')->name('shifts.reassign');
+        Route::post('/shifts/reassign-worker/{worker}', [\App\Http\Controllers\Hrm\Workforce\ShiftController::class, 'reassignWorker'])
+            ->middleware('page.permission:attendance,edit')->name('shifts.reassign-worker');
         Route::post('/shifts/bulk-assign', [\App\Http\Controllers\Hrm\Workforce\ShiftController::class, 'bulkAssign'])
             ->middleware('page.permission:attendance,edit')->name('shifts.bulk-assign');
         Route::get('/shifts/{shift}', [\App\Http\Controllers\Hrm\Workforce\ShiftController::class, 'show'])
@@ -580,6 +578,8 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
             ->middleware('page.permission:attendance,edit')->name('shifts.assign');
         Route::delete('/shifts/{shift}/unassign/{user}', [\App\Http\Controllers\Hrm\Workforce\ShiftController::class, 'unassign'])
             ->middleware('page.permission:attendance,edit')->name('shifts.unassign');
+        Route::delete('/shifts/{shift}/unassign-worker/{worker}', [\App\Http\Controllers\Hrm\Workforce\ShiftController::class, 'unassignWorker'])
+            ->middleware('page.permission:attendance,edit')->name('shifts.unassign-worker');
 
         Route::get('/training', [\App\Http\Controllers\Hrm\Workforce\TrainingController::class, 'index'])
             ->middleware('page.permission:training,view')->name('training.index');
@@ -736,6 +736,10 @@ Route::prefix('hrm')->middleware(['auth', 'verified'])->group(function () {
     Route::post('/recruitment/interviews', [NewInterviewController::class, 'store'])
         ->middleware('page.permission:interview,edit');
     Route::post('/recruitment/interviews/{interview}/reschedule', [NewInterviewController::class, 'reschedule'])
+        ->middleware('page.permission:interview,edit');
+    Route::post('/recruitment/interviews/{interview}/reschedule/approve', [NewInterviewController::class, 'approveReschedule'])
+        ->middleware('page.permission:interview,edit');
+    Route::post('/recruitment/interviews/{interview}/reschedule/deny', [NewInterviewController::class, 'denyReschedule'])
         ->middleware('page.permission:interview,edit');
     Route::post('/recruitment/interviews/{interview}/cancel', [NewInterviewController::class, 'cancel'])
         ->middleware('page.permission:interview,edit');

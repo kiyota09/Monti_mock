@@ -8,7 +8,7 @@ import {
     MessageSquare, Megaphone, Bell, Settings, X, Send, Search,
     User, LogOut, Palette, Check, ChevronLeft, Plus, CheckCheck,
     Users, Paperclip, ImagePlus, LogOut as LeaveIcon, Trash2, Pencil,
-    PanelLeft, ChevronRight, LifeBuoy, Info, KeyRound,
+    PanelLeft, ChevronRight, LifeBuoy, Info, KeyRound, Clock,
 } from 'lucide-vue-next';
 import { useSidebarToggle } from '@/Layouts/composables/useSidebarToggle';
 
@@ -59,6 +59,14 @@ const profileHref = computed(() => {
     if (isClient.value) return route('client.profile.edit');
     if (isApplicant.value) return route('applicant.profile.index');
     if (isInternal.value) return route('profile.edit');
+    return null;
+});
+const isEmployeePortal = computed(() => (currentUrl.value || '').startsWith('/dashboard/employee-ui'));
+const attendanceHref = computed(() => {
+    try {
+        if (isEmployeePortal.value) return route('employee.ui.clock');
+        if (isInternal.value) return route('hrm.workforce.my-attendance.index');
+    } catch { return null; }
     return null;
 });
 const logoutHref = computed(() => {
@@ -219,6 +227,84 @@ const readAllNotifs = async () => {
     notifs.value.forEach((n) => { n.is_read = true; });
     notifsUnread.value = 0;
     counts.value.notifications_unread = 0;
+};
+
+// ─── Agency notifications (bell next to Settings) ───────────────
+// Source: agency_activities for own agency. Read state is client-side
+// (localStorage last-seen id) so no new columns are needed.
+const agencyNotifs = ref([]);
+const agencyNotifsUnread = ref(0);
+const agencyNotifLoading = ref(false);
+const loadAgencyNotifs = async () => {
+    if (!isAgency.value) return;
+    agencyNotifLoading.value = true;
+    try {
+        const { data } = await axios.get(route('agency.notifications.index'));
+        agencyNotifs.value = data.items || [];
+        const lastSeen = Number(localStorage.getItem('agency_notif_seen') || 0);
+        if (!lastSeen && data.unread) {
+            agencyNotifsUnread.value = data.unread || 0;
+        } else {
+            const maxId = agencyNotifs.value.length ? Math.max(...agencyNotifs.value.map((n) => Number(n.id) || 0)) : 0;
+            agencyNotifsUnread.value = agencyNotifs.value.filter((n) => Number(n.id) > lastSeen).length;
+            if (!lastSeen && maxId) localStorage.setItem('agency_notif_seen', String(maxId));
+        }
+    } catch { /* offline — keep last list */ }
+    agencyNotifLoading.value = false;
+};
+const openAgencyNotifPanel = async () => {
+    if (openPanel.value === 'agency_notif') { openPanel.value = null; return; }
+    openPanel.value = 'agency_notif';
+    await loadAgencyNotifs();
+};
+const readAllAgencyNotifs = () => {
+    const maxId = agencyNotifs.value.length ? Math.max(...agencyNotifs.value.map((n) => Number(n.id) || 0)) : 0;
+    if (maxId) localStorage.setItem('agency_notif_seen', String(maxId));
+    agencyNotifsUnread.value = 0;
+};
+
+// ─── Applicant notifications (bell next to Settings) ───────────────
+// Source: applicant_notifications for the logged-in applicant. Read
+// state is server-side; clicking an item opens the full Notifications
+// page where the detail modal lives.
+const applicantNotifs = ref([]);
+const applicantNotifsUnread = ref(0);
+const applicantNotifLoading = ref(false);
+const loadApplicantNotifs = async () => {
+    if (!isApplicant.value) return;
+    applicantNotifLoading.value = true;
+    try {
+        const { data } = await axios.get(route('applicant.notifications.tab', 'all'));
+        applicantNotifs.value = (data.data || []).slice(0, 12);
+    } catch { /* offline — keep last list */ }
+    applicantNotifLoading.value = false;
+    loadApplicantNotifCount();
+};
+const loadApplicantNotifCount = async () => {
+    if (!isApplicant.value) return;
+    try {
+        const { data } = await axios.get(route('applicant.notifications.count'));
+        applicantNotifsUnread.value = data.count || 0;
+    } catch { /* noop */ }
+};
+const openApplicantNotifPanel = async () => {
+    if (openPanel.value === 'applicant_notif') { openPanel.value = null; return; }
+    openPanel.value = 'applicant_notif';
+    await loadApplicantNotifs();
+};
+const openApplicantNotif = async (n) => {
+    if (!n.read_at) {
+        try { await axios.post(route('applicant.notifications.mark-read', n.id)); } catch { /* noop */ }
+        n.read_at = new Date().toISOString();
+        applicantNotifsUnread.value = Math.max(0, applicantNotifsUnread.value - 1);
+    }
+    closePanels();
+    router.visit(route('applicant.notifications.index'));
+};
+const readAllApplicantNotifs = async () => {
+    try { await axios.post(route('applicant.notifications.mark-all-read')); } catch { /* noop */ }
+    applicantNotifs.value.forEach((n) => { n.read_at = new Date().toISOString(); });
+    applicantNotifsUnread.value = 0;
 };
 
 // ─── Memos ──────────────────────────────────────────────────────────
@@ -581,6 +667,14 @@ onMounted(() => {
         fetchSummary();
         pollTimer = setInterval(fetchSummary, 30000);
     }
+    if (isAgency.value) {
+        loadAgencyNotifs();
+        pollTimer = setInterval(loadAgencyNotifs, 30000);
+    }
+    if (isApplicant.value) {
+        loadApplicantNotifCount();
+        pollTimer = setInterval(loadApplicantNotifCount, 30000);
+    }
 });
 onBeforeUnmount(() => {
     if (clockTimer) clearInterval(clockTimer);
@@ -589,6 +683,8 @@ onBeforeUnmount(() => {
 });
 watch(openPanel, (panel) => {
     if (msgTimer) { clearInterval(msgTimer); msgTimer = null; }
+    if (panel === 'agency_notif' && isAgency.value) { loadAgencyNotifs(); return; }
+    if (panel === 'applicant_notif' && isApplicant.value) { loadApplicantNotifs(); return; }
     if (!isInternal.value) return;
     if (panel === 'notif') loadNotifs();
     if (panel === 'memo') loadMemos();
@@ -713,6 +809,18 @@ onMounted(() => {
                     <Bell class="h-5 w-5" />
                     <span v-if="counts.notifications_unread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">{{ counts.notifications_unread > 99 ? '99+' : counts.notifications_unread }}</span>
                 </button>
+                <!-- Agency notifications (agency only, left of Settings) -->
+                <button v-if="isAgency" @click="openAgencyNotifPanel" title="Notifications"
+                    :class="['relative rounded-xl p-2.5 transition active:scale-95', openPanel === 'agency_notif' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-zinc-800']">
+                    <Bell class="h-5 w-5" />
+                    <span v-if="agencyNotifsUnread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">{{ agencyNotifsUnread > 99 ? '99+' : agencyNotifsUnread }}</span>
+                </button>
+                <!-- Applicant notifications (applicant only, left of Settings) -->
+                <button v-if="isApplicant" @click="openApplicantNotifPanel" title="Notifications"
+                    :class="['relative rounded-xl p-2.5 transition active:scale-95', openPanel === 'applicant_notif' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-zinc-800']">
+                    <Bell class="h-5 w-5" />
+                    <span v-if="applicantNotifsUnread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">{{ applicantNotifsUnread > 99 ? '99+' : applicantNotifsUnread }}</span>
+                </button>
                 <!-- Settings -->
                 <button @click="toggle('settings')" title="Settings"
                     :class="['rounded-xl p-2.5 transition active:scale-95', openPanel === 'settings' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-zinc-800']">
@@ -758,6 +866,10 @@ onMounted(() => {
                         <Link v-if="profileHref && canViewProfile" :href="profileHref" @click="closePanels"
                             class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
                             <User class="h-4 w-4 text-indigo-500" /> My Profile
+                        </Link>
+                        <Link v-if="attendanceHref" :href="attendanceHref" @click="closePanels"
+                            class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
+                            <Clock class="h-4 w-4 text-indigo-500" /> My Attendance
                         </Link>
                         <!-- Help Center + About (internal accounts; portal users keep Profile/Theme/Logout) -->
                         <Link v-if="isInternal" :href="route('help.index')" @click="closePanels"
@@ -826,6 +938,63 @@ onMounted(() => {
                         </button>
                         <p v-if="!notifs.length" class="px-5 py-10 text-center text-xs font-bold text-gray-400">No notifications yet.</p>
                     </div>
+                </div>
+
+                <!-- AGENCY NOTIFICATIONS -->
+                <div v-if="openPanel === 'agency_notif'">
+                    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-zinc-800">
+                        <p class="text-sm font-black text-gray-900 dark:text-white">Notifications</p>
+                        <div class="flex items-center gap-2">
+                            <button @click="readAllAgencyNotifs" class="inline-flex items-center gap-1 text-[11px] font-black uppercase text-indigo-600 hover:underline">
+                                <CheckCheck class="h-3.5 w-3.5" /> Read all
+                            </button>
+                            <button @click="closePanels" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"><X class="h-4 w-4" /></button>
+                        </div>
+                    </div>
+                    <div class="max-h-96 overflow-y-auto">
+                        <div v-for="n in agencyNotifs" :key="n.id"
+                            class="flex w-full items-start gap-3 border-b border-gray-50 px-5 py-3.5 text-left last:border-0 dark:border-zinc-800/60">
+                            <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-black text-gray-900 dark:text-white">{{ n.title }}</span>
+                                <span v-if="n.details" class="block truncate text-xs text-gray-500">{{ n.details }}</span>
+                                <span v-if="n.reason" class="mt-0.5 block truncate text-xs italic text-orange-500">“{{ n.reason }}”</span>
+                                <span class="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-gray-400">{{ n.worker_code || n.request_code || n.action }} · {{ n.date }}</span>
+                            </span>
+                        </div>
+                        <p v-if="agencyNotifLoading" class="px-5 py-6 text-center text-xs font-bold text-gray-400">Loading…</p>
+                        <p v-else-if="!agencyNotifs.length" class="px-5 py-10 text-center text-xs font-bold text-gray-400">No notifications yet.</p>
+                    </div>
+                </div>
+
+                <!-- APPLICANT NOTIFICATIONS -->
+                <div v-if="openPanel === 'applicant_notif'">
+                    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-zinc-800">
+                        <p class="text-sm font-black text-gray-900 dark:text-white">Notifications</p>
+                        <div class="flex items-center gap-2">
+                            <button v-if="applicantNotifsUnread > 0" @click="readAllApplicantNotifs" class="inline-flex items-center gap-1 text-[11px] font-black uppercase text-indigo-600 hover:underline">
+                                <CheckCheck class="h-3.5 w-3.5" /> Read all
+                            </button>
+                            <button @click="closePanels" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"><X class="h-4 w-4" /></button>
+                        </div>
+                    </div>
+                    <div class="max-h-96 overflow-y-auto">
+                        <button v-for="n in applicantNotifs" :key="n.id" @click="openApplicantNotif(n)"
+                            :class="['flex w-full items-start gap-3 border-b border-gray-50 px-5 py-3.5 text-left transition last:border-0 hover:bg-gray-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/60', !n.read_at && 'bg-indigo-50/50 dark:bg-indigo-900/10']">
+                            <span :class="['mt-1.5 h-2 w-2 shrink-0 rounded-full', n.read_at ? 'bg-gray-300 dark:bg-zinc-600' : 'bg-indigo-500 animate-pulse']" />
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-black text-gray-900 dark:text-white">{{ n.title }}</span>
+                                <span v-if="n.message" class="block truncate text-xs text-gray-500">{{ n.message }}</span>
+                                <span class="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-gray-400">{{ n.type }} · {{ fmtTime(n.created_at) }}</span>
+                            </span>
+                        </button>
+                        <p v-if="applicantNotifLoading" class="px-5 py-6 text-center text-xs font-bold text-gray-400">Loading…</p>
+                        <p v-else-if="!applicantNotifs.length" class="px-5 py-10 text-center text-xs font-bold text-gray-400">No notifications yet.</p>
+                    </div>
+                    <Link :href="route('applicant.notifications.index')" @click="closePanels"
+                        class="flex items-center justify-center gap-2 border-t border-gray-100 px-5 py-3 text-xs font-black uppercase tracking-wide text-indigo-600 hover:bg-indigo-50 dark:border-zinc-800 dark:hover:bg-indigo-900/20">
+                        View all notifications
+                    </Link>
                 </div>
 
                 <!-- MEMOS -->

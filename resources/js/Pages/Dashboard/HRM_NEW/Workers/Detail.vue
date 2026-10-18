@@ -3,7 +3,6 @@
 import { ref, computed, watch } from 'vue';
 import { Head, Link, router, usePage, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Pencil } from 'lucide-vue-next';
 
 const props = defineProps<{
     worker: {
@@ -67,7 +66,8 @@ const props = defineProps<{
 
 const page = usePage();
 const flash = computed(() => (page.props as any).flash || {});
-const canEdit = computed(() => (props.permissions?.workers || 'edit') === 'edit');
+const canEdit = computed(() => (props.permissions?.workers) === 'edit');
+const hasPendingDocs = computed(() => ((props.worker.documents || []) as any[]).some((d) => d.status === 'Pending'));
 
 // ─── Overview inline edit ─────────────────────────────────────────────
 // HR can change overview fields directly here (same data the agency portal
@@ -381,12 +381,6 @@ function docBadge(s: string): string {
                 </div>
             </div>
             <div v-if="canEdit" class="flex flex-wrap items-center gap-2 shrink-0">
-                <Link
-                    :href="route('hrm.workers.edit', worker.id)"
-                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-                >
-                    <Pencil class="w-3.5 h-3.5" /> Edit
-                </Link>
                 <button
                     v-if="worker.status === 'Available'"
                     @click="openConfirm('deactivate')"
@@ -404,12 +398,19 @@ function docBadge(s: string): string {
                 <button
                     v-if="worker.status === 'Pending'"
                     @click="approvePending"
-                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition"
+                    :disabled="hasPendingDocs"
+                    :title="hasPendingDocs ? 'All supporting documents must be Verified before approving.' : ''"
+                    :class="[
+                        'px-4 py-2 rounded-xl text-xs font-bold transition',
+                        hasPendingDocs
+                            ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white',
+                    ]"
                 >
                     Approve
                 </button>
                 <button
-                    v-if="worker.status === 'Pending'"
+                    v-if="worker.status === 'Pending' || worker.status === 'Available' || worker.status === 'Deployed' || worker.status === 'For Correction'"
                     @click="openConfirm('request_changes')"
                     class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition"
                 >
@@ -446,7 +447,7 @@ function docBadge(s: string): string {
             {{ flash.error }}
         </div>
 
-        <div v-if="worker.status === 'For Correction'" class="mb-4 p-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-xs text-orange-800 dark:text-orange-300">
+        <div v-if="worker.pending_note && (worker.status === 'For Correction' || worker.status === 'Deployed')" class="mb-4 p-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-xs text-orange-800 dark:text-orange-300">
             <span class="font-black">Waiting on agency:</span> {{ worker.pending_note || 'Correction requested.' }}
         </div>
         <div v-if="worker.status === 'Blacklisted' && worker.blacklist_reason" class="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-400">
@@ -530,38 +531,38 @@ function docBadge(s: string): string {
                     </div>
                     <div>
                         <label :class="ovLabel">Proposed department</label>
-                        <select v-model="overviewForm.proposed_department" :class="ovInput">
+                        <select v-model="overviewForm.proposed_department" :class="[ovInput, worker.status === 'Deployed' && 'bg-slate-100 dark:bg-slate-900 opacity-70']" :disabled="worker.status === 'Deployed'">
                             <option value="">Select…</option>
                             <option v-for="d in (departments || [])" :key="d.id" :value="d.name">{{ d.name }}</option>
                         </select>
                     </div>
                     <div>
                         <label :class="ovLabel">Position / skill</label>
-                        <select v-if="filteredPositions.length" v-model="overviewForm.position_skill" :class="ovInput">
+                        <select v-if="filteredPositions.length" v-model="overviewForm.position_skill" :class="[ovInput, worker.status === 'Deployed' && 'bg-slate-100 dark:bg-slate-900 opacity-70']" :disabled="worker.status === 'Deployed'">
                             <option value="">Select…</option>
                             <option v-for="p in filteredPositions" :key="p.id + '-' + p.name" :value="p.name">{{ p.name }}</option>
                         </select>
-                        <input v-else v-model="overviewForm.position_skill" type="text" :class="ovInput" placeholder="e.g. HR Manager" />
+                        <input v-else v-model="overviewForm.position_skill" type="text" :class="[ovInput, worker.status === 'Deployed' && 'bg-slate-100 dark:bg-slate-900 opacity-70']" placeholder="e.g. HR Manager" :readonly="worker.status === 'Deployed'" />
                     </div>
                     <div>
                         <label :class="ovLabel">Years experience</label>
-                        <input v-model="overviewForm.years_experience" type="number" min="0" max="60" step="0.5" :class="ovInput" />
+                        <input v-model="overviewForm.years_experience" type="number" min="0" max="60" step="0.5" :class="[ovInput, worker.status === 'Deployed' && 'bg-slate-100 dark:bg-slate-900 opacity-70']" :readonly="worker.status === 'Deployed'" />
                     </div>
                     <div>
                         <label :class="ovLabel">Availability</label>
-                        <input v-model="overviewForm.availability" type="date" :class="ovInput" />
+                        <input v-model="overviewForm.availability" type="date" :class="[ovInput, worker.status === 'Deployed' && 'bg-slate-100 dark:bg-slate-900 opacity-70']" :readonly="worker.status === 'Deployed'" :disabled="worker.status === 'Deployed'" />
                         <p v-if="legacyAvailability" class="mt-1 text-[11px] text-slate-400">Previous: {{ legacyAvailability }} — pick a date to replace it.</p>
                     </div>
                     <div>
                         <label :class="ovLabel">Arrangement</label>
-                        <select v-model="overviewForm.employment_arrangement" :class="ovInput">
+                        <select v-model="overviewForm.employment_arrangement" :class="[ovInput, worker.status === 'Deployed' && 'bg-slate-100 dark:bg-slate-900 opacity-70']" :disabled="worker.status === 'Deployed'">
                             <option value="">Select…</option>
                             <option>Full-time</option><option>Part-time</option><option>Contractual</option><option>Project-based</option><option>Seasonal</option>
                         </select>
                     </div>
                     <div>
                         <label :class="ovLabel">Daily rate (₱)</label>
-                        <input v-model="overviewForm.daily_rate" type="number" min="0" step="0.01" :class="ovInput" />
+                        <input v-model="overviewForm.daily_rate" type="number" min="0" step="0.01" :class="[ovInput, worker.status === 'Deployed' && 'bg-slate-100 dark:bg-slate-900 opacity-70']" :readonly="worker.status === 'Deployed'" />
                         <p v-if="overviewForm.errors.daily_rate" class="mt-1 text-xs text-rose-600">{{ overviewForm.errors.daily_rate }}</p>
                     </div>
                     <div>
@@ -627,9 +628,12 @@ function docBadge(s: string): string {
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5 lg:col-span-2">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-1">Documents — HR verification</h2>
-                <p class="text-[11px] text-slate-400 mb-3">Mark each file as Pending, Verified, Rejected, or Expired. Approval requires no Rejected / Expired files.</p>
+                <p class="text-[11px] text-slate-400 mb-3">Mark each file as Pending, Verified, Rejected, or Expired. Approval requires all files Verified — no Pending / Rejected / Expired files.</p>
+                <p v-if="hasPendingDocs && worker.status === 'Pending'" class="mb-3 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                    Verify every document before approving — {{ (worker.documents || []).filter((d: any) => d.status === 'Pending').length }} still Pending.
+                </p>
                 <div v-if="!worker.documents || worker.documents.length === 0" class="text-xs text-slate-400">No supporting files uploaded yet.</div>
                 <ul v-else class="divide-y divide-slate-100 dark:divide-slate-700/50">
                     <li v-for="d in worker.documents" :key="d.id" class="py-3 flex flex-col gap-2">

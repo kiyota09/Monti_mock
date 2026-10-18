@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\Hrm;
 
 use App\Http\Controllers\Controller;
+use App\Models\Core\User;
 use App\Models\Hrm\Agency;
 use App\Models\Hrm\AgencyActivity;
 use App\Models\Hrm\Attendance;
 use App\Models\Hrm\AttendanceAdjustment;
+use App\Models\Hrm\AttendanceLog;
+use App\Models\Hrm\Holiday;
 use App\Models\Hrm\ManpowerRequest;
 use App\Models\Hrm\Worker;
 use App\Support\AttendanceCalc;
 use App\Traits\HasPagePermissions;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -27,73 +31,36 @@ class AttendanceController extends Controller
 {
     use HasPagePermissions;
 
-    public const STATUSES = ['Present', 'Absent', 'Late', 'Half day', 'Leave'];
+    public const STATUSES = ['Present', 'Absent', 'Late', 'Half day', 'Leave', 'Holiday'];
+
+    /** Normalize a clock time ("06:38 AM" or "06:38") to "06:38". */
+    protected static function toHm(?string $t): ?string
+    {
+        if (! $t) {
+            return null;
+        }
+        if (preg_match('/(\d{1,2}):(\d{2})\s*(AM|PM)/i', $t, $m)) {
+            $h = (int) $m[1];
+            if (strtoupper($m[3]) === 'PM' && $h < 12) {
+                $h += 12;
+            }
+            if (strtoupper($m[3]) === 'AM' && $h === 12) {
+                $h = 0;
+            }
+
+            return sprintf('%02d:%02d', $h, $m[2]);
+        }
+
+        return strlen($t) >= 5 ? substr($t, 0, 5) : $t;
+    }
 
     // ------------------------------------------------------------------
     // Page 11: Attendance list
     // ------------------------------------------------------------------
     public function index(Request $request)
     {
-        $q = Attendance::with([
-            'worker:id,code,name,agency_id',
-            'worker.agency:id,code,name',
-            'request:id,code,department',
-        ]);
-
-        if ($from = $request->get('from')) {
-            $q->whereDate('date', '>=', $from);
-        }
-        if ($to = $request->get('to')) {
-            $q->whereDate('date', '<=', $to);
-        }
-        if ($agencyId = $request->get('agency_id')) {
-            $q->whereHas('worker', fn ($w) => $w->where('agency_id', $agencyId));
-        }
-        if ($requestId = $request->get('request_id')) {
-            $q->where('request_id', $requestId);
-        }
-        if ($workerId = $request->get('worker_id')) {
-            $q->where('worker_id', $workerId);
-        }
-        if (($status = $request->get('status')) && $status !== 'All') {
-            $q->where('status', $status);
-        }
-        if (($approval = $request->get('approval')) && $approval !== 'All') {
-            $q->where('approval', $approval);
-        }
-
-        $paginated = $q->orderByDesc('date')->orderByDesc('id')->paginate(15)->withQueryString();
-        $rows = collect($paginated->items())->map(fn ($a) => $this->row($a))->values()->all();
-
-        return Inertia::render('Dashboard/HRM_NEW/Attendance/Index', [
-            'records' => $rows,
-            'pagination' => [
-                'current_page' => $paginated->currentPage(),
-                'last_page' => $paginated->lastPage(),
-                'per_page' => $paginated->perPage(),
-                'total' => $paginated->total(),
-            ],
-            'stats' => [
-                'draft' => Attendance::where('approval', Attendance::APPROVAL_DRAFT)->count(),
-                'approved' => Attendance::where('approval', Attendance::APPROVAL_APPROVED)->count(),
-                'disputed' => Attendance::where('agency_confirmation', 'Disputed')->count(),
-            ],
-            'agencies' => Agency::orderBy('name')->get(['id', 'code', 'name', 'status']),
-            'filters' => $request->only(['from', 'to', 'agency_id', 'request_id', 'worker_id', 'status', 'approval']),
-            // Add-record modal: open requests with their actively assigned workers.
-            'assignable' => ManpowerRequest::with('activeAssignments.worker:id,code,name')
-                ->where('status', ManpowerRequest::STATUS_OPEN)
-                ->orderByDesc('id')->take(200)->get(['id', 'code', 'department'])
-                ->map(fn ($r) => [
-                    'id' => $r->id,
-                    'label' => "{$r->code} · {$r->department}",
-                    'workers' => $r->activeAssignments->map(fn ($a) => [
-                        'id' => $a->worker_id,
-                        'label' => ($a->worker?->name ?? '') . ' (' . ($a->worker?->code ?? '') . ')',
-                    ])->values()->all(),
-                ])->values()->all(),
-            'permissions' => $this->getPagePermissionsForModule('HRM'),
-        ]);
+        // List page removed — bulk entry is now the main page.
+        return redirect()->route('hrm.attendance.bulk', $request->only(['request_id', 'date']));
     }
 
     // ------------------------------------------------------------------
@@ -101,53 +68,194 @@ class AttendanceController extends Controller
     // ------------------------------------------------------------------
     public function bulk(Request $request)
     {
-        $requestId = $request->get('request_id');
         $date = $request->get('date', today()->toDateString());
+        $department = trim((string) $request->get('department', ''));
 
-        $manpower = $requestId ? ManpowerRequest::with('agency:id,code,name,status')->find($requestId) : null;
-
-        $sheet = [];
-        if ($manpower) {
-            $sheet = $manpower->activeAssignments()->with('worker:id,code,name,position_skill')->get()
-                ->map(function ($asg) use ($date) {
-                    $existing = Attendance::where('worker_id', $asg->worker_id)
-                        ->whereDate('date', $date)->first();
-                    return [
-                        'worker_id' => $asg->worker_id,
-                        'worker_code' => $asg->worker?->code,
-                        'worker_name' => $asg->worker?->name,
-                        'position_skill' => $asg->worker?->position_skill,
-                        'record_id' => $existing?->id,
-                        'locked' => $existing && $existing->approval === Attendance::APPROVAL_APPROVED,
-                        'status' => $existing?->status ?? 'Present',
-                        'time_in' => $existing?->time_in,
-                        'time_out' => $existing?->time_out,
-                        'overtime_hours' => $existing?->overtime_hours ?? 0,
-                        'remarks' => $existing?->remarks,
-                    ];
-                })->values()->all();
+        // BC: old links used request_id — map it to its department.
+        if (! $department && $request->get('request_id')) {
+            $old = ManpowerRequest::find($request->get('request_id'));
+            if ($old) {
+                $department = (string) $old->department;
+            }
         }
 
+        // Holiday Management link: the selected day's non-working holiday
+        // (name + type), if any.
+        $holiday = Holiday::nonWorkingMap($date, $date)[$date] ?? null;
+
+        $sheet = [];
+        // Normal attendance sheet: every worker-employee (worker with a user
+        // login) is listed; time in/out comes straight from their live
+        // attendance_logs (My Attendance clock) — no save step needed.
+        {
+            $assignments = \App\Models\Hrm\ManpowerAssignment::with('request:id,department,shift,status')
+                ->whereNull('released_at')->get()->keyBy('worker_id');
+            $existingByWorker = Attendance::with('worker.agency:id,name')->whereDate('date', $date)->get()->keyBy('worker_id');
+
+            $workerUsers = Worker::with('agency:id,name')->whereNotNull('email')->get(['id', 'name', 'code', 'email', 'position_skill', 'proposed_department', 'agency_id', 'created_at']);
+
+            // Worker -> user login: same personal_email, tie-broken by name
+            // (seed data may reuse one email across workers).
+            $candidateUsers = \App\Models\Core\User::whereNotNull('personal_email')->get(['id', 'name', 'personal_email', 'join_date', 'created_at'])
+                ->groupBy(fn ($u) => strtolower((string) $u->personal_email));
+            $workerIdToUserId = [];
+            $userIdsMatched = [];
+            $deploymentStartByWorker = [];
+            $asDate = fn ($v) => $v ? substr((string) ($v instanceof \Carbon\Carbon ? $v->toDateString() : $v), 0, 10) : null;
+            foreach ($workerUsers as $w) {
+                $candidates = $candidateUsers->get(strtolower((string) $w->email), collect());
+                $match = $candidates->first(fn ($u) => strtolower(trim((string) $u->name)) === strtolower(trim((string) $w->name)))
+                    ?: ($candidates->count() === 1 ? $candidates->first() : null);
+                if ($match) {
+                    $workerIdToUserId[$w->id] = $match->id;
+                    $userIdsMatched[$match->id] = true;
+                    // Attendance only counts from the deployment date set on
+                    // the worker employee account (join_date of the login).
+                    $deploymentStartByWorker[$w->id] = $asDate($match->join_date) ?: $asDate($match->created_at);
+                } else {
+                    $deploymentStartByWorker[$w->id] = $asDate($w->created_at);
+                }
+            }
+            $logsByUser = $userIdsMatched
+                ? AttendanceLog::whereIn('user_id', array_keys($userIdsMatched))->whereDate('date', $date)->get()->keyBy('user_id')
+                : collect();
+
+            $displayStatus = function (?string $s): string {
+                return match (strtolower(trim((string) $s))) {
+                    'on-time', 'ontime', 'present' => 'Present',
+                    'late' => 'Late',
+                    'in progress', 'in_progress', 'working' => 'In Progress',
+                    'on leave', 'on_leave', 'on-leave', 'leave' => 'On Leave',
+                    default => ucwords(str_replace(['_', '-'], ' ', (string) ($s ?: 'Present'))),
+                };
+            };
+
+            $rows = [];
+            $seen = [];
+            foreach ($workerUsers as $w) {
+                if (isset($seen[$w->id])) {
+                    continue;
+                }
+                $seen[$w->id] = true;
+                // Before their deployment start date the worker is not on the
+                // sheet at all (never auto-marked Absent).
+                $start = $deploymentStartByWorker[$w->id] ?? null;
+                if ($start && $date < $start) {
+                    continue;
+                }
+                $asg = $assignments->get($w->id);
+                // Deployed request department first; proposed only as fallback.
+                $departmentOf = $asg?->request?->department ?: ($w->proposed_department ?: null);
+                if ($department !== '' && (string) $departmentOf !== $department) {
+                    continue;
+                }
+                $uid = $workerIdToUserId[$w->id] ?? null;
+                $log = $uid ? $logsByUser->get($uid) : null;
+                $existing = $existingByWorker->get($w->id);
+
+                $timeIn = null;
+                $timeOut = null;
+                $remarks = null;
+                $ot = 0;
+                if ($log) {
+                    $timeIn = self::toHm($log->clock_in);
+                    $timeOut = self::toHm($log->clock_out);
+                    $remarks = $log->remarks;
+                }
+                if ($existing) {
+                    $timeIn = $timeIn ?: ($existing->time_in ? substr((string) $existing->time_in, 0, 5) : null);
+                    $timeOut = $timeOut ?: ($existing->time_out ? substr((string) $existing->time_out, 0, 5) : null);
+                    $ot = $ot ?: ($existing->overtime_hours ?? 0);
+                    $remarks = $remarks ?: $existing->remarks;
+                }
+                if ($log) {
+                    $status = $displayStatus($log->status);
+                    if ($timeIn && ! $timeOut) {
+                        $status = $date === now('Asia/Manila')->toDateString() ? 'In Progress' : 'Incomplete';
+                    }
+                } elseif ($existing) {
+                    $status = $existing->status;
+                } elseif ($date < now('Asia/Manila')->toDateString()) {
+                    $status = 'Absent';
+                } else {
+                    $status = '—';
+                }
+
+                // Holiday Management link: nobody is Absent/blank on a
+                // non-working holiday — show it as a Holiday instead.
+                if ($holiday && ($status === 'Absent' || $status === '—')) {
+                    $status = 'Holiday';
+                    $remarks = $remarks ?: $holiday['name'];
+                }
+
+                $rows[] = [
+                    'worker_id' => $w->id,
+                    'worker_name' => $w->name,
+                    'worker_code' => $w->code,
+                    'agency' => $w->agency?->name,
+                    'department' => $departmentOf,
+                    'position_skill' => $w->position_skill,
+                    'shift' => $asg?->request?->shift ?: 'Morning Shift',
+                    'request_id' => $asg?->request_id,
+                    'record_id' => $existing?->id,
+                    'locked' => (bool) ($existing && $existing->approval === Attendance::APPROVAL_APPROVED),
+                    'status' => $status,
+                    'time_in' => $timeIn,
+                    'time_out' => $timeOut,
+                    'overtime_hours' => $ot,
+                    'remarks' => $remarks,
+                ];
+            }
+
+            // Saved attendance rows on this date for workers without a login
+            // (e.g. released) still appear below the list.
+            foreach ($existingByWorker as $a) {
+                if (isset($seen[$a->worker_id])) {
+                    continue;
+                }
+                $start = $deploymentStartByWorker[$a->worker_id] ?? null;
+                if ($start && $date < $start) {
+                    continue;
+                }
+                $asg = $assignments->get($a->worker_id);
+                if ($department !== '' && (string) ($asg?->request?->department ?? $a->request?->department) !== $department) {
+                    continue;
+                }
+                $seen[$a->worker_id] = true;
+                $rows[] = [
+                    'worker_id' => $a->worker_id,
+                    'worker_name' => $a->worker?->name,
+                    'worker_code' => $a->worker?->code,
+                    'agency' => $a->worker?->agency?->name,
+                    'department' => $asg?->request?->department ?? $a->request?->department,
+                    'position_skill' => $a->worker?->position_skill,
+                    'shift' => $asg?->request?->shift ?? $a->request?->shift,
+                    'request_id' => $a->request_id,
+                    'record_id' => $a->id,
+                    'locked' => $a->approval === Attendance::APPROVAL_APPROVED,
+                    'status' => $a->status,
+                    'time_in' => $a->time_in ? substr((string) $a->time_in, 0, 5) : null,
+                    'time_out' => $a->time_out ? substr((string) $a->time_out, 0, 5) : null,
+                    'overtime_hours' => $a->overtime_hours ?? 0,
+                    'remarks' => $a->remarks,
+                ];
+            }
+
+            usort($rows, fn ($a, $b) => strcmp((string) ($a['worker_name'] ?? ''), (string) ($b['worker_name'] ?? '')));
+            $sheet = array_values($rows);
+        }
+
+        $departments = ManpowerRequest::where('status', ManpowerRequest::STATUS_OPEN)
+            ->distinct()->orderBy('department')->pluck('department')->filter()
+            ->merge(Worker::whereNotNull('proposed_department')->distinct()->orderBy('proposed_department')->pluck('proposed_department')->filter())
+            ->unique()->values()->all();
+
         return Inertia::render('Dashboard/HRM_NEW/Attendance/Bulk', [
-            'requests' => ManpowerRequest::with('agency:id,code,name')
-                ->where('status', ManpowerRequest::STATUS_OPEN)
-                ->orderByDesc('id')->take(200)->get(['id', 'code', 'department', 'position_skill', 'agency_id'])
-                ->map(fn ($r) => [
-                    'id' => $r->id, 'code' => $r->code,
-                    'label' => "{$r->code} · {$r->department} · {$r->position_skill}",
-                    'agency' => $r->agency?->name,
-                ])->values()->all(),
-            'request_id' => $requestId ? (int) $requestId : null,
-            'request' => $manpower ? [
-                'id' => $manpower->id, 'code' => $manpower->code,
-                'department' => $manpower->department,
-                'agency' => $manpower->agency?->name,
-                'agency_status' => $manpower->agency?->status,
-                'start_date' => optional($manpower->start_date)->toDateString(),
-                'end_date' => optional($manpower->end_date)->toDateString(),
-            ] : null,
+            'departments' => $departments,
+            'department' => $department,
             'date' => $date,
             'sheet' => $sheet,
+            'holiday' => $holiday ? ['name' => $holiday['name'], 'type' => $holiday['type']] : null,
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
     }
@@ -155,11 +263,12 @@ class AttendanceController extends Controller
     public function bulkStore(Request $request)
     {
         $data = $request->validate([
-            'request_id' => 'required|exists:manpower_requests,id',
+            'department' => 'nullable|string|max:255',
             'date' => 'required|date',
             'submit' => 'nullable|boolean',
             'rows' => 'required|array|min:1',
             'rows.*.worker_id' => 'required|exists:workers,id',
+            'rows.*.request_id' => 'required|exists:manpower_requests,id',
             'rows.*.status' => 'required|in:' . implode(',', self::STATUSES),
             'rows.*.time_in' => 'nullable|string|max:5',
             'rows.*.time_out' => 'nullable|string|max:5',
@@ -167,12 +276,20 @@ class AttendanceController extends Controller
             'rows.*.remarks' => 'nullable|string|max:1000',
         ]);
 
-        $manpower = ManpowerRequest::with('agency')->findOrFail($data['request_id']);
-        $this->assertWritableDate($manpower, $data['date']);
-
         foreach ($data['rows'] as $row) {
             $worker = Worker::findOrFail($row['worker_id']);
-            $this->assertRowEligible($manpower, $worker);
+            $manpower = ManpowerRequest::with('agency')->findOrFail($row['request_id']);
+            if (! empty($data['department']) && (string) $manpower->department !== (string) $data['department']) {
+                throw ValidationException::withMessages([
+                    'department' => 'Row request does not belong to the selected department.',
+                ]);
+            }
+            if ((int) $worker->agency_id !== (int) $manpower->agency_id) {
+                throw ValidationException::withMessages([
+                    'worker_id' => 'This worker does not belong to the request’s agency.',
+                ]);
+            }
+            $this->assertWritableDate($manpower, $data['date']);
 
             $existing = Attendance::where('worker_id', $worker->id)->whereDate('date', $data['date'])->first();
             if ($existing && $existing->approval === Attendance::APPROVAL_APPROVED) {
@@ -212,6 +329,9 @@ class AttendanceController extends Controller
                 }
                 $this->log($manpower->agency_id, $worker->id, $manpower->id, 'attendance_recorded', "Attendance for {$worker->name} on {$data['date']} recorded (Draft).", null);
             }
+            // Mirror into Workforce Time & Attendance (attendance_logs) so the
+            // employee's own time in/out appears in HRM Workforce Attendance.
+            $this->syncWorkforceLog($worker, $data['date'], $row);
         }
 
         $msg = $data['submit'] ?? false
@@ -602,5 +722,53 @@ class AttendanceController extends Controller
             'actor_name' => auth()->user()?->name,
             'reason' => $reason,
         ]);
+    }
+
+    /**
+     * Mirror a bulk row into Workforce Time & Attendance (attendance_logs)
+     * via the worker's linked user login (created at assignment).
+     */
+    protected function syncWorkforceLog(Worker $worker, string $date, array $row): void
+    {
+        $user = null;
+        if (! empty($worker->email)) {
+            $user = User::where('personal_email', $worker->email)->first()
+                ?? User::where('email', $worker->email)->first();
+        }
+        if (! $user) {
+            $user = User::where('name', $worker->name)->orderByDesc('id')->first();
+        }
+        if (! $user) {
+            return;
+        }
+
+        $toAmPm = function (?string $t): ?string {
+            if (! $t) {
+                return null;
+            }
+            try {
+                return Carbon::createFromFormat('H:i', substr($t, 0, 5))->format('h:i A');
+            } catch (\Throwable) {
+                return null;
+            }
+        };
+        $status = match ($row['status'] ?? 'Present') {
+            'Late' => 'Late',
+            'Absent' => 'Absent',
+            'Half day' => 'Half Day',
+            'Leave' => 'On Leave',
+            'Holiday' => 'Holiday',
+            default => 'On-Time',
+        };
+
+        AttendanceLog::updateOrCreate(
+            ['user_id' => $user->id, 'date' => $date],
+            [
+                'clock_in' => $toAmPm($row['time_in'] ?? null),
+                'clock_out' => $toAmPm($row['time_out'] ?? null),
+                'status' => $status,
+                'remarks' => $row['remarks'] ?? null,
+            ]
+        );
     }
 }

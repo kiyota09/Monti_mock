@@ -280,8 +280,9 @@ class DashboardController extends Controller
                 'application' => 'hrm.applications.index',
                 'interview' => 'hrm.interview.index',
                 'trainee' => 'hrm.trainee.index',
-                'onboarding' => 'hrm.onboarding.index',
+                'onboarding' => 'hrm.onboarding.status.index',
                 'payroll' => 'hrm.payroll',
+                'compensation' => 'hrm.compensation',
                 'analytics' => 'hrm.analytics',
             ],
             'CRM' => [

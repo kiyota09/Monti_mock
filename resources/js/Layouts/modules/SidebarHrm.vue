@@ -1,9 +1,9 @@
 <script>
 import {
-    LayoutDashboard, Users, FileText, Eye, Award, UserPlus, Archive,
+    LayoutDashboard, Users, FileText, Eye, Award, UserPlus,
     HandCoins, ChartNoAxesCombined, Building2, Building, Briefcase, ClipboardList,
-    UserCog, Layers, GraduationCap, CalendarCheck, CalendarDays, Clock, HardHat, Receipt,
-    CalendarClock,
+    UserCog, Layers, GraduationCap, CalendarCheck, CalendarDays, HardHat, Receipt,
+    CalendarClock, Wallet,
 } from 'lucide-vue-next'
 
 /**
@@ -32,7 +32,7 @@ export const hrmModule = {
             { label: 'Agencies', href: safe('hrm.agencies.index'), icon: Building2, permKey: 'agencies' },
             { label: 'Workers', href: safe('hrm.workers.index'), icon: HardHat, permKey: 'workers' },
             { label: 'Manpower Requests', href: safe('hrm.manpower-requests.index'), icon: ClipboardList, permKey: 'requests' },
-            { label: 'Agency Attendance', href: safe('hrm.attendance.index'), icon: CalendarCheck, permKey: 'agency_attendance' },
+            { label: 'Agency Attendance', href: safe('hrm.attendance.bulk'), icon: CalendarCheck, permKey: 'agency_attendance' },
             { label: 'Agency Billing', href: safe('hrm.billing.index'), icon: Receipt, permKey: 'agency_billing' },
         ]
         const agencyDropdown = {
@@ -62,13 +62,12 @@ export const hrmModule = {
             // Workforce ops (static-phase pages, permission-gated)
             { label: 'Attendance Management', href: safe('hrm.workforce.attendance.index'), icon: CalendarCheck, permKey: 'attendance' },
             { label: 'Holiday Management', href: safe('hrm.workforce.holidays.index'), icon: CalendarDays, permKey: 'attendance' },
-            { label: 'My Attendance', href: safe('hrm.workforce.my-attendance.index'), icon: Clock, permKey: 'attendance' },
             { label: 'Shift Management', href: safe('hrm.workforce.shifts.index'), icon: CalendarClock, permKey: 'attendance' },
             { label: 'Leave Management', href: safe('hrm.workforce.leave.index'), icon: CalendarDays, permKey: 'leave' },
             { label: 'Trainees', href: safe('hrm.trainee.index'), icon: Award, permKey: 'trainee' },
             { label: 'My Assigned Trainees', href: safe('hrm.assigned-trainees.index'), icon: GraduationCap, permKey: 'trainee' },
-            { label: 'Archive', href: safe('hrm.applications.rejected'), icon: Archive, permKey: 'application' },
             { label: 'Payroll', href: safe('hrm.payroll'), icon: HandCoins, permKey: 'payroll' },
+            { label: 'Compensation & Salary Management', href: safe('hrm.compensation'), icon: Wallet, permKey: 'compensation' },
             { label: 'Analytics', href: safe('hrm.analytics'), icon: ChartNoAxesCombined, permKey: 'analytics' },
         ]
         // Fallback when a named route is missing (e.g. route cache): drop '#' links.

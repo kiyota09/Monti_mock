@@ -136,7 +136,7 @@ class ApplicationController extends Controller
         // application's own status / cover letter / dates / posting so each
         // of the applicant's applications displays its own context.
         if ($jaId = $request->get('job_application_id')) {
-            $ja = ApplicantJobApplication::with('jobPosting.employmentType')
+            $ja = ApplicantJobApplication::with('jobPosting.employmentType', 'jobPosting.position')
                 ->where('applicant_id', $application->id)->find($jaId);
             if ($ja) {
                 $payload['application']['job_application_id'] = $ja->id;
@@ -167,6 +167,15 @@ class ApplicationController extends Controller
                         'department' => $ja->jobPosting->department,
                         'employment_type' => $ja->jobPosting->employmentType?->name,
                     ];
+                    if ($pos = $ja->jobPosting->position) {
+                        $payload['position'] = array_merge($payload['position'] ?? [], [
+                            'name' => $pos->name,
+                            'description' => $pos->description ?: $ja->jobPosting->recruitment_notes,
+                            'responsibilities' => $pos->responsibilities,
+                            'qualifications' => $pos->qualifications,
+                            'required_skills' => $pos->required_skills,
+                        ]);
+                    }
                 }
             }
         }

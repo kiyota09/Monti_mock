@@ -170,22 +170,6 @@
                                         <Pencil class="w-3.5 h-3.5" />
                                     </button>
                                     <button
-                                        @click="moveItem(item, -1)"
-                                        class="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                        title="Move up"
-                                        :disabled="item.sort_order === 0"
-                                    >
-                                        <ChevronUp class="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        @click="moveItem(item, 1)"
-                                        class="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                        title="Move down"
-                                        :disabled="item.sort_order === items.length - 1"
-                                    >
-                                        <ChevronDown class="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
                                         @click="toggleItemActive(item)"
                                         class="p-1.5 rounded-lg transition-colors"
                                         :class="item.is_active ? 'text-slate-400 hover:text-amber-600 hover:bg-amber-50' : 'text-amber-500 hover:text-slate-500 hover:bg-slate-50'"
@@ -273,6 +257,11 @@
                             </select>
                         </div>
                     </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Duration (days)</label>
+                        <input v-model.number="editForm.duration_days" type="number" min="1" max="3650" placeholder="e.g. 7" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
+                        <p class="text-[10px] text-slate-400 mt-1">Onboarding countdown starts when the applicant opens their onboarding page. They are reminded 3 days before it ends. Leave blank for no deadline.</p>
+                    </div>
                     <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                         <input v-model="editForm.is_default" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                         Make this the default template
@@ -322,12 +311,31 @@
                                 <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
                             </select>
                         </div>
-<div v-if="!isHrTask">
-                             <label class="block text-xs font-semibold text-slate-600 mb-1.5">Input Type</label>
-                             <select v-model="itemForm.input_type" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm">
-                                 <option v-for="t in inputTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
-                             </select>
-                              <p class="text-[10px] text-slate-400 mt-1">{{ inputTypeHint }}</p>
+<div v-if="!isHrTask" class="grid grid-cols-2 gap-4">
+                             <div>
+                                 <label class="block text-xs font-semibold text-slate-600 mb-1.5">Input Type</label>
+                                 <select v-model="itemForm.input_type" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm">
+                                     <option v-for="t in inputTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
+                                 </select>
+                                  <p class="text-[10px] text-slate-400 mt-1">{{ inputTypeHint }}</p>
+                              </div>
+                             <div>
+                                 <label class="block text-xs font-semibold text-slate-600 mb-1.5">Reference File <span class="text-slate-400 font-normal">(optional)</span></label>
+                                 <input
+                                     ref="itemFileInput"
+                                     type="file"
+                                     @change="onItemFileChange"
+                                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                                     class="block w-full text-[11px] text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                 />
+                                 <p v-if="itemFileName" class="text-[10px] text-slate-400 mt-1 truncate">Selected: {{ itemFileName }}</p>
+                                 <p v-else-if="itemForm.attachment_name && !removeAttachment" class="text-[10px] text-slate-400 mt-1 truncate">
+                                     Current:
+                                     <a :href="itemForm.attachment_url" target="_blank" class="text-blue-600 hover:underline">{{ itemForm.attachment_name }}</a>
+                                     <button type="button" @click="removeAttachment = true" class="text-rose-500 hover:underline ml-1">Remove</button>
+                                 </p>
+                                 <p v-else class="text-[10px] text-slate-400 mt-1">Attach a file HR can download (PDF/DOC/XLS/image, max 10MB).</p>
+                             </div>
                           </div>
                     </div>
                     <div v-if="itemForm.input_type === 'select'">
@@ -631,9 +639,31 @@ const emptyItemForm = () => ({
         due_rule_type: 'none',
         due_rule_value: '',
         sort_order: null,
+        attachment_name: null,
+        attachment_url: null,
     });
 
 const itemForm = ref(emptyItemForm());
+
+// HR reference file attached beside the Input Type field.
+const itemFile = ref(null);
+const itemFileName = ref('');
+const removeAttachment = ref(false);
+const itemFileInput = ref(null);
+
+const onItemFileChange = (event) => {
+    const file = event.target.files?.[0] ?? null;
+    itemFile.value = file;
+    itemFileName.value = file ? file.name : '';
+    if (file) removeAttachment.value = false;
+};
+
+const resetItemAttachment = () => {
+    itemFile.value = null;
+    itemFileName.value = '';
+    removeAttachment.value = false;
+    if (itemFileInput.value) itemFileInput.value.value = '';
+};
 
 // HR add mode: task content inputs (children of the Task name above).
 // Each "Add Task" click appends one content input; all filled contents
@@ -651,6 +681,7 @@ const openAddItemModal = (category = 'Applicant Requirements') => {
     itemForm.value = { ...emptyItemForm(), category };
     itemOptionsText.value = '';
     hrTaskContents.value = [];
+    resetItemAttachment();
     activeModal.value = 'add-item';
 };
 
@@ -668,8 +699,11 @@ const openEditItemModal = (item) => {
         due_rule_type: item.due_rule_type,
         due_rule_value: item.due_rule_value,
         sort_order: item.sort_order,
+        attachment_name: item.attachment_name,
+        attachment_url: item.attachment_url,
     };
     itemOptionsText.value = normaliseItemOptions(item.options).join('\n');
+    resetItemAttachment();
     activeModal.value = 'edit-item';
 };
 
@@ -682,42 +716,56 @@ const submitItem = () => {
         toast.error('Add at least one dropdown option for select items.');
         return;
     }
-    const payload = { ...itemForm.value };
-    delete payload.id;
-    if (payload.sort_order === null) delete payload.sort_order;
-    payload.options = payload.input_type === 'select' ? parsedItemOptions.value : null;
+    const fields = { ...itemForm.value };
+    delete fields.id;
+    delete fields.attachment_name;
+    delete fields.attachment_url;
+    if (fields.sort_order === null) delete fields.sort_order;
+    fields.options = fields.input_type === 'select' ? parsedItemOptions.value : null;
     // HR add mode: filled task contents are saved as bullet lines
     // inside the item description (items have no child rows).
     if (isHrTask.value && activeModal.value === 'add-item') {
         const contents = hrTaskContents.value.map((c) => String(c ?? '').trim()).filter((c) => c !== '');
         if (contents.length) {
             const block = contents.map((c) => `- ${c}`).join('\n');
-            const base = String(payload.description ?? '').trim();
-            payload.description = base ? `${base}\n${block}` : block;
+            const base = String(fields.description ?? '').trim();
+            fields.description = base ? `${base}\n${block}` : block;
         }
     }
 
+    let payload = fields;
+    let forceFormData = false;
+    if (itemFile.value) {
+        payload = new FormData();
+        Object.entries(fields).forEach(([key, value]) => {
+            if (value === null || value === undefined) return;
+            if (Array.isArray(value)) {
+                value.forEach((entry) => payload.append(`${key}[]`, entry));
+                return;
+            }
+            payload.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : value);
+        });
+        payload.append('attachment', itemFile.value);
+        forceFormData = true;
+    } else if (removeAttachment.value) {
+        payload.remove_attachment = true;
+    }
+
     saving.value = true;
+    const requestOptions = {
+        preserveScroll: true,
+        forceFormData,
+        onSuccess: () => {
+            closeModal();
+            toast.success(activeModal.value === 'edit-item' ? 'Item updated.' : 'Item added to template.');
+        },
+        onError: () => toast.error(activeModal.value === 'edit-item' ? 'Failed to update item.' : 'Failed to add item.'),
+        onFinish: () => { saving.value = false; },
+    };
     if (activeModal.value === 'edit-item') {
-        router.put(route('hrm.onboarding.templates.items.update', { template: props.template.id, item: itemForm.value.id }), payload, {
-            preserveScroll: true,
-            onSuccess: () => {
-                closeModal();
-                toast.success('Item updated.');
-            },
-            onError: () => toast.error('Failed to update item.'),
-            onFinish: () => { saving.value = false; },
-        });
+        router.put(route('hrm.onboarding.templates.items.update', { template: props.template.id, item: itemForm.value.id }), payload, requestOptions);
     } else {
-        router.post(route('hrm.onboarding.templates.items.store', props.template.id), payload, {
-            preserveScroll: true,
-            onSuccess: () => {
-                closeModal();
-                toast.success('Item added to template.');
-            },
-            onError: () => toast.error('Failed to add item.'),
-            onFinish: () => { saving.value = false; },
-        });
+        router.post(route('hrm.onboarding.templates.items.store', props.template.id), payload, requestOptions);
     }
 };
 

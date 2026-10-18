@@ -125,12 +125,6 @@
                                     class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
                                 />
                             </div>
-                            <button
-                                @click="refreshList"
-                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
-                            >
-                                <span class="inline-flex items-center gap-1.5"><RefreshCw class="w-3.5 h-3.5" />Refresh</span>
-                            </button>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
@@ -225,12 +219,6 @@
                                 <option value="Cancelled">Cancelled</option>
                                 <option value="No Show">No Show</option>
                             </select>
-                            <button
-                                @click="refreshList"
-                                class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
-                            >
-                                <span class="inline-flex items-center gap-1.5"><RefreshCw class="w-3.5 h-3.5" />Refresh</span>
-                            </button>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
@@ -318,7 +306,13 @@
                                 <span class="absolute inset-y-0 left-0 flex items-center pl-3"><Search class="w-4 h-4 text-slate-400" /></span>
                                 <input v-model="interviewSearchQuery" type="text" placeholder="Search interview history..." class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm" />
                             </div>
-                            <button @click="refreshList" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-md"><span class="inline-flex items-center gap-1.5"><RefreshCw class="w-3.5 h-3.5" />Refresh</span></button>
+                            <select v-model="historyFilterStatus" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-emerald-500 shadow-sm transition-all duration-200 cursor-pointer">
+                                <option value="All">All Statuses</option>
+                                <option value="Scheduled">Scheduled</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Cancelled">Cancelled</option>
+                                <option value="No Show">No Show</option>
+                            </select>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
@@ -326,19 +320,19 @@
                                     <th class="py-3 px-5">Candidate</th><th class="py-3 px-5">Position</th><th class="py-3 px-5 text-center">Type</th><th class="py-3 px-5">Date</th><th class="py-3 px-5">Interviewer</th><th class="py-3 px-5 text-center">Status</th><th class="py-3 px-5 text-right">Action</th>
                                 </tr></thead>
                                 <tbody class="divide-y divide-slate-100">
-                                    <tr v-for="interview in completedInterviews.filter(i => !interviewSearchQuery || i.candidate_name?.toLowerCase().includes(interviewSearchQuery.toLowerCase()) || i.position?.toLowerCase().includes(interviewSearchQuery.toLowerCase()) || (i.interviewer?.name || getInterviewerName(i.interviewer_id))?.toLowerCase().includes(interviewSearchQuery.toLowerCase()))" :key="'history-'+interview.id" class="hover:bg-emerald-50 transition-colors">
+                                    <tr v-for="interview in filteredHistoryInterviews" :key="'history-'+interview.id" class="hover:bg-emerald-50 transition-colors">
                                         <td class="py-3 px-5 text-xs font-bold text-slate-900">{{ interview.candidate_name }}</td>
                                         <td class="py-3 px-5 text-xs text-slate-700">{{ interview.position || 'N/A' }}</td>
                                         <td class="py-3 px-5 text-center"><span :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border', getInterviewTypeBadge(interview)]">{{ getInterviewTypeLabel(interview) }}</span></td>
                                         <td class="py-3 px-5 text-xs text-slate-700">{{ formatDate(interview.date) }}<div class="text-[10px] text-slate-500">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</div></td>
                                         <td class="py-3 px-5 text-xs text-slate-700">{{ interview.interviewer?.name || getInterviewerName(interview.interviewer_id) }}</td>
-                                        <td class="py-3 px-5 text-center"><span :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border', getInterviewStatusBadge(interview.status)]">{{ interview.status }}</span></td>
+                                        <td class="py-3 px-5 text-center"><span :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border', getInterviewStatusBadge(interviewStatusLabel(interview))]">{{ interviewStatusLabel(interview) }}</span></td>
                                         <td class="py-3 px-5 text-right"><button @click="viewInterviewDetails(interview)" class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 text-slate-600 hover:text-emerald-600 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1"><Eye class="w-3.5 h-3.5" />View</button></td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
-                        <div v-if="completedInterviews.length === 0" class="text-center py-8"><p class="text-sm text-slate-500">No interview history found.</p></div>
+                        <div v-if="filteredHistoryInterviews.length === 0" class="text-center py-8"><p class="text-sm text-slate-500">No interview history found.</p></div>
                     </div>
                 </div>
 
@@ -352,7 +346,14 @@
                                 <span class="absolute inset-y-0 left-0 flex items-center pl-3"><Search class="w-4 h-4 text-slate-400" /></span>
                                 <input v-model="interviewSearchQuery" type="text" placeholder="Search final interviews..." class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm transition-all duration-200" />
                             </div>
-                            <button @click="refreshList" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all duration-200 shadow-md hover:shadow-lg"><span class="inline-flex items-center gap-1.5"><RefreshCw class="w-3.5 h-3.5" />Refresh</span></button>
+                            <select v-model="finalFilterStatus" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all duration-200 cursor-pointer">
+                                <option value="All">All Statuses</option>
+                                <option value="Scheduled">Scheduled</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Cancelled">Cancelled</option>
+                                <option value="No Show">No Show</option>
+                                <option value="Pending Final Interview">Pending Final Interview</option>
+                            </select>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
@@ -394,7 +395,10 @@
                                         </td>
                                         <td class="py-3 px-5 text-center">
                                             <span v-if="interview._queue" class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">Pending Final Interview</span>
-                                            <span v-else :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold', getInterviewStatusBadge(interview.status)]">{{ interview.status || 'Scheduled' }}</span>
+                                            <span v-else :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold', getInterviewStatusBadge(interviewStatusLabel(interview))]">{{ interviewStatusLabel(interview) }}</span>
+                                            <div v-if="interview.reschedule_status === 'requested'" class="mt-1">
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700 border border-orange-200"><RefreshCw class="w-2.5 h-2.5" />Reschedule requested</span>
+                                            </div>
                                         </td>
                                         <td class="py-3 px-5">
                                             <span v-if="interview.evaluation?.recommendation" :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border', getEvaluationRecommendationBadge(interview.evaluation.recommendation)]">{{ getEvaluationRecommendationLabel(interview.evaluation.recommendation) }}</span>
@@ -1031,8 +1035,35 @@
                         </div>
                         <div class="flex-1 overflow-y-auto p-6 space-y-5">
                             <div class="flex items-center justify-between">
-                                <span :class="['inline-flex px-2.5 py-1 rounded-full text-xs font-semibold', getInterviewStatusBadge(selectedInterview.status)]">{{ selectedInterview.status || 'Scheduled' }}</span>
+                                <span :class="['inline-flex px-2.5 py-1 rounded-full text-xs font-semibold', getInterviewStatusBadge(interviewStatusLabel(selectedInterview))]">{{ interviewStatusLabel(selectedInterview) }}</span>
                                 <span class="text-xs text-slate-400">#{{ selectedInterview.id }}</span>
+                            </div>
+
+                            <!-- Applicant cancellation notice -->
+                            <div v-if="selectedInterview.status === 'Cancelled' && selectedInterview.cancelled_by === 'applicant'" class="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                                <h4 class="text-sm font-bold text-rose-800">Cancelled by Applicant</h4>
+                                <p class="text-xs text-rose-700 mt-1">The applicant cancelled this interview. Their application stays active — you can offer another interview if appropriate.</p>
+                                <p v-if="selectedInterview.cancel_reason" class="text-xs text-rose-700 mt-1 whitespace-pre-wrap">Reason: {{ selectedInterview.cancel_reason }}</p>
+                            </div>
+
+                            <!-- Applicant reschedule request (approve / deny) -->
+                            <div v-if="selectedInterview.reschedule_status === 'requested'" class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                <div class="flex items-start gap-2.5">
+                                    <RefreshCw class="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                                    <div class="flex-1 min-w-0">
+                                        <h4 class="text-sm font-bold text-amber-800">Applicant requested a reschedule</h4>
+                                        <p class="text-xs text-amber-700 mt-1">
+                                            Requested:
+                                            <span class="font-semibold">{{ formatDate(selectedInterview.reschedule_date) }}</span>
+                                            <span v-if="selectedInterview.reschedule_start_time"> · {{ formatTime(selectedInterview.reschedule_start_time) }}<template v-if="selectedInterview.reschedule_end_time"> - {{ formatTime(selectedInterview.reschedule_end_time) }}</template></span>
+                                        </p>
+                                        <p v-if="selectedInterview.reschedule_reason" class="text-xs text-amber-700 mt-1 whitespace-pre-wrap">Reason: {{ selectedInterview.reschedule_reason }}</p>
+                                    </div>
+                                </div>
+                                <div class="flex justify-end gap-2 mt-3">
+                                    <button @click="denyReschedule(selectedInterview)" :disabled="isSubmitting" class="px-4 py-2 bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl text-xs font-bold transition disabled:opacity-50">Deny</button>
+                                    <button @click="approveReschedule(selectedInterview)" :disabled="isSubmitting" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-md disabled:opacity-50">Approve</button>
+                                </div>
                             </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-200"><span class="text-[10px] text-slate-400 block">Type</span><span class="text-sm font-semibold text-slate-900">{{ selectedInterview.type || 'N/A' }}</span></div>
@@ -1098,10 +1129,11 @@
                             </div>
                         </div>
                         <div class="p-4 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-end gap-2 shrink-0">
-                            <button v-if="selectedInterview.status === 'Scheduled'" @click="openRescheduleModal(selectedInterview)" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md">↻ Reschedule</button>
-                            <button v-if="selectedInterview.status === 'Scheduled'" @click="openCancelModal(selectedInterview)" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><X class="w-3.5 h-3.5" />Cancel</button>
-                            <button v-if="['Scheduled','No Show'].includes(selectedInterview.status)" @click="markNoShow(selectedInterview)" class="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><AlertTriangle class="w-3.5 h-3.5" />No Show</button>
-                            <button v-if="selectedInterview.status === 'Scheduled'" @click="openEvaluationModal(selectedInterview)" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Check class="w-3.5 h-3.5" />Start Evaluation</button>
+                            <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openRescheduleModal(selectedInterview)" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md">↻ Reschedule</button>
+                            <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openCancelModal(selectedInterview)" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><X class="w-3.5 h-3.5" />Cancel</button>
+                            <button v-if="['Scheduled','No Show'].includes(selectedInterview.status) && !isCancelledInterview(selectedInterview)" @click="markNoShow(selectedInterview)" class="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><AlertTriangle class="w-3.5 h-3.5" />No Show</button>
+                            <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openEvaluationModal(selectedInterview)" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Check class="w-3.5 h-3.5" />Start Evaluation</button>
+                            <button v-if="isCancelledInterview(selectedInterview) && selectedInterview.applicant_id && !hasScheduledInterviewFor(selectedInterview)" @click="scheduleNewInterview(selectedInterview)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule New Interview</button>
                             <button v-if="selectedInterview.status === 'Completed' && selectedInterview.result === 'Passed' && selectedInterview.applicant?.status === 'Interviewed'" @click="openSelectModal(selectedInterview)" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Star class="w-3.5 h-3.5" />Select Candidate</button>
                             <button v-if="selectedInterview.status === 'Completed' && !isFinalInterview(selectedInterview) && selectedInterview.evaluation?.recommendation === 'proceed_to_final_interview' && ['Shortlisted','Interview Scheduled','Initial Interview','Final Interview','Interviewed'].includes(selectedInterview.applicant?.status)" @click="scheduleFinalInterview(selectedInterview)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule Final Interview</button>
                             <button v-if="selectedInterview.status === 'Completed' && isFinalInterview(selectedInterview) && ['proceed_to_onboarding_training', 'proceed_to_onboarding', 'recommend_onboarding_training'].includes(selectedInterview.evaluation?.recommendation) && !['Onboard','Onboarding','Hired','Rejected','Withdrawn'].includes(selectedInterview.applicant?.status)" @click="advanceToOnboarding(selectedInterview)" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><ArrowRight class="w-3.5 h-3.5" />Advance to Onboarding</button>
@@ -1121,7 +1153,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Calendar, ClipboardList, CheckCircle2, Search, RefreshCw, Star, Eye, X, Check, AlertTriangle, Monitor, MapPin, BarChart3, XCircle, ArrowRight } from 'lucide-vue-next';
@@ -1152,6 +1184,8 @@ const activeTab = ref('schedule');
 const searchQuery = ref('');
 const interviewSearchQuery = ref('');
 const filterStatus = ref('');
+const historyFilterStatus = ref('All');
+const finalFilterStatus = ref('Scheduled');
 const showProfileModal = ref(false);
 const showScheduleModal = ref(false);
 const showConfirmationModal = ref(false);
@@ -1380,6 +1414,22 @@ const completedInterviews = computed(() => {
     return interviewRows.value.filter(interview => ['Completed', 'Cancelled', 'No Show'].includes(interview.status));
 });
 
+const filteredHistoryInterviews = computed(() => {
+    let list = completedInterviews.value;
+    const q = (interviewSearchQuery.value || '').toLowerCase();
+    if (q) {
+        list = list.filter(i =>
+            i.candidate_name?.toLowerCase().includes(q) ||
+            i.position?.toLowerCase().includes(q) ||
+            (i.interviewer?.name || getInterviewerName(i.interviewer_id))?.toLowerCase().includes(q)
+        );
+    }
+    if (historyFilterStatus.value !== 'All') {
+        list = list.filter(i => i.status === historyFilterStatus.value);
+    }
+    return list;
+});
+
 const finalInterviews = computed(() => {
     const isFinal = (interview) => ['final', 'final interview'].includes(String(interview.type ?? '').toLowerCase());
     const rows = [];
@@ -1423,12 +1473,18 @@ const finalInterviews = computed(() => {
 });
 
 const filteredFinalInterviews = computed(() => {
-    if (!interviewSearchQuery.value) return finalInterviews.value;
-    const query = interviewSearchQuery.value.toLowerCase();
-    return finalInterviews.value.filter(i =>
-        i.candidate_name?.toLowerCase().includes(query) ||
-        i.position?.toLowerCase().includes(query)
-    );
+    let list = finalInterviews.value;
+    const query = (interviewSearchQuery.value || '').toLowerCase();
+    if (query) {
+        list = list.filter(i =>
+            i.candidate_name?.toLowerCase().includes(query) ||
+            i.position?.toLowerCase().includes(query)
+        );
+    }
+    if (finalFilterStatus.value !== 'All') {
+        list = list.filter(i => i.status === finalFilterStatus.value);
+    }
+    return list;
 });
 
 const filteredUpcomingInterviews = computed(() => {
@@ -1512,9 +1568,29 @@ const getInterviewStatusBadge = (status) => {
         'Scheduled': 'bg-amber-100 text-amber-700 border-amber-200',
         'Completed': 'bg-emerald-100 text-emerald-700 border-emerald-200',
         'Cancelled': 'bg-rose-100 text-rose-700 border-rose-200',
+        'Cancelled by Applicant': 'bg-rose-100 text-rose-700 border-rose-200',
         'No Show': 'bg-red-100 text-red-700 border-red-200',
             };
     return classes[status] || 'bg-slate-100 text-slate-600 border-slate-200';
+};
+
+// Distinguish applicant-initiated cancellations in the UI while the stored
+// status stays 'Cancelled' (filters/metrics unchanged).
+const interviewStatusLabel = (iv) => {
+    if (iv?.status === 'Cancelled' && iv?.cancelled_by === 'applicant') return 'Cancelled by Applicant';
+    return iv?.status || 'Scheduled';
+};
+
+// A cancelled interview (by applicant OR by HR) must not offer scheduling actions.
+const isCancelledInterview = (iv) => String(iv?.status || '').toLowerCase().includes('cancel');
+
+// Once a cancelled interview has been rescheduled (the applicant again has a
+// Scheduled interview), stop offering "Schedule New Interview" on the cancelled row.
+const hasScheduledInterviewFor = (iv) => {
+    if (!iv?.applicant_id) return false;
+    return interviewRows.value.some(i =>
+        i.applicant_id === iv.applicant_id && i.id !== iv.id && i.status === 'Scheduled'
+    );
 };
 
 const getInterviewResultBadge = (result) => {
@@ -1831,13 +1907,41 @@ const rescheduleInterview = async () => {
     finally { isSubmitting.value = false; }
 };
 
+const approveReschedule = async (interview) => {
+    if (!interview || isSubmitting.value) return;
+    isSubmitting.value = true;
+    try {
+        const { data } = await axios.post(`/hrm/recruitment/interviews/${interview.id}/reschedule/approve`);
+        if (data?.data) {
+            selectedInterview.value = { ...selectedInterview.value, ...data.data };
+        }
+        showToastMessage('Reschedule Approved', 'The interview date has been updated to the requested schedule.', 'success');
+        await refreshList();
+    } catch (error) { showToastMessage('Error', error.response?.data?.message || 'Failed to approve reschedule.', 'error'); }
+    finally { isSubmitting.value = false; }
+};
+
+const denyReschedule = async (interview) => {
+    if (!interview || isSubmitting.value) return;
+    if (!confirm('Deny this reschedule request? The interview will keep its original schedule.')) return;
+    isSubmitting.value = true;
+    try {
+        const { data } = await axios.post(`/hrm/recruitment/interviews/${interview.id}/reschedule/deny`);
+        if (data?.data) {
+            selectedInterview.value = { ...selectedInterview.value, ...data.data };
+        }
+        showToastMessage('Reschedule Denied', 'The interview keeps its original schedule.', 'info');
+        await refreshList();
+    } catch (error) { showToastMessage('Error', error.response?.data?.message || 'Failed to deny reschedule.', 'error'); }
+    finally { isSubmitting.value = false; }
+};
+
 const openCancelModal = (interview) => {
     selectedInterview.value = interview;
     cancelForm.value = { interview_id: interview.id, reason: '' };
     showCancelModal.value = true;
     showDetailModal.value = false;
-};
-const closeCancelModal = () => { showCancelModal.value = false; };
+};const closeCancelModal = () => { showCancelModal.value = false; };
 
 const cancelInterview = async () => {
     if (!cancelForm.value.reason) { showToastMessage('Validation Error', 'Please provide a cancellation reason.', 'error'); return; }
@@ -1986,6 +2090,33 @@ const scheduleFinalInterview = (interview) => {
     }, 'Final Interview', interview.position || '');
 };
 
+// A cancelled interview frees the applicant for a brand-new interview. The
+// application was never withdrawn, so HR can offer a fresh slot from here.
+const scheduleNewInterview = (interview) => {
+    if (!interview) return;
+    const applicant = interview.applicant || interview.application;
+    const type = isFinalInterview(interview) ? 'Final Interview' : 'Initial Interview';
+    showDetailModal.value = false;
+    document.body.style.overflow = '';
+
+    if (applicant && applicant.id) {
+        openScheduleModal(applicant, type, interview.position || '');
+        return;
+    }
+    if (!interview.applicant_id) {
+        showToastMessage('Error', 'No application found for this interview.', 'error');
+        return;
+    }
+    const parts = String(interview.candidate_name || '').split(' ').filter(Boolean);
+    openScheduleModal({
+        id: interview.applicant_id,
+        first_name: parts[0] || interview.candidate_name || '',
+        last_name: parts.slice(1).join(' ') || '',
+        candidate_name: interview.candidate_name || '',
+        position_applied: interview.position || '',
+    }, type, interview.position || '');
+};
+
 const advanceToOnboarding = async (interview) => {
     if (!confirm(`Advance ${interview.candidate_name} to Onboarding / Training? The applicant will be notified through the portal.`)) return;
     isSubmitting.value = true;
@@ -2061,6 +2192,14 @@ onMounted(() => {
     }
     fetchInterviewers();
     fetchInterviews();
+
+    // Applicant-side actions (cancel / reschedule request) happen in another
+    // session — refresh when this tab regains focus so the list is never stale.
+    window.addEventListener('focus', refreshList);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('focus', refreshList);
 });
 </script>
 
