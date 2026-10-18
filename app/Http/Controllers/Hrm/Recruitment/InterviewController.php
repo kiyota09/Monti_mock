@@ -299,9 +299,92 @@ class InterviewController extends Controller
         return response()->json($interview);
     }
 
+    /**
+     * Interviewer approves an applicant's pending reschedule request:
+     * the live schedule adopts the proposed date/time and the request clears.
+     */
+    public function approveReschedule(Request $request, HrmInterview $interview)
+    {
+        if ($interview->reschedule_status !== 'requested') {
+            return response()->json(['message' => 'There is no pending reschedule request for this interview.'], 422);
+        }
+
+        $interview->update([
+            'date' => $interview->reschedule_date,
+            'start_time' => $interview->reschedule_start_time ?: $interview->start_time,
+            'end_time' => $interview->reschedule_end_time ?: $interview->end_time,
+            'status' => 'Scheduled',
+            'reschedule_status' => null,
+            'reschedule_date' => null,
+            'reschedule_start_time' => null,
+            'reschedule_end_time' => null,
+            'reschedule_reason' => null,
+            'reschedule_requested_at' => null,
+        ]);
+
+        if ($app = $interview->applicant) {
+            \App\Support\NotifiesApplicant::push($app, 'interview', 'Reschedule Approved', 'Your interview has been moved to the requested schedule.', [
+                'position' => $interview->position,
+                'interview_type' => $interview->type,
+                'date' => optional($interview->date)?->toDateString(),
+                'start_time' => $interview->start_time,
+                'end_time' => $interview->end_time,
+                'method' => $interview->method,
+                'location' => $interview->location,
+                'meeting_link' => $interview->meeting_link,
+                'status' => 'Scheduled',
+            ]);
+        }
+
+        return response()->json(['ok' => true, 'data' => $interview->fresh()->loadMissing(['applicant', 'evaluation', 'interviewer:id,name,email'])]);
+    }
+
+    /**
+     * Interviewer denies an applicant's pending reschedule request: the
+     * original schedule is kept and the request clears.
+     */
+    public function denyReschedule(Request $request, HrmInterview $interview)
+    {
+        if ($interview->reschedule_status !== 'requested') {
+            return response()->json(['message' => 'There is no pending reschedule request for this interview.'], 422);
+        }
+
+        $interview->update([
+            'reschedule_status' => null,
+            'reschedule_date' => null,
+            'reschedule_start_time' => null,
+            'reschedule_end_time' => null,
+            'reschedule_reason' => null,
+            'reschedule_requested_at' => null,
+        ]);
+
+        if ($app = $interview->applicant) {
+            \App\Support\NotifiesApplicant::push($app, 'interview', 'Reschedule Not Approved', 'Your interview will proceed on the original schedule.', [
+                'position' => $interview->position,
+                'interview_type' => $interview->type,
+                'date' => optional($interview->date)?->toDateString(),
+                'start_time' => $interview->start_time,
+                'end_time' => $interview->end_time,
+                'status' => 'Scheduled',
+            ]);
+        }
+
+        return response()->json(['ok' => true, 'data' => $interview->fresh()->loadMissing(['applicant', 'evaluation', 'interviewer:id,name,email'])]);
+    }
+
     public function cancel(Request $request, HrmInterview $interview)
     {
-        $interview->update(['status' => 'Cancelled', 'cancel_reason' => $request->get('reason')]);
+        $interview->update([
+            'status' => 'Cancelled',
+            'cancelled_by' => 'hrm',
+            'cancel_reason' => $request->get('reason'),
+            'reschedule_status' => null,
+            'reschedule_date' => null,
+            'reschedule_start_time' => null,
+            'reschedule_end_time' => null,
+            'reschedule_reason' => null,
+            'reschedule_requested_at' => null,
+        ]);
 
         return response()->json(['ok' => true]);
     }

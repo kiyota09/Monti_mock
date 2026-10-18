@@ -9,11 +9,15 @@ return new class extends Migration
 {
     public function up()
     {
-        DB::statement("ALTER TABLE users MODIFY COLUMN position ENUM('manager', 'staff', 'trainee', 'secretary', 'general_manager') NOT NULL");
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE users MODIFY COLUMN position ENUM('manager', 'staff', 'trainee', 'secretary', 'general_manager') NOT NULL");
+        }
     }
 
     public function down()
     {
-        DB::statement("ALTER TABLE users MODIFY COLUMN position ENUM('manager', 'staff', 'trainee') NOT NULL");
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE users MODIFY COLUMN position ENUM('manager', 'staff', 'trainee') NOT NULL");
+        }
     }
 };

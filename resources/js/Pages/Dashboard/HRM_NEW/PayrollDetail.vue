@@ -352,7 +352,6 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                         </template>
                     </div>
                 </div>
-                <p class="text-xs text-slate-500 mt-3 relative">Amounts are in PHP. Gross = (days × rate) + night + O.T. + Sun/special + holiday − late. Net = Gross − (SSS + PhilHealth + Pag-IBIG + SSS loan + PF loan).</p>
             </div>
         </div>
         <div v-if="confirmBox" class="fixed inset-0 z-50 flex items-center justify-center p-4">

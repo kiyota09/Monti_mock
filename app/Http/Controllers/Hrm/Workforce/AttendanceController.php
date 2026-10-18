@@ -43,7 +43,8 @@ class AttendanceController extends Controller
             $isHistory = false;
         }
 
-        $q = AttendanceLog::with(['user.hrmDepartment:id,name']);
+        $q = AttendanceLog::with(['user.hrmDepartment:id,name'])
+            ->whereNotIn('user_id', function ($sub) { $sub->select('users.id')->from('users')->join('workers', 'workers.email', '=', 'users.personal_email')->whereNotNull('users.personal_email'); });
         if ($isHistory) {
             $q->whereBetween('date', [$from, $to]);
         } else {
@@ -125,7 +126,13 @@ class AttendanceController extends Controller
 
         $scopeQ = $isHistory
             ? AttendanceLog::whereBetween('date', [$from, $to])
-            : AttendanceLog::where('date', $date);
+                ->whereNotIn('user_id', function ($sub) { $sub->select('users.id')->from('users')->join('workers', 'workers.email', '=', 'users.personal_email')->whereNotNull('users.personal_email'); })
+            : AttendanceLog::where('date', $date)
+            ->whereNotIn('user_id', function ($sub) {
+                $sub->select('users.id')->from('users')
+                    ->join('workers', 'workers.email', '=', 'users.personal_email')
+                    ->whereNotNull('users.personal_email');
+            });
         $dayLogs = (clone $scopeQ)->get();
         $onLeave = $isHistory
             ? LeaveRequest::where('status', 'approved')
@@ -198,7 +205,8 @@ class AttendanceController extends Controller
                     ->keyBy(fn ($s) => $s->user_id.'|'.substr((string) $s->effective_date, 0, 10))
                 : \App\Models\Hrm\EmployeeShift::where('effective_date', $date)
                     ->get(['user_id', 'shift_type', 'schedule_range'])->keyBy('user_id');
-            $base = AttendanceLog::with(['user.hrmDepartment:id,name']);
+            $base = AttendanceLog::with(['user.hrmDepartment:id,name'])
+            ->whereNotIn('user_id', function ($sub) { $sub->select('users.id')->from('users')->join('workers', 'workers.email', '=', 'users.personal_email')->whereNotNull('users.personal_email'); });
             if ($isHistory) $base->whereBetween('date', [$from, $to])->orderBy('date'); else $base->where('date', $date);
             $base->chunk(500, function ($rows) use ($out, $shiftMap, $isHistory) {
                 foreach ($rows as $log) {

@@ -116,6 +116,8 @@ class PayrollSummaryService
      * $isRestDay comes from the employee's rest-day configuration — never
      * from the weekday alone. Returns ['extra' => float,
      * 'count_holiday' => bool, 'skip_rest_premium' => bool].
+     * `non_working` is priced identically to `special_non_working`
+     * (130% / 150% on rest); `special_working` is ordinary (no extra).
      */
     public static function workedExtra(array $rule, bool $isRestDay, array $rates): array
     {
@@ -346,8 +348,10 @@ class PayrollSummaryService
             // Rest-day work: hourly × rest multiplier. Skipped when a stacked
             // holiday daily rate already covers the day; never applied merely
             // because the calendar day is Sunday — $isRestDay comes from the
-            // employee's rest-day configuration.
-            if (($isRestDay || self::isHoliday($dateStr, 'special_non_working')) && ! $worked['skip_rest_premium']) {
+            // employee's rest-day configuration. A special holiday on an
+            // ordinary workday must NOT earn a rest premium on top of its
+            // 130% daily rate (DOLE: 130% total, 150% only on a rest day).
+            if ($isRestDay && ! $worked['skip_rest_premium']) {
                 $hoursWorked = abs($clockIn->diffInHours($clockOut));
                 $sundayHours += $hoursWorked;
                 $sunAmt += $hoursWorked * $hourlyRate * $sunMult;
@@ -373,7 +377,7 @@ class PayrollSummaryService
             'ot_rate' => $dailyRate > 0 ? ($dailyRate / $hrsDay) * $otMult : 0,
             'ot_amt' => $otAmt,
             'night_hours' => $nightHours,
-            'night_rate' => $dailyRate * $nightMult,
+            'night_rate' => $dailyRate > 0 ? ($dailyRate / $hrsDay) * $nightMult : 0,
             'night_amt' => $nightAmt,
             'sunday_restday_hours' => $sundayHours,
             'sun_sp_rate' => $dailyRate > 0 ? ($dailyRate / $hrsDay) * $sunMult : 0,
@@ -403,11 +407,19 @@ class PayrollSummaryService
             return true;
         }
         $hols = Holiday::nonWorkingMap($start, $end);
+        // DOLE: when the day before the holiday is a rest day or a
+        // non-working day, entitlement looks at the last preceding workday.
+        // Rest days therefore never establish (or break) eligibility.
+        $rest = self::restWeekdays($userId);
 
         $cursor = Carbon::parse($end);
         $floor = Carbon::parse($start);
         while ($cursor->greaterThanOrEqualTo($floor)) {
             $key = $cursor->toDateString();
+            if (in_array((int) $cursor->dayOfWeek, $rest, true)) {
+                $cursor->subDay();
+                continue;
+            }
             if (isset($shifts[$key]) && ! isset($hols[$key])) {
                 $log = AttendanceLog::where('user_id', $userId)->where('date', $key)->first();
                 if ($log && $log->clock_in) {

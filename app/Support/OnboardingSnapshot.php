@@ -60,8 +60,16 @@ class OnboardingSnapshot
             $activities++;
         }
 
+        // Snapshot the template's onboarding duration so the applicant
+        // portal can start the countdown (never overwrite an HR-set value).
         if ($onboarding->template_id !== $template->id) {
-            $onboarding->update(['template_id' => $template->id]);
+            $onboarding->template_id = $template->id;
+        }
+        if ($onboarding->duration_days === null && $template->duration_days !== null) {
+            $onboarding->duration_days = $template->duration_days;
+        }
+        if ($onboarding->isDirty()) {
+            $onboarding->save();
         }
 
         return ['items' => $items, 'activities' => $activities, 'skipped' => false];

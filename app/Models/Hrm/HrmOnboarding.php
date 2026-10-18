@@ -13,9 +13,13 @@ class HrmOnboarding extends Model
         'applicant_id', 'template_id', 'job_posting_id', 'name', 'email', 'position',
         'department', 'employment_type', 'work_mode', 'work_location', 'work_schedule',
         'salary_range', 'start_date', 'expected_start_date', 'expected_completion_date',
+        'duration_days', 'duration_started_at', 'duration_reminder_sent_at',
         'assigned_manager', 'status', 'progress',
     ];
-    protected $casts = ['start_date' => 'date', 'expected_start_date' => 'date', 'expected_completion_date' => 'date'];
+    protected $casts = [
+        'start_date' => 'date', 'expected_start_date' => 'date', 'expected_completion_date' => 'date',
+        'duration_started_at' => 'datetime', 'duration_reminder_sent_at' => 'datetime',
+    ];
 
     public function items(): HasMany
     {

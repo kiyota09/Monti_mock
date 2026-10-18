@@ -22,9 +22,17 @@ class BillingPortalController extends Controller
 
     public function index(Request $request)
     {
-        $statements = BillingStatement::where('agency_id', $this->agencyId($request))
-            ->whereIn('status', [BillingStatement::STATUS_ISSUED, BillingStatement::STATUS_PAID])
-            ->orderByDesc('id')->paginate(15)->withQueryString();
+        $query = BillingStatement::where('agency_id', $this->agencyId($request))
+            ->whereIn('status', [BillingStatement::STATUS_ISSUED, BillingStatement::STATUS_PAID]);
+
+        if ($from = $request->get('from')) {
+            $query->whereDate('period_start', '>=', $from);
+        }
+        if ($to = $request->get('to')) {
+            $query->whereDate('period_end', '<=', $to);
+        }
+
+        $statements = $query->orderByDesc('id')->paginate(15)->withQueryString();
 
         return Inertia::render('Agency/Billing/Index', [
             'statements' => collect($statements->items())->map(fn ($s) => [
@@ -44,6 +52,7 @@ class BillingPortalController extends Controller
                 'per_page' => $statements->perPage(),
                 'total' => $statements->total(),
             ],
+            'filters' => $request->only(['from', 'to']),
         ]);
     }
 

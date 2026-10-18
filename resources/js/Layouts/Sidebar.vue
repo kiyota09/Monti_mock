@@ -133,7 +133,6 @@ const navItems = computed(() => {
     if (isEmployeePortal.value) {
         return [
             { label: 'Employee Dashboard', href: route('employee.ui.dashboard'), icon: Clock },
-            { label: 'My Attendance', href: route('employee.ui.clock'), icon: CalendarDays },
             { label: 'Leave Request', href: route('employee.ui.leave'), icon: History },
             { label: 'Payslip', href: route('employee.ui.payslip'), icon: HandCoins },
         ]
@@ -212,7 +211,6 @@ const navItems = computed(() => {
             { label: 'My Applications', href: applicantRoute('applicant.applications.index', '/applicant/applications'), icon: FileText },
             { label: 'Interviews', href: applicantRoute('applicant.interviews', '/applicant/interviews'), icon: CalendarDays },
             { label: 'Onboarding', href: applicantRoute('applicant.onboarding.index', '/applicant/onboarding'), icon: ClipboardList },
-            { label: 'Notifications', href: applicantRoute('applicant.notifications.index', '/applicant/notifications'), icon: Bell },
             { label: 'My Profile', href: applicantRoute('applicant.profile.index', '/applicant/profile'), icon: User },
             { label: 'Account', href: applicantRoute('applicant.account.index', '/applicant/account'), icon: UserCog2 },
         )

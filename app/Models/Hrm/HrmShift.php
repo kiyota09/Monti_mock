@@ -34,6 +34,14 @@ class HrmShift extends Model
         return $this->belongsToMany(User::class, 'hrm_shift_user', 'shift_id', 'user_id')->withTimestamps();
     }
 
+    /**
+     * Agency workers assigned to this shift (hrm_shift_worker pivot).
+     */
+    public function workers(): BelongsToMany
+    {
+        return $this->belongsToMany(Worker::class, 'hrm_shift_worker', 'shift_id', 'worker_id')->withTimestamps();
+    }
+
     public static function nextCode(): string
     {
         $max = self::where('code', 'like', 'SHF-%')->get(['code'])

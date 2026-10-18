@@ -90,7 +90,7 @@ class RequestPortalController extends Controller
                 ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('manpower_proposals as mp')
                     ->whereColumn('mp.worker_id', 'workers.id')
                     ->where('mp.request_id', $manpowerRequest->id)
-                    ->whereIn('mp.status', [ManpowerProposal::STATUS_PROPOSED, ManpowerProposal::STATUS_ACCEPTED]))
+                    ->where('mp.status', ManpowerProposal::STATUS_PROPOSED))
                 ->orderBy('name')->get(['id', 'code', 'name', 'position_skill', 'clearance_expiry'])
                 ->filter(fn ($w) => ! $w->clearance_expired)
                 ->map(fn ($w) => ['id' => $w->id, 'code' => $w->code, 'name' => $w->name, 'position_skill' => $w->position_skill])
@@ -102,6 +102,7 @@ class RequestPortalController extends Controller
                 'id' => $manpowerRequest->id, 'code' => $manpowerRequest->code,
                 'department' => $manpowerRequest->department,
                 'position_skill' => $manpowerRequest->position_skill,
+                'agency' => $manpowerRequest->agency?->name,
                 'needed' => (int) $manpowerRequest->headcount,
                 'filled' => (int) $manpowerRequest->filled_count,
                 'start_date' => optional($manpowerRequest->start_date)->toDateString(),
@@ -146,9 +147,15 @@ class RequestPortalController extends Controller
         }
         if (ManpowerProposal::where('request_id', $manpowerRequest->id)
             ->where('worker_id', $worker->id)
-            ->whereIn('status', [ManpowerProposal::STATUS_PROPOSED, ManpowerProposal::STATUS_ACCEPTED])
+            ->where('status', ManpowerProposal::STATUS_PROPOSED)
             ->exists()) {
             throw ValidationException::withMessages(['worker_id' => 'This worker was already proposed for this request.']);
+        }
+        if (\App\Models\Hrm\ManpowerAssignment::where('request_id', $manpowerRequest->id)
+            ->where('worker_id', $worker->id)
+            ->whereNull('released_at')
+            ->exists()) {
+            throw ValidationException::withMessages(['worker_id' => 'This worker is already assigned to this request.']);
         }
 
         ManpowerProposal::create([

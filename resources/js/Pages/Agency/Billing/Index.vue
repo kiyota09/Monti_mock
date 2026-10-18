@@ -1,17 +1,40 @@
 <script setup lang="ts">
 // Page 21: Agency billing (Issued + Paid only, read-only + exports)
-import { Head, Link } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
 import { Eye, FileDown, FileSpreadsheet } from 'lucide-vue-next';
 
-defineProps<{
+const props = defineProps<{
     statements: Array<{
         id: number; code: string; period: string;
         labor_cost: string | number; service_fee: string | number; total: string | number;
         status: string; paid_at: string | null; payment_reference: string | null;
     }>;
     pagination: { current_page: number; last_page: number; per_page: number; total: number };
+    filters?: { from?: string; to?: string };
 }>();
+
+const from = ref(props.filters?.from || '');
+const to = ref(props.filters?.to || '');
+
+function applyFilters() {
+    const params: Record<string, string> = {};
+    if (from.value) params.from = from.value;
+    if (to.value) params.to = to.value;
+    router.get(route('agency.billing.index'), params, { preserveState: true, preserveScroll: true, replace: true });
+}
+
+let t: any = null;
+watch([from, to], () => {
+    clearTimeout(t);
+    t = setTimeout(applyFilters, 400);
+});
+
+function clearFilters() {
+    from.value = '';
+    to.value = '';
+}
 
 function money(v: any): string {
     return '₱' + Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
@@ -25,6 +48,26 @@ function money(v: any): string {
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5 mb-4">Issued and paid statements for your agency.</p>
 
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-end gap-3 bg-slate-50/50 dark:bg-slate-800/50">
+                <div>
+                    <label class="block mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Period from</label>
+                    <input v-model="from" type="date" class="px-3 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200" />
+                </div>
+                <div>
+                    <label class="block mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Period to</label>
+                    <input v-model="to" type="date" class="px-3 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200" />
+                </div>
+                <button
+                    v-if="from || to"
+                    type="button"
+                    @click="clearFilters"
+                    class="px-3 py-2 text-xs font-bold text-slate-500 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                >
+                    Clear
+                </button>
+                <span class="ml-auto text-xs text-slate-400">{{ pagination.total }} statement{{ pagination.total === 1 ? '' : 's' }}</span>
+            </div>
+
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[680px]">
                     <thead>
@@ -64,7 +107,9 @@ function money(v: any): string {
                         </tr>
                     </tbody>
                 </table>
-                <div v-if="statements.length === 0" class="py-10 text-center text-sm font-bold">No statements yet.</div>
+                <div v-if="statements.length === 0" class="py-10 text-center text-sm font-bold">
+                    {{ from || to ? 'No statements in this period.' : 'No statements yet.' }}
+                </div>
             </div>
         </div>
     </AgencyLayout>

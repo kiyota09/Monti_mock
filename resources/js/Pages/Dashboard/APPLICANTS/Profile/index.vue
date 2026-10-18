@@ -1209,15 +1209,23 @@ const isDisabled = computed(() => !isEditMode.value)
                                             </p>
                                         </div>
                                         <div>
-                                            <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Phone Number</label>
+                                            <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Phone Number <span class="text-red-500">*</span></label>
                                             <input
                                                 v-model="form.phone"
-                                                type="tel"
-                                                placeholder="+63 9XX XXX XXXX"
+                                                type="text"
+                                                inputmode="numeric"
+                                                pattern="[0-9]*"
+                                                maxlength="15"
+                                                required
+                                                placeholder="09123456789"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
+                                                @input="form.phone = String(form.phone).replace(/\D/g, '')"
                                             />
+                                            <p v-if="form.errors.phone" class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                                {{ form.errors.phone }}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -1263,12 +1271,19 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Phone Number</label>
                                             <input
                                                 v-model="form.emergency_contact.phone"
-                                                type="tel"
-                                                placeholder="+63 9XX XXX XXXX"
+                                                type="text"
+                                                inputmode="numeric"
+                                                pattern="[0-9]*"
+                                                maxlength="15"
+                                                placeholder="09123456789"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
+                                                @input="form.emergency_contact.phone = String(form.emergency_contact.phone).replace(/\D/g, '')"
                                             />
+                                            <p v-if="form.errors['emergency_contact.phone']" class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                                {{ form.errors['emergency_contact.phone'] }}
+                                            </p>
                                         </div>
                                         <div>
                                             <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Address</label>

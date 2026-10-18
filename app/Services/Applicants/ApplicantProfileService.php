@@ -24,6 +24,11 @@ class ApplicantProfileService
 
         $jp = $applicant->jobPosting;
 
+        // Position qualifications shown in the screening review modal come
+        // from the job posting's linked org position (falling back to the
+        // applicant's own org position).
+        $pos = $jp?->position ?: $applicant->orgPosition;
+
         return [
             'application' => [
                 'id' => $applicant->id,
@@ -117,6 +122,11 @@ class ApplicantProfileService
             'position' => [
                 'applied' => $applicant->position_applied,
                 'org_position' => $applicant->orgPosition?->name,
+                'name' => $pos?->name,
+                'description' => $pos?->description ?: $jp?->recruitment_notes,
+                'responsibilities' => $pos?->responsibilities,
+                'qualifications' => $pos?->qualifications,
+                'required_skills' => $pos?->required_skills,
             ],
             'job_posting' => $jp ? [
                 'id' => $jp->id,

@@ -3,6 +3,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
 import { FileDown, FileSpreadsheet } from 'lucide-vue-next';
+import { formatHours } from '@/lib/utils';
 
 defineProps<{
     statement: {
@@ -66,7 +67,7 @@ function money(v: any): string {
                             <td class="py-2 px-3 text-sm font-bold">{{ l.worker_name }} <span class="font-mono text-[10px] text-slate-400">({{ l.worker_code }})</span></td>
                             <td class="py-2 px-3 text-xs font-mono">{{ l.request_code }}</td>
                             <td class="py-2 px-3 text-center text-xs">{{ l.days }}</td>
-                            <td class="py-2 px-3 text-center text-xs">{{ l.hours }}{{ l.overtime_hours ? '+' + l.overtime_hours + ' OT' : '' }}</td>
+                            <td class="py-2 px-3 text-center text-xs">{{ formatHours(l.hours) }}{{ l.overtime_hours ? '+' + formatHours(l.overtime_hours) + ' OT' : '' }}</td>
                             <td class="py-2 px-3 text-right text-xs font-bold">{{ money(l.labor) }}</td>
                         </tr>
                     </tbody>

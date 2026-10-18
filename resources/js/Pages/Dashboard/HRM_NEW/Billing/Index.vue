@@ -6,6 +6,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 import { Search, Plus, Eye, Pencil } from 'lucide-vue-next';
+import { formatHours } from '@/lib/utils';
 
 const props = defineProps<{
     statements: Array<{
@@ -127,7 +128,7 @@ function money(v: any): string {
                             <td class="py-3 px-4 text-xs font-mono font-bold text-slate-700 dark:text-slate-200">{{ s.code }}</td>
                             <td class="py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">{{ s.agency || '—' }}</td>
                             <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ s.period }}</td>
-                            <td class="py-3 px-4 text-center text-xs font-bold text-slate-700 dark:text-slate-200">{{ s.total_hours }}</td>
+                            <td class="py-3 px-4 text-center text-xs font-bold text-slate-700 dark:text-slate-200">{{ formatHours(s.total_hours) }}</td>
                             <td class="py-3 px-4 text-right text-xs font-bold text-slate-700 dark:text-slate-200">{{ money(s.labor_cost) }}</td>
                             <td class="py-3 px-4 text-right text-xs font-bold text-slate-700 dark:text-slate-200">{{ money(s.service_fee) }}</td>
                             <td class="py-3 px-4 text-right text-xs font-black text-slate-900 dark:text-white">{{ money(s.total) }}</td>

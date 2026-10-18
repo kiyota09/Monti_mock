@@ -149,49 +149,16 @@ class WorkerController extends Controller
 
     public function edit(Worker $worker)
     {
-        $worker->loadMissing('agency:id,code,name,status');
-
-        return Inertia::render('Dashboard/HRM_NEW/Workers/Form', [
-            'worker' => $this->detail($worker),
-            'suggested_code' => $worker->code,
-            'agencies' => Agency::where('status', Agency::STATUS_ACTIVE)->orderBy('name')->get(['id', 'code', 'name']),
-            'permissions' => $this->getPagePermissionsForModule('HRM'),
-        ]);
+        // HR edit page removed — worker data is maintained via agency portal
+        // + Request changes flow. Keep route for BC but send back to detail.
+        return redirect()->route('hrm.workers.show', $worker)
+            ->with('error', 'Direct worker editing is disabled.');
     }
 
     public function update(Request $request, Worker $worker)
     {
-        $data = $this->validated($request, $worker->id);
-
-        if (empty($data['code'])) {
-            $data['code'] = $worker->code;
-        }
-        if ($request->hasFile('resume')) {
-            if ($worker->resume_path && Storage::disk('public')->exists($worker->resume_path)) {
-                Storage::disk('public')->delete($worker->resume_path);
-            }
-            $file = $request->file('resume');
-            $data['resume_path'] = $file->store('workers/resumes', 'public');
-            $data['resume_original_name'] = $file->getClientOriginalName();
-        }
-
-        // Moving agencies is only possible without an active assignment,
-        // and only into an Active agency.
-        if ((int) ($data['agency_id'] ?? $worker->agency_id) !== (int) $worker->agency_id) {
-            if ($worker->activeAssignment()->exists()) {
-                return back()->withErrors(['agency_id' => 'Release this worker from the active assignment before moving agencies.']);
-            }
-            $target = Agency::findOrFail($data['agency_id']);
-            if ($target->status !== Agency::STATUS_ACTIVE) {
-                return back()->withErrors(['agency_id' => 'A worker cannot be moved to a Suspended or Terminated agency.']);
-            }
-        }
-
-        $worker->update($data);
-        $this->log($worker->fresh(), 'worker_updated', "Worker {$worker->code} updated.", null);
-
-        return redirect()->route('hrm.workers.show', $worker)
-            ->with('success', "Worker {$worker->name} updated.");
+        // HR edit page removed — block direct updates.
+        return back()->with('error', 'Direct worker editing is disabled.');
     }
 
     // ------------------------------------------------------------------
@@ -315,6 +282,9 @@ class WorkerController extends Controller
         if ($missing) {
             return back()->with('error', 'Required checks incomplete: ' . implode(', ', $missing) . '.');
         }
+        if ($worker->documents->where('status', WorkerDocument::STATUS_PENDING)->isNotEmpty()) {
+            return back()->with('error', 'A supporting document is still Pending HR verification — verify all documents before approving.');
+        }
         if ($worker->documents->where('status', WorkerDocument::STATUS_REJECTED)->isNotEmpty()) {
             return back()->with('error', 'A supporting document was Rejected — ask the agency to re-upload before approving.');
         }
@@ -348,16 +318,18 @@ class WorkerController extends Controller
 
     /**
      * HR sends a submission back to the agency for correction or completion:
-     * Pending → For Correction with a note. HR may propose overview edits
-     * inline — those are NOT saved; the old → new diff is appended to the
+     * Pending/Available → For Correction with a note. Deployed workers keep
+     * their Deployed status (assignment stays active) — only the note is
+     * saved so the agency can correct while deployed. HR may propose overview
+     * edits inline — those are NOT saved; the old → new diff is appended to the
      * note + activity so the agency portal applies the changes itself.
      */
     public function requestChanges(Request $request, Worker $worker)
     {
         $request->validate(['message' => 'required|string|max:2000']);
 
-        if ($worker->status !== Worker::STATUS_PENDING) {
-            return back()->with('error', 'Only workers pending HR approval can be sent back for correction.');
+        if (! in_array($worker->status, [Worker::STATUS_PENDING, Worker::STATUS_AVAILABLE, Worker::STATUS_DEPLOYED, Worker::STATUS_CORRECTION], true)) {
+            return back()->with('error', 'Only Pending, Available, Deployed, or For Correction workers can be sent back for correction.');
         }
 
         // Optional HR-proposed overview values (sent when the Detail overview
@@ -368,6 +340,11 @@ class WorkerController extends Controller
         $hasWorkerFields = collect($workerKeys)->some(fn ($k) => $request->has($k));
         $data = $hasWorkerFields ? $this->validated($request, $worker->id) : [];
         unset($data['agency_id'], $data['code'], $data['resume']);
+        // Deployment fields are locked while Deployed — strip any posted
+        // values so they never appear in the diff / note.
+        if ($worker->status === Worker::STATUS_DEPLOYED) {
+            unset($data['proposed_department'], $data['position_skill'], $data['years_experience'], $data['availability'], $data['employment_arrangement'], $data['daily_rate']);
+        }
 
         $labels = [
             'name' => 'Full name', 'birth_date' => 'Birth date', 'gender' => 'Gender',
@@ -400,11 +377,13 @@ class WorkerController extends Controller
         }
 
         // Proposal only — worker data stays untouched so the agency portal
-        // applies the corrections itself.
-        $worker->update([
-            'status' => Worker::STATUS_CORRECTION,
-            'pending_note' => $note,
-        ]);
+        // applies the corrections itself. Deployed workers stay Deployed
+        // (active assignment untouched); others go to For Correction.
+        $isDeployed = $worker->status === Worker::STATUS_DEPLOYED && $worker->activeAssignment()->exists();
+        $worker->update(array_merge(
+            ['pending_note' => $note],
+            $isDeployed ? [] : ['status' => Worker::STATUS_CORRECTION],
+        ));
         $this->log($worker, 'worker_correction_requested', "Worker {$worker->code} sent back for correction by HR." . ($diffs ? ' Requested: ' . implode('; ', $diffs) : ''), $note);
 
         return back()->with('success', "Correction requested for {$worker->name}. The agency will apply your note" . ($diffs ? ' and the ' . count($diffs) . ' requested field change(s).' : '.'));

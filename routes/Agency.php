@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\PasswordRecoveryController;
 use App\Http\Controllers\Agency\AgencyDashboardController;
 use App\Http\Controllers\Agency\AttendancePortalController;
 use App\Http\Controllers\Agency\BillingPortalController;
+use App\Http\Controllers\Agency\NotificationController;
 use App\Http\Controllers\Agency\PasswordController;
 use App\Http\Controllers\Agency\RequestPortalController;
 use App\Http\Controllers\Agency\WorkerPortalController;
@@ -48,8 +49,9 @@ Route::middleware('auth:agency')->prefix('agency')->name('agency.')->group(funct
     Route::get('/requests/{manpowerRequest}', [RequestPortalController::class, 'show'])->name('requests.show');
     Route::post('/requests/{manpowerRequest}/propose', [RequestPortalController::class, 'propose'])->name('requests.propose');
 
-    // Attendance (read-only + confirm/dispute).
+    // Attendance (bulk entry main + history + confirm/dispute).
     Route::get('/attendance', [AttendancePortalController::class, 'index'])->name('attendance.index');
+    Route::post('/attendance/bulk', [AttendancePortalController::class, 'bulkStore'])->name('attendance.bulk.store');
     Route::post('/attendance/{attendance}/confirm', [AttendancePortalController::class, 'confirm'])->name('attendance.confirm');
     Route::post('/attendance/{attendance}/dispute', [AttendancePortalController::class, 'dispute'])->name('attendance.dispute');
 
@@ -58,4 +60,7 @@ Route::middleware('auth:agency')->prefix('agency')->name('agency.')->group(funct
     Route::get('/billing/{statement}', [BillingPortalController::class, 'show'])->name('billing.show');
     Route::get('/billing/{statement}/export-pdf', [BillingPortalController::class, 'exportPdf'])->name('billing.export-pdf');
     Route::get('/billing/{statement}/export-excel', [BillingPortalController::class, 'exportExcel'])->name('billing.export-excel');
+
+    // Notifications (bell next to Settings — HR activity for this agency).
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
 });

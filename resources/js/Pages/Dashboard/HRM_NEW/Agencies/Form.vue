@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Page 2: Add / Edit agency (one form, 4 sections)
+// Page 2: Add / Edit agency (one form, 6 sections)
+import { computed, watch } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
@@ -19,8 +20,12 @@ const form = useForm({
     dole_expiry: props.agency?.dole_expiry || '',
     contract_start: props.agency?.contract_start || '',
     contract_end: props.agency?.contract_end || '',
+    billing_cycle: props.agency?.billing_cycle || 'Monthly',
+    payment_terms: props.agency?.payment_terms || '15 days after invoice receipt',
+    payment_custom_terms: props.agency?.payment_custom_terms || '',
     service_fee_type: props.agency?.service_fee_type || 'percentage',
     service_fee_value: props.agency?.service_fee_value ?? '',
+    ot_multiplier: props.agency?.ot_multiplier ?? '1.25',
     contact_name: props.agency?.contact_name || '',
     contact_email: props.agency?.contact_email || '',
     contact_phone: props.agency?.contact_phone || '',
@@ -33,6 +38,62 @@ function submit() {
         form.post(route('hrm.agencies.store'), { preserveScroll: true });
     }
 }
+
+// Percentage vs fixed presentation for the service-fee value.
+const isPercentage = computed(() => form.service_fee_type === 'percentage');
+
+// Numbers only: strip letters / spaces / special chars, keep one dot, max 2 decimals.
+function sanitizeFee(raw: string): string {
+    let v = (raw ?? '').replace(/[^0-9.]/g, '');
+    const firstDot = v.indexOf('.');
+    if (firstDot !== -1) {
+        v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+    }
+    const [intPart, decPart] = v.split('.');
+    if (decPart !== undefined && decPart.length > 2) {
+        v = intPart + '.' + decPart.slice(0, 2);
+    }
+    // Drop leading zeros like "007" -> "7", but keep "0." / "0".
+    if (v.length > 1 && v[0] === '0' && v[1] !== '.') {
+        v = v.replace(/^0+/, '') || '0';
+    }
+    return v;
+}
+
+function onFeeInput(e: Event) {
+    const el = e.target as HTMLInputElement;
+    const clean = sanitizeFee(el.value);
+    if (el.value !== clean) el.value = clean;
+    form.service_fee_value = clean as any;
+}
+
+// Block e/E/+/-/letters at keypress level (number-only field).
+function onFeeKeydown(e: KeyboardEvent) {
+    const allowed = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+    if (allowed.includes(e.key) || e.ctrlKey || e.metaKey) return;
+    const isDigit = /^[0-9]$/.test(e.key);
+    if (e.key === '.') {
+        if (String(form.service_fee_value ?? '').includes('.')) e.preventDefault();
+        return;
+    }
+    if (!isDigit) e.preventDefault();
+}
+
+function onFeePaste(e: ClipboardEvent) {
+    e.preventDefault();
+    const text = e.clipboardData?.getData('text') ?? '';
+    form.service_fee_value = sanitizeFee(text) as any;
+}
+
+// Switching to percentage clamps anything above 100.
+watch(() => form.service_fee_type, (t) => {
+    if (t === 'percentage') {
+        const n = Number(form.service_fee_value);
+        if (form.service_fee_value !== '' && !Number.isNaN(n) && n > 100) {
+            form.service_fee_value = '100' as any;
+        }
+    }
+});
 
 const inputCls = 'w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200';
 const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase';
@@ -107,6 +168,55 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                         <input v-model="form.contract_end" type="date" :class="inputCls" />
                         <p v-if="form.errors.contract_end" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_end }}</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- Section 4: Payment Terms (after Contract, before Service Fee) -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
+                <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4">Payment Terms</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label :class="labelCls">Billing cycle <span class="text-red-500">*</span></label>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                v-for="opt in ['Weekly', 'Semi-monthly', 'Monthly', 'Per invoice / As agreed']"
+                                :key="opt"
+                                type="button"
+                                @click="form.billing_cycle = opt"
+                                :class="['px-4 py-2 rounded-xl text-xs font-bold border transition', form.billing_cycle === opt ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/30' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400']"
+                            >
+                                {{ opt }}
+                            </button>
+                        </div>
+                        <p v-if="form.errors.billing_cycle" class="mt-1 text-xs text-rose-600">{{ form.errors.billing_cycle }}</p>
+                    </div>
+                    <div>
+                        <label :class="labelCls">Payment terms <span class="text-red-500">*</span></label>
+                        <div class="space-y-2">
+                            <label
+                                v-for="opt in ['Due upon invoice approval', '7 days after invoice receipt', '15 days after invoice receipt', '30 days after invoice receipt', 'Custom terms']"
+                                :key="opt"
+                                class="flex items-center gap-3 px-4 py-2.5 rounded-xl border cursor-pointer transition text-sm"
+                                :class="form.payment_terms === opt ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-900/10 font-bold text-slate-800 dark:text-slate-100' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300'"
+                            >
+                                <input v-model="form.payment_terms" type="radio" :value="opt" class="accent-blue-600" />
+                                {{ opt }}
+                            </label>
+                        </div>
+                        <p v-if="form.errors.payment_terms" class="mt-1 text-xs text-rose-600">{{ form.errors.payment_terms }}</p>
+                    </div>
+                    <div v-if="form.payment_terms === 'Custom terms'">
+                        <label :class="labelCls">Custom terms <span class="text-red-500">*</span></label>
+                        <input v-model="form.payment_custom_terms" type="text" :class="inputCls" placeholder="e.g. 45 days after invoice receipt, 50% upon approval..." />
+                        <p v-if="form.errors.payment_custom_terms" class="mt-1 text-xs text-rose-600">{{ form.errors.payment_custom_terms }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 5: Service Fee -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
+                <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4">Service Fee</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label :class="labelCls">Service fee type <span class="text-red-500">*</span></label>
                         <select v-model="form.service_fee_type" :class="inputCls">
@@ -117,13 +227,27 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                     </div>
                     <div>
                         <label :class="labelCls">Service fee value <span class="text-red-500">*</span></label>
-                        <input v-model="form.service_fee_value" type="number" min="0" step="0.01" :class="inputCls" placeholder="e.g. 10 or 5000" />
+                        <div class="relative">
+                            <span v-if="!isPercentage" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">₱</span>
+                            <input :value="form.service_fee_value" @input="onFeeInput" @keydown="onFeeKeydown" @paste="onFeePaste"
+                                type="text" inputmode="decimal" autocomplete="off"
+                                :placeholder="isPercentage ? 'e.g. 10 (%)' : 'e.g. 5000 (₱)'"
+                                :class="[inputCls, isPercentage ? 'pr-9' : 'pl-8']" />
+                            <span v-if="isPercentage" class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">%</span>
+                        </div>
+                        <p class="mt-1 text-[11px] text-slate-400">{{ isPercentage ? 'Enter 0 – 100 (% of labor cost).' : 'Enter a fixed peso amount.' }}</p>
                         <p v-if="form.errors.service_fee_value" class="mt-1 text-xs text-rose-600">{{ form.errors.service_fee_value }}</p>
+                    </div>
+                    <div>
+                        <label :class="labelCls">Overtime multiplier <span class="text-red-500">*</span></label>
+                        <input v-model="form.ot_multiplier" type="number" min="1" max="5" step="0.05" :class="inputCls" placeholder="1.25" />
+                        <p class="mt-1 text-[11px] text-slate-400">Contract OT rate: overtime is billed at (daily rate ÷ 8) × this. 1.25 = 125% of the regular hourly rate.</p>
+                        <p v-if="form.errors.ot_multiplier" class="mt-1 text-xs text-rose-600">{{ form.errors.ot_multiplier }}</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Section 4: Contact person -->
+            <!-- Section 6: Contact person -->
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4">Contact person</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

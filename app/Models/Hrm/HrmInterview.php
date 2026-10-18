@@ -14,8 +14,15 @@ class HrmInterview extends Model
         'applicant_id', 'job_posting_id', 'candidate_name', 'position', 'type',
         'interviewer_id', 'date', 'start_time', 'end_time', 'method', 'location',
         'meeting_link', 'notes', 'status', 'cancel_reason',
+        'reschedule_status', 'reschedule_date', 'reschedule_start_time',
+        'reschedule_end_time', 'reschedule_reason', 'reschedule_requested_at',
+        'cancelled_by',
     ];
-    protected $casts = ['date' => 'date'];
+    protected $casts = [
+        'date' => 'date',
+        'reschedule_date' => 'date',
+        'reschedule_requested_at' => 'datetime',
+    ];
 
     public function applicant(): BelongsTo
     {

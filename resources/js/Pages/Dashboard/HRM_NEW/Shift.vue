@@ -8,8 +8,9 @@ import axios from 'axios';
 const props = defineProps({
     shifts: { type: Array, default: () => [] },
     roster: { type: Array, default: () => [] },
+    workers: { type: Array, default: () => [] },
     departments: { type: Array, default: () => [] },
-    summary: { type: Object, default: () => ({ total: 0, active: 0, inactive: 0, assigned: 0 }) },
+    summary: { type: Object, default: () => ({ total: 0, active: 0, inactive: 0, employees: 0, workers: 0, employees_assigned: 0, workers_assigned: 0, assigned: 0 }) },
     filters: { type: Object, default: () => ({}) },
     types: { type: Array, default: () => ['Fixed', 'Flexible', 'Rotating'] },
     days: { type: Array, default: () => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] },
@@ -31,6 +32,9 @@ const applyFilter = () => {
         }, { preserveState: true, preserveScroll: true, replace: true, only: ['shifts', 'filters', 'summary', 'nextCode'] });
     }, 350);
 };
+
+// ---- Roster tab: Monti employees vs agency workers ----
+const listType = ref('employees');
 
 // ---- Employee roster filters (client-side) ----
 const empSearch = ref('');
@@ -56,6 +60,22 @@ const filteredRoster = computed(() => {
     });
 });
 
+// Agency workers reuse the same search / shift filters.
+const filteredWorkers = computed(() => {
+    const q = empSearch.value.trim().toLowerCase();
+    return props.workers.filter((w) => {
+        if (rosterShiftFilter.value === 'unassigned' && w.shift_id !== null) return false;
+        if (rosterShiftFilter.value && rosterShiftFilter.value !== 'unassigned' && String(w.shift_id) !== String(rosterShiftFilter.value)) return false;
+        if (q) {
+            const hay = `${w.name} ${w.code} ${w.agency || ''} ${w.position || ''}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+        }
+        return true;
+    });
+});
+
+const activeRoster = computed(() => listType.value === 'employees' ? filteredRoster.value : filteredWorkers.value);
+
 const clearRosterFilter = () => {
     empSearch.value = '';
     deptFilter.value = '';
@@ -64,56 +84,72 @@ const clearRosterFilter = () => {
 
 // ---- Checkbox grouping: select rows, assign them the same shift ----
 const selected = ref([]);
+const selectedWorkers = ref([]);
 const bulkShiftId = ref('');
 const bulkEffectiveDate = ref('');
 const bulkSaving = ref(false);
 
+const activeSelected = computed(() => listType.value === 'employees' ? selected.value : selectedWorkers.value);
+
 const allChecked = computed(() =>
-    filteredRoster.value.length > 0 &&
-    filteredRoster.value.every((e) => selected.value.includes(e.id))
+    activeRoster.value.length > 0 &&
+    activeRoster.value.every((e) => activeSelected.value.includes(e.id))
 );
 const toggleAll = () => {
+    const sel = listType.value === 'employees' ? selected : selectedWorkers;
     if (allChecked.value) {
-        const ids = new Set(filteredRoster.value.map((e) => e.id));
-        selected.value = selected.value.filter((id) => !ids.has(id));
+        const ids = new Set(activeRoster.value.map((e) => e.id));
+        sel.value = sel.value.filter((id) => !ids.has(id));
     } else {
-        const set = new Set(selected.value);
-        filteredRoster.value.forEach((e) => set.add(e.id));
-        selected.value = [...set];
+        const set = new Set(sel.value);
+        activeRoster.value.forEach((e) => set.add(e.id));
+        sel.value = [...set];
     }
 };
 const toggleRow = (id) => {
-    const i = selected.value.indexOf(id);
-    if (i >= 0) selected.value.splice(i, 1);
-    else selected.value.push(id);
+    const sel = listType.value === 'employees' ? selected : selectedWorkers;
+    const i = sel.value.indexOf(id);
+    if (i >= 0) sel.value.splice(i, 1);
+    else sel.value.push(id);
+};
+const clearSelection = () => {
+    selected.value = [];
+    selectedWorkers.value = [];
 };
 const submitBulk = () => {
-    if (!bulkShiftId.value || !selected.value.length) return;
+    if (!bulkShiftId.value || !activeSelected.value.length || bulkSaving.value) return;
     bulkSaving.value = true;
-    router.post(route('hrm.workforce.shifts.bulk-assign'), {
+    const payload = {
         shift_id: bulkShiftId.value,
-        user_ids: selected.value,
         effective_date: bulkEffectiveDate.value || null,
-    }, {
+    };
+    if (listType.value === 'employees') payload.user_ids = selected.value;
+    else payload.worker_ids = selectedWorkers.value;
+    router.post(route('hrm.workforce.shifts.bulk-assign'), payload, {
         preserveScroll: true,
-        onSuccess: () => { selected.value = []; bulkShiftId.value = ''; bulkEffectiveDate.value = ''; },
+        onSuccess: () => { clearSelection(); bulkShiftId.value = ''; bulkEffectiveDate.value = ''; },
         onFinish: () => { bulkSaving.value = false; },
     });
 };
 
-// ---- Edit one employee's shift (time follows the shift definition) ----
-const editingEmployee = ref(null);
+// ---- Edit one assignee's shift (employee or worker; time follows the shift definition) ----
+const editingRow = ref(null); // { kind: 'employee' | 'worker', id, name, meta }
 const editShiftId = ref('');
 const editEffectiveDate = ref('');
 const editSaving = ref(false);
 
 const openEditEmployee = (emp) => {
-    editingEmployee.value = emp;
+    editingRow.value = { kind: 'employee', id: emp.id, name: emp.name, meta: [emp.department, emp.position].filter((v) => v && v !== '—').join(' · ') };
     editShiftId.value = emp.shift_id ? String(emp.shift_id) : '';
     editEffectiveDate.value = emp.effective_date || '';
 };
+const openEditWorker = (worker) => {
+    editingRow.value = { kind: 'worker', id: worker.id, name: worker.name, meta: [worker.agency, worker.position].filter((v) => v && v !== '—').join(' · ') };
+    editShiftId.value = worker.shift_id ? String(worker.shift_id) : '';
+    editEffectiveDate.value = worker.effective_date || '';
+};
 const closeEditEmployee = () => {
-    editingEmployee.value = null;
+    editingRow.value = null;
     editShiftId.value = '';
     editEffectiveDate.value = '';
 };
@@ -121,9 +157,12 @@ const editShift = computed(() =>
     props.shifts.find((s) => String(s.id) === String(editShiftId.value)) || null
 );
 const saveEmployeeShift = () => {
-    if (!editingEmployee.value) return;
+    if (!editingRow.value) return;
     editSaving.value = true;
-    router.post(route('hrm.workforce.shifts.reassign', editingEmployee.value.id), {
+    const routeName = editingRow.value.kind === 'worker'
+        ? 'hrm.workforce.shifts.reassign-worker'
+        : 'hrm.workforce.shifts.reassign';
+    router.post(route(routeName, editingRow.value.id), {
         shift_id: editShiftId.value ? editShiftId.value : null,
         effective_date: editEffectiveDate.value || null,
     }, {
@@ -176,31 +215,44 @@ const toggleStatus = (s) => {
 // ---- View shift detail ----
 const detail = ref(null);
 const detailEmployees = ref([]);
+const detailWorkers = ref([]);
 const loadingDetail = ref(false);
 const openView = async (s) => {
     loadingDetail.value = true;
     detail.value = s;
     detailEmployees.value = [];
+    detailWorkers.value = [];
     try {
         const { data } = await axios.get(route('hrm.workforce.shifts.show', s.id));
         detail.value = data.shift;
         detailEmployees.value = data.employees || [];
+        detailWorkers.value = data.workers || [];
     } finally {
         loadingDetail.value = false;
     }
 };
-const closeView = () => { detail.value = null; detailEmployees.value = []; };
+const closeView = () => { detail.value = null; detailEmployees.value = []; detailWorkers.value = []; };
 
-// ---- Assign employees (inside shift detail) ----
+// ---- Assign employees / workers (inside shift detail) ----
+const assignType = ref('employee');
 const assignSearch = ref('');
 const assignResults = ref([]);
 const assignSelected = ref([]);
 const assignEffectiveDate = ref('');
 let assignTimer = null;
+const switchAssignType = () => {
+    assignSelected.value = [];
+    assignResults.value = [];
+    if (assignSearch.value.trim().length >= 2) searchEmployees();
+};
 const searchEmployees = () => {
     clearTimeout(assignTimer);
+    const term = assignSearch.value.trim();
+    if (term.length < 2) { assignResults.value = []; return; }
     assignTimer = setTimeout(async () => {
-        const { data } = await axios.get(route('hrm.workforce.shifts.employees'), { params: { search: assignSearch.value.trim() } });
+        const { data } = await axios.get(route('hrm.workforce.shifts.employees'), {
+            params: { search: term, type: assignType.value === 'worker' ? 'worker' : 'employee' },
+        });
         assignResults.value = data.employees || [];
     }, 300);
 };
@@ -211,7 +263,10 @@ const toggleAssign = (id) => {
 };
 const submitAssign = () => {
     if (!detail.value || !assignSelected.value.length) return;
-    router.post(route('hrm.workforce.shifts.assign', detail.value.id), { user_ids: assignSelected.value, effective_date: assignEffectiveDate.value || null }, {
+    const payload = { effective_date: assignEffectiveDate.value || null };
+    if (assignType.value === 'worker') payload.worker_ids = assignSelected.value;
+    else payload.user_ids = assignSelected.value;
+    router.post(route('hrm.workforce.shifts.assign', detail.value.id), payload, {
         preserveScroll: true,
         onSuccess: () => { assignSelected.value = []; assignSearch.value = ''; assignResults.value = []; assignEffectiveDate.value = ''; openView(detail.value); },
     });
@@ -219,6 +274,12 @@ const submitAssign = () => {
 const unassign = (userId) => {
     if (!detail.value) return;
     router.delete(route('hrm.workforce.shifts.unassign', { shift: detail.value.id, user: userId }), {
+        preserveScroll: true, onSuccess: () => openView(detail.value),
+    });
+};
+const unassignWorker = (workerId) => {
+    if (!detail.value) return;
+    router.delete(route('hrm.workforce.shifts.unassign-worker', { shift: detail.value.id, worker: workerId }), {
         preserveScroll: true, onSuccess: () => openView(detail.value),
     });
 };
@@ -242,10 +303,10 @@ const statusBadge = (s) => s === 'Active' ? 'bg-emerald-50 text-emerald-700 bord
 
             <!-- Summary cards -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p class="text-[11px] font-bold text-slate-400 uppercase">Total Shifts</p><p class="text-2xl font-black mt-1">{{ summary.total }}</p></div>
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p class="text-[11px] font-bold text-slate-400 uppercase">Active</p><p class="text-2xl font-black text-emerald-600 mt-1">{{ summary.active }}</p></div>
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p class="text-[11px] font-bold text-slate-400 uppercase">Inactive</p><p class="text-2xl font-black text-slate-400 mt-1">{{ summary.inactive }}</p></div>
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p class="text-[11px] font-bold text-slate-400 uppercase">Employees Assigned</p><p class="text-2xl font-black text-blue-600 mt-1">{{ summary.assigned }}</p></div>
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p class="text-[11px] font-bold text-slate-400 uppercase">Total Employees</p><p class="text-2xl font-black text-slate-900 mt-1">{{ summary.employees }}</p></div>
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p class="text-[11px] font-bold text-slate-400 uppercase">Total Workers</p><p class="text-2xl font-black text-slate-900 mt-1">{{ summary.workers }}</p></div>
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p class="text-[11px] font-bold text-slate-400 uppercase">Employees Assigned</p><p class="text-2xl font-black text-blue-600 mt-1">{{ summary.employees_assigned }}</p></div>
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p class="text-[11px] font-bold text-slate-400 uppercase">Workers Assigned</p><p class="text-2xl font-black text-emerald-600 mt-1">{{ summary.workers_assigned }}</p></div>
             </div>
 
             <!-- Employee filters: search + department (+ shift) -->
@@ -268,9 +329,19 @@ const statusBadge = (s) => s === 'Active' ? 'bg-emerald-50 text-emerald-700 bord
                 </div>
             </div>
 
+            <!-- Roster source toggle: Monti employees vs agency workers -->
+            <div class="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-xl">
+                <button @click="listType = 'employees'" :class="['inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition', listType === 'employees' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700']">
+                    Monti Employee
+                </button>
+                <button @click="listType = 'workers'" :class="['inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition', listType === 'workers' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700']">
+                    Worker
+                </button>
+            </div>
+
             <!-- Bulk group bar -->
-            <div v-if="selected.length" class="bg-blue-600 text-white rounded-2xl p-3 shadow-lg flex flex-col md:flex-row md:items-center gap-2">
-                <p class="text-xs font-bold px-1">{{ selected.length }} employee(s) selected — group into the same shift:</p>
+            <div v-if="activeSelected.length" class="bg-blue-600 text-white rounded-2xl p-3 shadow-lg flex flex-col md:flex-row md:items-center gap-2">
+                <p class="text-xs font-bold px-1">{{ activeSelected.length }} {{ listType === 'workers' ? 'worker(s)' : 'employee(s)' }} selected — group into the same shift:</p>
                 <div class="flex flex-1 gap-2 flex-wrap">
                     <select v-model="bulkShiftId" class="flex-1 min-w-40 px-3 py-2 rounded-xl text-xs text-slate-800 border-none outline-none">
                         <option value="">Select shift...</option>
@@ -278,14 +349,14 @@ const statusBadge = (s) => s === 'Active' ? 'bg-emerald-50 text-emerald-700 bord
                     </select>
                     <input v-model="bulkEffectiveDate" type="date" title="Effective date" class="px-3 py-2 rounded-xl text-xs text-slate-800 border-none outline-none" />
                     <button @click="submitBulk" :disabled="!bulkShiftId || bulkSaving" class="px-4 py-2 bg-white text-blue-700 rounded-xl text-xs font-black disabled:opacity-50">{{ bulkSaving ? 'Applying...' : 'Apply Shift' }}</button>
-                    <button @click="selected = []" class="px-3 py-2 bg-blue-700 hover:bg-blue-800 rounded-xl text-xs font-bold">Clear</button>
+                    <button @click="clearSelection" class="px-3 py-2 bg-blue-700 hover:bg-blue-800 rounded-xl text-xs font-bold">Clear</button>
                 </div>
             </div>
 
             <!-- Main roster table (no shift code here) -->
             <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-xs">
+                    <table v-if="listType === 'employees'" class="w-full text-xs">
                         <thead class="bg-slate-50 text-slate-500 uppercase text-[10px]">
                             <tr>
                                 <th class="px-4 py-3 text-left w-10"><input type="checkbox" :checked="allChecked" @change="toggleAll" title="Select all" /></th>
@@ -321,17 +392,55 @@ const statusBadge = (s) => s === 'Active' ? 'bg-emerald-50 text-emerald-700 bord
                             <tr v-if="!filteredRoster.length"><td colspan="7" class="px-4 py-10 text-center text-slate-400">No employees found.</td></tr>
                         </tbody>
                     </table>
+
+                    <!-- Agency worker roster -->
+                    <table v-else class="w-full text-xs">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-[10px]">
+                            <tr>
+                                <th class="px-4 py-3 text-left w-10"><input type="checkbox" :checked="allChecked" @change="toggleAll" title="Select all" /></th>
+                                <th class="px-4 py-3 text-left">Worker Name</th>
+                                <th class="px-4 py-3 text-left">Agency</th>
+                                <th class="px-4 py-3 text-left">Position</th>
+                                <th class="px-4 py-3 text-left">Shift</th>
+                                <th class="px-4 py-3 text-left">Effective Date</th>
+                                <th class="px-4 py-3 text-left">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="w in filteredWorkers" :key="w.id" class="border-t border-slate-100 hover:bg-slate-50">
+                                <td class="px-4 py-3"><input type="checkbox" :checked="selectedWorkers.includes(w.id)" @change="toggleRow(w.id)" /></td>
+                                <td class="px-4 py-3">
+                                    <p class="font-bold text-slate-900">{{ w.name }}</p>
+                                    <p class="text-[10px] text-slate-400 font-mono">{{ w.code }}</p>
+                                </td>
+                                <td class="px-4 py-3">{{ w.agency || '—' }}</td>
+                                <td class="px-4 py-3">{{ w.position }}</td>
+                                <td class="px-4 py-3">
+                                    <template v-if="w.shift_id">
+                                        <p class="font-bold text-slate-900">{{ w.shift_name }}</p>
+                                        <p class="text-[10px] text-slate-400">{{ w.start_time }} – {{ w.end_time }}</p>
+                                    </template>
+                                    <span v-else class="px-2 py-1 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200">Unassigned</span>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">{{ w.effective_date || '—' }}</td>
+                                <td class="px-4 py-3">
+                                    <button @click="openEditWorker(w)" class="p-1.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-500" title="Edit shift"><Pencil class="w-3.5 h-3.5" /></button>
+                                </td>
+                            </tr>
+                            <tr v-if="!filteredWorkers.length"><td colspan="7" class="px-4 py-10 text-center text-slate-400">No workers found.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- Edit employee shift modal (time follows shift definition) -->
-            <div v-if="editingEmployee" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <!-- Edit assignee shift modal (time follows shift definition) -->
+            <div v-if="editingRow" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-slate-900/50" @click="closeEditEmployee"></div>
                 <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4">
                     <div class="flex items-start justify-between">
                         <div>
                             <h3 class="font-black">Edit Shift</h3>
-                            <p class="text-xs text-slate-500 mt-0.5">{{ editingEmployee.name }} · {{ editingEmployee.department }} · {{ editingEmployee.position }}</p>
+                            <p class="text-xs text-slate-500 mt-0.5">{{ editingRow.name }}<template v-if="editingRow.meta"> · {{ editingRow.meta }}</template></p>
                         </div>
                         <button @click="closeEditEmployee" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400"><X class="w-4 h-4" /></button>
                     </div>
@@ -387,7 +496,7 @@ const statusBadge = (s) => s === 'Active' ? 'bg-emerald-50 text-emerald-700 bord
                         <div class="overflow-x-auto">
                             <table class="w-full text-xs">
                                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px]">
-                                    <tr><th class="px-4 py-3 text-left">Shift Code</th><th class="px-4 py-3 text-left">Shift Name</th><th class="px-4 py-3 text-left">Start Time</th><th class="px-4 py-3 text-left">End Time</th><th class="px-4 py-3 text-left">Break</th><th class="px-4 py-3 text-left">Grace Period</th><th class="px-4 py-3 text-left">Assigned Employees</th><th class="px-4 py-3 text-left">Status</th><th class="px-4 py-3 text-left">Action</th></tr>
+                                    <tr><th class="px-4 py-3 text-left">Shift Code</th><th class="px-4 py-3 text-left">Shift Name</th><th class="px-4 py-3 text-left">Start Time</th><th class="px-4 py-3 text-left">End Time</th><th class="px-4 py-3 text-left">Break</th><th class="px-4 py-3 text-left">Grace Period</th><th class="px-4 py-3 text-left">Assigned</th><th class="px-4 py-3 text-left">Status</th><th class="px-4 py-3 text-left">Action</th></tr>
                                 </thead>
                                 <tbody>
                                     <tr v-for="s in shifts" :key="s.id" class="border-t border-slate-100 hover:bg-slate-50">
@@ -397,7 +506,7 @@ const statusBadge = (s) => s === 'Active' ? 'bg-emerald-50 text-emerald-700 bord
                                         <td class="px-4 py-3">{{ s.end_time }}</td>
                                         <td class="px-4 py-3">{{ s.break }}</td>
                                         <td class="px-4 py-3">{{ s.grace }}</td>
-                                        <td class="px-4 py-3 font-bold">{{ s.assigned }}</td>
+                                        <td class="px-4 py-3 font-bold">{{ s.assigned_total }}<span class="text-slate-400 font-normal"> ({{ s.assigned }} emp / {{ s.assigned_workers }} wk)</span></td>
                                         <td class="px-4 py-3"><span :class="['px-2 py-1 rounded-full font-bold border', statusBadge(s.status)]">{{ s.status }}</span></td>
                                         <td class="px-4 py-3">
                                             <div class="flex items-center gap-1.5">
@@ -471,29 +580,48 @@ const statusBadge = (s) => s === 'Active' ? 'bg-emerald-50 text-emerald-700 bord
                         <div class="grid grid-cols-2"><span class="px-3 py-2 text-slate-400 bg-slate-50">Status</span><span class="px-3 py-2 font-bold">{{ detail.status }}</span></div>
                     </div>
                     <div>
-                        <h4 class="text-xs font-black uppercase text-slate-500 mb-2">Assigned Employees ({{ detailEmployees.length }})</h4>
                         <div v-if="loadingDetail" class="text-xs text-slate-400">Loading...</div>
-                        <table v-else class="w-full text-xs">
-                            <thead class="text-slate-400 uppercase text-[10px]"><tr><th class="text-left py-1">Employee</th><th class="text-left py-1">Position</th><th class="text-left py-1">Department</th><th class="text-left py-1">Work Schedule</th><th class="text-left py-1">Status</th><th></th></tr></thead>
-                            <tbody>
-                                <tr v-for="e in detailEmployees" :key="e.id" class="border-t border-slate-100">
-                                    <td class="py-1.5 font-bold">{{ e.name }}</td><td>{{ e.position }}</td><td>{{ e.department }}</td><td>{{ e.work_schedule }}</td><td>{{ e.status }}</td>
-                                    <td><button @click="unassign(e.id)" class="text-rose-500 font-bold">Remove</button></td>
-                                </tr>
-                                <tr v-if="!detailEmployees.length"><td colspan="6" class="py-4 text-center text-slate-400">No employees assigned.</td></tr>
-                            </tbody>
-                        </table>
-                        <div class="mt-3 flex gap-2 flex-wrap">
-                            <input v-model="assignSearch" @input="searchEmployees" placeholder="Search employee to assign..." class="flex-1 min-w-40 px-3 py-2 border border-slate-200 rounded-xl text-xs" />
-                            <input v-model="assignEffectiveDate" type="date" title="Effective date" class="px-3 py-2 border border-slate-200 rounded-xl text-xs" />
-                            <button @click="submitAssign" :disabled="!assignSelected.length" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">Assign ({{ assignSelected.length }})</button>
-                        </div>
-                        <div v-if="assignResults.length" class="mt-2 border border-slate-200 rounded-xl divide-y text-xs max-h-40 overflow-y-auto">
-                            <label v-for="e in assignResults" :key="e.id" class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" :checked="assignSelected.includes(e.id)" @change="toggleAssign(e.id)" />
-                                <span class="font-bold">{{ e.name }}</span><span class="text-slate-400 font-mono">{{ e.employee_id }}</span>
-                            </label>
-                        </div>
+                        <template v-else>
+                            <h4 class="text-xs font-black uppercase text-slate-500 mb-2">Assigned Employees ({{ detailEmployees.length }})</h4>
+                            <table class="w-full text-xs">
+                                <thead class="text-slate-400 uppercase text-[10px]"><tr><th class="text-left py-1">Employee</th><th class="text-left py-1">Position</th><th class="text-left py-1">Department</th><th class="text-left py-1">Work Schedule</th><th class="text-left py-1">Status</th><th></th></tr></thead>
+                                <tbody>
+                                    <tr v-for="e in detailEmployees" :key="e.id" class="border-t border-slate-100">
+                                        <td class="py-1.5 font-bold">{{ e.name }}</td><td>{{ e.position }}</td><td>{{ e.department }}</td><td>{{ e.work_schedule }}</td><td>{{ e.status }}</td>
+                                        <td><button @click="unassign(e.id)" class="text-rose-500 font-bold">Remove</button></td>
+                                    </tr>
+                                    <tr v-if="!detailEmployees.length"><td colspan="6" class="py-4 text-center text-slate-400">No employees assigned.</td></tr>
+                                </tbody>
+                            </table>
+
+                            <h4 class="text-xs font-black uppercase text-slate-500 mt-4 mb-2">Assigned Workers ({{ detailWorkers.length }})</h4>
+                            <table class="w-full text-xs">
+                                <thead class="text-slate-400 uppercase text-[10px]"><tr><th class="text-left py-1">Worker</th><th class="text-left py-1">Position</th><th class="text-left py-1">Agency</th><th class="text-left py-1">Status</th><th></th></tr></thead>
+                                <tbody>
+                                    <tr v-for="w in detailWorkers" :key="w.id" class="border-t border-slate-100">
+                                        <td class="py-1.5 font-bold">{{ w.name }} <span class="text-slate-400 font-mono">{{ w.employee_id }}</span></td><td>{{ w.position }}</td><td>{{ w.agency || '—' }}</td><td>{{ w.status }}</td>
+                                        <td><button @click="unassignWorker(w.id)" class="text-rose-500 font-bold">Remove</button></td>
+                                    </tr>
+                                    <tr v-if="!detailWorkers.length"><td colspan="5" class="py-4 text-center text-slate-400">No workers assigned.</td></tr>
+                                </tbody>
+                            </table>
+
+                            <div class="mt-3 flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">
+                                <button @click="assignType = 'employee'; switchAssignType()" :class="['px-3 py-1.5 rounded-lg text-[11px] font-bold', assignType === 'employee' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500']">Monti Employee</button>
+                                <button @click="assignType = 'worker'; switchAssignType()" :class="['px-3 py-1.5 rounded-lg text-[11px] font-bold', assignType === 'worker' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500']">Worker</button>
+                            </div>
+                            <div class="mt-2 flex gap-2 flex-wrap">
+                                <input v-model="assignSearch" @input="searchEmployees" :placeholder="assignType === 'worker' ? 'Search worker to assign...' : 'Search employee to assign...'" class="flex-1 min-w-40 px-3 py-2 border border-slate-200 rounded-xl text-xs" />
+                                <input v-model="assignEffectiveDate" type="date" title="Effective date" class="px-3 py-2 border border-slate-200 rounded-xl text-xs" />
+                                <button @click="submitAssign" :disabled="!assignSelected.length" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">Assign ({{ assignSelected.length }})</button>
+                            </div>
+                            <div v-if="assignResults.length" class="mt-2 border border-slate-200 rounded-xl divide-y text-xs max-h-40 overflow-y-auto">
+                                <label v-for="e in assignResults" :key="e.id" class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer">
+                                    <input type="checkbox" :checked="assignSelected.includes(e.id)" @change="toggleAssign(e.id)" />
+                                    <span class="font-bold">{{ e.name }}</span><span class="text-slate-400 font-mono">{{ e.employee_id }}</span>
+                                </label>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </div>

@@ -5,7 +5,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
-import { Search, Eye, Pencil } from 'lucide-vue-next';
+import { Search, Eye } from 'lucide-vue-next';
 
 const props = defineProps<{
     workers: Array<{
@@ -70,42 +70,6 @@ function openWorker(id: number) {
     router.visit(route('hrm.workers.show', id));
 }
 
-const queueTab = ref<'pending' | 'rates'>('pending');
-const rejectId = ref<number | null>(null);
-const rejectReason = ref('');
-const rejectError = ref('');
-
-function approvePending(id: number) {
-    router.post(route('hrm.workers.approve', id), {}, { preserveScroll: true });
-}
-function openRejectPending(id: number) {
-    rejectId.value = id;
-    rejectReason.value = '';
-    rejectError.value = '';
-}
-function submitRejectPending() {
-    if (!rejectReason.value.trim()) {
-        rejectError.value = 'A reason is required.';
-        return;
-    }
-    router.post(route('hrm.workers.reject-pending', rejectId.value!), { reason: rejectReason.value }, {
-        preserveScroll: true,
-        onSuccess: () => { rejectId.value = null; },
-    });
-}
-function approveRate(id: number) {
-    router.post(route('hrm.workers.rates.approve', id), {}, { preserveScroll: true });
-}
-function rejectRate(id: number) {
-    const reason = window.prompt('Reason for rejecting this rate change (required):');
-    if (reason === null) return;
-    if (!reason.trim()) {
-        toast.error('A reason is required.');
-        return;
-    }
-    router.post(route('hrm.workers.rates.reject', id), { reason }, { preserveScroll: true });
-}
-
 function statusBadge(s: string): string {
     const map: Record<string, string> = {
         Available: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
@@ -158,52 +122,6 @@ function statusBadge(s: string): string {
             </div>
         </div>
 
-        <!-- HR queues: pending workers + rate changes -->
-        <div v-if="pending_workers.length > 0 || rate_requests.length > 0" class="bg-white dark:bg-slate-800 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-sm overflow-hidden mb-4">
-            <div class="px-4 pt-3 flex items-center gap-1">
-                <button @click="queueTab = 'pending'" :class="['px-3 py-1.5 rounded-lg text-xs font-bold transition', queueTab === 'pending' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700']">
-                    Pending approval ({{ pending_workers.length }})
-                </button>
-                <button @click="queueTab = 'rates'" :class="['px-3 py-1.5 rounded-lg text-xs font-bold transition', queueTab === 'rates' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700']">
-                    Rate changes ({{ rate_requests.length }})
-                </button>
-            </div>
-            <div v-if="queueTab === 'pending'" class="p-4">
-                <div v-if="pending_workers.length === 0" class="text-xs text-slate-400">No workers awaiting approval.</div>
-                <ul class="divide-y divide-slate-100 dark:divide-slate-700/50">
-                    <li v-for="w in pending_workers" :key="w.id" class="py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <span><strong class="text-slate-900 dark:text-white">{{ w.name }}</strong> · {{ w.agency }} · {{ w.created_at }}</span>
-                        <span class="flex items-center gap-1">
-                            <button @click="approvePending(w.id)" class="px-3 py-1.5 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition">Approve</button>
-                            <button @click="openRejectPending(w.id)" class="px-3 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition">Reject</button>
-                        </span>
-                    </li>
-                </ul>
-            </div>
-            <div v-if="queueTab === 'rates'" class="p-4">
-                <div v-if="rate_requests.length === 0" class="text-xs text-slate-400">No pending rate changes.</div>
-                <ul class="divide-y divide-slate-100 dark:divide-slate-700/50">
-                    <li v-for="r in rate_requests" :key="r.id" class="py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <span><strong class="text-slate-900 dark:text-white">{{ r.worker_name }}</strong> · {{ r.agency }} · {{ r.old_rate }} → <strong>{{ r.new_rate }}</strong> · by {{ r.requested_by }}</span>
-                        <span class="flex items-center gap-1">
-                            <button @click="approveRate(r.id)" class="px-3 py-1.5 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition">Approve</button>
-                            <button @click="rejectRate(r.id)" class="px-3 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition">Reject</button>
-                        </span>
-                    </li>
-                </ul>
-            </div>
-        </div>
-
-        <div v-if="rejectId !== null" class="mb-4 p-4 rounded-xl bg-white dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600">
-            <p class="text-sm font-black text-slate-900 dark:text-white">Reject this worker?</p>
-            <textarea v-model="rejectReason" rows="2" placeholder="Reason (required)" class="mt-2 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200"></textarea>
-            <p v-if="rejectError" class="mt-1 text-xs text-rose-600">{{ rejectError }}</p>
-            <div class="mt-2 flex items-center justify-end gap-2">
-                <button @click="rejectId = null" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300">Cancel</button>
-                <button @click="submitRejectPending" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold">Confirm rejection</button>
-            </div>
-        </div>
-
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
             <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col lg:flex-row gap-3 bg-slate-50/50 dark:bg-slate-800/50">
                 <div class="relative flex-1">
@@ -243,7 +161,6 @@ function statusBadge(s: string): string {
                             <th class="py-3 px-4">Name</th>
                             <th class="py-3 px-4">Agency</th>
                             <th class="py-3 px-4">Position / skill</th>
-                            <th class="py-3 px-4">Current assignment</th>
                             <th class="py-3 px-4 text-center">Status</th>
                             <th class="py-3 px-4 text-right">Actions</th>
                         </tr>
@@ -263,7 +180,6 @@ function statusBadge(s: string): string {
                             <td class="py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">{{ w.name }}</td>
                             <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{{ w.agency || '—' }}</td>
                             <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ w.position_skill || '—' }}</td>
-                            <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ w.current_assignment || '—' }}</td>
                             <td class="py-3 px-4 text-center">
                                 <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', statusBadge(w.status)]">{{ w.status }}</span>
                             </td>
@@ -275,13 +191,6 @@ function statusBadge(s: string): string {
                                         title="View"
                                     >
                                         <Eye class="w-4 h-4" />
-                                    </Link>
-                                    <Link
-                                        :href="route('hrm.workers.edit', w.id)"
-                                        class="p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
-                                        title="Edit"
-                                    >
-                                        <Pencil class="w-4 h-4" />
                                     </Link>
                                 </div>
                             </td>

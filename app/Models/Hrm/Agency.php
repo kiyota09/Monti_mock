@@ -26,7 +26,8 @@ class Agency extends Model
         'code', 'name', 'tin', 'address',
         'dole_number', 'dole_expiry',
         'contract_start', 'contract_end',
-        'service_fee_type', 'service_fee_value',
+        'billing_cycle', 'payment_terms', 'payment_custom_terms',
+        'service_fee_type', 'service_fee_value', 'ot_multiplier',
         'contact_name', 'contact_email', 'contact_phone',
         'status', 'terminated_at',
     ];
@@ -36,8 +37,20 @@ class Agency extends Model
         'contract_start' => 'date',
         'contract_end' => 'date',
         'service_fee_value' => 'decimal:2',
+        'ot_multiplier' => 'decimal:2',
         'terminated_at' => 'datetime',
     ];
+
+    /**
+     * Contract overtime billing multiplier. Falls back to the global
+     * default (1.25×) when unset or non-positive.
+     */
+    public function otMultiplier(): float
+    {
+        $value = (float) ($this->ot_multiplier ?? 0);
+
+        return $value > 0 ? $value : \App\Support\AttendanceCalc::OT_MULTIPLIER;
+    }
 
     public function users(): HasMany
     {

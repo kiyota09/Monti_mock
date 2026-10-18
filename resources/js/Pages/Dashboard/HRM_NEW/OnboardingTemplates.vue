@@ -223,6 +223,11 @@
                             </select>
                         </div>
                     </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Duration (days)</label>
+                        <input v-model.number="createForm.duration_days" type="number" min="1" max="3650" placeholder="e.g. 7" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
+                        <p class="text-[10px] text-slate-400 mt-1">Onboarding countdown starts when the applicant opens their onboarding page. They are reminded 3 days before it ends. Leave blank for no deadline.</p>
+                    </div>
                     <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                         <input v-model="createForm.is_default" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                         Make this the default template
@@ -325,11 +330,11 @@ const openTemplate = (template) => {
 
 const createForm = ref({
     code: '', name: '', description: '', department_id: '', position_id: '',
-    employment_type_id: '', work_mode: '', is_default: false,
+    employment_type_id: '', work_mode: '', duration_days: '', is_default: false,
 });
 
 const openCreateModal = () => {
-    createForm.value = { code: '', name: '', description: '', department_id: '', position_id: '', employment_type_id: '', work_mode: '', is_default: false };
+    createForm.value = { code: '', name: '', description: '', department_id: '', position_id: '', employment_type_id: '', work_mode: '', duration_days: '', is_default: false };
     activeModal.value = 'create';
 };
 

@@ -298,8 +298,8 @@
                                         </span>
                                     </div>
 
-                                    <!-- More Actions Dropdown -->
-                                    <div class="relative">
+                                    <!-- More Actions Dropdown (hidden at the interview stage, once shortlisted, and once rejected) -->
+                                    <div v-if="!isInterviewStatus(app.status) && app.status !== 'Rejected' && app.status !== 'Shortlisted'" class="relative">
                                         <button 
                                             @click.stop="toggleMenu(cardKey(app))" 
                                             class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all"
@@ -1482,6 +1482,10 @@ const viewTabs = [
 // DATA
 // ============================================
 const statusOptions = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Job Offer', 'Offer Accepted', 'Pre-employment', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+// Applications already at the interview stage show only the View button
+// (the "More" actions menu is hidden).
+const interviewStatuses = ['Interview', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed'];
+const isInterviewStatus = (s: string) => interviewStatuses.includes(s);
 // Position options for the Add/Edit modal, fed by the backend's
 // published job postings (kept in sync if the prop updates).
 const jobOptions = ref<JobOption[]>([...(props.jobPostings ?? [])]);

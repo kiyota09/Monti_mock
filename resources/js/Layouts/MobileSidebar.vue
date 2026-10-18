@@ -89,7 +89,6 @@ const portalItems = computed(() => {
     if (isEmployeePortal.value) {
         return [
             { id: 'employee_dashboard', label: 'Dashboard', icon: Clock, href: safeRoute('employee.ui.dashboard', '/dashboard/employee-ui') },
-            { id: 'employee_attendance', label: 'My Attendance', icon: CalendarDays, href: safeRoute('employee.ui.clock', '/dashboard/employee-ui/clock') },
             { id: 'employee_leave', label: 'Leave Request', icon: History, href: safeRoute('employee.ui.leave', '/dashboard/employee-ui/leave') },
             { id: 'employee_payslip', label: 'Payslip', icon: HandCoins, href: safeRoute('employee.ui.payslip', '/dashboard/employee-ui/payslip') },
         ]
@@ -123,7 +122,6 @@ const portalItems = computed(() => {
             { id: 'applicant_applications', label: 'My Applications', icon: FileText, href: safeRoute('applicant.applications.index', '/applicant/applications') },
             { id: 'applicant_interviews', label: 'Interviews', icon: CalendarDays, href: safeRoute('applicant.interviews', '/applicant/interviews') },
             { id: 'applicant_onboarding', label: 'Onboarding', icon: Clock, href: safeRoute('applicant.onboarding.index', '/applicant/onboarding') },
-            { id: 'applicant_notifications', label: 'Notifications', icon: Bell, href: safeRoute('applicant.notifications.index', '/applicant/notifications') },
             { id: 'applicant_profile', label: 'My Profile', icon: User, href: safeRoute('applicant.profile.index', '/applicant/profile') },
             { id: 'applicant_account', label: 'Account', icon: UserCog2, href: safeRoute('applicant.account.index', '/applicant/account') },
         ]

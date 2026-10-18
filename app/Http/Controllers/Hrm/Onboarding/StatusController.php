@@ -406,6 +406,7 @@ class StatusController extends Controller
             'start_date' => 'nullable|date',
             'expected_start_date' => 'nullable|date',
             'expected_completion_date' => 'nullable|date',
+            'duration_days' => 'nullable|integer|min:1|max:3650',
             'assigned_manager' => 'nullable|string',
             'work_location' => 'nullable|string',
             'work_schedule' => 'nullable|string',

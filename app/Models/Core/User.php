@@ -65,6 +65,7 @@ class User extends Authenticatable
         'must_change_password',
         'profile_photo_path',
         'employee_id',
+        'worker_id',
         'department',
         'join_date',
         // Fields for promotion suggestion logic

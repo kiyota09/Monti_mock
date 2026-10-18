@@ -10,6 +10,7 @@ const props = defineProps<{
         id: number;
         code: string;
         department: string;
+        department_module?: string | null;
         position_skill: string;
         needed: number;
         filled: number;
@@ -27,14 +28,22 @@ const props = defineProps<{
         assigned: Array<{
             assignment_id: number; worker_id: number; worker_code: string | null;
             worker_name: string | null; position_skill: string | null;
+            worker_status: string | null; daily_rate: string | number | null;
+            phone: string | null; gender: string | null;
+            clearance_expiry: string | null; clearance_expired: boolean;
+            resume_url: string | null; resume_name: string | null;
             assigned_at: string | null; assigned_by: string | null;
         }>;
-        available_workers: Array<{ id: number; code: string; name: string; position_skill: string | null }>;
+        available_workers: Array<{ id: number; code: string; name: string; position_skill: string | null; worker_status?: string | null; daily_rate?: string | number | null; phone?: string | null; gender?: string | null; clearance_expiry?: string | null; resume_url?: string | null; resume_name?: string | null; emergency_name?: string | null; emergency_relationship?: string | null; emergency_phone?: string | null; availability?: string | null; employment_arrangement?: string | null; proposed_department?: string | null; years_experience?: string | number | null }>;
         proposals: Array<{
             id: number; worker_id: number; worker_code: string | null; worker_name: string | null;
             position_skill: string | null; worker_status: string | null; daily_rate: string | number | null;
             phone: string | null; gender: string | null; clearance_expiry: string | null;
-            clearance_expired: boolean; status: string; proposed_by: string | null;
+            clearance_expired: boolean; resume_url: string | null; resume_name: string | null;
+            emergency_name?: string | null; emergency_relationship?: string | null; emergency_phone?: string | null;
+            availability?: string | null; employment_arrangement?: string | null; proposed_department?: string | null;
+            years_experience?: string | number | null;
+            status: string; proposed_by: string | null;
             proposed_at: string | null; review_reason: string | null; reviewed_by: string | null;
         }>;
         attendance_summary: Array<{
@@ -90,16 +99,55 @@ function closeRequest() {
 }
 
 function assignWorker() {
-    if (!assignForm.worker_id) return;
-    assignForm.post(route('hrm.manpower-requests.assign', props.request.id), {
-        preserveScroll: true,
-        onSuccess: () => assignForm.reset(),
-    });
+    // Same process as proposal acceptance: confirmation first, then worker-account preview.
+    if (!assignForm.worker_id || accepting.value) return;
+    const w = props.request.available_workers.find((x) => String(x.id) === String(assignForm.worker_id)) || null;
+    if (!w) return;
+    selectedAssigned.value = null;
+    hirePreview.value = null;
+    assignTarget.value = { ...w, worker_id: w.id, worker_name: w.name, worker_code: w.code };
+}
+function closeAssignConfirm() {
+    if (accepting.value) return;
+    assignTarget.value = null;
+}
+function confirmAssignWorker() {
+    if (!assignTarget.value || accepting.value) return;
+    // Step 1 (direct): open preview WITHOUT posting — nothing assigned yet.
+    hirePreview.value = { ...assignTarget.value };
+    hireMode.value = 'direct';
+    assignTarget.value = null;
+    previewEmail.value = '';
+    suggestPreviewEmail(true);
+    previewStartDate.value = props.request.start_date || hirePreview.value.availability || '';
 }
 
+const releaseTarget = ref<any>(null);
+const releaseReason = ref('');
+const releaseError = ref('');
+
 function releaseWorker(a: any) {
-    if (!window.confirm(`Release ${a.worker_name} from this request?`)) return;
-    router.post(route('hrm.manpower-requests.release', { manpowerRequest: props.request.id, assignment: a.assignment_id }), {}, { preserveScroll: true });
+    if (!a) return;
+    selectedAssigned.value = null;
+    releaseTarget.value = a;
+    releaseReason.value = '';
+    releaseError.value = '';
+}
+function closeReleaseWorker() {
+    releaseTarget.value = null;
+    releaseReason.value = '';
+    releaseError.value = '';
+}
+function submitReleaseWorker() {
+    if (!releaseTarget.value) return;
+    if (!releaseReason.value.trim()) {
+        releaseError.value = 'A reason is required to release.';
+        return;
+    }
+    router.post(route('hrm.manpower-requests.release', { manpowerRequest: props.request.id, assignment: releaseTarget.value.assignment_id }), { reason: releaseReason.value }, {
+        preserveScroll: true,
+        onSuccess: () => { closeReleaseWorker(); },
+    });
 }
 
 const rejectProposalId = ref<number | null>(null);
@@ -116,10 +164,111 @@ function closeProposalWorker() {
     selectedProposal.value = null;
 }
 
+// Worker-info modal for a clicked assigned worker.
+const selectedAssigned = ref<any>(null);
+
+function openAssignedWorker(a: any) {
+    selectedAssigned.value = a;
+}
+function closeAssignedWorker() {
+    selectedAssigned.value = null;
+}
+
+// Live preview of the worker picked in the assign dropdown.
+const selectedAvailable = computed(() =>
+    props.request.available_workers.find((w) => String(w.id) === String(assignForm.worker_id)) || null
+);
+
 function acceptProposal(id: number) {
-    router.post(route('hrm.manpower-requests.proposals.accept', { manpowerRequest: props.request.id, proposal: id }), {}, {
+    const target = props.request.proposals.find((p) => p.id === id) || null;
+    openAcceptProposal(target && target.id === id ? target : { id } as any);
+}
+
+// --- Accept / assign flow: confirm -> preview -> finish creates assignment ---
+// Proposals stay Proposed while the preview is open; direct assigns create
+// nothing until Finish. Only Finish POSTs (proposals.accept or assign).
+const acceptTarget = ref<any>(null);
+const assignTarget = ref<any>(null);
+const accepting = ref(false);
+const hirePreview = ref<any>(null);
+const hireMode = ref<'proposal' | 'direct' | null>(null);
+// Reference-only company email (same format as Onboarding CREATE EMPLOYEE).
+// Editable + Generate button. Never posted — preview only.
+const previewEmail = ref('');
+// Editable calendar for deployment start. Reference only — never posted.
+const previewStartDate = ref('');
+
+function suggestPreviewEmail(force = false) {
+    if (!force && previewEmail.value.trim()) return;
+    const raw = hirePreview.value?.worker_name || '';
+    const parts = String(raw).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    if (!parts.length) return;
+    const local = (parts.length > 1 ? `${parts[0]}.${parts[parts.length - 1]}` : parts[0]).slice(0, 64);
+    previewEmail.value = `${local}@monti.com`;
+}
+
+function openAcceptProposal(p: any) {
+    if (!p) return;
+    selectedProposal.value = null;
+    hirePreview.value = null;
+    hireMode.value = null;
+    assignTarget.value = null;
+    acceptTarget.value = p;
+}
+function closeAcceptConfirm() {
+    if (accepting.value) return;
+    acceptTarget.value = null;
+}
+function confirmAcceptProposal() {
+    if (!acceptTarget.value || accepting.value) return;
+    // Step 1 (proposal): open the worker-account preview WITHOUT posting —
+    // status stays Proposed while HR reviews.
+    hirePreview.value = { ...acceptTarget.value };
+    hireMode.value = 'proposal';
+    acceptTarget.value = null;
+    previewEmail.value = '';
+    suggestPreviewEmail(true);
+    previewStartDate.value = props.request.start_date || hirePreview.value.availability || '';
+}
+function closeHirePreview() {
+    if (accepting.value) return;
+    // Cancel: no assignment; proposal stays Proposed / direct assign does nothing.
+    hirePreview.value = null;
+    hireMode.value = null;
+    previewEmail.value = '';
+    previewStartDate.value = '';
+}
+function finishHirePreview() {
+    if (!hirePreview.value || accepting.value) return;
+    // Finish: send real preview data — backend assigns (+ Accepted for proposals) and emails worker.
+    accepting.value = true;
+    const payload = {
+        company_email: previewEmail.value || undefined,
+        start_date: previewStartDate.value || undefined,
+    } as any;
+    const done = () => {
+        hirePreview.value = null;
+        hireMode.value = null;
+        previewEmail.value = '';
+        previewStartDate.value = '';
+        assignForm.reset();
+    };
+    if (hireMode.value === 'direct') {
+        router.post(route('hrm.manpower-requests.assign', props.request.id), {
+            worker_id: hirePreview.value.worker_id || hirePreview.value.id,
+            ...payload,
+        }, {
+            preserveScroll: true,
+            onSuccess: done,
+            onFinish: () => { accepting.value = false; },
+        });
+        return;
+    }
+    const proposalId = hirePreview.value.id;
+    router.post(route('hrm.manpower-requests.proposals.accept', { manpowerRequest: props.request.id, proposal: proposalId }), payload, {
         preserveScroll: true,
-        onSuccess: () => { if (selectedProposal.value?.id === id) selectedProposal.value = null; },
+        onSuccess: done,
+        onFinish: () => { accepting.value = false; },
     });
 }
 function openRejectProposal(id: number) {
@@ -238,7 +387,7 @@ const canAssign = computed(() =>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">End date</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.end_date || '—' }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Shift</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.shift || '—' }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Agency</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ request.agency || '—' }} <span class="text-slate-400">({{ request.agency_code || '—' }})</span></dd></div>
-                    <div v-if="request.notes"><dt class="text-slate-400">Notes</dt><dd class="mt-1 text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap">{{ request.notes }}</dd></div>
+                    <div v-if="request.notes"><dt class="text-slate-400">Notes</dt><dd class="mt-1 text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{{ request.notes }}</dd></div>
                 </dl>
                 <div class="mt-4">
                     <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
@@ -253,16 +402,54 @@ const canAssign = computed(() =>
 
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Assigned workers</h2>
-                <form v-if="canAssign" @submit.prevent="assignWorker" class="mb-3 flex items-center gap-2">
-                    <select v-model="assignForm.worker_id" class="flex-1 px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200">
-                        <option value="">Select an available worker...</option>
-                        <option v-for="w in request.available_workers" :key="w.id" :value="w.id">
-                            {{ w.name }} ({{ w.code }}){{ w.position_skill ? ' · ' + w.position_skill : '' }}
-                        </option>
-                    </select>
-                    <button type="submit" :disabled="!assignForm.worker_id || assignForm.processing" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-60 whitespace-nowrap">
-                        Assign
-                    </button>
+                <form v-if="canAssign" @submit.prevent="assignWorker" class="mb-3">
+                    <div class="flex items-center gap-2">
+                        <select v-model="assignForm.worker_id" class="flex-1 px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200">
+                            <option value="">Select an available worker...</option>
+                            <option v-for="w in request.available_workers" :key="w.id" :value="w.id">
+                                {{ w.name }} ({{ w.code }}){{ w.position_skill ? ' · ' + w.position_skill : '' }}
+                            </option>
+                        </select>
+                        <button type="submit" :disabled="!assignForm.worker_id || assignForm.processing" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-60 whitespace-nowrap">
+                            Assign
+                        </button>
+                    </div>
+                    <div v-if="selectedAvailable" class="mt-2 rounded-xl bg-blue-50/60 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/40 px-3 py-3 text-xs">
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="font-bold text-blue-700 dark:text-blue-300">
+                                {{ selectedAvailable.name }} <span class="font-mono font-semibold text-slate-400">({{ selectedAvailable.code }})</span>
+                            </p>
+                            <span v-if="selectedAvailable.worker_status" class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-white dark:bg-slate-800 border border-blue-100 dark:border-blue-900/40 text-blue-700 dark:text-blue-300">{{ selectedAvailable.worker_status }}</span>
+                        </div>
+                        <dl class="mt-2 grid grid-cols-2 gap-2">
+                            <div class="rounded-lg bg-white dark:bg-slate-900/60 border border-blue-100 dark:border-blue-900/40 px-2.5 py-2">
+                                <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Position / skill</dt>
+                                <dd class="mt-0.5 font-bold text-slate-700 dark:text-slate-200">{{ selectedAvailable.position_skill || '—' }}</dd>
+                            </div>
+                            <div class="rounded-lg bg-white dark:bg-slate-900/60 border border-blue-100 dark:border-blue-900/40 px-2.5 py-2">
+                                <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Daily rate</dt>
+                                <dd class="mt-0.5 font-bold text-slate-700 dark:text-slate-200">{{ selectedAvailable.daily_rate ? '₱' + selectedAvailable.daily_rate + '/day' : '—' }}</dd>
+                            </div>
+                            <div class="rounded-lg bg-white dark:bg-slate-900/60 border border-blue-100 dark:border-blue-900/40 px-2.5 py-2">
+                                <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Phone</dt>
+                                <dd class="mt-0.5 font-bold text-slate-700 dark:text-slate-200">{{ selectedAvailable.phone || '—' }}</dd>
+                            </div>
+                            <div class="rounded-lg bg-white dark:bg-slate-900/60 border border-blue-100 dark:border-blue-900/40 px-2.5 py-2">
+                                <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gender</dt>
+                                <dd class="mt-0.5 font-bold text-slate-700 dark:text-slate-200">{{ selectedAvailable.gender || '—' }}</dd>
+                            </div>
+                            <div class="rounded-lg bg-white dark:bg-slate-900/60 border border-blue-100 dark:border-blue-900/40 px-2.5 py-2 col-span-2">
+                                <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Resume</dt>
+                                <dd class="mt-0.5 font-bold text-slate-700 dark:text-slate-200">
+                                    <a v-if="selectedAvailable.resume_url" :href="selectedAvailable.resume_url" target="_blank" rel="noopener"
+                                        class="text-blue-600 hover:text-blue-700 hover:underline transition" :title="selectedAvailable.resume_name || 'View resume'">
+                                        {{ selectedAvailable.resume_name || 'View resume' }} →
+                                    </a>
+                                    <span v-else class="text-slate-400">No resume uploaded</span>
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
                 </form>
                 <p v-if="assignForm.errors.worker_id" class="mb-2 text-xs text-rose-600">{{ assignForm.errors.worker_id }}</p>
                 <p v-if="!canAssign && request.stored_status === 'Open' && request.agency_status !== 'Active'" class="mb-3 px-2 py-1.5 rounded-lg text-[11px] font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
@@ -272,7 +459,10 @@ const canAssign = computed(() =>
                 <ul class="divide-y divide-slate-100 dark:divide-slate-700/50">
                     <li v-for="a in request.assigned" :key="a.assignment_id" class="py-2 flex items-center justify-between gap-2 text-xs">
                         <div>
-                            <Link :href="route('hrm.workers.show', a.worker_id)" class="font-bold text-blue-600 hover:text-blue-700">{{ a.worker_name }} <span class="font-mono text-slate-400">({{ a.worker_code }})</span></Link>
+                            <button @click="openAssignedWorker(a)" title="View worker info"
+                                class="font-bold text-blue-600 hover:text-blue-700 hover:underline text-left transition">
+                                {{ a.worker_name }} <span class="font-mono text-slate-400">({{ a.worker_code }})</span>
+                            </button>
                             <p class="text-slate-500 dark:text-slate-400">{{ a.position_skill || '' }}{{ a.assigned_at ? ' · since ' + a.assigned_at : '' }}{{ a.assigned_by ? ' · by ' + a.assigned_by : '' }}</p>
                         </div>
                         <button
@@ -302,7 +492,7 @@ const canAssign = computed(() =>
                         <div class="flex items-center gap-1">
                             <span v-if="p.status !== 'Proposed'" :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', p.status === 'Accepted' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400']">{{ p.status }}</span>
                             <template v-if="p.status === 'Proposed' && canEdit">
-                                <button @click="acceptProposal(p.id)" class="px-3 py-1.5 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition">Accept</button>
+                                <button @click="openAcceptProposal(p)" class="px-3 py-1.5 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition">Accept</button>
                                 <button @click="openRejectProposal(p.id)" class="px-3 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition">Reject</button>
                             </template>
                         </div>
@@ -386,10 +576,13 @@ const canAssign = computed(() =>
                         <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{{ selectedProposal.gender || '—' }}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3 col-span-2">
-                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Clearance expiry</dt>
-                        <dd class="mt-0.5 font-bold" :class="selectedProposal.clearance_expired ? 'text-rose-600' : 'text-slate-800 dark:text-slate-100'">
-                            {{ selectedProposal.clearance_expiry || '—' }}
-                            <span v-if="selectedProposal.clearance_expired" class="ml-1 text-[10px] font-black uppercase">(expired)</span>
+                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Resume</dt>
+                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">
+                            <a v-if="selectedProposal.resume_url" :href="selectedProposal.resume_url" target="_blank" rel="noopener"
+                                class="text-blue-600 hover:text-blue-700 hover:underline transition" :title="selectedProposal.resume_name || 'View resume'">
+                                {{ selectedProposal.resume_name || 'View resume' }} →
+                            </a>
+                            <span v-else class="text-slate-400">No resume uploaded</span>
                         </dd>
                     </div>
                 </dl>
@@ -402,9 +595,83 @@ const canAssign = computed(() =>
                 <div class="mt-4 flex items-center justify-between gap-2">
                     <Link :href="route('hrm.workers.show', selectedProposal.worker_id)" class="text-xs font-bold text-blue-600 hover:text-blue-700 transition">Open full worker profile →</Link>
                     <div v-if="selectedProposal.status === 'Proposed' && canEdit" class="flex items-center gap-2">
-                        <button @click="acceptProposal(selectedProposal.id)" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition">Accept</button>
+                        <button @click="openAcceptProposal(selectedProposal)" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition">Accept</button>
                         <button @click="openRejectProposal(selectedProposal.id)" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition">Reject</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assigned worker-info modal -->
+        <div v-if="selectedAssigned" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @click.self="closeAssignedWorker">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full max-w-lg p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-black text-slate-900 dark:text-white">{{ selectedAssigned.worker_name }}</h3>
+                        <p class="text-xs font-mono text-slate-400">{{ selectedAssigned.worker_code }}</p>
+                    </div>
+                    <button @click="closeAssignedWorker" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Close">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <span v-if="selectedAssigned.worker_status" class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase border bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600">{{ selectedAssigned.worker_status }}</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Assigned{{ selectedAssigned.assigned_at ? ' · since ' + selectedAssigned.assigned_at : '' }}</span>
+                </div>
+
+                <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3">
+                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Position / skill</dt>
+                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{{ selectedAssigned.position_skill || '—' }}</dd>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3">
+                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Daily rate</dt>
+                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{{ selectedAssigned.daily_rate ?? '—' }}</dd>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3">
+                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Phone</dt>
+                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{{ selectedAssigned.phone || '—' }}</dd>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3">
+                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Gender</dt>
+                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{{ selectedAssigned.gender || '—' }}</dd>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3 col-span-2">
+                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Resume</dt>
+                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">
+                            <a v-if="selectedAssigned.resume_url" :href="selectedAssigned.resume_url" target="_blank" rel="noopener"
+                                class="text-blue-600 hover:text-blue-700 hover:underline transition" :title="selectedAssigned.resume_name || 'View resume'">
+                                {{ selectedAssigned.resume_name || 'View resume' }} →
+                            </a>
+                            <span v-else class="text-slate-400">No resume uploaded</span>
+                        </dd>
+                    </div>
+                </dl>
+
+                <p v-if="selectedAssigned.assigned_by" class="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                    Assigned{{ selectedAssigned.assigned_at ? ' ' + selectedAssigned.assigned_at : '' }} by {{ selectedAssigned.assigned_by }}
+                </p>
+
+                <div class="mt-4 flex items-center justify-between gap-2">
+                    <Link :href="route('hrm.workers.show', selectedAssigned.worker_id)" class="text-xs font-bold text-blue-600 hover:text-blue-700 transition">Open full worker profile →</Link>
+                    <button v-if="canEdit && selectedAssigned.assignment_id" @click="closeAssignedWorker(); releaseWorker(selectedAssigned)" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition">Release</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Release-worker modal (reason required) -->
+        <div v-if="releaseTarget" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @click.self="closeReleaseWorker">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md p-5 shadow-2xl">
+                <h3 class="text-base font-black text-slate-900 dark:text-white">Release {{ releaseTarget.worker_name }}?</h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    The worker returns to Available and a slot reopens on <span class="font-bold text-slate-700 dark:text-slate-200">{{ request.code }}</span>.
+                </p>
+                <textarea v-model="releaseReason" rows="2" placeholder="Reason (required)" class="mt-3 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200"></textarea>
+                <p v-if="releaseError" class="mt-1 text-xs text-rose-600">{{ releaseError }}</p>
+                <div class="mt-3 flex items-center justify-end gap-2">
+                    <button @click="closeReleaseWorker" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300">Cancel</button>
+                    <button @click="submitReleaseWorker" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold">Confirm release</button>
                 </div>
             </div>
         </div>
@@ -418,6 +685,153 @@ const canAssign = computed(() =>
                 <div class="mt-3 flex items-center justify-end gap-2">
                     <button @click="rejectProposalId = null" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300">Cancel</button>
                     <button @click="submitRejectProposal" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold">Confirm rejection</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Accept-proposal CONFIRMATION modal -->
+        <div v-if="acceptTarget" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @click.self="closeAcceptConfirm">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md p-5 shadow-2xl">
+                <h3 class="text-base font-black text-slate-900 dark:text-white">Review worker account?</h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    This opens the worker account for <span class="font-bold text-slate-700 dark:text-slate-200">{{ request.code }}</span>
+                    ({{ request.filled }} of {{ request.needed }} filled). Status stays Proposed until you click Finish.
+                </p>
+                <div class="mt-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3 text-xs">
+                    <p class="font-black text-slate-900 dark:text-white">
+                        {{ acceptTarget.worker_name }} <span class="font-mono font-semibold text-slate-400">({{ acceptTarget.worker_code }})</span>
+                    </p>
+                    <p class="mt-1 text-slate-500 dark:text-slate-400">
+                        {{ acceptTarget.position_skill || '—' }}{{ acceptTarget.daily_rate ? ' · ₱' + acceptTarget.daily_rate + '/day' : '' }}{{ acceptTarget.proposed_at ? ' · proposed ' + acceptTarget.proposed_at : '' }}{{ acceptTarget.proposed_by ? ' by ' + acceptTarget.proposed_by : '' }}
+                    </p>
+                </div>
+                <div class="mt-3 flex items-center justify-end gap-2">
+                    <button @click="closeAcceptConfirm" :disabled="accepting" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 disabled:opacity-50">Cancel</button>
+                    <button @click="confirmAcceptProposal" :disabled="accepting" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-60">
+                        {{ accepting ? 'Opening...' : 'Continue to worker account' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Direct-assign CONFIRMATION modal (same process as proposal acceptance) -->
+        <div v-if="assignTarget" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @click.self="closeAssignConfirm">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md p-5 shadow-2xl">
+                <h3 class="text-base font-black text-slate-900 dark:text-white">Review worker account?</h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    This opens the worker account for <span class="font-bold text-slate-700 dark:text-slate-200">{{ request.code }}</span>
+                    ({{ request.filled }} of {{ request.needed }} filled). Nothing is assigned until you click Finish.
+                </p>
+                <div class="mt-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3 text-xs">
+                    <p class="font-black text-slate-900 dark:text-white">
+                        {{ assignTarget.worker_name }} <span class="font-mono font-semibold text-slate-400">({{ assignTarget.worker_code }})</span>
+                    </p>
+                    <p class="mt-1 text-slate-500 dark:text-slate-400">
+                        {{ assignTarget.position_skill || '—' }}{{ assignTarget.daily_rate ? ' · ₱' + assignTarget.daily_rate + '/day' : '' }}
+                    </p>
+                </div>
+                <div class="mt-3 flex items-center justify-end gap-2">
+                    <button @click="closeAssignConfirm" :disabled="accepting" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 disabled:opacity-50">Cancel</button>
+                    <button @click="confirmAssignWorker" :disabled="accepting" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-60">
+                        {{ accepting ? 'Opening...' : 'Continue to worker account' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Display-only CREATE-EMPLOYEE-style preview (separate from Onboarding flow — no DB write) -->
+        <div v-if="hirePreview" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @click.self="closeHirePreview">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div class="p-5 border-b border-slate-200 dark:border-slate-700 shrink-0">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-base font-bold tracking-tight text-slate-900 dark:text-white">WORKER ASSIGNMENT — PREVIEW</h3>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">{{ hireMode === 'direct' ? 'Direct assign — finishes as Assigned' : 'Still Proposed — finishes as Accepted' }}</span>
+                            </div>
+                        </div>
+                        <button @click="closeHirePreview" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl text-slate-400 hover:text-slate-600 transition-all">✕</button>
+                    </div>
+                </div>
+
+                <div class="p-5 space-y-6 overflow-y-auto">
+                    <section>
+                        <h4 class="text-xs font-bold text-slate-900 dark:text-white tracking-wide">1. WORKER INFORMATION</h4>
+                        <div class="border-t border-slate-200 dark:border-slate-700 mt-1 mb-3"></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                            <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Worker</span><span class="font-bold text-slate-800 dark:text-slate-100">{{ hirePreview.worker_name }}</span></div>
+                            <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Worker ID</span><span class="font-mono font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.worker_code }}</span></div>
+                            <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Position / skill</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.position_skill || '—' }}</span></div>
+                            <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Phone</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.phone || '—' }}</span></div>
+                            <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Gender</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.gender || '—' }}</span></div>
+                            <div v-if="hireMode !== 'direct'" class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Proposal</span><span class="font-semibold text-amber-600">⏳ Proposed — under review{{ hirePreview.proposed_at ? ' · ' + hirePreview.proposed_at : '' }}</span></div>
+                            <div v-else class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Source</span><span class="font-semibold text-blue-600">Direct assign — available worker</span></div>
+                            <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Request</span><span class="font-mono font-semibold text-slate-700 dark:text-slate-200">{{ request.code }}</span></div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h4 class="text-xs font-bold text-slate-900 dark:text-white tracking-wide">2. EMPLOYMENT ASSIGNMENT (from request)</h4>
+                        <div class="border-t border-slate-200 dark:border-slate-700 mt-1 mb-3"></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div><p class="text-slate-400 font-semibold mb-1">Position</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.position_skill }}</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Department</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.department }}</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Department module (users.role)</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.department_module || '—' }}</p><p class="mt-1 text-[10px] text-slate-500">Same mapping as CREATE EMPLOYEE — prefilled from department, display only.</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Employment arrangement</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">Agency Contract</p><p class="mt-1 text-[10px] text-slate-500">Fixed for agency workers — display only.</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Deployment start (request)</p><input v-model="previewStartDate" type="date" class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm font-semibold" /><p class="mt-1 text-[10px] text-slate-500">Calendar — editable, reference only.</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Years of experience</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ hirePreview.years_experience ?? '—' }}</p></div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h4 class="text-xs font-bold text-slate-900 dark:text-white tracking-wide">3. WORK ASSIGNMENT</h4>
+                        <div class="border-t border-slate-200 dark:border-slate-700 mt-1 mb-3"></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div><p class="text-slate-400 font-semibold mb-1">Shift</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.shift || '—' }}</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Agency</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.agency || '—' }}</p></div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h4 class="text-xs font-bold text-slate-900 dark:text-white tracking-wide">4. COMPENSATION (display only)</h4>
+                        <div class="border-t border-slate-200 dark:border-slate-700 mt-1 mb-3"></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div><p class="text-slate-400 font-semibold mb-1">Daily rate</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ hirePreview.daily_rate ? '₱' + hirePreview.daily_rate + '/day' : '—' }}</p></div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h4 class="text-xs font-bold text-slate-900 dark:text-white tracking-wide">5. EMPLOYEE ACCOUNT</h4>
+                        <div class="border-t border-slate-200 dark:border-slate-700 mt-1 mb-3"></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div>
+                                <p class="text-slate-400 font-semibold mb-1">Company Email</p>
+                                <div class="flex items-center gap-2">
+                                    <input v-model="previewEmail" type="email" placeholder="juan.delacruz@monti.com" class="flex-1 min-w-0 px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <button type="button" @click="suggestPreviewEmail(true)" title="Auto-generate from worker name" class="shrink-0 px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 transition-all">Generate</button>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mt-2 text-xs text-slate-500">Generate via system or type manually. On Finish the worker gets the same welcome email as CREATE EMPLOYEE (ID, position, department, company email, temp password, training date).</p>
+                    </section>
+
+                    <section>
+                        <h4 class="text-xs font-bold text-slate-900 dark:text-white tracking-wide">6. EMERGENCY CONTACT</h4>
+                        <div class="border-t border-slate-200 dark:border-slate-700 mt-1 mb-3"></div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                            <div><p class="text-slate-400 font-semibold mb-1">Contact name</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ hirePreview.emergency_name || '—' }}</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Relationship</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ hirePreview.emergency_relationship || '—' }}</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Contact number</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ hirePreview.emergency_phone || '—' }}</p></div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="p-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3 shrink-0">
+                    <Link :href="route('hrm.workers.show', hirePreview.worker_id || hirePreview.id)" class="text-xs font-bold text-blue-600 hover:text-blue-700 transition">Open full worker profile →</Link>
+                    <div class="flex items-center gap-2">
+                        <button @click="closeHirePreview" :disabled="accepting" class="px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all disabled:opacity-50">Cancel</button>
+                        <button @click="finishHirePreview" :disabled="accepting" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-60">{{ accepting ? 'Working...' : (hireMode === 'direct' ? '[ Finish — Assign worker ]' : '[ Finish — Accept worker ]') }}</button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -14,6 +14,31 @@ class PayrollSettingsController extends Controller
 {
     use HasPagePermissions;
 
+    /**
+     * Sane server-side bounds for payroll math (frontend validation alone
+     * is not enough — an out-of-range multiplier would corrupt gross pay).
+     * [min, max] inclusive; null means use the type default only.
+     */
+    private const RANGES = [
+        'ot_multiplier' => [0, 5],
+        'night_multiplier' => [0, 5],
+        'sun_multiplier' => [0, 5],
+        'holiday_regular_worked' => [1, 5],
+        'holiday_special_worked' => [1, 5],
+        'holiday_regular_unworked' => [0, 2],
+        'holiday_regular_rest_worked' => [1, 5],
+        'holiday_special_rest_worked' => [1, 5],
+        'late_minutes_divisor' => [1, 1440],
+        'daily_divisor' => [1, 365],
+        'hours_per_day' => [1, 24],
+        'pay_date_offset_days' => [0, 31],
+        'weekly_periods' => [1, 100],
+        'semimonthly_periods' => [1, 48],
+        'monthly_periods' => [1, 24],
+        'accrual_months' => [1, 60],
+        'ot_warning_hours' => [0, 500],
+    ];
+
     private function isHR(): bool
     {
         $u = auth()->user();
@@ -76,6 +101,13 @@ class PayrollSettingsController extends Controller
             $type = $defs[$key]['value_type'];
             $normalized = $this->normalize($incoming, $type);
             if ($normalized === null) continue; // invalid input for its type
+            if (isset(self::RANGES[$key]) && $type === 'number') {
+                [$min, $max] = self::RANGES[$key];
+                $num = (float) $normalized;
+                if ($num < $min || $num > $max) {
+                    return back()->withErrors(['error' => "Invalid value for {$defs[$key]['label']}: must be between {$min} and {$max}. No settings were saved."]);
+                }
+            }
 
             $row = PayrollSetting::firstOrNew(['key' => $key]);
             $isNew = !$row->exists;

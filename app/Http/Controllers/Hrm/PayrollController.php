@@ -282,6 +282,11 @@ class PayrollController extends Controller
 
     /**
      * Show the payroll rates page.
+     *
+     * Legacy display only: the authoritative payroll math reads
+     * PayrollSetting::cached() (payroll_settings). Rows in payroll_rates
+     * are NOT consumed by PayrollSummaryService and must not be treated
+     * as a second source of multipliers.
      */
     public function rates()
     {
@@ -526,6 +531,15 @@ class PayrollController extends Controller
     public function show(Payroll $payroll)
     {
         $freq = \App\Support\PayPeriods::frequencyForLabel((string) ($payroll->period ?? ''));
+        $attendance = $this->attendanceSource($payroll);
+
+        // Draft rows auto-adopt live attendance on load so the payslip day count
+        // never drifts from attendance after generation. Locked rows keep their
+        // snapshot (Submitted / Approved / Paid stay frozen for audit).
+        if ($attendance && $this->normalizeStatus($payroll->status) === 'Draft') {
+            $this->reconcileDraftDays($payroll, $attendance, $freq);
+        }
+
         $calc = PayrollCalc::calc([
             'days' => (float) ($payroll->days_worked ?? 0),
             'daily' => (float) ($payroll->daily_rate ?? 0),
@@ -545,8 +559,45 @@ class PayrollController extends Controller
             'payroll' => array_merge($payroll->toArray(), ['status' => $this->normalizeStatus($payroll->status)]),
             'calc' => $calc,
             'frequency' => $freq,
-            'attendance' => $this->attendanceSource($payroll),
+            'attendance' => $attendance,
             'settings' => \App\Models\Hrm\PayrollSetting::cached(),
+        ]);
+    }
+
+    /**
+     * Align a Draft row's day count with live attendance. Only the
+     * day-derived snapshot fields are touched (days, absences, basic,
+     * gross, net); HR-typed amounts, deductions and the stored
+     * OT / night / late snapshot stay untouched. Writes only on change.
+     */
+    private function reconcileDraftDays(Payroll $payroll, array $src, string $freq): void
+    {
+        $liveDays = (float) ($src['present'] ?? 0);
+        $liveAbsent = (float) ($src['absent'] ?? 0);
+        if ((float) $payroll->days_worked === $liveDays && (float) ($payroll->absent_days ?? 0) === $liveAbsent) {
+            return;
+        }
+        $calc = PayrollCalc::calc([
+            'days' => $liveDays,
+            'daily' => (float) ($payroll->daily_rate ?? 0),
+            'monthly' => (float) ($payroll->monthly_salary ?? $payroll->base_salary),
+            'night_hours' => (float) $payroll->night_hours,
+            'ot_hours' => (float) $payroll->overtime_hours,
+            'sun_hours' => (float) ($payroll->sunday_restday_hours ?? 0),
+            'holiday_amt' => (float) ($payroll->holiday_amt ?? 0),
+            'late_minutes' => (float) $payroll->late_minutes,
+            'sss' => (float) ($payroll->sss_deduction ?? 0),
+            'philhealth' => (float) ($payroll->philhealth_deduction ?? 0),
+            'pagibig' => (float) ($payroll->pagibig_deduction ?? 0),
+            'sss_loan' => (float) ($payroll->sss_loan ?? 0),
+            'pf_loan' => (float) ($payroll->pf_loan ?? 0),
+        ], $freq);
+        $payroll->update([
+            'days_worked' => $liveDays,
+            'absent_days' => $liveAbsent,
+            'total_days_amt' => $calc['basic'],
+            'gross_pay' => $calc['gross'],
+            'net_pay' => $calc['net'],
         ]);
     }
 
@@ -798,6 +849,18 @@ class PayrollController extends Controller
             return back()->withErrors(['error' => 'None of the selected rows are submitted.']);
         }
         $payroll->update(['status' => 'Approved']);
+
+        // Record as Finance Expense
+        \App\Models\Fin\FinExpense::create([
+            'expense_date' => now(),
+            'category' => 'Payroll',
+            'description' => 'Payroll approval for ' . $payroll->employee_name . ' (' . $payroll->period . ')',
+            'amount' => $payroll->net_pay,
+            'department' => $payroll->department,
+            'recorded_by' => auth()->id(),
+            'payroll_id' => $payroll->id,
+        ]);
+
         $this->auditPayroll('Approved: '.$payroll->employee_name, $payroll->id, 'approved');
         return back()->with('message', 'Approved.');
     }
@@ -812,7 +875,24 @@ class PayrollController extends Controller
         if ($rows->isEmpty()) {
             return back()->withErrors(['error' => 'None of the selected rows are submitted.']);
         }
-        foreach ($rows as $p) $p->update(['status' => 'Approved']);
+        
+        DB::transaction(function () use ($rows) {
+            foreach ($rows as $p) {
+                $p->update(['status' => 'Approved']);
+
+                // Record as Finance Expense
+                \App\Models\Fin\FinExpense::create([
+                    'expense_date' => now(),
+                    'category' => 'Payroll',
+                    'description' => 'Payroll approval for ' . $p->employee_name . ' (' . $p->period . ')',
+                    'amount' => $p->net_pay,
+                    'department' => $p->department,
+                    'recorded_by' => auth()->id(),
+                    'payroll_id' => $p->id,
+                ]);
+            }
+        });
+
         $this->auditPayroll('Approved — '.$this->auditNames($rows), null, 'approved');
         return back()->with('message', 'Approved ('.$rows->count().').');
     }

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Applicants\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Models\Core\Notification;
 use App\Models\Hrm\ApplicantJobApplication;
 use App\Models\Hrm\HrmInterview;
+use App\Support\NotifiesHr;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -101,6 +103,13 @@ class ApplicationsController extends Controller
                 'interviewer' => $i->interviewer?->name,
                 'interviewer_id' => $i->interviewer_id,
                 'status' => $i->status,
+                'cancelled_by' => $i->cancelled_by,
+                'cancel_reason' => $i->cancel_reason,
+                'reschedule_status' => $i->reschedule_status,
+                'reschedule_date' => optional($i->reschedule_date)?->toDateString(),
+                'reschedule_start_time' => $i->reschedule_start_time,
+                'reschedule_end_time' => $i->reschedule_end_time,
+                'reschedule_reason' => $i->reschedule_reason,
                 'created_at' => optional($i->created_at)->toISOString(),
                 'updated_at' => optional($i->updated_at)->toISOString(),
             ])->values()->all();
@@ -137,8 +146,9 @@ class ApplicationsController extends Controller
     }
 
     /**
-     * Applicant requests an interview reschedule
-     * (ported from super_monti, adapted to hrm_interviews).
+     * Applicant requests an interview reschedule. The proposal is stored as
+     * PENDING — the live date/time stays untouched until the interviewer
+     * approves it (see NewInterviewController::approveReschedule).
      */
     public function rescheduleInterview(Request $request, HrmInterview $interview)
     {
@@ -157,19 +167,52 @@ class ApplicationsController extends Controller
         ]);
 
         $interview->update([
-            'date' => $data['date'],
-            'start_time' => $data['start_time'],
-            'end_time' => $data['end_time'] ?? $interview->end_time,
-            'status' => 'Scheduled',
-            'notes' => trim(($interview->notes ?? '') . ' ' . ($data['reason'] ?? '') . ' [Applicant requested reschedule]'),
+            'reschedule_status' => 'requested',
+            'reschedule_date' => $data['date'],
+            'reschedule_start_time' => $data['start_time'],
+            'reschedule_end_time' => $data['end_time'] ?? $interview->end_time,
+            'reschedule_reason' => $data['reason'] ?? null,
+            'reschedule_requested_at' => now(),
         ]);
 
-        return back()->with('success', 'Interview rescheduled successfully. Please wait for the HR confirmation.');
+        $this->notifyReschedule($interview->fresh(), $applicant, $data);
+
+        return back()->with('success', 'Reschedule request submitted. The interview date stays the same until HR approves it.');
     }
 
     /**
-     * Applicant cancels their interview
-     * (ported from super_monti, adapted to hrm_interviews).
+     * Notify the assigned interviewer (and HR) that the applicant asked to
+     * move the interview. The bell notification links back to the HRM
+     * Recruitment > Interviews dashboard.
+     */
+    private function notifyReschedule(HrmInterview $interview, $applicant, array $data): void
+    {
+        $applicantName = trim(($applicant->first_name ?? '') . ' ' . ($applicant->last_name ?? '')) ?: 'An applicant';
+        $position = $interview->position ?: 'the position';
+        $requestedDate = optional($interview->reschedule_date)?->format('M j, Y') ?? ($data['date'] ?? '');
+        $when = trim($requestedDate . ' ' . ($interview->reschedule_start_time ?? ($data['start_time'] ?? '')));
+        $title = 'Interview reschedule requested';
+        $body = "{$applicantName} requested to reschedule the {$interview->type} interview for {$position} to {$when}."
+            . ($data['reason'] ?? '' ? " Reason: {$data['reason']}" : '');
+        $link = 'hrm.recruitment.interviews.index';
+
+        try {
+            $interviewerId = (int) ($interview->interviewer_id ?? 0);
+            if ($interviewerId) {
+                Notification::notify($interviewerId, 'recruitment', $title, $body, $link);
+            } else {
+                NotifiesHr::push($title, $body, $link);
+            }
+        } catch (\Throwable $e) {
+            // Notifications must never break the reschedule.
+        }
+    }
+
+    /**
+     * Applicant cancels their interview. The cancellation is recorded (with
+     * reason) and the interviewer is notified, but the APPLICATION stays
+     * active — the applicant does not have to apply again and HR can offer
+     * another interview later.
      */
     public function cancelInterview(Request $request, HrmInterview $interview)
     {
@@ -180,15 +223,50 @@ class ApplicationsController extends Controller
             return back()->with('error', "This interview has already been {$interview->status}.");
         }
 
-        $data = $request->validate(['reason' => 'nullable|string|max:1000']);
+        $data = $request->validate(['reason' => 'required|string|max:1000']);
 
         $interview->update([
             'status' => 'Cancelled',
-            'cancel_reason' => $data['reason'] ?? $interview->cancel_reason,
-            'notes' => trim(($interview->notes ?? '') . ' ' . ($data['reason'] ?? '') . ' [Applicant cancelled]'),
+            'cancelled_by' => 'applicant',
+            'cancel_reason' => $data['reason'],
+            // A pending reschedule request is moot once the applicant cancels.
+            'reschedule_status' => null,
+            'reschedule_date' => null,
+            'reschedule_start_time' => null,
+            'reschedule_end_time' => null,
+            'reschedule_reason' => null,
+            'reschedule_requested_at' => null,
         ]);
 
-        return back()->with('success', 'Interview cancelled successfully.');
+        $this->notifyCancellation($interview->fresh(), $applicant);
+
+        return back()->with('success', 'Interview cancelled. Your application is still active — HR will reach out if another interview is arranged.');
+    }
+
+    /**
+     * Notify the assigned interviewer (and HR) that the applicant cancelled.
+     * The application is intentionally left active so another interview can
+     * be offered.
+     */
+    private function notifyCancellation(HrmInterview $interview, $applicant): void
+    {
+        $applicantName = trim(($applicant->first_name ?? '') . ' ' . ($applicant->last_name ?? '')) ?: 'An applicant';
+        $position = $interview->position ?: 'the position';
+        $title = 'Interview cancelled by applicant';
+        $body = "{$applicantName} cancelled the {$interview->type} interview for {$position}. Their application remains active"
+            . ($interview->cancel_reason ? ". Reason: {$interview->cancel_reason}" : '. You can offer another interview if appropriate.');
+        $link = 'hrm.recruitment.interviews.index';
+
+        try {
+            $interviewerId = (int) ($interview->interviewer_id ?? 0);
+            if ($interviewerId) {
+                Notification::notify($interviewerId, 'recruitment', $title, $body, $link);
+            } else {
+                NotifiesHr::push($title, $body, $link);
+            }
+        } catch (\Throwable $e) {
+            // Notifications must never break the cancellation.
+        }
     }
 
     /**

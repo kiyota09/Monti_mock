@@ -221,7 +221,7 @@
                       <!-- Dropdown Menu -->
                       <div class="relative">
                         <button 
-                          @click.stop="togglePostingMenu(posting.id)" 
+                          @click.stop="togglePostingMenu(posting.id,$event)"
                           class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all"
                           title="More"
                         >
@@ -229,10 +229,14 @@
                             <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
                           </svg>
                         </button>
-                        <!-- Dropdown -->
+                        <!-- Dropdown (teleported to <body> so the table's
+                             scroll container can never clip it) -->
+                        <Teleport to="body">
                         <div 
                           v-if="activeMenu === posting.id" 
-                          class="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 py-1 min-w-[180px]"
+                          :ref="setMenuRef"
+                          :style="menuStyle"
+                          class="fixed w-52 bg-white border border-slate-200 rounded-xl shadow-2xl z-[60] py-1 min-w-[180px]"
                           @click.stop
                         >
                           <button 
@@ -306,6 +310,7 @@
                             Delete
                           </button>
                         </div>
+                        </Teleport>
                       </div>
                     </div>
                   </td>
@@ -447,7 +452,7 @@
                   <label class="block text-xs font-semibold text-slate-600 mb-1.5">Position <span class="text-rose-500">*</span></label>
                   <select v-model="form.position_id" :disabled="modalType === 'view'" @change="onPositionChange" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.position_id }">
                     <option value="">Select Position</option>
-                    <option v-for="pos in props.positions" :key="pos.id" :value="pos.id">{{ pos.name }} ({{ pos.code }})</option>
+                    <option v-for="pos in props.positions" :key="pos.id" :value="pos.id">{{ pos.name }}</option>
                   </select>
                   <p v-if="validationErrors.position_id" class="text-[10px] text-rose-500 mt-1">{{ validationErrors.position_id }}</p>
                 </div>
@@ -497,15 +502,6 @@
                       </option>
                     </select>
                   </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Recruiter</label>
-                    <select v-model="form.recruiter" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
-                      <option value="">Select</option>
-                      <option>Emily Parker</option>
-                      <option>John Smith</option>
-                      <option>Maria Santos</option>
-                    </select>
-                  </div>
                   <div class="col-span-2">
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Hiring Manager <span class="text-slate-400 font-normal">(Optional)</span></label>
                     <select v-model="form.hiring_manager" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
@@ -534,7 +530,7 @@
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Number of Vacancies <span class="text-rose-500">*</span></label>
-                    <input v-model.number="form.vacancies" type="number" min="1" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
+                    <input v-model.number="form.vacancies" type="number" min="1" :max="maxVacancies ?? undefined" @input="clampVacancies" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
                     <p v-if="form.position_id" class="text-[10px] text-slate-400 mt-1">
                       {{ getPositionVacancyInfo() }}
                     </p>
@@ -553,7 +549,7 @@
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Expected Start Date</label>
-                    <input v-model="form.expected_start_date" type="date" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
+                    <input v-model="form.expected_start_date" type="date" :min="todayDate" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
                   </div>
                 </div>
               </div>
@@ -583,11 +579,13 @@
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Mode</label>
-                    <select v-model="form.work_mode" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
-                      <option>On-site</option>
-                      <option>Remote</option>
-                      <option>Hybrid</option>
-                    </select>
+                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 cursor-not-allowed opacity-75 flex items-center gap-2">
+                      <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>
+                      </svg>
+                      <span>On-site</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Fixed to on-site work</p>
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Schedule</label>
@@ -596,11 +594,17 @@
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Shift</label>
                     <select v-model="form.shift" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
-                      <option>Morning Shift</option>
-                      <option>Afternoon Shift</option>
-                      <option>Night Shift</option>
-                      <option>Rotating Shift</option>
-                      <option>Flexible Shift</option>
+                      <template v-if="(shifts || []).length">
+                        <option v-for="sh in shifts" :key="sh.id" :value="sh.name">{{ sh.name }}{{ sh.code ? ' (' + sh.code + ')' : '' }}</option>
+                      </template>
+                      <template v-else>
+                        <option>Morning Shift</option>
+                        <option>Afternoon Shift</option>
+                        <option>Night Shift</option>
+                        <option>Rotating Shift</option>
+                        <option>Flexible Shift</option>
+                      </template>
+                      <option v-if="form.shift && !(shifts || []).some((sh) => sh.name === form.shift)" :value="form.shift">{{ form.shift }}</option>
                     </select>
                   </div>
                   <div>
@@ -627,42 +631,20 @@
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Minimum Salary</label>
-                    <div class="relative">
-                      <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs">₱</span>
-                      <input v-model.number="form.salary_min" type="number" min="0" step="1000" placeholder="Auto from position" disabled readonly class="w-full pl-8 pr-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-500 cursor-not-allowed opacity-75" />
+                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 cursor-not-allowed opacity-75 flex items-center gap-2">
+                      <span v-if="form.salary_min !== null && form.salary_min !== ''" class="font-semibold">{{ formatCurrency(form.salary_min) }}</span>
+                      <span v-else class="text-slate-400">Auto from position</span>
                     </div>
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Maximum Salary</label>
-                    <div class="relative">
-                      <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs">₱</span>
-                      <input v-model.number="form.salary_max" type="number" min="0" step="1000" placeholder="Auto from position" disabled readonly class="w-full pl-8 pr-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-500 cursor-not-allowed opacity-75" />
+                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 cursor-not-allowed opacity-75 flex items-center gap-2">
+                      <span v-if="form.salary_max !== null && form.salary_max !== ''" class="font-semibold">{{ formatCurrency(form.salary_max) }}</span>
+                      <span v-else class="text-slate-400">Auto from position</span>
                     </div>
                   </div>
                 </div>
                 <p class="text-[10px] text-slate-400 mt-2">Read-only — taken from the selected position. Update it on the Positions page.</p>
-              </div>
-
-              <!-- Section 6: Notes -->
-              <div class="bg-slate-50/50 border border-slate-200 rounded-xl p-5">
-                <div class="flex items-center gap-2 mb-4">
-                  <div class="w-8 h-8 rounded-lg bg-slate-500/10 flex items-center justify-center">
-                    <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
-                  </div>
-                  <h4 class="text-sm font-bold text-slate-800">Additional Notes</h4>
-                </div>
-                <div class="space-y-3">
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Recruitment Notes</label>
-                    <textarea v-model="form.recruitment_notes" rows="2" placeholder="Notes visible to recruitment team..." :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs shadow-sm resize-none disabled:bg-slate-50 disabled:text-slate-400"></textarea>
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Internal Notes</label>
-                    <textarea v-model="form.internal_notes" rows="2" placeholder="Internal notes (not visible to applicants)..." :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs shadow-sm resize-none disabled:bg-slate-50 disabled:text-slate-400"></textarea>
-                  </div>
-                </div>
               </div>
 
               <!-- Applicant Statistics (View Mode Only) -->
@@ -731,7 +713,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, onMounted } from 'vue';
+import { ref, computed, reactive, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { toast } from 'vue3-toastify';
@@ -744,6 +726,7 @@ const props = defineProps({
     metrics: { type: Object, default: () => ({ active: 0, drafts: 0, total_applicants: 0, hired: 0, urgent: 0, vacancies: 0, closed: 0, archived: 0 }) },
     positions: { type: Array, default: () => [] },
     hiringManagers: { type: Array, default: () => [] },
+    shifts: { type: Array, default: () => [] },
     workLocation: { type: String, default: 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite' },
     employmentTypes: { type: Array, default: () => ['Full-time', 'Part-time', 'Contract', 'Temporary', 'Internship', 'Freelance'] },
 });
@@ -754,6 +737,9 @@ const showArchived = ref(false);
 const activeModal = ref(null);
 const modalType = ref('create');
 const activeMenu = ref(null);
+const menuRef = ref(null);
+const menuAnchor = ref(null);
+const menuStyle = reactive({ top: '0px', left: '0px' });
 const saving = ref(false);
 const showConfirmModal = ref(false);
 const showValidationModal = ref(false);
@@ -853,15 +839,19 @@ const selectedPositionName = computed(() => {
     return form.title || '';
 });
 
-// Hiring managers: manager level or higher, filtered by selected position's
-// department. Company-level managers (no department) always show.
+// Hiring managers: manager level or higher, restricted to the selected
+// position's department (matched by department id, falling back to the
+// department name). Managers from other departments are never shown.
 const filteredHiringManagers = computed(() => {
     const all = props.hiringManagers || [];
     const deptId = form.department_id;
-    if (!deptId) return all;
+    const deptName = String(form.department || '').trim().toLowerCase();
+    if (!deptId && !deptName) return all;
     return all.filter(m => {
-        if (m.hrm_department_id == null) return true;
-        return String(m.hrm_department_id) === String(deptId);
+        const idMatch = deptId != null && m.hrm_department_id != null
+            && String(m.hrm_department_id) === String(deptId);
+        const nameMatch = deptName && String(m.department || '').trim().toLowerCase() === deptName;
+        return idMatch || nameMatch;
     });
 });
 
@@ -871,7 +861,7 @@ const hiringManagerHint = computed(() => {
     if (!form.position_id) return `${all.length} managers available — pick a position to filter by department`;
     if (!shown.length) return 'No manager found for this department — you may leave this blank';
     const deptLabel = form.department ? ` for ${form.department}` : '';
-    return `${shown.length} manager${shown.length === 1 ? '' : 's'} available${deptLabel} (company-level included)`;
+    return `${shown.length} manager${shown.length === 1 ? '' : 's'} available${deptLabel}`;
 });
 
 const formatCurrency = (val) => {
@@ -917,6 +907,35 @@ const getPositionVacancyInfo = () => {
     return `Approved: ${approved}, Filled: ${filled}, Available: ${available}`;
 };
 
+// Number of vacancies may never exceed the position's available headcount
+// (approved − filled). Falls back to 1 when the position is already full so
+// the required min=1 input stays valid.
+const maxVacancies = computed(() => {
+    if (!form.position_id) return null;
+    const p = props.positions.find(x => String(x.id) === String(form.position_id));
+    if (!p) return null;
+    const available = (p.approved_headcount || 0) - (p.filled_positions || 0);
+    return available > 0 ? available : 1;
+});
+
+const clampVacancies = () => {
+    const max = maxVacancies.value;
+    if (max == null) return;
+    let v = Math.floor(Number(form.vacancies) || 0);
+    if (v > max) v = max;
+    if (v < 1) v = 1;
+    form.vacancies = v;
+};
+
+// Today (local) as YYYY-MM-DD — the earliest selectable date for the
+// expected start date (past dates are not allowed).
+const todayDate = (() => {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+})();
+
 const getStatusBadgeClass = (s) => ({ 
   'Draft':'bg-amber-50 text-amber-700 border-amber-200',
   'Published':'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -931,6 +950,15 @@ onMounted(() => {
     if (props.postingsData?.data) {
         allPostings.value = props.postingsData.data;
     }
+    document.addEventListener('click', onDocumentClick);
+    window.addEventListener('scroll', onViewportChange, true);
+    window.addEventListener('resize', onViewportChange);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('click', onDocumentClick);
+    window.removeEventListener('scroll', onViewportChange, true);
+    window.removeEventListener('resize', onViewportChange);
 });
 
 // Watch for prop changes
@@ -1110,18 +1138,12 @@ const onPositionChange = () => {
         form.salary_min = selectedPosition.salary_min || null;
         form.salary_max = selectedPosition.salary_max || null;
         
-        // Auto-fill vacancies from position's available vacancies
+        // Auto-fill vacancies from position's available vacancies, capped at
+        // the available headcount (approved − filled).
         const approved = selectedPosition.approved_headcount || 0;
         const filled = selectedPosition.filled_positions || 0;
         const available = approved - filled;
-        
-        if (available > 0) {
-            form.vacancies = available;
-        } else if (approved > 0) {
-            form.vacancies = approved;
-        } else {
-            form.vacancies = 1;
-        }
+        form.vacancies = available > 0 ? available : 1;
         
         form.hiring_manager = '';
     } else {
@@ -1139,12 +1161,52 @@ const onPositionChange = () => {
 // TOGGLE MENU
 // ============================================
 
-const togglePostingMenu = (id) => {
+const togglePostingMenu = async (id, event) => {
     if (activeMenu.value === id) {
         activeMenu.value = null;
-    } else {
-        activeMenu.value = id;
+        menuAnchor.value = null;
+        return;
     }
+    activeMenu.value = id;
+    menuAnchor.value = event?.currentTarget?.getBoundingClientRect?.() || null;
+    await nextTick();
+    placePostingMenu();
+};
+
+// Fixed-position dropdown so it is never clipped by the table's scroll
+// container; it flips up when there isn't room below.
+const placePostingMenu = () => {
+    const rect = menuAnchor.value;
+    if (!rect) return;
+    const menuW = menuRef.value?.offsetWidth || 208;
+    const menuH = menuRef.value?.offsetHeight || 160;
+    let left = rect.right - menuW;
+    if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+    if (left < 8) left = 8;
+    let top = rect.bottom + 4;
+    if (top + menuH > window.innerHeight - 8) top = rect.top - menuH - 4;
+    if (top < 8) top = 8;
+    menuStyle.top = top + 'px';
+    menuStyle.left = left + 'px';
+};
+
+const closePostingMenu = () => {
+    activeMenu.value = null;
+    menuAnchor.value = null;
+};
+
+const setMenuRef = (el) => {
+    menuRef.value = el;
+};
+
+const onDocumentClick = (e) => {
+    if (activeMenu.value == null) return;
+    if (menuRef.value && menuRef.value.contains(e.target)) return;
+    closePostingMenu();
+};
+
+const onViewportChange = () => {
+    if (activeMenu.value != null) closePostingMenu();
 };
 
 // ============================================
@@ -1175,7 +1237,7 @@ const openModal = (type, data = null) => {
             hiring_manager: data.hiring_manager || '',
             work_location: data.work_location || props.workLocation || 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite',
             employment_type_id: data.employment_type_id || null,
-            work_mode: data.work_mode || 'On-site',
+            work_mode: 'On-site',
             work_schedule: data.work_schedule || '',
             shift: data.shift || 'Morning Shift',
             salary_visibility: data.salary_visibility || 'Show Range',
@@ -1214,7 +1276,7 @@ const openModal = (type, data = null) => {
             employment_type_id: null,
             work_mode: 'On-site',
             work_schedule: '',
-            shift: 'Morning Shift',
+            shift: (props.shifts && props.shifts.length) ? props.shifts[0].name : 'Morning Shift',
             salary_visibility: 'Show Range',
             recruitment_notes: '',
             internal_notes: '',
@@ -1245,6 +1307,13 @@ const closeModal = () => {
 
 const submitForm = async () => {
     saving.value = true;
+    // Expected start date cannot be in the past (min attribute blocks the
+    // picker; this guards typed input too).
+    if (form.expected_start_date && form.expected_start_date < todayDate) {
+        toast.error('Expected start date cannot be in the past.');
+        saving.value = false;
+        return;
+    }
     // Title + salary are derived — sync from the selected position before send.
     const selected = props.positions.find(p => String(p.id) === String(form.position_id));
     if (selected) {

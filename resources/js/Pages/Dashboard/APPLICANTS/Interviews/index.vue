@@ -66,15 +66,6 @@
                                 <option value="Completed">Completed</option>
                                 <option value="Cancelled">Cancelled</option>
                             </select>
-                            <select v-model="filterType" class="px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200">
-                                <option value="All">All Types</option>
-                                <option>Initial Interview</option>
-                                <option>Technical Interview</option>
-                                <option>Manager Interview</option>
-                                <option>Final Interview</option>
-                                <option>HR Interview</option>
-                                <option>Panel Interview</option>
-                            </select>
                         </div>
                     </div>
                 </div>
@@ -85,7 +76,7 @@
                         Showing <span class="font-bold text-slate-900 dark:text-white">{{ filteredInterviews.length }}</span>
                         interview{{ filteredInterviews.length !== 1 ? 's' : '' }}
                     </p>
-                    <p v-if="searchQuery || filterStatus !== 'All' || filterType !== 'All'"
+                    <p v-if="searchQuery || filterStatus !== 'All'"
                        class="px-3 py-1 rounded-full text-[11px] font-bold border bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800">
                         Filters applied
                     </p>
@@ -104,100 +95,66 @@
                             <span class="ml-3 text-sm text-slate-500 dark:text-slate-400">Loading interviews...</span>
                         </div>
 
-                        <div v-else-if="filteredInterviews.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div
-                                v-for="interview in filteredInterviews"
-                                :key="interview.id"
-                                class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden cursor-pointer"
-                                @click="viewInterviewDetails(interview)"
-                            >
-                                <div class="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-                                    <div class="flex items-start justify-between mb-2">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-500/30">
-                                                {{ getInitials(interview.position || 'I') }}
+                        <div v-else-if="filteredInterviews.length > 0" class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                        <th class="py-3 px-4">Position</th>
+                                        <th class="py-3 px-4">Type</th>
+                                        <th class="py-3 px-4">Date &amp; Time</th>
+                                        <th class="py-3 px-4">Interviewer</th>
+                                        <th class="py-3 px-4 text-center">Status</th>
+                                        <th class="py-3 px-4 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                    <tr v-for="interview in filteredInterviews" :key="interview.id" class="hover:bg-blue-50/50 dark:hover:bg-slate-900/40 transition-colors">
+                                        <td class="py-3 px-4">
+                                            <div class="text-xs font-bold text-slate-900 dark:text-white">{{ interview.position || 'Position' }}</div>
+                                            <div v-if="interview.reschedule_status === 'requested'" class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                </svg>
+                                                Reschedule requested
                                             </div>
-                                            <div>
-                                                <h3 class="text-sm font-black text-slate-900 dark:text-white">{{ interview.position || 'Position' }}</h3>
-                                                <span class="text-[11px] font-mono font-bold text-slate-400 dark:text-slate-400">#{{ interview.application_id || 'N/A' }}</span>
+                                        </td>
+                                        <td class="py-3 px-4"><span class="text-xs text-slate-700 dark:text-slate-200">{{ interview.type || 'Interview' }}</span></td>
+                                        <td class="py-3 px-4">
+                                            <div class="text-xs font-medium text-slate-900 dark:text-white">{{ formatDate(interview.date) }}</div>
+                                            <div class="text-[10px] text-slate-500 dark:text-slate-400">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</div>
+                                            <div v-if="showInterviewLocation(interview)" class="text-[10px] text-slate-400 dark:text-slate-500">{{ interview.location || 'To be announced' }}</div>
+                                        </td>
+                                        <td class="py-3 px-4"><span class="text-xs text-slate-700 dark:text-slate-200">{{ interview.interviewer || 'N/A' }}</span></td>
+                                        <td class="py-3 px-4 text-center">
+                                            <span :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border', getStatusBadgeClass(interview.status)]">{{ statusLabel(interview) }}</span>
+                                        </td>
+                                        <td class="py-3 px-4 text-right">
+                                            <div class="inline-flex items-center gap-2">
+                                                <button
+                                                    @click="viewInterviewDetails(interview)"
+                                                    class="px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-blue-50 hover:border-blue-300 text-slate-600 dark:text-slate-300 hover:text-blue-600 rounded-lg text-[10px] font-bold transition inline-flex items-center gap-1"
+                                                >
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"/>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+                                                    </svg>
+                                                    View Details
+                                                </button>
+                                                <button
+                                                    v-if="showMeetingLink(interview) && interview.status === 'Scheduled'"
+                                                    @click="openMeeting(interview.meeting_link)"
+                                                    class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold transition shadow-md inline-flex items-center gap-1"
+                                                >
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.357-1.357a4.5 4.5 0 0 0-6.364-6.364l-1.757 1.757"/>
+                                                    </svg>
+                                                    Join Meeting
+                                                </button>
                                             </div>
-                                        </div>
-                                        <span
-                                            :class="[
-                                                'px-3 py-1 rounded-full text-[11px] font-bold border',
-                                                getStatusBadgeClass(interview.status)
-                                            ]"
-                                        >{{ interview.status || 'Scheduled' }}</span>
-                                    </div>
-                                    <p class="text-xs text-slate-500 dark:text-slate-400">
-                                        <span class="text-slate-700 dark:text-slate-200 font-bold">{{ interview.type || 'Interview' }}</span>
-                                    </p>
-                                </div>
-
-                                <div class="p-4 space-y-2.5">
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <div class="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-xl text-xs">
-                                            <span class="text-slate-400 dark:text-slate-400">Date</span>
-                                            <p class="font-bold text-slate-900 dark:text-white text-sm">{{ formatDate(interview.date) }}</p>
-                                        </div>
-                                        <div class="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-xl text-xs">
-                                            <span class="text-slate-400 dark:text-slate-400">Time</span>
-                                            <p class="font-bold text-slate-900 dark:text-white text-sm">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</p>
-                                        </div>
-                                    </div>
-                                    <div class="space-y-1 text-xs">
-                                        <div v-if="showInterviewLocation(interview)" class="flex justify-between">
-                                            <span class="text-slate-400 dark:text-slate-400">Location</span>
-                                            <span class="text-slate-700 dark:text-slate-200">{{ interview.location || 'To be announced' }}</span>
-                                        </div>
-                                        <div v-if="interview.interviewer" class="flex justify-between">
-                                            <span class="text-slate-400 dark:text-slate-400">Interviewer</span>
-                                            <span class="text-slate-700 dark:text-slate-200">{{ interview.interviewer }}</span>
-                                        </div>
-                                    </div>
-                                    <div v-if="interview.meeting_link && showMeetingLink(interview)" class="flex items-center gap-1 text-[11px] font-bold text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-xl border border-blue-200 dark:border-blue-800">
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.357-1.357a4.5 4.5 0 0 0-6.364-6.364l-1.757 1.757"/>
-                                        </svg>
-                                        <a :href="interview.meeting_link" target="_blank" class="hover:underline">Join Meeting</a>
-                                    </div>
-                                    <div v-if="interview.notes" class="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded-xl border border-slate-100 dark:border-slate-700">
-                                        {{ interview.notes }}
-                                    </div>
-                                </div>
-
-                                <!-- Action Buttons -->
-                                <div class="px-4 py-2.5 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
-                                    <button
-                                        @click.stop="viewInterviewDetails(interview)"
-                                        class="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition"
-                                    >
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"/>
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
-                                        </svg>
-                                        View Details
-                                    </button>
-                                    <button
-                                        v-if="interview.status === 'Scheduled'"
-                                        @click.stop="confirmInterview(interview)"
-                                        :disabled="actingId === interview.id"
-                                        class="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-500/30 active:scale-95"
-                                    >
-                                        Confirm
-                                    </button>
-                                    <button
-                                        v-if="showMeetingLink(interview) && interview.status === 'Scheduled'"
-                                        @click.stop="openMeeting(interview.meeting_link)"
-                                        class="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-blue-500/30 active:scale-95"
-                                    >
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.357-1.357a4.5 4.5 0 0 0-6.364-6.364l-1.757 1.757"/>
-                                        </svg>
-                                        Join Meeting
-                                    </button>
-                                </div>
-                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
 
                         <!-- Empty State -->
@@ -241,7 +198,7 @@
                                         'px-3 py-1 rounded-full text-[11px] font-bold border mt-1 inline-flex',
                                         getStatusBadgeClass(selectedInterview.status)
                                     ]"
-                                >{{ selectedInterview.status || 'Scheduled' }}</span>
+                                >{{ statusLabel(selectedInterview) }}</span>
                             </div>
                         </div>
                         <button
@@ -291,7 +248,7 @@
                     </div>
 
                     <!-- Meeting Link -->
-                    <div v-if="selectedInterview.meeting_link && showMeetingLink(selectedInterview)">
+                    <div v-if="selectedInterview.meeting_link && showMeetingLink(selectedInterview) && selectedInterview.status === 'Scheduled'">
                         <h4 class="text-sm font-black text-slate-900 dark:text-white mb-2 flex items-center gap-2">
                             <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.357-1.357a4.5 4.5 0 0 0-6.364-6.364l-1.757 1.757"/>
@@ -302,19 +259,6 @@
                             <a :href="selectedInterview.meeting_link" target="_blank" class="text-sm text-blue-700 dark:text-blue-400 hover:underline font-bold break-all">
                                 {{ selectedInterview.meeting_link }}
                             </a>
-                        </div>
-                    </div>
-
-                    <!-- Notes -->
-                    <div v-if="selectedInterview.notes">
-                        <h4 class="text-sm font-black text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/>
-                            </svg>
-                            Notes / Instructions
-                        </h4>
-                        <div class="text-sm text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-700 whitespace-pre-wrap">
-                            {{ selectedInterview.notes || 'No notes provided.' }}
                         </div>
                     </div>
 
@@ -337,7 +281,7 @@
                                     }"
                                 ></div>
                                 <span class="text-sm font-bold text-slate-900 dark:text-white">
-                                    {{ selectedInterview.status || 'Scheduled' }}
+                                    {{ statusLabel(selectedInterview) }}
                                     <span v-if="selectedInterview.status === 'Scheduled'" class="text-xs text-slate-500 dark:text-slate-400 font-normal">
                                         - Waiting for interview date
                                     </span>
@@ -345,7 +289,7 @@
                                         - Interview completed
                                     </span>
                                     <span v-else-if="selectedInterview.status === 'Cancelled'" class="text-xs text-rose-600 dark:text-rose-400 font-normal">
-                                        - Interview cancelled
+                                        - {{ selectedInterview.cancelled_by === 'applicant' ? 'You cancelled this interview. Your application is still active.' : 'Interview cancelled' }}
                                     </span>
                                 </span>
                             </div>
@@ -376,11 +320,14 @@
                         </div>
                     </div>
                     <!-- Cancel reason -->
-                    <div v-if="showCancel && selectedInterview?.status === 'Scheduled'" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex gap-2">
-                        <input v-model="cancelReason" type="text" placeholder="Cancellation reason (optional)" class="flex-1 px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400" />
-                        <button @click="submitCancel" :disabled="actingId === selectedInterview?.id" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition">
-                            {{ actingId ? 'Saving...' : 'Confirm cancel' }}
-                        </button>
+                    <div v-if="showCancel && selectedInterview?.status === 'Scheduled'" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col gap-1.5">
+                        <div class="flex gap-2">
+                            <input v-model="cancelReason" type="text" placeholder="Cancellation reason (required)" @input="cancelError = ''" @keyup.enter="submitCancel" class="flex-1 px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400" />
+                            <button @click="submitCancel" :disabled="actingId === selectedInterview?.id || !cancelReason.trim()" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition">
+                                {{ actingId ? 'Saving...' : 'Confirm cancel' }}
+                            </button>
+                        </div>
+                        <p v-if="cancelError" class="text-[11px] text-rose-600 dark:text-rose-400">{{ cancelError }}</p>
                     </div>
                     <div class="flex items-center justify-end gap-2 flex-wrap">
                     <button
@@ -390,13 +337,6 @@
                         Close
                     </button>
                     <template v-if="selectedInterview?.status === 'Scheduled'">
-                        <button
-                            @click="confirmInterview(selectedInterview)"
-                            :disabled="actingId === selectedInterview?.id"
-                            class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-sm font-bold transition shadow-lg shadow-emerald-500/30 active:scale-95"
-                        >
-                            {{ actingId ? 'Working...' : 'Confirm' }}
-                        </button>
                         <button
                             @click="showReschedule = !showReschedule; showCancel = false"
                             class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold transition active:scale-95"
@@ -452,6 +392,7 @@ const props = defineProps<{
         interviewer: string | null;
         interviewer_id: number | null;
         status: string;
+        reschedule_status?: string | null;
         created_at: string;
         updated_at: string;
     }>;
@@ -468,7 +409,6 @@ const props = defineProps<{
 // ============================================
 const searchQuery = ref('');
 const filterStatus = ref('All');
-const filterType = ref('All');
 const loading = ref(false);
 const showDetailModal = ref(false);
 const selectedInterview = ref<any>(null);
@@ -476,6 +416,7 @@ const actingId = ref<number | null>(null);
 const showReschedule = ref(false);
 const showCancel = ref(false);
 const cancelReason = ref('');
+const cancelError = ref('');
 const rescheduleForm = ref({ date: '', start_time: '', end_time: '', reason: '' });
 
 const interviews = ref(props.interviews || []);
@@ -511,10 +452,6 @@ const filteredInterviews = computed(() => {
 
     if (filterStatus.value !== 'All') {
         filtered = filtered.filter(i => i.status === filterStatus.value);
-    }
-
-    if (filterType.value !== 'All') {
-        filtered = filtered.filter(i => i.type === filterType.value);
     }
 
     return filtered;
@@ -570,6 +507,13 @@ function getStatusBadgeClass(status: string): string {
     return classes[status] || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
 }
 
+// Distinguish who cancelled — kept separate from the stored 'Cancelled' status
+// so metrics/filters keep working.
+function statusLabel(iv: any): string {
+    if (iv?.status === 'Cancelled' && iv?.cancelled_by === 'applicant') return 'Cancelled by Applicant';
+    return iv?.status || 'Scheduled';
+}
+
 // Online meetings show the link and hide the location; onsite interviews
 // show the location and hide the link. Unknown/legacy methods keep the
 // previous behavior (show whatever is present).
@@ -604,6 +548,7 @@ function viewInterviewDetails(interview: any) {
     showReschedule.value = false;
     showCancel.value = false;
     cancelReason.value = '';
+    cancelError.value = '';
     rescheduleForm.value = { date: interview?.date || '', start_time: interview?.start_time || '', end_time: interview?.end_time || '', reason: '' };
     document.body.style.overflow = 'hidden';
 }
@@ -648,10 +593,16 @@ function submitReschedule() {
 function submitCancel() {
     const iv = selectedInterview.value;
     if (!iv || actingId.value) return;
+    const reason = cancelReason.value.trim();
+    if (!reason) {
+        cancelError.value = 'Please provide a reason for cancelling the interview.';
+        return;
+    }
+    cancelError.value = '';
     actingId.value = iv.id;
-    router.post(route('applicant.interviews.cancel', iv.id), { reason: cancelReason.value }, {
+    router.post(route('applicant.interviews.cancel', iv.id), { reason }, {
         preserveScroll: true,
-        onSuccess: () => { showCancel.value = false; syncLocal({ id: iv.id, status: 'Cancelled' }); },
+        onSuccess: () => { showCancel.value = false; syncLocal({ id: iv.id, status: 'Cancelled', cancelled_by: 'applicant', cancel_reason: reason }); },
         onFinish: () => { actingId.value = null; refreshInterviews(); },
     });
 }

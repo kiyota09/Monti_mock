@@ -343,8 +343,12 @@ class AgencyController extends Controller
             'dole_expiry' => optional($agency->dole_expiry)->toDateString(),
             'contract_start' => optional($agency->contract_start)->toDateString(),
             'contract_end' => optional($agency->contract_end)->toDateString(),
+            'billing_cycle' => $agency->billing_cycle,
+            'payment_terms' => $agency->payment_terms,
+            'payment_custom_terms' => $agency->payment_custom_terms,
             'service_fee_type' => $agency->service_fee_type,
             'service_fee_value' => $agency->service_fee_value,
+            'ot_multiplier' => $agency->ot_multiplier !== null ? (float) $agency->ot_multiplier : 1.25,
             'contact_name' => $agency->contact_name,
             'contact_email' => $agency->contact_email,
             'contact_phone' => $agency->contact_phone,
@@ -414,8 +418,12 @@ class AgencyController extends Controller
             'dole_expiry' => 'nullable|date',
             'contract_start' => 'nullable|date',
             'contract_end' => 'nullable|date',
+            'billing_cycle' => 'required|in:Weekly,Semi-monthly,Monthly,Per invoice / As agreed',
+            'payment_terms' => 'required|in:Due upon invoice approval,7 days after invoice receipt,15 days after invoice receipt,30 days after invoice receipt,Custom terms',
+            'payment_custom_terms' => 'nullable|string|max:255',
             'service_fee_type' => 'required|in:percentage,fixed',
             'service_fee_value' => 'required|numeric|min:0',
+            'ot_multiplier' => 'required|numeric|min:1|max:5',
             'contact_name' => 'nullable|string|max:255',
             'contact_email' => 'nullable|email|max:255',
             'contact_phone' => 'nullable|string|max:60',
@@ -436,6 +444,21 @@ class AgencyController extends Controller
         }
 
         $data = $request->validate($this->rules($ignoreId));
+
+        if (($data['payment_terms'] ?? '') === 'Custom terms' && empty(trim((string) ($data['payment_custom_terms'] ?? '')))) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'payment_custom_terms' => 'Describe the custom payment terms.',
+            ]);
+        }
+        if (($data['payment_terms'] ?? '') !== 'Custom terms') {
+            $data['payment_custom_terms'] = null;
+        }
+
+        if (($data['service_fee_type'] ?? '') === 'percentage' && (float) ($data['service_fee_value'] ?? 0) > 100) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'service_fee_value' => 'Percentage fee cannot exceed 100%.',
+            ]);
+        }
 
         if (! empty($data['contract_start']) && ! empty($data['contract_end'])
             && $data['contract_end'] < $data['contract_start']) {

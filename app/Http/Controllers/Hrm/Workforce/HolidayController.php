@@ -17,7 +17,10 @@ class HolidayController extends Controller
 {
     use HasPagePermissions;
 
-    public const TYPES = ['regular', 'special_non_working', 'non_working'];
+    // `special_working` is a legacy type kept for backward compatibility:
+    // payroll treats it as an ordinary workday (no holiday premium). `non_working`
+    // is treated the same as `special_non_working` (130% / 150% when worked).
+    public const TYPES = ['regular', 'special_non_working', 'non_working', 'special_working'];
 
     public const POLICIES = ['non_working', 'required_to_work'];
 
@@ -41,6 +44,7 @@ class HolidayController extends Controller
             'holiday_type' => 'required|in:' . implode(',', self::TYPES),
             'work_policy' => 'required|in:' . implode(',', self::POLICIES),
         ]);
+        $this->validateCombination($data['holiday_type'], $data['work_policy']);
 
         $date = substr((string) $data['holiday_date'], 0, 10);
 
@@ -67,6 +71,7 @@ class HolidayController extends Controller
             'holiday_type' => 'required|in:' . implode(',', self::TYPES),
             'work_policy' => 'required|in:' . implode(',', self::POLICIES),
         ]);
+        $this->validateCombination($data['holiday_type'], $data['work_policy']);
 
         $oldDate = substr((string) $holiday->holiday_date, 0, 10);
         $newDate = substr((string) $data['holiday_date'], 0, 10);
@@ -105,6 +110,21 @@ class HolidayController extends Controller
             'policy_label' => ($h->work_policy ?? 'non_working') === 'required_to_work' ? 'Required to Work' : 'Non-Working Day',
             'status' => $h->status,
         ];
+    }
+
+    /**
+     * A special working day is an ordinary workday: it must require work.
+     * Storing it as `non_working` would be silently reinterpreted as an
+     * ordinary day by payroll (policy ignored), so reject it explicitly.
+     */
+    private function validateCombination(string $type, string $policy): void
+    {
+        if ($type === 'special_working' && $policy !== 'required_to_work') {
+            abort(response()->json([
+                'message' => 'The selected holiday type is invalid.',
+                'errors' => ['work_policy' => ['A special working day is an ordinary workday and must use the Required to Work policy.']],
+            ], 422));
+        }
     }
 
     /**

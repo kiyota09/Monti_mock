@@ -263,9 +263,9 @@ const exportCsv = async () => {
                                 class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer max-w-72">
                                 <option v-for="p in periodOptions" :key="p.label" :value="p.label">{{ p.label }}{{ p.is_current ? ' · Current' : '' }}{{ p.locked ? ' · Locked' : '' }}{{ p.row_count ? ` (${p.row_count})` : '' }}</option>
                             </select>
-                            <Link :href="route('hrm.payroll.generate')" :class="canEdit ? '' : 'opacity-50 pointer-events-none'"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5">
-                                <Plus class="w-4 h-4" /> Add employee
+                            <Link :href="route('hrm.payroll.generate')"
+                                 class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5">
+                                <Plus class="w-4 h-4" /> Generate Payroll
                             </Link>
                         </div>
                     </div>

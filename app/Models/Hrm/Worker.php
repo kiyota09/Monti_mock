@@ -4,6 +4,7 @@ namespace App\Models\Hrm;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -71,6 +72,14 @@ class Worker extends Model
     public function activeAssignments(): HasMany
     {
         return $this->hasMany(ManpowerAssignment::class, 'worker_id')->whereNull('released_at');
+    }
+
+    /**
+     * Work shifts assigned to this agency worker (hrm_shift_worker pivot).
+     */
+    public function shifts(): BelongsToMany
+    {
+        return $this->belongsToMany(HrmShift::class, 'hrm_shift_worker', 'worker_id', 'shift_id')->withTimestamps();
     }
 
     public function getClearanceExpiredAttribute(): bool
