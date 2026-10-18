@@ -1485,7 +1485,7 @@ const statusOptions = ['Submitted', 'Screening', 'Shortlisted', 'Interview Sched
 // Applications already at the interview stage show only the View button
 // (the "More" actions menu is hidden).
 const interviewStatuses = ['Interview', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed'];
-const isInterviewStatus = (s: string) => interviewStatuses.includes(s);
+const isInterviewStatus = (s) => interviewStatuses.includes(s);
 // Position options for the Add/Edit modal, fed by the backend's
 // published job postings (kept in sync if the prop updates).
 const jobOptions = ref<JobOption[]>([...(props.jobPostings ?? [])]);

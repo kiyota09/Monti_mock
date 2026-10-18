@@ -1,8 +1,6 @@
 <?php
 
 use App\Http\Controllers\Fin\FinDashboardController;
-use App\Http\Controllers\Fin\PayrollReviewController;
-
 use App\Http\Controllers\Hrm\InterviewController;
 use App\Http\Controllers\Hrm\TraineeController;
 use Illuminate\Support\Facades\Route;
@@ -65,14 +63,6 @@ Route::prefix('dashboard/fin')->name('fin.')->middleware(['auth', 'verified'])->
     Route::post('/manager/expenses', [FinDashboardController::class, 'storeExpense'])
         ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:dashboard,edit'])
         ->name('manager.expenses.store');
-
-    Route::get('/manager/expenses/review/{id}', [PayrollReviewController::class, 'show'])
-        ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:expenses,view'])
-        ->name('manager.expenses.review');
-
-    Route::get('/manager/expenses/date/{date}', [PayrollReviewController::class, 'getByDate'])
-        ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:expenses,view'])
-        ->name('manager.expenses.date');
     Route::post('/manager/bills', [FinDashboardController::class, 'storeBill'])
         ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:payables,edit'])
         ->name('manager.bills.store');

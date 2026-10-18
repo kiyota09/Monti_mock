@@ -16,9 +16,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (DB::getDriverName() !== 'sqlite') {
-            DB::statement("ALTER TABLE users MODIFY COLUMN role ENUM('HRM','SCM','FIN','MAN','INV','ORD','WAR','CRM','ECO','PRO','PROJ','IT','LOG','CEO','COO') NOT NULL DEFAULT 'HRM'");
-        }
+        DB::statement("ALTER TABLE users MODIFY COLUMN role ENUM('HRM','SCM','FIN','MAN','INV','ORD','WAR','CRM','ECO','PRO','PROJ','IT','LOG','CEO','COO') NOT NULL DEFAULT 'HRM'");
 
         DB::table('users')
             ->where('role', 'CEO')
@@ -36,8 +34,6 @@ return new class extends Migration
             return;
         }
 
-        if (DB::getDriverName() !== 'sqlite') {
-            DB::statement("ALTER TABLE users MODIFY COLUMN role ENUM('HRM','SCM','FIN','MAN','INV','ORD','WAR','CRM','ECO','PRO','PROJ','IT','LOG','CEO') NOT NULL DEFAULT 'HRM'");
-        }
+        DB::statement("ALTER TABLE users MODIFY COLUMN role ENUM('HRM','SCM','FIN','MAN','INV','ORD','WAR','CRM','ECO','PRO','PROJ','IT','LOG','CEO') NOT NULL DEFAULT 'HRM'");
     }
 };

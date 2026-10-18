@@ -392,7 +392,6 @@ const props = defineProps<{
         interviewer: string | null;
         interviewer_id: number | null;
         status: string;
-        reschedule_status?: string | null;
         created_at: string;
         updated_at: string;
     }>;
