@@ -1,5 +1,6 @@
 import { reactive } from 'vue';
 import { route } from 'ziggy-js';
+import { request } from '@/lib/http';
 
 /**
  * App-wide call centre. A module singleton (no Pinia): the overlay mounted in
@@ -20,28 +21,6 @@ let pollTimer = null;
 let statusTimer = null;
 let ringHandler = null;
 let noticeTimer = null;
-
-const csrf = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
-
-const request = async (url, method = 'POST', body) => {
-    const res = await fetch(url, {
-        method,
-        headers: {
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            ...(method === 'GET' ? {} : { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() }),
-        },
-        credentials: 'same-origin',
-        body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-        const error = new Error(data.message ?? `Request failed (HTTP ${res.status})`);
-        error.status = res.status;
-        throw error;
-    }
-    return data;
-};
 
 const ring = (kind) => ringHandler?.(kind);
 

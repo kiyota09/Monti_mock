@@ -4,6 +4,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import ForgotPasswordModal from '@/Components/Auth/ForgotPasswordModal.vue';
 import AuthLayout from '@/Layouts/AuthLayout.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { toast } from 'vue3-toastify';
@@ -18,6 +19,7 @@ defineProps<{
 const page = usePage();
 const isLoaded = ref(false);
 const showPassword = ref(false);
+const showForgot = ref(false);
 
 const inputWarnings = ref({
     identity: '',
@@ -187,10 +189,10 @@ const identityPlaceholder = computed(() => "user@monticorp.com or EMP-XXXX-X");
                             <div>
                                 <div class="flex justify-between items-baseline mb-1">
                                     <InputLabel for="password" value="Password" class="text-white/90" />
-                                    <Link v-if="canResetPassword" :href="route('password.request')"
+                                    <button type="button" @click="showForgot = true"
                                         class="text-sm text-blue-300 hover:text-blue-200 font-medium transition-colors">
                                         Forgot Key?
-                                    </Link>
+                                    </button>
                                 </div>
 
                                 <div class="relative">
@@ -252,5 +254,8 @@ const identityPlaceholder = computed(() => "user@monticorp.com or EMP-XXXX-X");
                                 </PrimaryButton>
                             </div>
                         </form>
+
+        <ForgotPasswordModal v-model="showForgot" route-name="password.recover"
+            portal-label="Employee Portal" accent="blue" />
     </AuthLayout>
 </template>

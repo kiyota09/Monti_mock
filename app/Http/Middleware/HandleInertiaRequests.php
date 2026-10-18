@@ -146,6 +146,10 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'message' => fn () => $request->session()->get('message'),
             ],
+            // When the signed-in account still holds a system-issued password
+            // (temporary / initial / recovered), the frontend shows a
+            // non-dismissible "set a new password" modal and posts to `route`.
+            'password_change' => $this->passwordChange(),
             // Executive inbox badge (CEO role only; everyone else gets 0).
             'notifications_unread' => function () use ($user) {
                 if (! $user || ($user->role ?? null) !== 'CEO') {
@@ -164,6 +168,39 @@ class HandleInertiaRequests extends Middleware
         } catch (\InvalidArgumentException $e) {
             return null;
         }
+    }
+
+    /**
+     * Detect whether the currently authenticated portal user must change their
+     * password, and which endpoint they should post the new password to.
+     */
+    protected function passwordChange(): array
+    {
+        $routes = [
+            'web' => 'password.force',
+            'client' => 'client.password.force',
+            'applicant' => 'applicant.password.force',
+            'supplier' => 'supplier.password.force',
+            'agency' => 'agency.password.force',
+        ];
+
+        foreach ($routes as $guard => $route) {
+            try {
+                if (Auth::guard($guard)->check()) {
+                    $user = Auth::guard($guard)->user();
+
+                    return [
+                        'required' => (bool) ($user->must_change_password ?? false),
+                        'route' => $route,
+                        'guard' => $guard,
+                    ];
+                }
+            } catch (\InvalidArgumentException $e) {
+                continue;
+            }
+        }
+
+        return ['required' => false, 'route' => null, 'guard' => null];
     }
 
     /**

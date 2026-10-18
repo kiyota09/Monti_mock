@@ -5,8 +5,10 @@ use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\EmployeeLoginController;
+use App\Http\Controllers\Auth\ForcedPasswordController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Auth\PasswordRecoveryController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
@@ -55,6 +57,12 @@ Route::middleware('guest:web,client')->group(function () {
     Route::post('reset-password', [NewPasswordController::class, 'store'])
         ->middleware('throttle:6,1')
         ->name('password.store');
+
+    // Custom "forgot password" recovery: emails a brand-new password
+    // instead of a reset link. Consumed by the login modal.
+    Route::post('forgot-password/recover', [PasswordRecoveryController::class, 'employee'])
+        ->middleware('throttle:6,1')
+        ->name('password.recover');
 });
 
 // ✅ Updated to support both guards for authenticated actions
@@ -80,6 +88,10 @@ Route::middleware('auth:web,client')->group(function () {
     // Password Update
     Route::put('password', [PasswordController::class, 'update'])
         ->name('password.update');
+
+    // Forced password change (first login / after a recovery password).
+    Route::post('password/force', [ForcedPasswordController::class, 'employee'])
+        ->name('password.force');
 
     // ✅ Unified Logout Logic
     // Logs out of EVERY guard (web, client, supplier, applicant). Logging

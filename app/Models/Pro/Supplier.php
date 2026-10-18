@@ -22,6 +22,7 @@ class Supplier extends Authenticatable
         'email',
         'phone_number',
         'password',
+        'must_change_password',
         'status',
         'approved_at',
         'approved_by',
@@ -43,6 +44,7 @@ class Supplier extends Authenticatable
      */
     protected $casts = [
         'password' => 'hashed',
+        'must_change_password' => 'boolean',
     ];
 
     /**

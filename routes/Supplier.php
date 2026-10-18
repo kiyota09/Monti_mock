@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Auth\ForcedPasswordController;
+use App\Http\Controllers\Auth\PasswordRecoveryController;
 use App\Http\Controllers\Auth\SupplierAuthController;
 use App\Http\Controllers\Suppliers\SupplierChatController;
 use App\Http\Controllers\Suppliers\SupplierDashboardController;
@@ -15,6 +17,7 @@ Route::middleware('guest:supplier')->group(function () {
     Route::post('supplier/login', [SupplierAuthController::class, 'login'])->middleware('throttle:10,1')->name('supplier.login.store');
     Route::get('supplier/register', [SupplierAuthController::class, 'create'])->name('supplier.register');
     Route::post('supplier/register', [SupplierAuthController::class, 'store'])->middleware('throttle:6,1')->name('supplier.register.store');
+    Route::post('supplier/password/recover', [PasswordRecoveryController::class, 'supplier'])->middleware('throttle:6,1')->name('supplier.password.recover');
 });
 
 Route::post('supplier/logout', [SupplierAuthController::class, 'logout'])
@@ -28,6 +31,8 @@ Route::post('supplier/logout', [SupplierAuthController::class, 'logout'])
 */
 Route::middleware('auth:supplier')->prefix('supplier')->name('supplier.')->group(function () {
     Route::get('/dashboard', [SupplierDashboardController::class, 'index'])->name('dashboard');
+    // Forced password change (first login / after a recovery password).
+    Route::post('/password/force', [ForcedPasswordController::class, 'supplier'])->name('password.force');
     Route::post('/rfq/{id}/respond', [SupplierDashboardController::class, 'submitQuotation'])->name('rfq.respond');
     Route::get('/orders', [SupplierDashboardController::class, 'purchaseOrders'])->name('orders');
     Route::post('/orders/{id}/status', [SupplierDashboardController::class, 'updateOrderStatus'])->name('orders.update_status');

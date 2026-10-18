@@ -4,6 +4,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import ForgotPasswordModal from '@/Components/Auth/ForgotPasswordModal.vue';
 import AuthLayout from '@/Layouts/AuthLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { toast } from 'vue3-toastify';
@@ -17,6 +18,7 @@ const form = useForm({
 
 const isLoaded = ref(false);
 const showPassword = ref(false);
+const showForgot = ref(false);
 
 onMounted(() => {
     isLoaded.value = true;
@@ -68,10 +70,10 @@ const submit = () => {
                             <div>
                                 <div class="flex justify-between items-baseline mb-1">
                                     <InputLabel for="password" value="Password" class="text-white/90" />
-                                    <Link v-if="$page.props.canResetPassword" :href="route('password.request')"
+                                    <button type="button" @click="showForgot = true"
                                         class="text-sm text-emerald-300 hover:text-emerald-200 font-medium transition-colors">
                                         Forgot password?
-                                    </Link>
+                                    </button>
                                 </div>
 
                                 <div class="relative">
@@ -134,5 +136,8 @@ const submit = () => {
                                 </PrimaryButton>
                             </div>
                         </form>
+
+        <ForgotPasswordModal v-model="showForgot" route-name="supplier.password.recover"
+            portal-label="Supplier Portal" accent="emerald" />
     </AuthLayout>
 </template>

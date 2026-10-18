@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Agency\AgencyAuthController;
+use App\Http\Controllers\Auth\ForcedPasswordController;
+use App\Http\Controllers\Auth\PasswordRecoveryController;
 use App\Http\Controllers\Agency\AgencyDashboardController;
 use App\Http\Controllers\Agency\AttendancePortalController;
 use App\Http\Controllers\Agency\BillingPortalController;
@@ -18,6 +20,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest:agency')->group(function () {
     Route::get('agency/login', [AgencyAuthController::class, 'showLogin'])->name('agency.login');
     Route::post('agency/login', [AgencyAuthController::class, 'login'])->middleware('throttle:10,1')->name('agency.login.store');
+    Route::post('agency/password/recover', [PasswordRecoveryController::class, 'agency'])->middleware('throttle:6,1')->name('agency.password.recover');
 });
 
 Route::post('agency/logout', [AgencyAuthController::class, 'logout'])
@@ -30,6 +33,8 @@ Route::middleware('auth:agency')->prefix('agency')->name('agency.')->group(funct
     // Forced password change at first login.
     Route::get('/password', [PasswordController::class, 'edit'])->name('password.edit');
     Route::put('/password', [PasswordController::class, 'update'])->name('password.update');
+    // Forced password change via the global modal (no current password needed).
+    Route::post('/password/force', [ForcedPasswordController::class, 'agency'])->name('password.force');
 
     // Workers (own agency only).
     Route::get('/workers', [WorkerPortalController::class, 'index'])->name('workers.index');

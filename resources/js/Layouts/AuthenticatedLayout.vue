@@ -4,6 +4,7 @@ import MobileSidebar from './MobileSidebar.vue'
 import TopBar from './Navbar/TopBar.vue'
 import CallCenterOverlay from '@/Components/crm/messaging/CallCenterOverlay.vue'
 import PartnerCallOverlay from '@/Components/crm/messaging/PartnerCallOverlay.vue'
+import ForcePasswordChangeModal from '@/Components/Auth/ForcePasswordChangeModal.vue'
 import { usePage } from '@inertiajs/vue3'
 import { computed, onMounted, ref, watch, onErrorCaptured } from 'vue'
 import axios from 'axios'
@@ -134,5 +135,8 @@ const reloadPage = () => {
         <CallCenterOverlay v-if="!hasError" />
         <!-- Global partner-call listener (staff or portal, any page) -->
         <PartnerCallOverlay v-if="!hasError" />
+
+        <!-- Forced password change for system-issued passwords (any page) -->
+        <ForcePasswordChangeModal />
     </div>
 </template>

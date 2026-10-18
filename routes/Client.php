@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Auth\ClientAuthController;
+use App\Http\Controllers\Auth\ForcedPasswordController;
+use App\Http\Controllers\Auth\PasswordRecoveryController;
 use App\Http\Controllers\Client\ClientConversationController;
 use App\Http\Controllers\Client\ClientDashboardController;
 use App\Http\Controllers\Client\ClientInvoiceController;
@@ -26,11 +28,19 @@ Route::middleware('guest:client')->group(function () {
     Route::post('client/register', [ClientAuthController::class, 'store'])->middleware('throttle:6,1')->name('client.register.store');
     Route::get('client/login', [ClientAuthController::class, 'showLogin'])->name('client.login');
     Route::post('client/login', [ClientAuthController::class, 'login'])->middleware('throttle:10,1')->name('client.login.store');
+    Route::post('client/password/recover', [PasswordRecoveryController::class, 'client'])->middleware('throttle:6,1')->name('client.password.recover');
 });
 
 Route::post('client/logout', [ClientAuthController::class, 'logout'])
     ->middleware('auth:client')
     ->name('client.logout');
+
+// Forced password change (first login / after a recovery password). Kept
+// outside the client.access group so restricted sessions are never locked out
+// of changing a system-issued password.
+Route::post('client/password/force', [ForcedPasswordController::class, 'client'])
+    ->middleware('auth:client')
+    ->name('client.password.force');
 
 /*
 |--------------------------------------------------------------------------
