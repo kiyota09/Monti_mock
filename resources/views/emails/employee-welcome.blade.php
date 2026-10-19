@@ -32,7 +32,7 @@
 
         <a class="btn" href="{{ $portalUrl }}">Access Employee Portal</a>
 
-        <p class="footer">If you have any questions, please contact the HR Department.<br><br>Welcome to the team!<br><br><strong>Monti HR Department</strong></p>
+        <p class="footer">If this email landed in your spam folder, please mark it as &ldquo;Not spam&rdquo; so you receive future notices from the HR Department.<br><br>If you have any questions, please contact the HR Department.<br><br>Welcome to the team!<br><br><strong>Monti HR Department</strong></p>
     </div>
 </body>
 </html>

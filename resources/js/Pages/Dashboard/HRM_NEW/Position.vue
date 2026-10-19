@@ -94,7 +94,6 @@
                 <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   <th class="py-3 px-4">Position</th>
                   <th class="py-3 px-4">Department</th>
-                  <th class="py-3 px-4">Hierarchy</th>
                   <th class="py-3 px-4 text-center">Headcount</th>
                   <th class="py-3 px-4">Compensation</th>
                   <th class="py-3 px-4 text-center">Status</th>
@@ -120,10 +119,6 @@
                   </td>
                   <td class="py-3 px-4">
                     <div class="text-sm text-slate-700">{{ position.department_name }}</div>
-                  </td>
-                  <td class="py-3 px-4">
-                    <div class="text-sm text-slate-700">Reports to: <span class="font-semibold">{{ position.reports_to_name || '—' }}</span></div>
-                    <div class="text-[10px] text-blue-600 font-semibold">{{ position.management_level }}</div>
                   </td>
                   <td class="py-3 px-4 text-center">
                     <div class="flex items-center justify-center gap-3">
@@ -178,7 +173,7 @@
                 </tr>
                 <!-- Empty State -->
                 <tr v-if="filteredPositions.length === 0">
-                  <td colspan="7" class="py-12 text-center">
+                  <td colspan="6" class="py-12 text-center">
                     <div class="flex flex-col items-center justify-center">
                       <Briefcase class="w-6 h-6 mb-3" />
                       <p class="text-sm text-slate-500">No positions found</p>
@@ -196,47 +191,7 @@
           Showing {{ filteredPositions.length }} {{ filteredPositions.length === 1 ? 'position' : 'positions' }}
         </div>
 
-        <!-- REPORTS & QUICK LINKS -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 shrink-0">
-          <button @click="confirmReport('employees')" class="p-3 bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-sm text-left group">
-            <div class="flex items-center justify-between mb-2">
-              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-inner group-hover:from-blue-100 group-hover:to-blue-200 transition-all">
-                <Users class="w-5 h-5" />
-              </div>
-              <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-              </svg>
-            </div>
-            <h4 class="text-sm font-bold text-slate-900">Employees Assigned Report</h4>
-            <p class="text-xs text-slate-500 mt-0.5">View all employees per position</p>
-          </button>
-          
-          <button @click="confirmReport('vacancy')" class="p-3 bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-sm text-left group">
-            <div class="flex items-center justify-between mb-2">
-              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center shadow-inner group-hover:from-emerald-100 group-hover:to-emerald-200 transition-all">
-                <BarChart3 class="w-5 h-5" />
-              </div>
-              <svg class="w-4 h-4 text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-              </svg>
-            </div>
-            <h4 class="text-sm font-bold text-slate-900">Vacancy Analysis</h4>
-            <p class="text-xs text-slate-500 mt-0.5">Open positions and fulfillment metrics</p>
-          </button>
-          
-          <button @click="confirmReport('history')" class="p-3 bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-sm text-left group">
-            <div class="flex items-center justify-between mb-2">
-              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center shadow-inner group-hover:from-purple-100 group-hover:to-purple-200 transition-all">
-                <Clock class="w-5 h-5" />
-              </div>
-              <svg class="w-4 h-4 text-slate-400 group-hover:text-purple-500 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-              </svg>
-            </div>
-            <h4 class="text-sm font-bold text-slate-900">Position History Log</h4>
-            <p class="text-xs text-slate-500 mt-0.5">Chronological changes and audit trail</p>
-          </button>
-        </div>
+        <!-- VALIDATION ERROR MODAL -->
 
         <!-- VALIDATION ERROR MODAL -->
         <div v-if="showValidationModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

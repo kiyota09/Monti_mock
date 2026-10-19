@@ -30,6 +30,7 @@ class InterviewController extends Controller
                 'shortlisted' => Applicant::where('status', 'Shortlisted')->count(),
                 'interview_scheduled' => HrmInterview::where('status', 'Scheduled')->count(),
                 'interviewed' => HrmInterview::where('status', 'Completed')->count(),
+                'interview_rescheduled' => HrmInterview::where('status', 'Rescheduled')->count(),
             ],
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
@@ -264,6 +265,30 @@ class InterviewController extends Controller
         if (isset($data['type'])) {
             $data['type'] = stripos($data['type'], 'final') !== false ? 'Final' : 'Initial';
         }
+
+        // Idempotency: a repeated submit (double-click, retry, refresher) for
+        // the exact same slot must not create a second "Scheduled" row. Reuse
+        // the existing one so the dashboard never shows duplicates.
+        if (! empty($data['applicant_id'])) {
+            $existing = HrmInterview::query()
+                ->where('applicant_id', $data['applicant_id'])
+                ->where('type', $data['type'] ?? 'Initial')
+                ->where('job_posting_id', $data['job_posting_id'] ?? null)
+                ->where('date', $data['date'] ?? null)
+                ->where('start_time', $data['start_time'] ?? null)
+                ->where('status', 'Scheduled')
+                ->first();
+
+            if ($existing) {
+                $existing->update($data);
+
+                return response()->json(
+                    $existing->fresh()->loadMissing(['applicant', 'evaluation', 'interviewer:id,name,email']),
+                    200
+                );
+            }
+        }
+
         $interview = HrmInterview::create($data + ['status' => 'Scheduled']);
         if ($interview->applicant_id) {
             Applicant::whereKey($interview->applicant_id)->update(['status' => 'Interview']);
@@ -291,17 +316,102 @@ class InterviewController extends Controller
 
     public function reschedule(Request $request, HrmInterview $interview)
     {
-        $interview->update($request->validate([
-            'date' => 'sometimes|date', 'start_time' => 'sometimes|string',
-            'end_time' => 'sometimes|string', 'reason' => 'nullable|string',
-        ]));
+        $data = $request->validate([
+            'date' => 'required|date',
+            'start_time' => 'required|string',
+            'end_time' => 'required|string',
+            'reason' => 'nullable|string',
+            'interviewer_id' => 'nullable|exists:users,id',
+            'method' => 'nullable|in:Online,Onsite',
+            'location' => 'nullable|string',
+            'meeting_link' => 'nullable|string',
+        ]);
 
-        return response()->json($interview);
+        $this->ensureInterviewerEligible($data['interviewer_id'] ?? null);
+
+        if ($interview->reschedule_status === 'completed') {
+            return response()->json(['message' => 'This interview has already been rescheduled.'], 422);
+        }
+
+        DB::transaction(function () use ($interview, $data, $request) {
+            $oldDate = $interview->date;
+            $oldStartTime = $interview->start_time;
+            $oldEndTime = $interview->end_time;
+            $oldInterviewerId = $interview->interviewer_id;
+            $oldMethod = $interview->method;
+            $oldLocation = $interview->location;
+            $oldMeetingLink = $interview->meeting_link;
+
+            $slot = [
+                'applicant_id' => $interview->applicant_id,
+                'job_posting_id' => $interview->job_posting_id,
+                'type' => $interview->type,
+                'date' => $data['date'],
+                'start_time' => $data['start_time'],
+            ];
+            $attributes = [
+                'candidate_name' => $interview->candidate_name,
+                'position' => $interview->position,
+                'interviewer_id' => $data['interviewer_id'] ?? $interview->interviewer_id,
+                'end_time' => $data['end_time'],
+                'method' => $data['method'] ?? $interview->method,
+                'location' => $data['location'] ?? $interview->location,
+                'meeting_link' => $data['meeting_link'] ?? $interview->meeting_link,
+                'notes' => $interview->notes,
+            ];
+            // Reuse an already-scheduled slot instead of creating a duplicate row.
+            $newInterview = $this->findScheduledSlot($slot, $interview->id);
+            if ($newInterview) {
+                $newInterview->update($attributes);
+            } else {
+                $newInterview = HrmInterview::create($slot + $attributes + [
+                    'status' => 'Scheduled',
+                    'rescheduled_from_id' => $interview->id,
+                ]);
+            }
+
+            $interview->update([
+                'status' => 'Rescheduled',
+                'reschedule_status' => 'completed',
+                'reschedule_date' => $data['date'],
+                'reschedule_start_time' => $data['start_time'],
+                'reschedule_end_time' => $data['end_time'],
+                'reschedule_reason' => $data['reason'],
+                'reschedule_requested_at' => now(),
+                'rescheduled_to_id' => $newInterview->id,
+            ]);
+
+            if ($app = $interview->applicant) {
+                \App\Support\NotifiesApplicant::push($app, 'interview', 'Interview Rescheduled', 'Your interview has been rescheduled.', [
+                    'position' => $interview->position,
+                    'interview_type' => $interview->type,
+                    'old_date' => optional($oldDate)?->toDateString(),
+                    'old_start_time' => $oldStartTime,
+                    'old_end_time' => $oldEndTime,
+                    'date' => $data['date'],
+                    'start_time' => $data['start_time'],
+                    'end_time' => $data['end_time'],
+                    'method' => $data['method'] ?? $interview->method,
+                    'location' => $data['location'] ?? $interview->location,
+                    'meeting_link' => $data['meeting_link'] ?? $interview->meeting_link,
+                    'status' => 'Rescheduled',
+                    'rescheduled_interview_id' => $newInterview->id,
+                ]);
+            }
+        });
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Interview rescheduled successfully. The previous interview is marked as Rescheduled.',
+            'old_interview' => $interview->fresh()->loadMissing(['applicant', 'evaluation', 'interviewer:id,name,email']),
+            'new_interview' => HrmInterview::with(['applicant', 'evaluation', 'interviewer:id,name,email'])->find($newInterview->id),
+        ]);
     }
 
     /**
      * Interviewer approves an applicant's pending reschedule request:
-     * the live schedule adopts the proposed date/time and the request clears.
+     * creates a new interview record with the requested date/time,
+     * marks the old interview as Rescheduled.
      */
     public function approveReschedule(Request $request, HrmInterview $interview)
     {
@@ -309,34 +419,80 @@ class InterviewController extends Controller
             return response()->json(['message' => 'There is no pending reschedule request for this interview.'], 422);
         }
 
-        $interview->update([
-            'date' => $interview->reschedule_date,
-            'start_time' => $interview->reschedule_start_time ?: $interview->start_time,
-            'end_time' => $interview->reschedule_end_time ?: $interview->end_time,
-            'status' => 'Scheduled',
-            'reschedule_status' => null,
-            'reschedule_date' => null,
-            'reschedule_start_time' => null,
-            'reschedule_end_time' => null,
-            'reschedule_reason' => null,
-            'reschedule_requested_at' => null,
-        ]);
+        $oldDate = $interview->date;
+        $oldStartTime = $interview->start_time;
+        $oldEndTime = $interview->end_time;
+        $oldInterviewerId = $interview->interviewer_id;
+        $oldMethod = $interview->method;
+        $oldLocation = $interview->location;
+        $oldMeetingLink = $interview->meeting_link;
+        $rescheduleReason = $interview->reschedule_reason;
 
-        if ($app = $interview->applicant) {
-            \App\Support\NotifiesApplicant::push($app, 'interview', 'Reschedule Approved', 'Your interview has been moved to the requested schedule.', [
+        DB::transaction(function () use ($interview, $oldDate, $oldStartTime, $oldEndTime, $oldInterviewerId, $oldMethod, $oldLocation, $oldMeetingLink, $rescheduleReason) {
+            $slot = [
+                'applicant_id' => $interview->applicant_id,
+                'job_posting_id' => $interview->job_posting_id,
+                'type' => $interview->type,
+                'date' => $interview->reschedule_date,
+                'start_time' => $interview->reschedule_start_time ?: $interview->start_time,
+            ];
+            $attributes = [
+                'candidate_name' => $interview->candidate_name,
                 'position' => $interview->position,
-                'interview_type' => $interview->type,
-                'date' => optional($interview->date)?->toDateString(),
-                'start_time' => $interview->start_time,
-                'end_time' => $interview->end_time,
+                'interviewer_id' => $interview->interviewer_id,
+                'end_time' => $interview->reschedule_end_time ?: $interview->end_time,
                 'method' => $interview->method,
                 'location' => $interview->location,
                 'meeting_link' => $interview->meeting_link,
-                'status' => 'Scheduled',
-            ]);
-        }
+                'notes' => $interview->notes,
+            ];
+            // Reuse an already-scheduled slot instead of creating a duplicate row.
+            $newInterview = $this->findScheduledSlot($slot, $interview->id);
+            if ($newInterview) {
+                $newInterview->update($attributes);
+            } else {
+                $newInterview = HrmInterview::create($slot + $attributes + [
+                    'status' => 'Scheduled',
+                    'rescheduled_from_id' => $interview->id,
+                ]);
+            }
 
-        return response()->json(['ok' => true, 'data' => $interview->fresh()->loadMissing(['applicant', 'evaluation', 'interviewer:id,name,email'])]);
+            $interview->update([
+                'status' => 'Rescheduled',
+                'reschedule_status' => 'completed',
+                'reschedule_date' => $interview->reschedule_date,
+                'reschedule_start_time' => $interview->reschedule_start_time ?: $interview->start_time,
+                'reschedule_end_time' => $interview->reschedule_end_time ?: $interview->end_time,
+                'reschedule_reason' => $interview->reschedule_reason,
+                'reschedule_requested_at' => $interview->reschedule_requested_at,
+                'rescheduled_to_id' => $newInterview->id,
+            ]);
+
+            if ($app = $interview->applicant) {
+                \App\Support\NotifiesApplicant::push($app, 'interview', 'Reschedule Approved', 'Your interview has been rescheduled.', [
+                    'position' => $interview->position,
+                    'interview_type' => $interview->type,
+                    'old_date' => optional($oldDate)?->toDateString(),
+                    'old_start_time' => $oldStartTime,
+                    'old_end_time' => $oldEndTime,
+                    'date' => $interview->reschedule_date,
+                    'start_time' => $interview->reschedule_start_time ?: $interview->start_time,
+                    'end_time' => $interview->reschedule_end_time ?: $interview->end_time,
+                    'method' => $interview->method,
+                    'location' => $interview->location,
+                    'meeting_link' => $interview->meeting_link,
+                    'status' => 'Rescheduled',
+                    'rescheduled_interview_id' => $newInterview->id,
+                ]);
+            }
+        });
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Reschedule approved. A new interview has been scheduled and the previous one is marked as Rescheduled.',
+            'old_interview' => $interview->fresh()->loadMissing(['applicant', 'evaluation', 'interviewer:id,name,email']),
+            'new_interview' => HrmInterview::with(['applicant', 'evaluation', 'interviewer:id,name,email'])->find($newInterview->id),
+        ]);
     }
 
     /**
@@ -455,6 +611,23 @@ class InterviewController extends Controller
      * submitted with an onboarding recommendation. Skips creating a
      * duplicate record when one is already open for the same applicant.
      */
+    /**
+     * Existing "Scheduled" interview occupying the same applicant/type/posting
+     * slot — used so schedule/reschedule never leaves parallel duplicate rows.
+     */
+    private function findScheduledSlot(array $slot, ?int $exceptId = null): ?HrmInterview
+    {
+        return HrmInterview::query()
+            ->where('applicant_id', $slot['applicant_id'] ?? null)
+            ->where('job_posting_id', $slot['job_posting_id'] ?? null)
+            ->where('type', $slot['type'] ?? null)
+            ->where('date', $slot['date'] ?? null)
+            ->where('start_time', $slot['start_time'] ?? null)
+            ->where('status', 'Scheduled')
+            ->when($exceptId, fn ($q) => $q->where('id', '!=', $exceptId))
+            ->first();
+    }
+
     /**
      * Which job posting an applicant's interview belongs to: latest
      * non-terminal job application first, then the applicant header link.

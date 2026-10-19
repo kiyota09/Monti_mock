@@ -181,5 +181,19 @@ class DatabaseSeeder extends Seeder
         // 7. SEED IT MODULE (service desk, assets, monitoring, KB, changes)
         // ==========================================
         $this->call(ItSeeder::class);
+
+        // ==========================================
+        // 8. SEED HRM + AGENCY DEMO DATASET
+        // ==========================================
+        $this->call(HRMAGENCYAPPLICCANT::class);
+
+        // ==========================================
+        // 9. PROVISION HRM PAGE PERMISSIONS
+        // ==========================================
+        // Runs after the users exist so the full HRM sidebar (Agency,
+        // Workers, Requests, Attendance, Billing, Compensation, ...) is
+        // reproducible from an empty database — the data migrations that
+        // originally granted these pages are no-ops on a fresh migrate.
+        $this->call(AddHrmManagerPermissionsSeeder::class);
     }
 }

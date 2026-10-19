@@ -316,6 +316,10 @@ class StatusController extends Controller
                 'emergency_name' => $person?->emergency_name,
                 'emergency_relationship' => $person?->emergency_relationship,
                 'emergency_phone' => $person?->emergency_phone,
+                // System Position (users.position) derived from HRM position's management_level
+                'position_rank' => self::deriveSystemPosition($jaPosting, $onboarding, $person),
+                // System Role (users.role) derived from department
+                'role' => self::deriveSystemRole($onboarding, $jaPosting),
             ],
             'trainings' => $onboarding->activities->map(fn ($a) => [
                 'id' => $a->id, 'title' => $a->title,
@@ -563,7 +567,7 @@ class StatusController extends Controller
         // System rank for users.position (dropdown in CREATE EMPLOYEE modal).
         // Job title ($data['position'], e.g. "HR Manager") stays as the org
         // title (hrm_position_id); this rank drives access gates.
-        $rawRank = strtolower(trim((string) ($data['position_rank'] ?? 'staff')));
+        $rawRank = strtolower(trim((string) ($data['position_rank'] ?? '')));
         $rankAliases = [
             'special_office' => 'special_officer',
             'special-officer' => 'special_officer',
@@ -579,7 +583,27 @@ class StatusController extends Controller
         ];
         $rawRank = $rankAliases[$rawRank] ?? $rawRank;
         $allowedRanks = ['trainee', 'staff', 'supervisor', 'manager', 'secretary', 'special_officer', 'vice_president'];
-        $systemPosition = in_array($rawRank, $allowedRanks, true) ? $rawRank : 'staff';
+
+        // Check if form explicitly provided a rank (not just defaulting)
+        $explicitRank = ! empty($data['position_rank']);
+
+        if ($rawRank && in_array($rawRank, $allowedRanks, true)) {
+            $systemPosition = $rawRank;
+        } else {
+            // No explicit rank provided - derive from HRM position's management_level
+            $levelMap = [
+                'Trainee' => 'trainee',
+                'Individual Contributor' => 'staff',
+                'Supervisory' => 'supervisor',
+                'Managerial' => 'manager',
+                'Executive' => 'special_officer',
+            ];
+            if ($positionModel && $positionModel->management_level) {
+                $systemPosition = $levelMap[$positionModel->management_level] ?? 'staff';
+            } else {
+                $systemPosition = 'staff';
+            }
+        }
 
         // Prefer the position-chain manager: resolve the name from the linked
         // user id so a renamed manager account can't desync the record.
@@ -663,7 +687,12 @@ class StatusController extends Controller
         // reactivated instead of lingering as a dead duplicate.
         $wasNewHire = $user->wasRecentlyCreated;
         $previousSalary = $user->getOriginal('basic_salary');
-        $user->fill([
+        // forceFill: role/position/is_active/manager_id and the training_*
+        // columns are not in User::$fillable, so a plain fill() would silently
+        // drop them (leaving manager_id null → the hire never appears under the
+        // reporting manager's "My Assigned Trainees").
+        $user->forceFill([
+            'role' => $role,
             'is_active' => true,
             'employment_status' => $user->employment_status === 'Terminated' ? null : $user->employment_status,
             'position' => $systemPosition,
@@ -681,6 +710,7 @@ class StatusController extends Controller
             'basic_salary' => $data['basic_salary'] ?? $user->basic_salary,
             'payroll_group' => $data['payroll_group'] ?? $user->payroll_group,
             'immediate_supervisor' => $managerName ?? $user->immediate_supervisor,
+            'department_head' => $managerName ?? $user->department_head,
             'manager_id' => ($managerId && $managerId !== (int) $user->id) ? $managerId : $user->manager_id,
         ])->save();
 
@@ -1006,5 +1036,62 @@ class StatusController extends Controller
         }
 
         return $sections;
+    }
+
+    /**
+     * Derive system position (users.position) from HRM position's management_level.
+     * Maps: Trainee->trainee, Individual Contributor->staff, Supervisory->supervisor,
+     * Managerial->manager, Executive->special_officer
+     */
+    protected static function deriveSystemPosition($jaPosting, $onboarding, $person): string
+    {
+        $positionTitle = ($jaPosting && ($jaPosting->id ?? null) && $jaPosting->title)
+            ? $jaPosting->title
+            : ($onboarding->position ?: $person?->position_applied ?: $jaPosting?->title);
+
+        if (! $positionTitle) {
+            return 'staff';
+        }
+
+        $positionModel = \App\Models\Hrm\HrmPosition::where('name', $positionTitle)->first();
+        if (! $positionModel || ! $positionModel->management_level) {
+            return 'staff';
+        }
+
+        $levelMap = [
+            'Trainee' => 'trainee',
+            'Individual Contributor' => 'staff',
+            'Supervisory' => 'supervisor',
+            'Managerial' => 'manager',
+            'Executive' => 'special_officer',
+        ];
+
+        return $levelMap[$positionModel->management_level] ?? 'staff';
+    }
+
+    /**
+     * Derive system role (users.role) from department.
+     * Tries department name uppercase, then department category uppercase, falls back to HRM.
+     */
+    protected static function deriveSystemRole($onboarding, $jaPosting): string
+    {
+        $department = $onboarding->department ?: $jaPosting?->department;
+        if (! $department) {
+            return 'HRM';
+        }
+
+        $validRoles = ['HRM', 'SCM', 'FIN', 'MAN', 'INV', 'ORD', 'WAR', 'CRM', 'ECO', 'PRO', 'PROJ', 'IT', 'LOG'];
+        $upperDept = strtoupper((string) $department);
+        if (in_array($upperDept, $validRoles, true)) {
+            return $upperDept;
+        }
+
+        $deptModel = \App\Models\Hrm\HrmDepartment::where('name', $department)->first();
+        $cat = $deptModel ? strtoupper((string) $deptModel->category) : '';
+        if ($cat && in_array($cat, $validRoles, true)) {
+            return $cat;
+        }
+
+        return 'HRM';
     }
 }

@@ -184,15 +184,21 @@ class PayPeriods
     public static function find(string $label, string $freq = 'semi_monthly'): ?array
     {
         $freq = self::normalizeFrequency($freq);
+        $currentLabel = self::currentLabel($freq);
         foreach (self::calendar($freq) as $p) {
-            if ($p['label'] === $label) return $p;
+            if ($p['label'] === $label) {
+                $p['is_current'] = ($label === $currentLabel);
+                return $p;
+            }
         }
         // Monthly "M Y".
         try {
             if (preg_match('/^([A-Z][a-z]{2}) (\d{4})$/', trim($label), $m)) {
                 $start = Carbon::createFromFormat('M Y', "{$m[1]} {$m[2]}")->startOfMonth()->startOfDay();
                 $end = $start->copy()->endOfMonth()->startOfDay();
-                return self::make($start, $end, 'monthly');
+                $p = self::make($start, $end, 'monthly');
+                $p['is_current'] = ($label === self::currentLabel('monthly'));
+                return $p;
             }
             if (preg_match('/^(\w{3}) (\d+)–(\w{3})? ?(\d+)?, (\d{4})$/u', $label, $m)) {
                 // "Oct 6–12, 2026" or cross-month "Sep 29–Oct 5, 2026".
@@ -200,7 +206,9 @@ class PayPeriods
                 $start = Carbon::createFromFormat('M j, Y', "{$mon1} {$d1}, {$yr}")->startOfDay();
                 $end = Carbon::createFromFormat('M j, Y', "{$mon2} {$d2}, {$yr}")->startOfDay();
                 $f = self::frequencyForLabel($label) === 'monthly' ? 'monthly' : $freq;
-                return self::make($start, $end, $f);
+                $p = self::make($start, $end, $f);
+                $p['is_current'] = ($label === self::currentLabel($f));
+                return $p;
             }
         } catch (\Throwable $e) {
         }

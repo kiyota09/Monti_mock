@@ -214,10 +214,7 @@
                 <div class="p-5 space-y-4">
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Code</label>
-                            <input v-model="editForm.code" type="text" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
-                        </div>
-                        <div>
+                            <input v-model="editForm.code" type="hidden" />
                             <label class="block text-xs font-semibold text-slate-600 mb-1.5">Name <span class="text-rose-500">*</span></label>
                             <input v-model="editForm.name" type="text" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
                         </div>
@@ -320,7 +317,7 @@
                                   <p class="text-[10px] text-slate-400 mt-1">{{ inputTypeHint }}</p>
                               </div>
                              <div>
-                                 <label class="block text-xs font-semibold text-slate-600 mb-1.5">Reference File <span class="text-slate-400 font-normal">(optional)</span></label>
+                                 <label class="block text-xs font-semibold text-slate-600 mb-1.5">Upload File <span class="text-slate-400 font-normal">(optional)</span></label>
                                  <input
                                      ref="itemFileInput"
                                      type="file"
@@ -328,13 +325,21 @@
                                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
                                      class="block w-full text-[11px] text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                                  />
-                                 <p v-if="itemFileName" class="text-[10px] text-slate-400 mt-1 truncate">Selected: {{ itemFileName }}</p>
-                                 <p v-else-if="itemForm.attachment_name && !removeAttachment" class="text-[10px] text-slate-400 mt-1 truncate">
-                                     Current:
-                                     <a :href="itemForm.attachment_url" target="_blank" class="text-blue-600 hover:underline">{{ itemForm.attachment_name }}</a>
-                                     <button type="button" @click="removeAttachment = true" class="text-rose-500 hover:underline ml-1">Remove</button>
-                                 </p>
-                                 <p v-else class="text-[10px] text-slate-400 mt-1">Attach a file HR can download (PDF/DOC/XLS/image, max 10MB).</p>
+                                 <!-- Newly selected file: preview + delete -->
+                                 <div v-if="itemFile" class="mt-1.5 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-3 py-2">
+                                     <Paperclip class="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                     <span class="text-[10px] font-semibold text-slate-700 truncate flex-1">{{ itemFile.name }} <span class="font-normal text-slate-400">({{ formatItemFileSize(itemFile.size) }})</span></span>
+                                     <a :href="itemFilePreviewUrl" target="_blank" class="text-[10px] font-bold text-blue-600 hover:underline shrink-0">View</a>
+                                     <button type="button" @click="resetItemAttachment" class="text-[10px] font-bold text-rose-500 hover:underline shrink-0">Delete</button>
+                                 </div>
+                                 <!-- Existing saved file: view + delete -->
+                                 <div v-else-if="itemForm.attachment_url && !removeAttachment" class="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                     <Paperclip class="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                     <span class="text-[10px] font-semibold text-slate-700 truncate flex-1">{{ itemForm.attachment_name }}</span>
+                                     <a :href="itemForm.attachment_url" target="_blank" class="text-[10px] font-bold text-blue-600 hover:underline shrink-0">View</a>
+                                     <button type="button" @click="removeAttachment = true" class="text-[10px] font-bold text-rose-500 hover:underline shrink-0">Delete</button>
+                                 </div>
+                                 <p v-else class="text-[10px] text-slate-400 mt-1">Attach a file the applicant can download (PDF/DOC/XLS/image, max 10MB).</p>
                              </div>
                           </div>
                     </div>
@@ -415,7 +420,7 @@ import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 import {
     LayoutTemplate, Pencil, Copy, Plus, Trash2, PauseCircle, PlayCircle,
-    ChevronUp, ChevronDown, Power, X, Info,
+    ChevronUp, ChevronDown, Power, X, Info, Paperclip,
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -647,20 +652,29 @@ const itemForm = ref(emptyItemForm());
 
 // HR reference file attached beside the Input Type field.
 const itemFile = ref(null);
-const itemFileName = ref('');
+const itemFilePreviewUrl = ref(null);
 const removeAttachment = ref(false);
 const itemFileInput = ref(null);
 
+const formatItemFileSize = (bytes) => {
+    if (!bytes && bytes !== 0) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+};
+
 const onItemFileChange = (event) => {
     const file = event.target.files?.[0] ?? null;
+    if (itemFilePreviewUrl.value) URL.revokeObjectURL(itemFilePreviewUrl.value);
     itemFile.value = file;
-    itemFileName.value = file ? file.name : '';
+    itemFilePreviewUrl.value = file ? URL.createObjectURL(file) : null;
     if (file) removeAttachment.value = false;
 };
 
 const resetItemAttachment = () => {
+    if (itemFilePreviewUrl.value) URL.revokeObjectURL(itemFilePreviewUrl.value);
+    itemFilePreviewUrl.value = null;
     itemFile.value = null;
-    itemFileName.value = '';
     removeAttachment.value = false;
     if (itemFileInput.value) itemFileInput.value.value = '';
 };

@@ -540,6 +540,8 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
 
         Route::get('/holidays', [\App\Http\Controllers\Hrm\Workforce\HolidayController::class, 'index'])
             ->middleware('page.permission:attendance,view')->name('holidays.index');
+        Route::get('/holidays/{year}', [\App\Http\Controllers\Hrm\Workforce\HolidayController::class, 'index'])
+            ->middleware('page.permission:attendance,view')->name('holidays.index.year');
         Route::post('/holidays', [\App\Http\Controllers\Hrm\Workforce\HolidayController::class, 'store'])
             ->middleware('page.permission:attendance,edit')->name('holidays.store');
         Route::patch('/holidays/{holiday}', [\App\Http\Controllers\Hrm\Workforce\HolidayController::class, 'update'])

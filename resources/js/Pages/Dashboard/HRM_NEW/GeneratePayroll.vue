@@ -2,7 +2,7 @@
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { CheckCircle2, Search } from 'lucide-vue-next';
+import { CheckCircle2, Search, X } from 'lucide-vue-next';
 
 const props = defineProps({
     employees: { type: Array, default: () => [] },
@@ -53,8 +53,35 @@ const toggleAll = (e) => {
     form.employee_ids = e.target.checked ? list.value.map((emp) => emp.id) : [];
 };
 
-const submit = () => {
-    form.post(route('hrm.payroll.generate.store'));
+const showConfirm = ref(false);
+const confirmSubmitting = ref(false);
+
+const selectedEmployees = computed(() => {
+    if (!form.employee_ids.length) return [];
+    const idSet = new Set(form.employee_ids);
+    return (props.employees || []).filter((e) => idSet.has(e.id));
+});
+
+const openConfirm = () => {
+    if (!form.employee_ids.length) {
+        alert('Please select at least one employee.');
+        return;
+    }
+    if (activeMeta.value?.is_current) {
+        alert('Cannot generate payroll for the current period. Please select a past period.');
+        return;
+    }
+    showConfirm.value = true;
+};
+
+const closeConfirm = () => { showConfirm.value = false; };
+
+const confirmSubmit = () => {
+    confirmSubmitting.value = true;
+    form.post(route('hrm.payroll.generate.store'), {
+        onSuccess: () => { showConfirm.value = false; },
+        onFinish: () => { confirmSubmitting.value = false; },
+    });
 };
 const switchFrequency = (e) => {
     router.get(route('hrm.payroll.generate'), { frequency: e.target.value, year: props.calendar_year || undefined }, { preserveState: false });
@@ -93,13 +120,16 @@ const switchFrequency = (e) => {
                             <div>
                                 <label class="text-xs font-bold text-slate-700 block mb-1.5">Pay period</label>
                                 <select v-model="form.period" @change="applyPeriodDates" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option v-for="p in periodList" :key="p.label" :value="p.label">{{ p.label }}{{ p.pay_date ? ` · pay ${p.pay_date}` : '' }}{{ p.locked ? ' · Locked' : '' }}</option>
+                                    <option v-for="p in periodList" :key="p.label" :value="p.label" :disabled="p.is_current">{{ p.label }}{{ p.pay_date ? ` · pay ${p.pay_date}` : '' }}{{ p.locked ? ' · Locked' : '' }}{{ p.is_current ? ' · Current (cannot generate)' : '' }}</option>
                                 </select>
                             </div>
                         </div>
                         <p class="text-xs text-slate-500 mt-1">
                             <span v-if="activeMeta">Cutoff {{ activeMeta.start }} – {{ activeMeta.end }} · pay {{ activeMeta.pay_date }}.</span>
                             Statuses and inputs are stored per pay period. Locked periods refuse new drafts. Paid is final.
+                        </p>
+                        <p v-if="activeMeta?.is_current" class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                            ⚠️ This is the current period. Payroll cannot be generated in advance — please select a completed period.
                         </p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
@@ -144,15 +174,60 @@ const switchFrequency = (e) => {
                     </div>
                     <div class="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
                         <Link :href="route('hrm.payroll')" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">Cancel</Link>
-                        <button type="button" :disabled="form.processing" @click="submit"
+                        <button type="button" :disabled="form.processing || confirmSubmitting" @click="openConfirm"
                             class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition disabled:opacity-50">
-                            <CheckCircle2 class="w-4 h-4" />{{ form.processing ? 'Generating…' : 'Generate Payroll' }}
+                            <CheckCircle2 class="w-4 h-4" />{{ (form.processing || confirmSubmitting) ? 'Generating…' : 'Generate Payroll' }}
                         </button>
                     </div>
                 </div>
             </div>
         </div>
     </AuthenticatedLayout>
+
+    <!-- Confirmation Modal -->
+    <div v-if="showConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/50" @click="closeConfirm"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex items-start justify-between">
+                <div>
+                    <h3 class="font-black text-slate-900">Confirm Payroll Generation</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">{{ selectedEmployees.length }} employee(s) will be added to payroll for {{ form.period }}.</p>
+                </div>
+                <button @click="closeConfirm" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400"><X class="w-4 h-4" /></button>
+            </div>
+
+            <div class="p-5 overflow-y-auto flex-1">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
+                                <th class="py-2 px-3">Name</th>
+                                <th class="py-2 px-3">Position</th>
+                                <th class="py-2 px-3">Department</th>
+                                <th class="py-2 px-3 text-right">Basic Salary</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="emp in selectedEmployees" :key="emp.id" class="hover:bg-slate-50/50">
+                                <td class="py-2 px-3 font-medium">{{ emp.name }}</td>
+                                <td class="py-2 px-3 text-slate-600">{{ emp.position }}</td>
+                                <td class="py-2 px-3 text-slate-600">{{ emp.department || '—' }}</td>
+                                <td class="py-2 px-3 text-right font-mono">{{ emp.basic_salary ? `₱${Number(emp.basic_salary).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                <button @click="closeConfirm" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">Cancel</button>
+                <button @click="confirmSubmit" :disabled="confirmSubmitting"
+                    class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition disabled:opacity-50">
+                    <CheckCircle2 class="w-4 h-4" />{{ confirmSubmitting ? 'Generating…' : 'Confirm Generate' }}
+                </button>
+            </div>
+        </div>
+    </div>
 </template>
 
 <style scoped>
