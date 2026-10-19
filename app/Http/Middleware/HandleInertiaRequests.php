@@ -9,6 +9,7 @@ use App\Models\Crm\CrmPagePermission;
 use App\Models\Core\UserModuleAccess;
 use App\Models\Crm\CrmClientAssignment;
 use App\Support\ClientAccess;
+use App\Support\ManufacturingPages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Middleware;
@@ -157,6 +158,16 @@ class HandleInertiaRequests extends Middleware
                 }
 
                 return \App\Models\Ceo\ExecutiveNotification::where('is_read', false)->count();
+            },
+            // Business-client portal bell badge (0 for non-client guards).
+            'client_notifications_unread' => function () {
+                if (! Auth::guard('client')->check()) {
+                    return 0;
+                }
+
+                return \App\Models\Crm\ClientNotification::where('client_id', Auth::guard('client')->id())
+                    ->where('is_read', false)
+                    ->count();
             },
         ];
     }
@@ -413,7 +424,7 @@ class HandleInertiaRequests extends Middleware
             'CRM' => ['dashboard', 'leads', 'customer_profiles', 'opportunities', 'inquiry', 'messaging', 'approvals', 'quotations', 'activities', 'cases', 'campaigns', 'investigation'],
             'SCM' => ['dashboard', 'sales', 'procurement', 'planning', 'purchase', 'deliveries', 'vendor', 'analytics'],
             'FIN' => ['dashboard', 'receivables', 'payables', 'expenses', 'payroll', 'reports', 'approvals'],
-            'MAN' => ['dashboard', 'production', 'reject', 'inventory'],
+            'MAN' => ManufacturingPages::allPageKeys(),
             'INV' => ['dashboard', 'materials', 'products', 'bom', 'checker'],
             'ORD' => ['dashboard', 'orders', 'productions', 'delivery', 'returns'],
             'WAR' => ['warehouse', 'receiving', 'monitor', 'packages', 'reject'],

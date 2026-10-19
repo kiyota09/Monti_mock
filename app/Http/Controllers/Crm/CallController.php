@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Models\Core\AppSetting;
 use App\Models\Core\User;
 use App\Models\Crm\CrmCall;
 use App\Models\Crm\CrmCallSignal;
@@ -84,6 +85,10 @@ class CallController extends Controller
 
     public function store(Request $request)
     {
+        if (! AppSetting::getBool('calls_enabled', true)) {
+            return response()->json(['message' => 'Calling is currently disabled.'], 403);
+        }
+
         $data = $request->validate([
             'user_id' => 'required|integer|exists:users,id',
             'type' => 'required|in:audio,video',

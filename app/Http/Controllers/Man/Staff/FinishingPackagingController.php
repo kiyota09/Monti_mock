@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Man\Staff;
 use App\Models\Man\Fabric;
 use App\Models\Man\Machine;
 use App\Models\Man\MachineReport;
+use App\Models\Man\ManufacturingOrder;
 use App\Models\Man\Package;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -136,14 +137,23 @@ class FinishingPackagingController extends ManufacturingStaffController
             return back()->with('error', 'This Job Order is not assigned to you by your supervisor.');
         }
 
+        // Carry the Job Order link onto the package so logistics can resolve
+        // the destination client (and its coordinates). Fabrics link to the MO
+        // directly or, once pushed from knitting, only via the sales order.
+        $manufacturingOrderId = $fabric->manufacturing_order_id
+            ?? ($fabric->sales_order_id
+                ? ManufacturingOrder::where('sales_order_id', $fabric->sales_order_id)->value('id')
+                : null);
+
         $package = Package::create([
-            'code'          => $this->generateCode('PACKAGE', Package::class),
-            'operator_id'   => $this->staff()->id,
-            'shift'         => $this->getShift(),
-            'packaged_at'   => now(),
-            'status'        => 'pending',
-            'fabric_id'     => $fabric->id,
-            'quantity'      => $validated['quantity'],   // store the quantity
+            'code'                   => $this->generateCode('PACKAGE', Package::class),
+            'operator_id'            => $this->staff()->id,
+            'shift'                  => $this->getShift(),
+            'packaged_at'            => now(),
+            'status'                 => 'pending',
+            'fabric_id'              => $fabric->id,
+            'manufacturing_order_id' => $manufacturingOrderId,
+            'quantity'               => $validated['quantity'],   // store the quantity
         ]);
 
         // Fabric status remains 'packed' – the package existence prevents it from reappearing.

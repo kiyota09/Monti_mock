@@ -36,6 +36,7 @@ class DriversController extends Controller
             'password' => Hash::make($tempPassword),
             'role' => 'LOG',
             'position' => 'staff',
+            'log_role' => 'driver',
         ]);
 
         $driver = new Driver([

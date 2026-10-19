@@ -55,8 +55,12 @@ Route::middleware(['auth', 'verified', 'module.access:LOG'])->prefix('dashboard/
 
     Route::get('/dispatch', [DispatchController::class, 'index'])
         ->middleware('page.permission:dispatch,view')->name('dispatch.index');
-    Route::post('/dispatch/{delivery}', [DispatchController::class, 'assignAndDispatch'])
-        ->middleware('page.permission:dispatch,edit')->name('dispatch.assign');
+    Route::get('/dispatch/route-preview', [DispatchController::class, 'routePreview'])
+        ->middleware('page.permission:dispatch,view')->name('dispatch.preview');
+    Route::post('/dispatch', [DispatchController::class, 'store'])
+        ->middleware('page.permission:dispatch,edit')->name('dispatch.store');
+    Route::post('/dispatch/{delivery}/deliver', [DispatchController::class, 'deliver'])
+        ->middleware('page.permission:dispatch,edit')->name('dispatch.deliver');
 
     // Portals (Driver & Conductor) — role work tools; writes gated as drivers/edit
     Route::get('/driver-portal', [DriverController::class, 'index'])
@@ -66,8 +70,38 @@ Route::middleware(['auth', 'verified', 'module.access:LOG'])->prefix('dashboard/
     Route::post('/driver-portal/{delivery}/proof', [DriverController::class, 'uploadProof'])
         ->middleware('page.permission:drivers,edit')->name('driver.proof');
 
+    // Driver portal tools
+    Route::post('/driver-portal/duty', [DriverController::class, 'updateDutyStatus'])
+        ->middleware('page.permission:drivers,edit')->name('driver.duty');
+    Route::post('/driver-portal/duty/end', [DriverController::class, 'endDutyLog'])
+        ->middleware('page.permission:drivers,edit')->name('driver.duty.end');
+    Route::post('/driver-portal/inspections', [DriverController::class, 'storeInspection'])
+        ->middleware('page.permission:drivers,edit')->name('driver.inspection.store');
+    Route::post('/driver-portal/incidents', [DriverController::class, 'storeIncident'])
+        ->middleware('page.permission:drivers,edit')->name('driver.incident.store');
+    Route::post('/driver-portal/expenses', [DriverController::class, 'storeExpense'])
+        ->middleware('page.permission:drivers,edit')->name('driver.expense.store');
+    Route::post('/driver-portal/documents', [DriverController::class, 'storeDocument'])
+        ->middleware('page.permission:drivers,edit')->name('driver.document.store');
+    Route::delete('/driver-portal/documents/{document}', [DriverController::class, 'destroyDocument'])
+        ->middleware('page.permission:drivers,edit')->name('driver.document.destroy');
+    Route::post('/driver-portal/{delivery}/stops/{stop}/arrive', [DriverController::class, 'arriveStop'])
+        ->middleware('page.permission:drivers,edit')->name('driver.stop.arrive');
+    Route::post('/driver-portal/{delivery}/stops/{stop}/outcome', [DriverController::class, 'completeStop'])
+        ->middleware('page.permission:drivers,edit')->name('driver.stop.update');
+
     Route::get('/conductor-portal', [ConductorController::class, 'index'])
         ->middleware('page.permission:drivers,view')->name('conductor.portal');
+    Route::post('/conductor-portal/load-checks', [ConductorController::class, 'storeLoadCheck'])
+        ->middleware('page.permission:drivers,edit')->name('conductor.load-check.store');
+    Route::post('/conductor-portal/collections', [ConductorController::class, 'storeCollection'])
+        ->middleware('page.permission:drivers,edit')->name('conductor.collection.store');
+    Route::post('/conductor-portal/collections/{collection}/remit', [ConductorController::class, 'remitCollection'])
+        ->middleware('page.permission:drivers,edit')->name('conductor.collection.remit');
+    Route::post('/conductor-portal/returns', [ConductorController::class, 'storeReturn'])
+        ->middleware('page.permission:drivers,edit')->name('conductor.return.store');
+    Route::post('/conductor-portal/returns/{return}/resolve', [ConductorController::class, 'resolveReturn'])
+        ->middleware('page.permission:drivers,edit')->name('conductor.return.resolve');
     Route::post('/conductor-portal/{delivery}/report', [ConductorController::class, 'storeReport'])
         ->middleware('page.permission:drivers,edit')->name('conductor.report');
 
@@ -92,6 +126,8 @@ Route::middleware(['auth', 'verified', 'module.access:LOG'])->prefix('dashboard/
     // Tracking & Live Map
     Route::get('/tracking', [TrackingController::class, 'index'])
         ->middleware('page.permission:tracking,view')->name('tracking');
+    Route::patch('/tracking/delivery-simulation', [TrackingController::class, 'updateDeliverySimulation'])
+        ->middleware('page.permission:tracking,edit')->name('tracking.delivery-simulation');
 
     // Driver profile update
     Route::post('/driver/profile', [DriverController::class, 'updateProfile'])

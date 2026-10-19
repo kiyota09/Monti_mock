@@ -16,6 +16,7 @@ use App\Http\Controllers\Client\AccessControlController;
 use App\Http\Controllers\Client\ClientReceivingController;
 use App\Http\Controllers\Client\ClientSupportController;
 use App\Http\Controllers\Client\ClientTrackingController;
+use App\Http\Controllers\Client\ClientNotificationController;
 use App\Http\Controllers\Client\OrdersController;
 use Illuminate\Support\Facades\Route;
 
@@ -115,6 +116,12 @@ Route::middleware(['auth:client', 'client.access'])->prefix('partner')->name('cl
     // Receiving (delivery confirmation)
     Route::get('/receiving', [ClientReceivingController::class, 'index'])->name('receiving');
     Route::post('/receiving/{order}/mark', [ClientReceivingController::class, 'markReceived'])->name('receiving.mark');
+    Route::post('/receiving/{delivery}/rate', [ClientReceivingController::class, 'rate'])->name('receiving.rate');
+
+    // In-portal notifications (logistics / delivery alerts)
+    Route::get('/notifications', [ClientNotificationController::class, 'index'])->name('notifications.index');
+    Route::patch('/notifications/{notification}/read', [ClientNotificationController::class, 'read'])->name('notifications.read');
+    Route::post('/notifications/read-all', [ClientNotificationController::class, 'readAll'])->name('notifications.read-all');
     // Change password (available to every sign-in, even when the Profile page
     // has been removed from a representative's granted pages).
     Route::post('/password', [ClientPasswordController::class, 'update'])->name('password.update');

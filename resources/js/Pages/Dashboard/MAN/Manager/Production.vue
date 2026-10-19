@@ -57,11 +57,15 @@ const confirmModal   = ref(false);
 const confirmLabel   = ref('');
 const confirmSub     = ref('');
 const confirmAction  = ref(null);
+const confirmAccept  = ref('Yes, continue');
+const confirmTone    = ref('danger');
 
-const askConfirm = (label, sub, action) => {
+const askConfirm = (label, sub, action, acceptLabel = 'Yes, continue', tone = 'danger') => {
     confirmLabel.value   = label;
     confirmSub.value     = sub;
     confirmAction.value  = action;
+    confirmAccept.value  = acceptLabel;
+    confirmTone.value    = tone;
     confirmModal.value   = true;
 };
 const runConfirm = () => {
@@ -118,12 +122,16 @@ const passSqueezer = (squeezerId) =>
 const passIron = (ironId) =>
     router.post(route('man.gates.dyeing.pass-iron', ironId), { action: 'pack' });
 
-const pushToLogistics = (packageId) => {
-    if (confirm('Send this package to logistics?')) {
-        router.post(route('man.gates.finishing.push-to-logistics', packageId), {}, {
+const pushToLogistics = (pkg) => {
+    askConfirm(
+        'Push to Logistics?',
+        `Send package ${pkg.code} to the logistics module? This action cannot be undone.`,
+        () => router.post(route('man.gates.finishing.push-to-logistics', pkg.id), {}, {
             preserveScroll: true,
-        });
-    }
+        }),
+        'Yes, Push',
+        'success',
+    );
 };
 </script>
 
@@ -473,18 +481,19 @@ const pushToLogistics = (packageId) => {
                                 <p class="text-xs text-gray-500 dark:text-gray-400">Operator: {{ pkg.operator }}</p>
                             </div>
                             <div class="mt-auto flex flex-col sm:flex-row gap-2">
+                                <button v-if="canEditProduction && pkg.status === 'checked'"
+                                    @click="pushToLogistics(pkg)"
+                                    class="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl shadow-lg shadow-emerald-500/25 transition hover:-translate-y-0.5 active:scale-95"
+                                >
+                                    <Truck class="w-3.5 h-3.5" /> Push to Logistics
+                                </button>
                                 <Link
+                                    v-else
                                     :href="route('man.assignments.index')"
                                     class="flex-1 flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl transition hover:-translate-y-0.5 active:scale-95"
                                 >
                                     <ClipboardList class="w-3.5 h-3.5" /> Assignments
                                 </Link>
-                                <button v-if="canEditProduction && pkg.status === 'checked'"
-                                    @click="pushToLogistics(pkg.id)"
-                                    class="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl shadow-lg shadow-emerald-500/25 transition hover:-translate-y-0.5 active:scale-95"
-                                >
-                                    <Truck class="w-3.5 h-3.5" /> Push to Logistics
-                                </button>
                             </div>
                         </div>
                     </TransitionGroup>
@@ -521,9 +530,12 @@ const pushToLogistics = (packageId) => {
                         <button
                             @click="runConfirm"
                             type="button"
-                            class="flex-1 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wide shadow-lg shadow-rose-500/25 transition active:scale-95"
+                            class="flex-1 py-2.5 rounded-2xl text-white text-xs font-black uppercase tracking-wide shadow-lg transition active:scale-95"
+                            :class="confirmTone === 'success'
+                                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/25'
+                                : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/25'"
                         >
-                            Yes, Reject
+                            {{ confirmAccept }}
                         </button>
                     </div>
                 </div>

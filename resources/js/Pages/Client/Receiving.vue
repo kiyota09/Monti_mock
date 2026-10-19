@@ -133,12 +133,24 @@
                                         </button>
                                     </td>
                                     <td class="px-8 py-6 text-right">
-                                        <button @click="markAsReceived(delivery)"
-                                            :disabled="delivery.status === 'delivered' || processing[delivery.id]"
-                                            class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                            <Loader2 v-if="processing[delivery.id]" class="h-4 w-4 animate-spin inline mr-1" />
-                                            {{ delivery.status === 'delivered' ? 'Received' : 'Confirm Receipt' }}
-                                        </button>
+                                        <div class="flex flex-col items-end gap-2">
+                                            <button @click="markAsReceived(delivery)"
+                                                :disabled="delivery.status === 'delivered' || processing[delivery.id]"
+                                                class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <Loader2 v-if="processing[delivery.id]" class="h-4 w-4 animate-spin inline mr-1" />
+                                                {{ delivery.status === 'delivered' ? 'Received' : 'Confirm Receipt' }}
+                                            </button>
+                                            <template v-if="delivery.status === 'delivered'">
+                                                <div v-if="delivery.rating" class="flex items-center gap-0.5">
+                                                    <Star v-for="i in 5" :key="i" :class="i <= delivery.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300 dark:text-zinc-600'" class="h-3.5 w-3.5" />
+                                                    <span class="ml-1 text-[10px] font-black text-gray-400">{{ delivery.rating }}/5</span>
+                                                </div>
+                                                <button v-else @click="openRatingModal(delivery)"
+                                                    class="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-600 hover:text-amber-700 hover:underline">
+                                                    <Star class="h-3.5 w-3.5" /> Rate delivery
+                                                </button>
+                                            </template>
+                                        </div>
                                     </td>
                                 </tr>
                                 <tr v-if="filteredDeliveries.length === 0">
@@ -188,6 +200,50 @@
                 </Transition>
             </Teleport>
 
+            <!-- Rating Modal -->
+            <Teleport to="body">
+                <Transition name="modal">
+                    <div v-if="showRatingModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeRatingModal">
+                        <div class="bg-white dark:bg-zinc-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+                            <div class="relative px-6 py-5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white flex justify-between items-center overflow-hidden">
+                                <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15 blur-2xl animate-float" />
+                                <div class="relative">
+                                    <h3 class="font-black text-lg tracking-tight">Rate this delivery</h3>
+                                    <p class="text-xs text-amber-50 font-mono">{{ ratingTarget?.delivery_number }}</p>
+                                </div>
+                                <button @click="closeRatingModal" class="relative flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 text-white hover:bg-white/35 hover:rotate-90 transition-all"><X class="h-5 w-5" /></button>
+                            </div>
+                            <div class="p-6 space-y-5">
+                                <div class="text-center">
+                                    <p class="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-2">Overall experience</p>
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button v-for="i in 5" :key="i" type="button"
+                                            @mouseenter="hoverRating = i" @mouseleave="hoverRating = 0" @click="ratingForm.rating = i"
+                                            class="transition-transform hover:scale-110 active:scale-95">
+                                            <Star :class="i <= (hoverRating || ratingForm.rating) ? 'fill-amber-400 text-amber-400' : 'text-gray-300 dark:text-zinc-600'" class="h-9 w-9" />
+                                        </button>
+                                    </div>
+                                    <p class="mt-2 text-xs font-black text-gray-500">{{ ratingLabels[(hoverRating || ratingForm.rating) - 1] || 'Tap a star to rate' }}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Comment (optional)</label>
+                                    <textarea v-model="ratingForm.rating_comment" rows="3" placeholder="How was the delivery experience?"
+                                        class="w-full rounded-xl border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none"></textarea>
+                                </div>
+                                <div class="flex gap-3">
+                                    <button @click="closeRatingModal" class="flex-1 py-3 bg-gray-100 dark:bg-zinc-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-200 active:scale-95 transition">Cancel</button>
+                                    <button @click="submitRating" :disabled="!ratingForm.rating || ratingForm.processing"
+                                        class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/30 hover:scale-[1.02] active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+                                        <Loader2 v-if="ratingForm.processing" class="h-4 w-4 animate-spin" />
+                                        Submit rating
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </Transition>
+            </Teleport>
+
             <!-- Toast Notification -->
             <Transition name="toast">
                 <div v-if="toast.show" class="fixed bottom-8 right-8 z-50 px-6 py-3 rounded-2xl shadow-xl text-white font-bold text-sm ring-1 ring-white/20"
@@ -201,9 +257,9 @@
 
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
-import { Truck, RefreshCw, Search, Package, Loader2, X } from 'lucide-vue-next';
+import { Truck, RefreshCw, Search, Package, Loader2, X, Star } from 'lucide-vue-next';
 
 const props = defineProps({
     deliveries: {
@@ -218,6 +274,39 @@ const processing = ref({});
 const toast = ref({ show: false, type: 'success', message: '' });
 const showPackagesModal = ref(false);
 const selectedDelivery = ref(null);
+
+const showRatingModal = ref(false);
+const ratingTarget = ref(null);
+const hoverRating = ref(0);
+const ratingLabels = ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
+const ratingForm = useForm({ rating: 0, rating_comment: '' });
+
+const openRatingModal = (delivery) => {
+    ratingTarget.value = delivery;
+    ratingForm.reset();
+    ratingForm.clearErrors();
+    hoverRating.value = 0;
+    showRatingModal.value = true;
+};
+
+const closeRatingModal = () => {
+    showRatingModal.value = false;
+    ratingTarget.value = null;
+    ratingForm.reset();
+};
+
+const submitRating = () => {
+    if (!ratingTarget.value || !ratingForm.rating) return;
+    ratingForm.post(route('client.receiving.rate', ratingTarget.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showToast('success', 'Thank you for rating this delivery!');
+            closeRatingModal();
+            refreshData();
+        },
+        onError: () => showToast('error', 'Failed to submit rating.'),
+    });
+};
 
 const filteredDeliveries = computed(() => {
     let list = props.deliveries;

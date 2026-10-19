@@ -161,8 +161,45 @@
                             class="px-8 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center gap-2">
                             <Loader2 v-if="processing" class="h-4 w-4 animate-spin" />
                             <Send v-else class="h-4 w-4" />
-                            {{ processing ? 'Processing...' : 'Pass to Dispatch' }}
+                            {{ processing ? 'Staging...' : 'Stage for Dispatch' }}
                         </button>
+                    </div>
+                </div>
+
+                <!-- Staged packages awaiting a truck load -->
+                <div class="animate-fade-up bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden" style="animation-delay:160ms">
+                    <div class="p-6 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-emerald-50 to-transparent dark:from-emerald-900/20 flex flex-wrap items-center gap-2">
+                        <Truck class="h-5 w-5 text-emerald-600" />
+                        <h2 class="text-sm font-black uppercase tracking-widest">Staged · Awaiting Load</h2>
+                        <span class="rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-black px-2.5 py-1">{{ staged.length }}</span>
+                        <Link :href="route('logistics.dispatch.index')" class="ml-auto inline-flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-emerald-700 active:scale-95 transition">
+                            <Send class="h-3.5 w-3.5" /> Build truck load
+                        </Link>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-zinc-800">
+                                <tr>
+                                    <th class="px-6 py-4">Package #</th>
+                                    <th class="px-6 py-4">Product</th>
+                                    <th class="px-6 py-4">Destination Client</th>
+                                    <th class="px-6 py-4 text-center">Quantity</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-50 dark:divide-zinc-800">
+                                <tr v-for="pkg in staged" :key="pkg.id" class="text-sm hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
+                                    <td class="px-6 py-3 font-mono text-sm font-black text-gray-900 dark:text-white">{{ pkg.package_number }}</td>
+                                    <td class="px-6 py-3 font-bold text-gray-700 dark:text-gray-200">{{ pkg.product?.name || '—' }}</td>
+                                    <td class="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{{ pkg.client_name || 'Unassigned' }}</td>
+                                    <td class="px-6 py-3 text-center font-bold text-gray-900 dark:text-white">{{ pkg.quantity }} pcs</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div v-if="staged.length === 0" class="px-6 py-10 text-center">
+                            <Truck class="mx-auto h-9 w-9 text-gray-200 dark:text-zinc-700" />
+                            <p class="mt-2 text-sm font-bold text-gray-400">Nothing staged yet.</p>
+                            <p class="text-xs text-gray-400">Select packages above and stage them for dispatch.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -180,9 +217,9 @@
 
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, Link } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
-import { Package, RefreshCw, Search, Send, Loader2, Sparkles, CheckSquare } from 'lucide-vue-next';
+import { Package, RefreshCw, Search, Send, Loader2, Sparkles, CheckSquare, Truck } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
@@ -190,6 +227,10 @@ const canEditLoad = computed(() => canEdit('LOG', 'load'));
 
 const props = defineProps({
     packages: {
+        type: Array,
+        default: () => []
+    },
+    staged: {
         type: Array,
         default: () => []
     }
@@ -254,7 +295,7 @@ const passToDispatch = async () => {
     processing.value = true;
     try {
         await router.post(route('logistics.load.pass'), { package_ids: selectedIds.value });
-        showToast('success', `${selectedIds.value.length} package(s) passed to dispatch.`);
+        showToast('success', `${selectedIds.value.length} package(s) staged for dispatch.`);
         selectedIds.value = [];
         selectAllFlag.value = false;
         refreshData();

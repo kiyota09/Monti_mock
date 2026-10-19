@@ -28,6 +28,21 @@ class Conductor extends Model
 
     public function reports()
     {
-        return $this->hasMany(ConductorReport::class);
+        return $this->hasMany(ConductorReport::class)->latest();
+    }
+
+    public function loadChecks()
+    {
+        return $this->hasMany(ConductorLoadCheck::class)->latest('checked_at');
+    }
+
+    public function collections()
+    {
+        return $this->hasMany(ConductorCollection::class)->latest('collected_at');
+    }
+
+    public function returns()
+    {
+        return $this->hasMany(ConductorReturn::class)->latest('reported_at');
     }
 }

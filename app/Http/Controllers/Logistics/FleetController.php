@@ -22,6 +22,7 @@ class FleetController extends Controller
             'model' => 'required',
             'year' => 'required|integer|min:1990|max:' . date('Y'),
             'mileage' => 'nullable|numeric',
+            'max_packages' => 'nullable|integer|min:1|max:1000',
             'status' => 'required|in:available,in_use,under_maintenance,retired',
             'remarks' => 'nullable|string',
         ]);
@@ -34,6 +35,7 @@ class FleetController extends Controller
         $validated = $request->validate([
             'status' => 'required|in:available,in_use,under_maintenance,retired',
             'mileage' => 'nullable|numeric',
+            'max_packages' => 'nullable|integer|min:1|max:1000',
             'remarks' => 'nullable|string',
         ]);
         $truck->update($validated);

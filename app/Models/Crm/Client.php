@@ -113,6 +113,12 @@ class Client extends Authenticatable
         return $this->hasMany(CrmMeeting::class);
     }
 
+    /** In-portal notifications shown in the client bell. */
+    public function clientNotifications()
+    {
+        return $this->hasMany(ClientNotification::class)->latest('id');
+    }
+
     public function feedback()
     {
         return $this->hasMany(CrmFeedback::class);

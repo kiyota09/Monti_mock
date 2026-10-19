@@ -13,6 +13,7 @@ import { usePartnerCallCenter } from '@/composables/crm/usePartnerCallCenter';
 const props = defineProps({
     messages: { type: Array, default: () => [] },
     callLogs: { type: Array, default: () => [] },
+    callsEnabled: { type: Boolean, default: true },
 });
 
 const SELF = 'client';
@@ -233,6 +234,7 @@ const unsend = async (m, scope) => {
 };
 
 const startCall = async (type) => {
+    if (!props.callsEnabled) return;
     sendError.value = '';
     const message = await partnerCall.startOutgoing({ type });
     if (message) mergeMessages([message]);
@@ -328,11 +330,11 @@ onUnmounted(() => {
                             <p class="truncate text-sm font-bold text-gray-900 dark:text-white">Monti Textiles</p>
                             <p class="truncate text-xs text-gray-500 dark:text-gray-400">CRM Support Team</p>
                         </div>
-                        <button @click="startCall('audio')" title="Voice call"
+                        <button v-if="callsEnabled" @click="startCall('audio')" title="Voice call"
                             class="flex h-9 w-9 items-center justify-center rounded-full text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/50">
                             <Phone class="h-4 w-4" />
                         </button>
-                        <button @click="startCall('video')" title="Video call"
+                        <button v-if="callsEnabled" @click="startCall('video')" title="Video call"
                             class="flex h-9 w-9 items-center justify-center rounded-full text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/50">
                             <Video class="h-4 w-4" />
                         </button>

@@ -8,7 +8,7 @@ import {
 } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
 import ActivityModal from '@/Components/crm/pipeline/ActivityModal.vue';
-import { activityStateOf, orderStages } from '@/composables/crm/usePipeline';
+import { activityStateOf, orderStages, canAdvanceTo, nextStageOf } from '@/composables/crm/usePipeline';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 
@@ -54,19 +54,19 @@ const save = () => {
 const moveTo = (stage) => {
     if (!canEditOpp.value || Number(stage.id) === Number(o.value.stage_id)) return;
     if (!canMoveTo(stage)) {
-        toast.error(`Deals only move forward — “${stage.name}” is behind “${currentStage.value?.name}”. Move it to a Lost stage to close it.`);
+        const next = nextStageOf(orderedStages.value, o.value.stage_id);
+        toast.error(
+            next
+                ? `This deal must move to "${next.name}" next before it can reach "${stage.name}".`
+                : `This deal cannot move to "${stage.name}" from a closed stage.`,
+        );
         return;
     }
     router.post(route('crm.opportunities.move', o.value.id), { stage_id: stage.id }, { preserveScroll: true });
 };
 
-// Forward-only rule: same/higher default probability, or a Lost stage.
-const canMoveTo = (stage) => {
-    if (!currentStage.value) return true;
-    if (stage.is_lost) return true;
-    if (Number(stage.id) === Number(o.value.stage_id)) return true;
-    return Number(stage.default_probability ?? 0) >= Number(currentStage.value.default_probability ?? 0);
-};
+// Sequential rule: stay put, go to Lost, or advance to the immediate next stage.
+const canMoveTo = (stage) => canAdvanceTo(orderedStages.value, o.value.stage_id, stage);
 
 const activeTab = ref('notes');
 const showActivity = ref(false);
@@ -112,7 +112,7 @@ const cancelAct = (a) => router.post(route('crm.activities.cancel', a.id), {}, {
                             :key="s.id"
                             @click="moveTo(s)"
                             :disabled="!canEditOpp || !canMoveTo(s)"
-                            :title="Number(s.id) === Number(o.stage_id) ? 'Current stage' : (canMoveTo(s) ? `Move to ${s.name}` : `${s.name} is behind the current stage`)"
+                            :title="Number(s.id) === Number(o.stage_id) ? 'Current stage' : (canMoveTo(s) ? `Move to ${s.name}` : (nextStageOf(orderedStages, o.stage_id) ? `Move to ${nextStageOf(orderedStages, o.stage_id).name} first` : `${s.name} cannot be reached from a closed stage`))"
                             :class="[
                                 'flex shrink-0 items-center gap-1 px-4 py-2.5 text-[11px] font-black uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40',
                                 Number(s.id) === Number(o.stage_id)

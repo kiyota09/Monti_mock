@@ -157,21 +157,21 @@ class PrimaryContactFullAccessTest extends TestCase
             ->assertOk();
     }
 
-    public function test_owner_loses_management_when_another_contact_is_primary(): void
+    public function test_owner_keeps_management_when_another_contact_is_primary(): void
     {
-        // Owner email (owner@full.test) maps to no contact; a different contact
-        // is primary → the first account created no longer manages.
+        // The account-owner login remains the account administrator even when a
+        // different CRM contact is flagged as the primary representative.
         [$client] = $this->makeRep(['email' => 'someone-else@full.test', 'is_primary' => true]);
 
         $this->actingAs($client, 'client')
             ->get('partner/representatives')
-            ->assertStatus(403);
+            ->assertOk();
     }
 
-    public function test_owner_is_restricted_to_the_pages_granted_to_its_matching_contact(): void
+    public function test_owner_is_not_restricted_by_contact_page_grants(): void
     {
-        // The owner (owner@full.test) maps to a non-primary contact granted only
-        // dashboard + orders → those are the only pages the owner may open.
+        // Contact-level grants apply to delegated representatives only; the
+        // company-owner login always has the full portal.
         [$client] = $this->makeRep([
             'email'        => 'owner@full.test',
             'is_primary'   => false,
@@ -179,8 +179,7 @@ class PrimaryContactFullAccessTest extends TestCase
         ]);
 
         $this->actingAs($client, 'client')->get('partner/dashboard')->assertOk();
-        $this->actingAs($client, 'client')->get('partner/products')->assertStatus(403);
-        // …and it is never the primary, so the management pages are closed too.
-        $this->actingAs($client, 'client')->get('partner/representatives')->assertStatus(403);
+        $this->actingAs($client, 'client')->get('partner/products')->assertOk();
+        $this->actingAs($client, 'client')->get('partner/representatives')->assertOk();
     }
 }

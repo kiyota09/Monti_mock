@@ -24,4 +24,29 @@ class Driver extends Model
     {
         return $this->hasMany(Delivery::class, 'driver_id');
     }
+
+    public function dutyLogs()
+    {
+        return $this->hasMany(DriverDutyLog::class)->latest('started_at');
+    }
+
+    public function inspections()
+    {
+        return $this->hasMany(DriverVehicleInspection::class)->latest('inspected_at');
+    }
+
+    public function incidents()
+    {
+        return $this->hasMany(DriverIncident::class)->latest('reported_at');
+    }
+
+    public function expenses()
+    {
+        return $this->hasMany(DriverExpense::class)->latest('spent_at');
+    }
+
+    public function documents()
+    {
+        return $this->hasMany(DriverDocument::class)->latest();
+    }
 }

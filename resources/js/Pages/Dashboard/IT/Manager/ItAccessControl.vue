@@ -2,12 +2,14 @@
 import { ref, computed, watch, onUnmounted } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Search, X, ShieldCheck, ShieldOff, PauseCircle, RotateCcw, Save, Users, Bell, CheckCircle2, Ban, Lock } from 'lucide-vue-next';
+import { Search, X, ShieldCheck, ShieldOff, PauseCircle, RotateCcw, Save, Users, Bell, CheckCircle2, Ban, Lock, Truck } from 'lucide-vue-next';
 
 const props = defineProps({
     users: { type: Array, default: () => [] },
     modules: { type: Array, default: () => [] },
     modulePages: { type: Object, default: () => ({}) },
+    manRolePages: { type: Object, default: () => ({}) },
+    manOverviewPages: { type: Object, default: () => ({}) },
     userPagePerms: { type: Object, default: () => ({}) },
     userModules: { type: Object, default: () => ({}) },
     assignableRoles: { type: Array, default: () => [] },
@@ -100,6 +102,19 @@ const manDeptOf = (u) => {
 const manDeptLabel = (dept) => (MAN_DEPT_LABELS[dept] ? `${MAN_DEPT_LABELS[dept]} Dept` : dept);
 const formatManRole = (role) => (role ? String(role).replace(/_/g, ' ') : '');
 
+// ── LOG plant-staff labels (driver / conductor) ─────────────────────
+// Backend resolves users.log_role (falling back to the driver/conductor
+// records) and only returns a value for LOG accounts.
+const logRoleLabel = (u) => {
+    if (!u || String(u.role || '').toUpperCase() !== 'LOG') return '';
+    if (u.log_role === 'driver') return 'Driver';
+    if (u.log_role === 'conductor') return 'Conductor';
+    return '';
+};
+const logRolePill = (u) => (u?.log_role === 'driver'
+    ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300');
+
 // All modules handled by an employee: explicit grants first, fallback to
 // root_module / role so staff with no rows still show their home module.
 const userModuleList = (u) => {
@@ -132,6 +147,22 @@ const isPageLocked = (moduleKey) => {
 };
 
 const requestsForUser = (userId) => (props.pendingRequests || []).filter((r) => Number(r.target_user_id) === Number(userId));
+
+// Manufacturing is role-aware: a plant staff employee only sees the pages
+// their role actually handles (e.g. Dyeing Lab Chemist -> Shades, Tests &
+// CoA, Lab Inventory, Bulk Transfer, History, Recipes). Supervisors and
+// role-less MAN accounts keep the shared overview.
+const pagesForModule = (module, user = managing.value) => {
+    const key = String(module || '').toUpperCase();
+    if (key === 'MAN') {
+        const role = user?.manufacturing_role;
+        if (role && !user?.is_manufacturing_supervisor) {
+            return props.manRolePages?.[role] || props.manOverviewPages || {};
+        }
+        return props.manOverviewPages || props.modulePages?.[module] || props.modulePages?.MAN || {};
+    }
+    return props.modulePages?.[module] || props.modulePages?.[key] || {};
+};
 
 const openManage = (user) => {
     managing.value = user;
@@ -168,14 +199,16 @@ const openManage = (user) => {
     // A higher-up's locked root can never be disabled: legacy 'disabled'
     // rows there open as 'view' so DISABLE is never the selected state.
     const locked = lockedRootOf(user);
-    Object.entries(props.modulePages).forEach(([module, pages]) => {
-        grants[module] = {};
-        const isLockedModule = !!locked && String(module).toUpperCase() === locked;
-        Object.entries(pages || {}).forEach(([key]) => {
+    Object.keys(props.modulePages).forEach((module) => {
+        const moduleKey = String(module).toUpperCase();
+        const pages = pagesForModule(moduleKey, user);
+        grants[moduleKey] = {};
+        const isLockedModule = !!locked && moduleKey === locked;
+        Object.keys(pages || {}).forEach((key) => {
             const pageKey = String(key).toLowerCase();
-            let lvl = existing[module]?.[pageKey] || 'disabled';
+            let lvl = existing[moduleKey]?.[pageKey] || 'disabled';
             if (isLockedModule && lvl === 'disabled') lvl = 'view';
-            grants[module][pageKey] = lvl;
+            grants[moduleKey][pageKey] = lvl;
         });
     });
     pageGrants.value = grants;
@@ -222,7 +255,8 @@ const filteredUsers = computed(() => {
             u.email.toLowerCase().includes(q) ||
             (u.employee_id || '').toLowerCase().includes(q) ||
             (u.manufacturing_role || '').toLowerCase().includes(q) ||
-            (manDeptOf(u) || '').toLowerCase().includes(q)
+            (manDeptOf(u) || '').toLowerCase().includes(q) ||
+            (logRoleLabel(u) || '').toLowerCase().includes(q)
         );
     }
     if (roleFilter.value) list = list.filter((u) => userModuleList(u).includes(String(roleFilter.value).toUpperCase()));
@@ -371,18 +405,17 @@ const currentModule = computed(() => {
 
 // Normalized [{key, label}] rows for the active module tab.
 const currentPages = computed(() => {
-    const pages = props.modulePages[currentModule.value] || {};
+    const pages = pagesForModule(currentModule.value);
     return Object.entries(pages).map(([key, val]) => ({
         key: String(key).toLowerCase(),
         label: typeof val === 'string' ? val : val.label,
     }));
 });
 
-// Plant-staff trap guard: every MAN role workspace (including its Dashboard
-// tab) is gated by the Production page on the backend, so enabling Dashboard
-// while Production stays DISABLED leaves the account with no openable page —
-// login bounces into a "production disabled" 403. Supervisors are exempt:
-// their overview dashboard is dashboard-gated and works standalone.
+// The staff landing (/dashboard/man/staff) requires the Dashboard page and
+// redirects into the role dashboard. If IT enables role pages but leaves
+// Dashboard DISABLED, the account can still open those pages by URL but the
+// normal login entry shows the limited-access notice.
 const manPlantDashboardWarning = computed(() => {
     const u = managing.value;
     if (!u || u.role !== 'MAN' || u.position !== 'staff' || u.is_manufacturing_supervisor) return false;
@@ -390,8 +423,8 @@ const manPlantDashboardWarning = computed(() => {
     const gKey = Object.keys(pageGrants.value).find((k) => String(k).toLowerCase() === 'man');
     const grants = (gKey && pageGrants.value[gKey]) || {};
     const dashboardOn = ['view', 'edit'].includes(grants.dashboard);
-    const productionOn = ['view', 'edit'].includes(grants.production);
-    return dashboardOn && !productionOn;
+    const anyRolePageOn = Object.entries(grants).some(([key, level]) => key !== 'dashboard' && ['view', 'edit'].includes(level));
+    return anyRolePageOn && !dashboardOn;
 });
 
 const setLevel = (page, level) => {
@@ -524,6 +557,11 @@ onUnmounted(() => {
                                 <div class="mt-1 text-xs text-slate-500 capitalize">{{ displayPositionLabel(u) }}</div>
                                 <span v-if="u.is_manufacturing_supervisor" class="ml-1.5 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-black uppercase">Supervisor{{ (u.supervisor_department || manDeptOf(u)) ? ` · ${u.supervisor_department || manDeptOf(u)}` : '' }}</span>
                                 <span v-else-if="u.role === 'MAN' && u.manufacturing_role" class="ml-1.5 text-xs text-slate-500 capitalize">· {{ formatManRole(u.manufacturing_role) }}</span>
+                                <span v-if="logRoleLabel(u)" :class="logRolePill(u)"
+                                    class="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide">
+                                    <component :is="u.log_role === 'driver' ? Truck : Users" class="w-3 h-3" />
+                                    {{ logRoleLabel(u) }}
+                                </span>
                                 <div v-if="u.role === 'MAN'" class="mt-1">
                                     <span v-if="manDeptOf(u)" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-[10px] font-black uppercase tracking-wide">
                                         {{ manDeptLabel(manDeptOf(u)) }}
@@ -738,8 +776,9 @@ onUnmounted(() => {
                         <div v-if="!currentModule" class="p-4 text-xs text-slate-400 font-bold">No page modules available for this employee.</div>
                         <template v-else>
                         <div v-if="manPlantDashboardWarning" class="mb-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-[11px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
-                            Dashboard alone opens nothing for plant staff — every role workspace (including its Dashboard tab) requires the Production page.
-                            Enable Production (VIEW or EDIT) as well, or this account lands on a limited-access notice after login.
+                            Role pages are enabled but Dashboard is DISABLED. The employee can open those pages by URL,
+                            but the normal staff landing shows a limited-access notice. Enable Dashboard (VIEW or EDIT)
+                            so the account can sign in to its plant workspace.
                         </div>
                         <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                             <table class="w-full text-left">

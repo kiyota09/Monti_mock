@@ -38,4 +38,44 @@ class WarehousePackage extends Model
     {
         return $this->belongsTo(User::class, 'pushed_by');
     }
+
+    /** Loads (deliveries) this package has been placed on. */
+    public function deliveries()
+    {
+        return $this->belongsToMany(\App\Models\Logistics\Delivery::class, 'delivery_packages', 'warehouse_package_id', 'delivery_id')
+            ->withPivot('delivery_stop_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Business client this package is destined for. Resolved through the
+     * manufacturing order to its sales order (or purchase order) client.
+     */
+    public function destinationClientId(): ?int
+    {
+        $mo = $this->manufacturingOrder;
+
+        if (! $mo) {
+            return null;
+        }
+
+        $clientId = $mo->relationLoaded('salesOrder')
+            ? $mo->salesOrder?->client_id
+            : $mo->salesOrder()->value('client_id');
+
+        if (! $clientId) {
+            $clientId = $mo->relationLoaded('purchaseOrder')
+                ? $mo->purchaseOrder?->client_id
+                : $mo->purchaseOrder()->value('client_id');
+        }
+
+        return $clientId ? (int) $clientId : null;
+    }
+
+    public function destinationClient(): ?\App\Models\Crm\Client
+    {
+        $id = $this->destinationClientId();
+
+        return $id ? \App\Models\Crm\Client::find($id) : null;
+    }
 }

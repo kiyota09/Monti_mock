@@ -549,6 +549,16 @@ class User extends Authenticatable
         return $this->hasOne(ScmAccessPermission::class);
     }
 
+    public function driver()
+    {
+        return $this->hasOne(\App\Models\Logistics\Driver::class);
+    }
+
+    public function conductor()
+    {
+        return $this->hasOne(\App\Models\Logistics\Conductor::class);
+    }
+
     public function supervisorRoles()
     {
         return $this->hasMany(ManufacturingSupervisorRole::class);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Concerns\PresentsClientChat;
 use App\Http\Controllers\Controller;
 use App\Models\Crm\Client;
+use App\Models\Core\AppSetting;
 use App\Models\Crm\ClientCallSignal;
 use App\Models\Crm\ClientMessage;
 use App\Models\Crm\ClientMessageReaction;
@@ -171,7 +172,19 @@ class MessageController extends Controller
             'messages' => $messages,
             'callLogs' => $callLogs,
             'totalUnread' => (int) $unreadCounts->sum(),
+            'callsEnabled' => AppSetting::getBool('calls_enabled', true),
         ]);
+    }
+
+    public function updateCallSettings(Request $request)
+    {
+        $data = $request->validate(['calls_enabled' => 'required|boolean']);
+        AppSetting::setBool('calls_enabled', (bool) $data['calls_enabled']);
+
+        return back()->with(
+            'message',
+            $data['calls_enabled'] ? 'Calling has been enabled.' : 'Calling has been disabled.',
+        );
     }
 
     public function feed(Request $request, Client $client)
@@ -373,6 +386,10 @@ class MessageController extends Controller
 
     public function startCall(Request $request, Client $client)
     {
+        if (! AppSetting::getBool('calls_enabled', true)) {
+            return response()->json(['message' => 'Calling is currently disabled.'], 403);
+        }
+
         $data = $request->validate(['type' => 'required|in:audio,video']);
 
         $message = ClientMessage::create([
