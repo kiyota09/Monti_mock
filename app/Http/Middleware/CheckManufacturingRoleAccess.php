@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use Closure;
+use App\Support\ManufacturingRoles;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -29,34 +30,9 @@ class CheckManufacturingRoleAccess
     /**
      * Maps each supervisor_department value to the manufacturing_role slugs it covers.
      *
-     * Keep this in sync with User::getSupervisedRolesAttribute and
-     * ManAccessController::getDepartmentFromRole.
+     * Sourced from App\Support\ManufacturingRoles (single source of truth).
      */
-    protected array $departmentRoles = [
-        'knitting' => [
-            'knitting_yarn',
-            'knitting_mechanic',
-        ],
-        'dyeing' => [
-            'dyeing_color',
-            'dyeing_fabric_softener',
-            'dyeing_squeezer',
-            'dyeing_ironing',
-            'dyeing_packaging',
-            'dyeing_lab_chemist',
-        ],
-        'finishing' => [
-            'checker_quality',
-        ],
-        'maintenance' => [
-            'maintenance_checker',
-            'pollution_control_operator',
-            'safety_officer',
-        ],
-        'boiler' => [
-            'boiler_operator',
-        ],
-    ];
+    protected array $departmentRoles = ManufacturingRoles::DEPARTMENTS;
 
     /**
      * Handle an incoming request.

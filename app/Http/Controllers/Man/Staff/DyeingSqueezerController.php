@@ -16,18 +16,25 @@ class DyeingSqueezerController extends ManufacturingStaffController
         // Checker gate: only softener jobs whose fabric the quality checker
         // already approved to 'squeezer' may be squeezed. Recorded-but-
         // unapproved work stays with the checker, never here.
-        $pendingCount = SoftenerJob::where('status', 'softened')
-            ->whereHas('fabric', fn ($q) => $q->where('status', 'squeezer'))
-            ->count();
+        $pendingQuery = SoftenerJob::where('status', 'softened')
+            ->whereHas('fabric', function ($q) {
+                $q->where('status', 'squeezer');
+                $this->scopeToAssignment($q);
+            });
+        $pendingCount = $pendingQuery->count();
         $recentJobs = SqueezerJob::with('softenerJob.fabric')
             ->where('operator_id', $this->staff()->id)
             ->latest()
             ->take(10)
             ->get();
 
-        $nextQueue = SoftenerJob::with('fabric')
+        $nextQueueQuery = SoftenerJob::with('fabric')
             ->where('status', 'softened')
-            ->whereHas('fabric', fn ($q) => $q->where('status', 'squeezer'))
+            ->whereHas('fabric', function ($q) {
+                $q->where('status', 'squeezer');
+                $this->scopeToAssignment($q);
+            });
+        $nextQueue = $nextQueueQuery
             ->orderBy('created_at', 'asc')
             ->take(3)
             ->get(['id', 'code', 'fabric_id', 'created_at']);
@@ -63,10 +70,13 @@ class DyeingSqueezerController extends ManufacturingStaffController
     {
         // Only checker-approved work: softened jobs whose fabric sits at
         // 'squeezer'. Anything still awaiting softener QC is invisible here.
-        $softenerJobs = SoftenerJob::with('fabric')
+        $softenerJobsQuery = SoftenerJob::with('fabric')
             ->where('status', 'softened')
-            ->whereHas('fabric', fn ($q) => $q->where('status', 'squeezer'))
-            ->get();
+            ->whereHas('fabric', function ($q) {
+                $q->where('status', 'squeezer');
+                $this->scopeToAssignment($q);
+            });
+        $softenerJobs = $softenerJobsQuery->get();
 
         $machines = Machine::where('type', 'squeezer')
             ->where('status', 'available')
@@ -95,6 +105,10 @@ class DyeingSqueezerController extends ManufacturingStaffController
         }
         if ($softenerJob->fabric?->status !== 'squeezer') {
             return back()->withErrors(['softener_job_id' => 'This fabric has not been approved to squeezing yet — awaiting quality check.']);
+        }
+        $fabric = $softenerJob->fabric;
+        if (! $this->isAssignedItem($fabric?->manufacturing_order_id, $fabric?->sales_order_id)) {
+            return back()->withErrors(['softener_job_id' => 'This Job Order is not assigned to you by your supervisor.']);
         }
 
         $softenerJob->update(['status' => 'squeezed']);

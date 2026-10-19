@@ -26,13 +26,13 @@ const props = defineProps({
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                                <Sparkles class="h-3.5 w-3.5" /> MAN · Dyeing Packaging
+                                <Sparkles class="h-3.5 w-3.5" /> MAN · Finishing Packaging
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Packaging Dashboard</h1>
                             <p class="text-sm text-blue-100/90">{{ stats.pending }} available products · {{ stats.total_today }} packages today</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <Link :href="route('man.staff.dyeing-packaging.page')"
+                            <Link :href="route('man.staff.finishing-packaging.page')"
                                 class="rounded-2xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wide text-indigo-700 shadow-lg hover:scale-105 active:scale-95 transition-all duration-200">
                                 Create Package
                             </Link>

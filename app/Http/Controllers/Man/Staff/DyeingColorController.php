@@ -19,26 +19,29 @@ class DyeingColorController extends ManufacturingStaffController
         // Only fabrics still awaiting dye work: at 'dyeing' stage with no dye
         // job recorded yet. Once recorded, the fabric sits with the quality
         // checker until approved — it must not linger in the dye queue.
-        $pendingCount = Fabric::where('status', 'dyeing')
+        $pendingQuery = Fabric::where('status', 'dyeing')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('dye_jobs')
                     ->whereColumn('dye_jobs.fabric_id', 'fabrics.id');
-            })
-            ->count();
+            });
+        $this->scopeToAssignment($pendingQuery);
+        $pendingCount = $pendingQuery->count();
         $recentJobs   = DyeJob::with('fabric')
             ->where('operator_id', $this->staff()->id)
             ->latest()
             ->take(10)
             ->get();
 
-        $nextQueue = Fabric::with('machine')
+        $nextQueueQuery = Fabric::with('machine')
             ->where('status', 'dyeing')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('dye_jobs')
                     ->whereColumn('dye_jobs.fabric_id', 'fabrics.id');
-            })
+            });
+        $this->scopeToAssignment($nextQueueQuery);
+        $nextQueue = $nextQueueQuery
             ->orderBy('created_at', 'asc')
             ->take(3)
             ->get(['id', 'code', 'yarn_type', 'weight', 'created_at']);
@@ -76,13 +79,16 @@ class DyeingColorController extends ManufacturingStaffController
         // Only fabrics with no dye job recorded yet: once recorded, the
         // fabric waits on the quality checker (stays 'dyeing') until the
         // checker approves it to softener or rejects it.
-        $fabrics = Fabric::with(['machine', 'operator', 'salesOrder.recipe'])
+        $fabricsQuery = Fabric::with(['machine', 'operator', 'salesOrder.recipe'])
             ->where('status', 'dyeing')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('dye_jobs')
                     ->whereColumn('dye_jobs.fabric_id', 'fabrics.id');
-            })
+            });
+        $this->scopeToAssignment($fabricsQuery);
+
+        $fabrics = $fabricsQuery
             ->orderBy('created_at', 'asc')
             ->get()
             ->map(function ($fabric) {
@@ -210,6 +216,10 @@ class DyeingColorController extends ManufacturingStaffController
             if ($fabric->dyeJobs()->exists()) {
                 DB::rollBack();
                 return back()->withErrors(['fabric_id' => 'A dye job is already recorded for this fabric — awaiting quality check.']);
+            }
+            if (! $this->isAssignedItem($fabric->manufacturing_order_id, $fabric->sales_order_id)) {
+                DB::rollBack();
+                return back()->withErrors(['fabric_id' => 'This Job Order is not assigned to you by your supervisor.']);
             }
 
             // Use the first dye lot as the "primary" for the dye_jobs main columns

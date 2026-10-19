@@ -68,6 +68,11 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/threads/{thread}/members/{user}', [MessengerController::class, 'removeMember'])->name('threads.members.remove');
         Route::post('/threads/{thread}/leave', [MessengerController::class, 'leave'])->name('threads.leave');
     });
+
+    // Full-page Messenger — opened from the top-bar "expand" button in a new
+    // tab. Renders standalone (no sidebar) and reuses the topbar JSON endpoints
+    // above for its data.
+    Route::get('/messenger', [MessengerController::class, 'page'])->name('messenger.index');
 });
 
 /*

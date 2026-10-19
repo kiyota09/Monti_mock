@@ -114,10 +114,17 @@ class KnittingYarnController extends ManufacturingStaffController
                 'remarks'      => $f->remarks,
             ]);
 
-        // Job orders in production — pending first, done last
+        // Job orders in production — only those the knitting supervisor
+        // assigned to this staff member; pending first, done last.
+        $assignedSalesOrders = $this->myAssignmentScope()['so'];
+        // Produced JOs leave this list — they are recorded in the work history
+        // and now await the knitting supervisor's quality gate. Only JOs still
+        // needing knitting remain. If the supervisor rejects the output the
+        // JO's knitting-done mark is cleared so it reappears here to be remade.
         $jobOrders = SalesOrder::with('recipe')
             ->where('status', 'in_production')
-            ->orderByRaw('knitting_done_at IS NOT NULL ASC')
+            ->whereIn('id', $assignedSalesOrders)
+            ->whereNull('knitting_done_at')
             ->orderBy('created_at', 'asc')
             ->get()
             ->map(function ($order) {
@@ -205,6 +212,10 @@ class KnittingYarnController extends ManufacturingStaffController
     public function markDone(Request $request, $id)
     {
         $order = SalesOrder::where('status', 'in_production')->findOrFail($id);
+
+        if (! in_array($order->id, $this->myAssignmentScope()['so'], true)) {
+            return back()->withErrors(['error' => 'This Job Order is not assigned to you by your supervisor.']);
+        }
 
         if (!is_null($order->knitting_done_at)) {
             return back()->withErrors(['error' => 'This job order is already marked as done.']);

@@ -27,6 +27,7 @@ use App\Models\Man\IronJob;
 use App\Models\Man\Package;
 use App\Models\Man\MachineReport;   
 use App\Models\Man\ManufacturingSupervisorRole;
+use App\Support\ManufacturingRoles;
 use App\Models\Pro\ProAccess;
 use App\Models\Scm\ScmAccessPermission;
 use App\Models\Core\UserModuleAccess;
@@ -585,21 +586,7 @@ class User extends Authenticatable
             return [];
         }
 
-        return match ($this->supervisor_department) {
-            'knitting' => ['knitting_yarn', 'knitting_mechanic'],
-            'dyeing' => [
-                'dyeing_color',
-                'dyeing_fabric_softener',
-                'dyeing_squeezer',
-                'dyeing_ironing',
-                'dyeing_packaging',
-                'dyeing_lab_chemist',
-            ],
-            'finishing' => ['checker_quality'],
-            'maintenance' => ['maintenance_checker', 'pollution_control_operator', 'safety_officer'],
-            'boiler' => ['boiler_operator'],
-            default => [],
-        };
+        return ManufacturingRoles::rolesForDepartment($this->supervisor_department);
     }
 
     /**

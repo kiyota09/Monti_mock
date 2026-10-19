@@ -35,18 +35,10 @@ watch(() => page.props.errors, (errs) => {
 });
 const dismissFlash = () => { showFlash.value = false; };
 
-// ─── Job Order Tab Filter ─────────────────────────────────────────────────────
-const activeTab = ref('all');
-const filteredOrders = computed(() => {
-    if (activeTab.value === 'pending') return props.jobOrders.filter(o => !o.is_knitting_done);
-    if (activeTab.value === 'done')    return props.jobOrders.filter(o =>  o.is_knitting_done);
-    return props.jobOrders;
-});
-const pendingCount = computed(() => props.jobOrders.filter(o => !o.is_knitting_done).length);
-const doneCount    = computed(() => props.jobOrders.filter(o =>  o.is_knitting_done).length);
-const progress     = computed(() =>
-    props.jobOrders.length ? Math.round((doneCount.value / props.jobOrders.length) * 100) : 0
-);
+// ─── Production Job Orders ────────────────────────────────────────────────────
+// Produced JOs are removed server-side (recorded in work history) and only
+// return here if the knitting supervisor rejects the output for a remake.
+const filteredOrders = computed(() => props.jobOrders);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getYarnById = (id) => props.yarns.find(y => y.id == id) ?? null;
@@ -259,11 +251,11 @@ const submitFabric = () => {
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Knitting Yarn Workspace</h1>
                             <span v-if="!canEditProduction" class="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">View only</span>
-                            <p class="text-sm text-blue-100/90">{{ doneCount }} of {{ jobOrders.length }} orders done · {{ progress }}% complete</p>
+                            <p class="text-sm text-blue-100/90">{{ jobOrders.length }} active job order(s) on your plate</p>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
-                                {{ pendingCount }} pending
+                                {{ jobOrders.length }} active
                             </span>
                             <Link :href="route('man.staff.knitting-yarn.reports')"
                                 class="rounded-full bg-white px-4 py-1.5 text-xs font-black text-indigo-700 shadow-lg hover:scale-105 transition-all duration-200 active:scale-95 flex items-center gap-1.5">
@@ -272,24 +264,12 @@ const submitFabric = () => {
                         </div>
                     </div>
 
-                    <!-- Progress + tabs -->
+                    <!-- Active order count -->
                     <div class="relative mt-6 flex flex-col gap-3">
                         <div v-if="jobOrders.length" class="flex items-center gap-3">
-                            <div class="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
-                                <div class="h-full bg-white rounded-full transition-all duration-500" :style="`width: ${progress}%`"></div>
-                            </div>
-                            <span class="text-xs font-black">{{ progress }}%</span>
-                        </div>
-                        <div v-if="jobOrders.length" class="flex gap-2">
-                            <button v-for="tab in [
-                                { key: 'all', label: 'All', count: jobOrders.length },
-                                { key: 'pending', label: 'Pending', count: pendingCount },
-                                { key: 'done', label: 'Done', count: doneCount },
-                            ]" :key="tab.key" @click="activeTab = tab.key" type="button"
-                                :class="activeTab === tab.key ? 'bg-white text-indigo-700 shadow-lg scale-105' : 'bg-white/15 text-white hover:bg-white/25'"
-                                class="rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide backdrop-blur transition-all duration-200 active:scale-95">
-                                {{ tab.label }} · {{ tab.count }}
-                            </button>
+                            <span class="rounded-2xl bg-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white backdrop-blur">
+                                {{ jobOrders.length }} in progress
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -407,11 +387,9 @@ const submitFabric = () => {
                     </TransitionGroup>
 
                     <div v-else class="animate-fade-up bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 px-6 py-10 text-center">
-                        <component :is="activeTab === 'done' ? CheckCheck : ClipboardList" class="w-10 h-10 text-indigo-300 mx-auto mb-3 animate-bounce-soft" />
+                        <ClipboardList class="w-10 h-10 text-indigo-300 mx-auto mb-3 animate-bounce-soft" />
                         <p class="text-sm font-bold text-gray-500 dark:text-gray-300">
-                            {{ activeTab === 'done' ? 'No job orders marked as done yet.'
-                               : activeTab === 'pending' ? 'All job orders are done — great work!'
-                               : 'No active job orders at the moment.' }}
+                            No active job orders at the moment. Produced orders are recorded in your work history while they are checked by your supervisor.
                         </p>
                     </div>
                 </section>

@@ -6,7 +6,7 @@ import {
     LayoutDashboard, ShoppingCart, ShoppingBag, MessageSquare,
     Receipt, HelpCircle, User, Truck, Navigation, Clock, CalendarDays,
     History, HandCoins, Building2, UserCog2, ShieldCheck,
-    FileText, Megaphone, Stamp, Bell, Printer, Target, Wrench, Repeat, ClipboardList, Zap, ScanSearch, Users,
+    FileText, Megaphone, Stamp, Bell, Printer, Target, Wrench, Repeat, ClipboardList, Zap, ScanSearch, Users, Wallet,
 } from 'lucide-vue-next'
 
 import { useDropdown, useDynamicDropdowns, useSidebarScroll } from './composables/useSidebarPersistence'
@@ -80,6 +80,7 @@ const navItems = computed(() => {
             { label: 'Vendor Hub', href: route('supplier.dashboard'), icon: LayoutDashboard },
             { label: 'Messages', href: route('supplier.messages'), icon: MessageSquare },
             { label: 'Purchase Orders', href: route('supplier.orders'), icon: ShoppingCart },
+            { label: 'Payments', href: route('supplier.payments'), icon: Wallet },
             { label: 'My Products', href: route('supplier.products'), icon: ShoppingBag },
         ]
     }
@@ -93,6 +94,7 @@ const navItems = computed(() => {
             { key: 'orders', label: 'Orders', href: route('client.orders'), icon: ShoppingCart },
             { key: 'tracking', label: 'Order Tracking', href: route('client.tracking'), icon: Navigation },
             { key: 'invoices', label: 'Invoices', href: route('client.invoices'), icon: Receipt },
+            { key: 'payments', label: 'Payments', href: route('client.payments'), icon: Wallet },
             { key: 'receiving', label: 'Receiving', href: route('client.receiving'), icon: Truck },
             { key: 'profile', label: 'Profile', href: route('client.profile.edit'), icon: User },
             { key: 'support', label: 'Support', href: route('client.support'), icon: HelpCircle },

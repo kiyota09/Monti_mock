@@ -5,7 +5,7 @@ import { computed, ref, watch, nextTick } from 'vue'
 import {
     ShieldCheck, X, LayoutDashboard, ShoppingCart, ShoppingBag, MessageSquare,
     Receipt, HelpCircle, User, Truck, Navigation, Clock, CalendarDays,
-    History, HandCoins, FileText, Bell, UserCog2,
+    History, HandCoins, FileText, Bell, UserCog2, Wallet,
 } from 'lucide-vue-next'
 
 import { MODULES } from './navItems/navConfig'
@@ -69,6 +69,7 @@ const portalItems = computed(() => {
             { id: 'supplier_hub', label: 'Vendor Hub', icon: LayoutDashboard, href: safeRoute('supplier.dashboard', '/supplier/dashboard') },
             { id: 'supplier_messages', label: 'Messages', icon: MessageSquare, href: safeRoute('supplier.messages', '/supplier/messages') },
             { id: 'supplier_orders', label: 'Purchase Orders', icon: ShoppingCart, href: safeRoute('supplier.orders', '/supplier/orders') },
+            { id: 'supplier_payments', label: 'Payments', icon: Wallet, href: safeRoute('supplier.payments', '/supplier/payments') },
             { id: 'supplier_products', label: 'My Products', icon: ShoppingBag, href: safeRoute('supplier.products', '/supplier/products') },
         ]
     }
@@ -81,6 +82,7 @@ const portalItems = computed(() => {
             { id: 'client_orders', label: 'Orders', icon: ShoppingCart, href: safeRoute('client.orders', '/client/orders') },
             { id: 'client_tracking', label: 'Order Tracking', icon: Navigation, href: safeRoute('client.tracking', '/client/tracking') },
             { id: 'client_invoices', label: 'Invoices', icon: Receipt, href: safeRoute('client.invoices', '/client/invoices') },
+            { id: 'client_payments', label: 'Payments', icon: Wallet, href: safeRoute('client.payments', '/client/payments') },
             { id: 'client_receiving', label: 'Receiving', icon: Truck, href: safeRoute('client.receiving', '/client/receiving') },
             { id: 'client_profile', label: 'Profile', icon: User, href: safeRoute('client.profile.edit', '/client/profile') },
             { id: 'client_support', label: 'Support', icon: HelpCircle, href: safeRoute('client.support', '/client/support') },

@@ -37,7 +37,7 @@ class ManDashboardController extends Controller
             'dyeing_fabric_softener' => 'man.staff.dyeing-fabric-softener.dashboard',
             'dyeing_squeezer' => 'man.staff.dyeing-squeezer.dashboard',
             'dyeing_ironing' => 'man.staff.dyeing-ironing.dashboard',
-            'dyeing_packaging' => 'man.staff.dyeing-packaging.dashboard',
+            'finishing_packaging' => 'man.staff.finishing-packaging.dashboard',
             'dyeing_lab_chemist' => 'man.staff.dyeing-lab-chemist.dashboard',
             'maintenance_checker' => 'man.staff.maintenance-checker.dashboard',
             'boiler_operator' => 'man.staff.boiler-operator.dashboard',

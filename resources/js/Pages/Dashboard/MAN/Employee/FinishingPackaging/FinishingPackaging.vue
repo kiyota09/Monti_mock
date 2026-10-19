@@ -37,7 +37,7 @@ const closeModal = () => {
 };
 
 const submitPackage = () => {
-    form.post(route('man.staff.dyeing-packaging.store-package'), {
+    form.post(route('man.staff.finishing-packaging.store-package'), {
         preserveScroll: true,
         onSuccess: () => {
             closeModal();
@@ -48,7 +48,7 @@ const submitPackage = () => {
 </script>
 
 <template>
-    <AuthenticatedLayout title="Dyeing Packaging">
+    <AuthenticatedLayout title="Finishing Packaging">
         <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
             <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
 
@@ -63,7 +63,7 @@ const submitPackage = () => {
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                                <Sparkles class="h-3.5 w-3.5" /> MAN · Dyeing Packaging
+                                <Sparkles class="h-3.5 w-3.5" /> MAN · Finishing Packaging
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Packaging Workspace</h1>
                             <span v-if="!canEditProduction" class="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">View only</span>
@@ -73,7 +73,7 @@ const submitPackage = () => {
                             <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
                                 {{ fabrics?.length ?? 0 }} ready
                             </span>
-                            <Link :href="route('man.staff.dyeing-packaging.dashboard')"
+                            <Link :href="route('man.staff.finishing-packaging.dashboard')"
                                 class="rounded-full bg-white px-4 py-1.5 text-xs font-black text-indigo-700 shadow-lg hover:scale-105 transition-all duration-200 active:scale-95 flex items-center gap-1.5">
                                 <LayoutDashboard class="h-3.5 w-3.5" /> Back to Dashboard
                             </Link>

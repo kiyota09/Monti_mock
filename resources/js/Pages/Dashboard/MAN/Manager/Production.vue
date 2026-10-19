@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { ref, computed, watchEffect } from 'vue';
+import { router, Link } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
 
@@ -8,24 +8,29 @@ const { canEdit } = usePageAccess();
 const canEditProduction = computed(() => canEdit('MAN', 'production'));
 import {
     Package, Shirt, Droplet, Factory,
-    CheckCircle, XCircle, ArrowRight,
+    CheckCircle, XCircle, ClipboardList,
     Wind, Flame, Truck,
-    AlertTriangle, X, Sparkles,
+    AlertTriangle, Sparkles,
 } from 'lucide-vue-next';
 
 const props = defineProps({
+    department:   { type: String, default: null },
     fabrics:      Array,
     dyeJobs:      Array,
-    // softenerJobs: Array,
+    softenerJobs: Array,
     squeezerJobs: Array,
     ironJobs:     Array,
-    packages:     Array, // Now includes product_name, product_sku, quantity, fabric_code, yarn_type, weight, operator
+    packages:     Array, // Now includes status, product_name, product_sku, quantity, fabric_code, yarn_type, weight, operator
 });
 
-// ─── Active Tab ───────────────────────────────────────────────────────────────
-const activeTab = ref('fabrics');
+// ─── Tabs (department-scoped for supervisors) ─────────────────────────────────
+const DEPT_TABS = {
+    knitting:  ['fabrics'],
+    dyeing:    ['dye', 'softener', 'squeezer', 'iron'],
+    finishing: ['packed'],
+};
 
-const tabs = computed(() => [
+const allTabs = computed(() => [
     { key: 'fabrics',  label: 'Fabrics',   icon: Shirt,    count: props.fabrics?.length      ?? 0 },
     { key: 'dye',      label: 'Dye',       icon: Droplet,  count: props.dyeJobs?.length      ?? 0 },
     { key: 'softener', label: 'Softener',  icon: Wind,     count: props.softenerJobs?.length ?? 0 },
@@ -33,6 +38,19 @@ const tabs = computed(() => [
     { key: 'iron',     label: 'Iron',      icon: Flame,    count: props.ironJobs?.length     ?? 0 },
     { key: 'packed',   label: 'Packed',    icon: Package,  count: props.packages?.length     ?? 0 },
 ]);
+
+const tabs = computed(() => {
+    const allowed = DEPT_TABS[props.department];
+    return allowed ? allTabs.value.filter((t) => allowed.includes(t.key)) : allTabs.value;
+});
+
+// ─── Active Tab ───────────────────────────────────────────────────────────────
+const activeTab = ref('fabrics');
+watchEffect(() => {
+    if (!tabs.value.some((t) => t.key === activeTab.value)) {
+        activeTab.value = tabs.value[0]?.key ?? 'fabrics';
+    }
+});
 
 // ─── Confirm Modal ────────────────────────────────────────────────────────────
 const confirmModal   = ref(false);
@@ -56,16 +74,28 @@ const cancelConfirm = () => {
     confirmAction.value  = null;
 };
 
-// ─── Actions ──────────────────────────────────────────────────────────────────
+// ─── Actions (department supervisor gates) ─────────────────────────────────────
 const passFabric = (fabricId, destination) =>
-    router.post(route('man.staff.checker-quality.pass-fabric', fabricId), { destination });
+    router.post(route('man.gates.knitting.pass-fabric', fabricId), { action: 'approve', destination });
+
+const rejectFabricWithReason = (fabric) => {
+    const reason = prompt('Why is this fabric not good? The Job Order will be sent back to the knitting yarn staff to be made again:');
+    if (reason !== null && reason.trim() !== '') {
+        router.post(route('man.gates.knitting.pass-fabric', fabric.id), {
+            action: 'reject',
+            rejection_reason: reason.trim(),
+        }, { preserveScroll: true });
+    } else if (reason !== null) {
+        alert('A reason is required so the staff knows what to fix.');
+    }
+};
 
 const passDye = (dyeId, action, rejectionReason = null) => {
     const data = { action };
     if (action === 'reject' && rejectionReason) {
         data.rejection_reason = rejectionReason;
     }
-    router.post(route('man.staff.checker-quality.pass-dye', dyeId), data, {
+    router.post(route('man.gates.dyeing.pass-dye', dyeId), data, {
         preserveScroll: true,
     });
 };
@@ -80,26 +110,17 @@ const rejectDyeWithReason = (dye) => {
 };
 
 const passSoftener = (softenerId, action) =>
-    router.post(route('man.staff.checker-quality.pass-softener', softenerId), { action });
+    router.post(route('man.gates.dyeing.pass-softener', softenerId), { action });
 
 const passSqueezer = (squeezerId) =>
-    router.post(route('man.staff.checker-quality.pass-squeezer', squeezerId));
+    router.post(route('man.gates.dyeing.pass-squeezer', squeezerId), { action: 'quality' });
 
 const passIron = (ironId) =>
-    router.post(route('man.staff.checker-quality.pass-iron', ironId), { action: 'pack' });
-
-const assignToOrder = (packageId) => {
-    const orderId = prompt('Enter Manufacturing Order ID to assign this package to:');
-    if (orderId && !isNaN(orderId)) {
-        router.post(route('man.staff.checker-quality.assign-package', packageId), { manufacturing_order_id: parseInt(orderId) });
-    } else {
-        alert('Please enter a valid order ID.');
-    }
-};
+    router.post(route('man.gates.dyeing.pass-iron', ironId), { action: 'pack' });
 
 const pushToLogistics = (packageId) => {
     if (confirm('Send this package to logistics?')) {
-        router.post(route('man.staff.checker-quality.push-to-logistics', packageId), {}, {
+        router.post(route('man.gates.finishing.push-to-logistics', packageId), {}, {
             preserveScroll: true,
         });
     }
@@ -126,7 +147,10 @@ const pushToLogistics = (packageId) => {
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Production Pipeline</h1>
                             <span v-if="!canEditProduction" class="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">View only</span>
-                            <p class="text-sm text-blue-100/90">Track and advance items through each stage</p>
+                            <p class="text-sm text-blue-100/90">
+                                <span v-if="department" class="font-bold capitalize">{{ department }} department</span>
+                                <span v-else>Track and advance items through each stage</span>
+                            </p>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
@@ -205,6 +229,12 @@ const pushToLogistics = (packageId) => {
                                     class="flex-1 flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 active:scale-95"
                                 >
                                     <Droplet class="w-3.5 h-3.5" /> Pass to Dyeing
+                                </button>
+                                <button v-if="canEditProduction"
+                                    @click="rejectFabricWithReason(fabric)"
+                                    class="flex-1 flex items-center justify-center gap-1.5 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 hover:bg-rose-100 text-xs font-black px-3 py-2.5 rounded-2xl transition active:scale-95"
+                                >
+                                    <XCircle class="w-3.5 h-3.5" /> Not Good — Remake
                                 </button>
                             </div>
                         </div>
@@ -425,8 +455,14 @@ const pushToLogistics = (packageId) => {
                             <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-indigo-500 to-fuchsia-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
                             <div class="flex items-center justify-between mb-3">
                                 <span class="text-xs font-black text-gray-900 dark:text-white font-mono tracking-wide">{{ pkg.code }}</span>
-                                <span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30 ring-1 text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
-                                    <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> Packed
+                                <span
+                                    class="inline-flex items-center gap-1 ring-1 text-[10px] font-black uppercase px-2.5 py-1 rounded-full"
+                                    :class="pkg.status === 'checked'
+                                        ? 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30'
+                                        : 'bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30'"
+                                >
+                                    <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+                                    {{ pkg.status === 'checked' ? 'Checked · ready' : 'Awaiting QC' }}
                                 </span>
                             </div>
                             <div class="mb-4 space-y-1">
@@ -437,13 +473,13 @@ const pushToLogistics = (packageId) => {
                                 <p class="text-xs text-gray-500 dark:text-gray-400">Operator: {{ pkg.operator }}</p>
                             </div>
                             <div class="mt-auto flex flex-col sm:flex-row gap-2">
-                                <button v-if="canEditProduction"
-                                    @click="assignToOrder(pkg.id)"
+                                <Link
+                                    :href="route('man.assignments.index')"
                                     class="flex-1 flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl transition hover:-translate-y-0.5 active:scale-95"
                                 >
-                                    <ArrowRight class="w-3.5 h-3.5" /> Assign to Order
-                                </button>
-                                <button v-if="canEditProduction"
+                                    <ClipboardList class="w-3.5 h-3.5" /> Assignments
+                                </Link>
+                                <button v-if="canEditProduction && pkg.status === 'checked'"
                                     @click="pushToLogistics(pkg.id)"
                                     class="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl shadow-lg shadow-emerald-500/25 transition hover:-translate-y-0.5 active:scale-95"
                                 >

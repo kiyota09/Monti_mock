@@ -9,6 +9,7 @@ use App\Models\Core\User;
 use App\Models\Core\UserModuleAccess;
 use App\Models\It\ItAccessLog;
 use App\Models\Man\ManufacturingSupervisorRole;
+use App\Support\ManufacturingRoles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -130,27 +131,7 @@ class ItAccessControlController extends Controller
      */
     protected function manufacturingDepartmentFor(?string $role): ?string
     {
-        if (! $role) {
-            return null;
-        }
-
-        $map = [
-            'knitting_yarn' => 'knitting',
-            'knitting_mechanic' => 'knitting',
-            'dyeing_color' => 'dyeing',
-            'dyeing_fabric_softener' => 'dyeing',
-            'dyeing_squeezer' => 'dyeing',
-            'dyeing_ironing' => 'dyeing',
-            'dyeing_packaging' => 'dyeing',
-            'dyeing_lab_chemist' => 'dyeing',
-            'checker_quality' => 'finishing',
-            'maintenance_checker' => 'maintenance',
-            'pollution_control_operator' => 'maintenance',
-            'safety_officer' => 'maintenance',
-            'boiler_operator' => 'boiler',
-        ];
-
-        return $map[$role] ?? null;
+        return ManufacturingRoles::departmentForRole($role);
     }
 
     public function index()
@@ -468,21 +449,7 @@ class ItAccessControlController extends Controller
             return back()->withErrors(['error' => "The {$dept} seat is held by {$occupant->name}. Remove them first."]);
         }
 
-        $rolesToAssign = match ($dept) {
-            'knitting' => ['knitting_yarn', 'knitting_mechanic'],
-            'dyeing' => [
-                'dyeing_color',
-                'dyeing_fabric_softener',
-                'dyeing_squeezer',
-                'dyeing_ironing',
-                'dyeing_packaging',
-                'dyeing_lab_chemist',
-            ],
-            'finishing' => ['checker_quality'],
-            'maintenance' => ['maintenance_checker', 'pollution_control_operator', 'safety_officer'],
-            'boiler' => ['boiler_operator'],
-            default => [],
-        };
+        $rolesToAssign = ManufacturingRoles::rolesForDepartment($dept);
 
         $before = ['supervisor' => $user->is_manufacturing_supervisor ? $user->supervisor_department : null];
 

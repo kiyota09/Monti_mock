@@ -62,6 +62,16 @@ Route::prefix('dashboard/fin')->name('fin.')->middleware(['auth', 'verified'])->
     Route::post('/manager/payables/{bill}/pay', [FinDashboardController::class, 'recordBillPayment'])
         ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:payables,edit'])
         ->name('manager.payables.pay');
+
+    // PayMongo hosted checkout (the PayMongo UI) for a supplier bill. The
+    // return URL is hit by the browser after PayMongo redirects back and is
+    // where the verified payment is written to the ledger.
+    Route::post('/manager/payables/{bill}/checkout', [FinDashboardController::class, 'startBillCheckout'])
+        ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:payables,edit'])
+        ->name('manager.payables.checkout');
+    Route::get('/manager/payables/checkout/return', [FinDashboardController::class, 'billCheckoutReturn'])
+        ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:payables,view'])
+        ->name('manager.payables.checkout.return');
     Route::post('/manager/expenses', [FinDashboardController::class, 'storeExpense'])
         ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:dashboard,edit'])
         ->name('manager.expenses.store');

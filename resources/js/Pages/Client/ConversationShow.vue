@@ -713,7 +713,7 @@
                     <div class="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6">
                         <div v-if="quotationPreviewModal.quotation" id="quotation-doc"
                             class="bg-white shadow-lg mx-auto overflow-y-auto"
-                            style="width:100%;max-width:620px;aspect-ratio:210/297;max-height:100%;padding:40px 48px;font-family:'Times New Roman',Times,serif;">
+                            style="width:100%;max-width:620px;aspect-ratio:210/297;max-height:100%;padding:40px 48px;font-family:'Times New Roman',Times,serif;color:#111;">
 
                             <!-- Company Header -->
                             <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px;">

@@ -20,27 +20,30 @@ class DyeingFabricSoftenerController extends ManufacturingStaffController
         // the checker sent back for rework ('resoften') re-appear here so
         // staff can redo them; recorded work sits with the checker until
         // approved and never lingers in this queue.
-        $pendingCount = Fabric::where('status', 'softener')
+        $pendingQuery = Fabric::where('status', 'softener')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('softener_jobs')
                     ->whereColumn('softener_jobs.fabric_id', 'fabrics.id')
                     ->whereIn('softener_jobs.status', ['softened', 'squeezed']);
-            })
-            ->count();
+            });
+        $this->scopeToAssignment($pendingQuery);
+        $pendingCount = $pendingQuery->count();
         $recentJobs = SoftenerJob::with('fabric')
             ->where('operator_id', $this->staff()->id)
             ->latest()
             ->take(10)
             ->get();
 
-        $nextQueue = Fabric::where('status', 'softener')
+        $nextQueueQuery = Fabric::where('status', 'softener')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('softener_jobs')
                     ->whereColumn('softener_jobs.fabric_id', 'fabrics.id')
                     ->whereIn('softener_jobs.status', ['softened', 'squeezed']);
-            })
+            });
+        $this->scopeToAssignment($nextQueueQuery);
+        $nextQueue = $nextQueueQuery
             ->orderBy('created_at', 'asc')
             ->take(3)
             ->get(['id', 'code', 'yarn_type', 'weight', 'created_at']);
@@ -79,15 +82,16 @@ class DyeingFabricSoftenerController extends ManufacturingStaffController
         // Fabrics the checker sent back for rework ('resoften') re-appear
         // here for redo; recorded work stays at status 'softener' with the
         // quality checker until approved.
-        $fabrics = Fabric::with('machine', 'salesOrder')
+        $fabricsQuery = Fabric::with('machine', 'salesOrder')
             ->where('status', 'softener')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('softener_jobs')
                     ->whereColumn('softener_jobs.fabric_id', 'fabrics.id')
                     ->whereIn('softener_jobs.status', ['softened', 'squeezed']);
-            })
-            ->get();
+            });
+        $this->scopeToAssignment($fabricsQuery);
+        $fabrics = $fabricsQuery->get();
 
         $machines = Machine::where('type', 'softening')
             ->where('status', 'available')
@@ -124,6 +128,14 @@ class DyeingFabricSoftenerController extends ManufacturingStaffController
             'softener_used' => 'required|numeric|min:0.01',
             'remarks' => 'nullable|string',
         ]);
+
+        // Every selected fabric must be assigned to this staff member.
+        $selectedFabrics = Fabric::whereIn('id', $validated['fabric_ids'])->get();
+        foreach ($selectedFabrics as $selected) {
+            if (! $this->isAssignedItem($selected->manufacturing_order_id, $selected->sales_order_id)) {
+                return back()->withErrors(['fabric_ids' => 'One or more selected fabrics belong to a Job Order not assigned to you.']);
+            }
+        }
 
         DB::beginTransaction();
         try {

@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Suppliers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Core\User;
+use App\Models\Fin\FinBill;
 use App\Models\Inv\Material;
 use App\Models\Pro\SupplierProduct;
+use App\Models\Scm\ProcurementPayment;
 use App\Models\Scm\PurchaseInvoice;
 use App\Models\Scm\RequestForQuotation;
 use App\Models\Scm\RfqResponse;
 use App\Models\Scm\ScmPurchaseOrder;
+use App\Support\PaymentMethodLabel;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -202,6 +206,125 @@ class SupplierDashboardController extends Controller
                 'supplier' => $supplier,
             ],
             'orders' => $orders,
+        ]);
+    }
+
+    /**
+     * Payments Monti Textiles has made to this supplier, grouped by the
+     * supplier's purchase invoices. Mirrors the FIN Payables receipt view:
+     * payments are pulled from BOTH ledgers (cleared procurement payments
+     * plus finance bill payments on the linked bill) so the receipts always
+     * sum to the paid total shown.
+     */
+    public function payments()
+    {
+        $supplier = auth('supplier')->user();
+
+        $invoices = PurchaseInvoice::where('supplier_id', $supplier->id)
+            ->orderByDesc('invoice_date')
+            ->orderByDesc('id')
+            ->get();
+
+        $invoiceIds = $invoices->pluck('id');
+
+        $procPayments = $invoiceIds->isEmpty()
+            ? collect()
+            : ProcurementPayment::whereIn('invoice_id', $invoiceIds)
+                ->where('status', 'cleared')
+                ->orderByDesc('paid_date')->orderByDesc('id')
+                ->get()->groupBy('invoice_id');
+
+        $bills = $invoiceIds->isEmpty()
+            ? collect()
+            : FinBill::whereIn('purchase_invoice_id', $invoiceIds)
+                ->with(['payments' => fn ($q) => $q->orderByDesc('paid_at')->orderByDesc('id')])
+                ->get()->groupBy('purchase_invoice_id');
+
+        $recorderIds = $bills
+            ->flatMap(fn ($group) => $group->flatMap(fn ($bill) => $bill->payments->pluck('recorded_by')))
+            ->filter()->unique()->values();
+        $recorders = $recorderIds->isEmpty()
+            ? collect()
+            : User::whereIn('id', $recorderIds)->pluck('name', 'id');
+
+        $rows = $invoices->map(function ($inv) use ($procPayments, $bills, $recorders) {
+            $paid = 0.0;
+            $receipts = collect();
+
+            // 1) Cleared procurement payments against this supplier invoice.
+            foreach ($procPayments->get($inv->id, collect()) as $p) {
+                $paid += (float) $p->amount;
+                $receipts->push([
+                    'id' => 'PRO-' . $p->id,
+                    'source' => 'Procurement · ' . $p->payment_number,
+                    'receipt_no' => $p->payment_number,
+                    'amount' => round((float) $p->amount, 2),
+                    'paid_at' => $p->paid_date?->format('Y-m-d'),
+                    'method' => PaymentMethodLabel::label($p->method),
+                    'reference' => $p->bank_reference ?: '—',
+                    'recorded_by' => 'Monti Textiles · Accounts Payable',
+                    'created_at' => $p->created_at?->toIso8601String(),
+                ]);
+            }
+
+            // 2) Finance bill payments recorded on the linked FIN bill.
+            foreach ($bills->get($inv->id, collect()) as $bill) {
+                foreach ($bill->payments as $p) {
+                    $paid += (float) $p->amount;
+                    $receipts->push([
+                        'id' => 'FIN-' . $p->id,
+                        'source' => 'Finance ledger',
+                        'receipt_no' => 'RCPT-' . str_pad((string) $p->id, 5, '0', STR_PAD_LEFT),
+                        'amount' => round((float) $p->amount, 2),
+                        'paid_at' => $p->paid_at?->format('Y-m-d'),
+                        'method' => PaymentMethodLabel::label($p->method),
+                        'reference' => $p->reference ?: '—',
+                        'recorded_by' => $recorders[$p->recorded_by] ?? 'Monti Textiles · Finance',
+                        'created_at' => $p->created_at?->toIso8601String(),
+                    ]);
+                }
+            }
+
+            $paid = round($paid, 2);
+            $balance = round((float) $inv->amount - $paid, 2);
+            $status = $balance <= 0 ? 'paid' : ($paid > 0 ? 'partial' : 'unpaid');
+            if ($balance > 0 && $inv->due_date && $inv->due_date->isPast()) {
+                $status = 'overdue';
+            }
+
+            $receipts = $receipts
+                ->sortByDesc(fn ($r) => ($r['paid_at'] ?? '') . $r['id'])
+                ->values();
+
+            return [
+                'id' => $inv->id,
+                'bill_no' => $inv->invoice_number,
+                'supplier' => $inv->supplier_name,
+                'category' => $inv->po_number ? 'PO ' . $inv->po_number : 'Purchase invoice',
+                'amount' => round((float) $inv->amount, 2),
+                'paid' => $paid,
+                'due_date' => $inv->due_date?->format('Y-m-d'),
+                'status' => $status,
+                'notes' => $inv->payment_terms,
+                'created_at' => $inv->invoice_date?->format('Y-m-d'),
+                'receipts' => $receipts,
+                'receipt_count' => $receipts->count(),
+            ];
+        })->values();
+
+        return Inertia::render('Supplier/supplierPayments', [
+            'auth' => [
+                'user' => $supplier,
+                'supplier' => $supplier,
+            ],
+            'invoices' => $rows,
+            'stats' => [
+                'invoiced' => round($rows->sum('amount'), 2),
+                'received' => round($rows->sum('paid'), 2),
+                'outstanding' => round($rows->sum('amount') - $rows->sum('paid'), 2),
+                'paidCount' => $rows->where('status', 'paid')->count(),
+                'openCount' => $rows->whereIn('status', ['unpaid', 'partial', 'overdue'])->count(),
+            ],
         ]);
     }
 

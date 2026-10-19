@@ -9,10 +9,12 @@ use App\Models\Fin\FinBill;
 use App\Models\Fin\FinBudget;
 use App\Models\Fin\FinExpense;
 use App\Models\Fin\FinInvoice;
+use App\Models\Fin\FinPaymongoCheckout;
 use App\Models\Scm\ScmPurchaseOrder;
 use App\Services\Fin\FinanceService;
 use App\Services\Fin\PayMongoService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class FinDashboardController extends Controller
@@ -21,7 +23,12 @@ class FinDashboardController extends Controller
 
     protected function gatewayMode(): array
     {
-        return ['mode' => $this->gateway->mode(), 'methods' => PayMongoService::METHOD_LABELS];
+        return [
+            'mode' => $this->gateway->mode(),
+            'configured' => $this->gateway->isConfigured(),
+            'sandbox' => (bool) config('services.paymongo.sandbox', true),
+            'methods' => PayMongoService::METHOD_LABELS,
+        ];
     }
 
     public function managerDashboard()
@@ -150,6 +157,132 @@ class FinDashboardController extends Controller
         $this->finance->recordBillPayment($bill, $data, auth()->id());
 
         return back()->with('success', 'Payment of ₱' . number_format($data['amount'], 2) . ' recorded for ' . $bill->bill_no . '.');
+    }
+
+    /**
+     * Start a PayMongo hosted checkout for a supplier bill. Returns the
+     * gateway's checkout_url as JSON; the browser is then redirected to
+     * PayMongo's own payment UI. Nothing is written to the ledger until the
+     * return handler (or webhook) verifies a successful charge.
+     */
+    public function startBillCheckout(Request $request, FinBill $bill)
+    {
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:0.01|max:' . max(0.01, $bill->balance()),
+        ]);
+
+        $amount = round((float) $data['amount'], 2);
+        $reference = 'MNT-B' . $bill->id . '-' . strtoupper(Str::random(10));
+
+        $checkout = FinPaymongoCheckout::create([
+            'reference' => $reference,
+            'fin_bill_id' => $bill->id,
+            'amount' => $amount,
+            'status' => 'pending',
+            'created_by' => auth()->id(),
+        ]);
+
+        $session = $this->gateway->createCheckoutSession($amount, [
+            'reference_number' => $reference,
+            'description' => 'Payment for supplier bill ' . $bill->bill_no,
+            'item_name' => 'Bill ' . $bill->bill_no,
+            'item_description' => $bill->supplier_name . ' · ' . $bill->category,
+            'metadata' => [
+                'bill_id' => (string) $bill->id,
+                'bill_no' => (string) $bill->bill_no,
+                'reference' => $reference,
+            ],
+            'success_url' => route('fin.manager.payables.checkout.return', ['ref' => $reference, 'result' => 'success']),
+            'cancel_url' => route('fin.manager.payables.checkout.return', ['ref' => $reference, 'result' => 'cancel']),
+        ]);
+
+        if (! $session['success'] || ! $session['checkout_url']) {
+            $checkout->update(['status' => 'failed']);
+
+            return response()->json([
+                'message' => $session['message'] ?? 'Could not start PayMongo checkout.',
+            ], 422);
+        }
+
+        $checkout->update([
+            'paymongo_session_id' => $session['session_id'],
+            'checkout_url' => $session['checkout_url'],
+        ]);
+
+        return response()->json([
+            'checkout_url' => $session['checkout_url'],
+            'reference' => $reference,
+        ]);
+    }
+
+    /**
+     * PayMongo return URL: the customer lands here after the hosted checkout.
+     * We verify the session against the gateway (works locally — no webhook
+     * required) and only then write the ledger payment.
+     */
+    public function billCheckoutReturn(Request $request)
+    {
+        $reference = (string) $request->query('ref', '');
+        $result = (string) $request->query('result', 'success');
+
+        $checkout = FinPaymongoCheckout::with('bill')->where('reference', $reference)->whereNotNull('fin_bill_id')->first();
+
+        if (! $checkout) {
+            return redirect()->route('fin.manager.payables')
+                ->withErrors(['error' => 'Unknown PayMongo checkout reference.']);
+        }
+
+        if ($checkout->isPaid()) {
+            return redirect()->route('fin.manager.payables')
+                ->with('message', 'PayMongo payment for ' . ($checkout->bill?->bill_no ?? 'this bill') . ' was already recorded.');
+        }
+
+        if ($result === 'cancel') {
+            $checkout->update(['status' => 'failed']);
+
+            return redirect()->route('fin.manager.payables')
+                ->withErrors(['error' => 'PayMongo checkout was cancelled — no payment recorded.']);
+        }
+
+        $verify = $this->gateway->verifyCheckoutSession($checkout->paymongo_session_id);
+
+        if (! $verify['paid']) {
+            return redirect()->route('fin.manager.payables')
+                ->withErrors(['error' => $verify['message'] ?? 'PayMongo has not confirmed this payment yet.']);
+        }
+
+        $bill = $checkout->bill;
+        $paidAmount = round((float) ($verify['amount'] ?? $checkout->amount), 2);
+        $paidAmount = min($paidAmount, max(0.0, $bill->balance()));
+
+        if ($paidAmount <= 0) {
+            $checkout->update([
+                'status' => 'paid',
+                'method' => $verify['method'],
+                'gateway_reference' => $verify['payment_id'],
+                'paid_at' => now(),
+            ]);
+
+            return redirect()->route('fin.manager.payables')
+                ->with('message', 'Bill ' . $bill->bill_no . ' is already fully paid.');
+        }
+
+        $this->finance->recordBillPayment($bill, [
+            'amount' => $paidAmount,
+            'paid_at' => today()->toDateString(),
+            'method' => $verify['method'] ?? 'paymongo',
+            'reference' => $verify['payment_id'] ?? $checkout->reference,
+        ], $checkout->created_by ?? auth()->id());
+
+        $checkout->update([
+            'status' => 'paid',
+            'method' => $verify['method'],
+            'gateway_reference' => $verify['payment_id'],
+            'paid_at' => now(),
+        ]);
+
+        return redirect()->route('fin.manager.payables')
+            ->with('message', 'PayMongo payment of ₱' . number_format($paidAmount, 2) . ' recorded for ' . $bill->bill_no . '.');
     }
 
     public function storeExpense(Request $request)

@@ -14,9 +14,12 @@ class DyeingIroningController extends ManufacturingStaffController
     {
         // Checker gate: only squeezer jobs whose fabric the quality checker
         // already approved to 'iron' may be ironed.
-        $pendingCount = SqueezerJob::whereDoesntHave('ironJob')
-            ->whereHas('softenerJob.fabric', fn ($q) => $q->where('status', 'iron'))
-            ->count();
+        $pendingQuery = SqueezerJob::whereDoesntHave('ironJob')
+            ->whereHas('softenerJob.fabric', function ($q) {
+                $q->where('status', 'iron');
+                $this->scopeToAssignment($q);
+            });
+        $pendingCount = $pendingQuery->count();
 
         $recentJobs = IronJob::with('squeezerJob.softenerJob.fabric')
             ->where('operator_id', $this->staff()->id)
@@ -24,9 +27,13 @@ class DyeingIroningController extends ManufacturingStaffController
             ->take(10)
             ->get();
 
-        $nextQueue = SqueezerJob::with('softenerJob.fabric')
+        $nextQueueQuery = SqueezerJob::with('softenerJob.fabric')
             ->whereDoesntHave('ironJob')
-            ->whereHas('softenerJob.fabric', fn ($q) => $q->where('status', 'iron'))
+            ->whereHas('softenerJob.fabric', function ($q) {
+                $q->where('status', 'iron');
+                $this->scopeToAssignment($q);
+            });
+        $nextQueue = $nextQueueQuery
             ->orderBy('created_at', 'asc')
             ->take(3)
             ->get(['id', 'code', 'created_at']);
@@ -64,10 +71,13 @@ class DyeingIroningController extends ManufacturingStaffController
         // Only checker-approved work: squeezer jobs without an iron job yet
         // whose fabric sits at 'iron'. Anything still awaiting squeezer QC
         // is invisible here.
-        $squeezerJobs = SqueezerJob::with('softenerJob.fabric')
+        $squeezerJobsQuery = SqueezerJob::with('softenerJob.fabric')
             ->whereDoesntHave('ironJob')
-            ->whereHas('softenerJob.fabric', fn ($q) => $q->where('status', 'iron'))
-            ->get();
+            ->whereHas('softenerJob.fabric', function ($q) {
+                $q->where('status', 'iron');
+                $this->scopeToAssignment($q);
+            });
+        $squeezerJobs = $squeezerJobsQuery->get();
 
         return Inertia::render('Dashboard/MAN/Employee/DyeingIroning/DyeingIroning', [
             'squeezerJobs' => $squeezerJobs,
@@ -91,6 +101,9 @@ class DyeingIroningController extends ManufacturingStaffController
         }
         if ($squeezerJob->ironJob()->exists()) {
             return back()->withErrors(['squeezer_job_id' => 'An iron job is already recorded for this fabric — awaiting quality check.']);
+        }
+        if (! $this->isAssignedItem($fabric->manufacturing_order_id, $fabric->sales_order_id)) {
+            return back()->withErrors(['squeezer_job_id' => 'This Job Order is not assigned to you by your supervisor.']);
         }
 
         IronJob::create([

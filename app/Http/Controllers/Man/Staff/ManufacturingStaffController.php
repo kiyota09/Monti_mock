@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Hrm\EmployeeShift;
 use App\Models\Man\Machine;
 use App\Models\Man\MachineReport;
+use App\Models\Man\ManTaskAssignment;
+use App\Support\ManufacturingRoles;
 use Illuminate\Support\Facades\Auth;
 
 abstract class ManufacturingStaffController extends Controller
@@ -43,6 +45,66 @@ abstract class ManufacturingStaffController extends Controller
             ->first();
 
         return $shift ? $shift->shift_type : 'Morning'; // fallback
+    }
+
+    /**
+     * Manufacturing-order / sales-order ids assigned to the logged-in staff
+     * member for the stage their role performs. Staff only see Job Orders
+     * their supervisor assigned to them, so an empty result means "nothing
+     * on my plate" — the work lists intentionally render empty.
+     *
+     * @return array{mo: array<int, int>, so: array<int, int>}
+     */
+    protected function myAssignmentScope(): array
+    {
+        $stage = ManufacturingRoles::stageForRole($this->staff()->manufacturing_role);
+
+        $base = ManTaskAssignment::where('assigned_to', $this->staff()->id)->active();
+        if ($stage) {
+            $base->where('stage', $stage);
+        }
+
+        return [
+            'mo' => (clone $base)->whereNotNull('manufacturing_order_id')
+                ->pluck('manufacturing_order_id')->unique()->values()->all(),
+            'so' => (clone $base)->whereNotNull('sales_order_id')
+                ->pluck('sales_order_id')->unique()->values()->all(),
+        ];
+    }
+
+    /**
+     * Constrain a query to the staff member's assigned Job Orders. Matches on
+     * either the manufacturing-order or the sales-order column (whichever the
+     * model links on).
+     */
+    protected function scopeToAssignment($query, string $moColumn = 'manufacturing_order_id', string $soColumn = 'sales_order_id')
+    {
+        $scope = $this->myAssignmentScope();
+
+        return $query->where(function ($q) use ($scope, $moColumn, $soColumn) {
+            $q->whereIn($moColumn, $scope['mo'])
+                ->orWhereIn($soColumn, $scope['so']);
+        });
+    }
+
+    /**
+     * True when the given Job Order (by manufacturing-order or sales-order id)
+     * is assigned to the logged-in staff member for their stage. Staff must
+     * never touch work their supervisor did not hand them.
+     */
+    protected function isAssignedItem(?int $manufacturingOrderId, ?int $salesOrderId): bool
+    {
+        $scope = $this->myAssignmentScope();
+
+        if ($manufacturingOrderId && in_array($manufacturingOrderId, $scope['mo'], true)) {
+            return true;
+        }
+
+        if ($salesOrderId && in_array($salesOrderId, $scope['so'], true)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

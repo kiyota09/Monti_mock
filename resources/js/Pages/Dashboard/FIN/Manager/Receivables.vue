@@ -1,11 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ReceiptsModal from '@/Components/ReceiptsModal.vue';
 import {
     HandCoins, Search, Sparkles, ReceiptText, Wallet,
-    CalendarClock, X, Banknote, Hourglass, BadgeCheck,
-    Landmark, Smartphone, CreditCard, Loader2,
+    CalendarClock, Banknote, Hourglass, BadgeCheck,
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -16,7 +16,9 @@ const props = defineProps({
     isDummy: { type: Boolean, default: false },
 });
 
-// Live rows from props; the record-payment modal posts to the ledger.
+// Live rows from props. Collections now arrive from the partner portal's
+// PayMongo checkout (and any legacy ledger postings), so finance monitors the
+// ledger and reviews each invoice's receipts here.
 const localRows = ref(props.receivables.map(r => ({ ...r })));
 
 const searchQuery = ref('');
@@ -71,58 +73,12 @@ const agingGradients = [
     'from-violet-500 via-purple-600 to-fuchsia-700',
 ];
 
-// --- Record-payment sheet (standard payment UI; online methods route
-// through the PayMongo gateway layer, offline ones record directly) ---
-const showModal = ref(false);
-const activeRow = ref(null);
-const payAmount = ref(0);
-const payMethod = ref('cash');
-const payReference = ref('');
-const saving = ref(false);
-
-const page = usePage();
-const gatewayError = computed(() => page.props.errors?.error || '');
-
-const methodOptions = [
-    { key: 'cash', label: 'Cash', icon: Banknote },
-    { key: 'bank_transfer', label: 'Bank transfer', icon: Landmark },
-    { key: 'check', label: 'Check', icon: ReceiptText },
-    { key: 'gcash', label: 'GCash', icon: Smartphone },
-    { key: 'maya', label: 'Maya', icon: Wallet },
-    { key: 'card', label: 'Card', icon: CreditCard },
-];
-const onlineKeys = ['gcash', 'maya', 'card'];
-const isOnline = computed(() => onlineKeys.includes(payMethod.value));
-
-const openModal = (row) => {
-    activeRow.value = row;
-    payAmount.value = balanceOf(row);
-    payMethod.value = 'cash';
-    payReference.value = '';
-    showModal.value = true;
-};
-const closeModal = () => { showModal.value = false; activeRow.value = null; };
-const submitPayment = () => {
-    if (!activeRow.value || saving.value) return;
-    const add = Math.max(0, Math.min(Number(payAmount.value || 0), balanceOf(activeRow.value)));
-    if (add <= 0) return;
-    saving.value = true;
-    router.post(route('fin.manager.receivables.pay', activeRow.value.id), {
-        amount: add,
-        paid_at: new Date().toISOString().split('T')[0],
-        method: payMethod.value,
-        reference: payReference.value || undefined,
-    }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            activeRow.value.paid = Number(activeRow.value.paid ?? 0) + add;
-            if (balanceOf(activeRow.value) <= 0) activeRow.value.status = 'paid';
-            else if (Number(activeRow.value.paid) > 0) activeRow.value.status = 'partial';
-            closeModal();
-        },
-        onFinish: () => { saving.value = false; },
-    });
-};
+// --- Receipts / payment history: every collection recorded against an
+// invoice, rendered as online-receipt cards so finance can monitor them. ---
+const showReceipts = ref(false);
+const receiptRow = ref(null);
+const openReceipts = (row) => { receiptRow.value = row; showReceipts.value = true; };
+const closeReceipts = () => { showReceipts.value = false; receiptRow.value = null; };
 </script>
 
 <template>
@@ -222,7 +178,7 @@ const submitPayment = () => {
                                     <th class="px-5 py-3 text-right">Balance</th>
                                     <th class="px-5 py-3">Due Date</th>
                                     <th class="px-5 py-3">Status</th>
-                                    <th class="px-5 py-3 text-right">Action</th>
+                                    <th class="px-5 py-3 text-right">Receipts</th>
                                 </tr>
                             </thead>
                             <TransitionGroup name="card" tag="tbody">
@@ -245,9 +201,10 @@ const submitPayment = () => {
                                         </span>
                                     </td>
                                     <td class="px-5 py-3.5 text-right">
-                                        <button @click="openModal(r)" :disabled="balanceOf(r) <= 0"
-                                            class="rounded-xl bg-indigo-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-95">
-                                            Record payment
+                                        <button @click="openReceipts(r)"
+                                            class="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-indigo-700 transition active:scale-95">
+                                            <ReceiptText class="h-3.5 w-3.5" /> Receipt
+                                            <span v-if="r.receipt_count" class="rounded-full bg-white/25 px-1.5 text-[10px] font-black">{{ r.receipt_count }}</span>
                                         </button>
                                     </td>
                                 </tr>
@@ -273,61 +230,14 @@ const submitPayment = () => {
 
             </div>
 
-            <!-- Record-payment modal (frontend-only dummy) -->
-            <Transition name="modal">
-                <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div class="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" @click="closeModal" />
-                    <div class="relative w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-zinc-900 shadow-2xl">
-                        <div class="bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-5 text-white">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-100">Record payment</p>
-                                    <h3 class="text-lg font-black tracking-tight">Record payment</h3>
-                                </div>
-                                <button @click="closeModal" class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/25 transition active:scale-95">
-                                    <X class="h-4 w-4" />
-                                </button>
-                            </div>
-                        </div>
-                        <div v-if="activeRow" class="p-5 space-y-4">
-                            <div class="rounded-2xl bg-slate-50 dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800 p-4 text-xs">
-                                <div class="flex items-center justify-between gap-2">
-                                    <p class="font-black text-gray-900 dark:text-white">{{ activeRow.invoice_no }} · {{ activeRow.client }}</p>
-                                </div>
-                                <p class="text-gray-400 font-medium mt-1">Balance due: <span class="font-black text-indigo-600 dark:text-indigo-300">{{ peso(balanceOf(activeRow)) }}</span></p>
-                            </div>
-                            <label class="block">
-                                <span class="text-[11px] font-black uppercase tracking-widest text-gray-400">Amount (PHP)</span>
-                                <input v-model.number="payAmount" type="number" min="0" :max="activeRow ? balanceOf(activeRow) : 0" step="0.01"
-                                    class="mt-1.5 w-full rounded-2xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 transition" />
-                            </label>
-                            <div>
-                                <span class="text-[11px] font-black uppercase tracking-widest text-gray-400">Payment method</span>
-                                <div class="mt-1.5 grid grid-cols-3 gap-2">
-                                    <button v-for="opt in methodOptions" :key="opt.key" type="button" @click="payMethod = opt.key"
-                                        :class="payMethod === opt.key ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 shadow-md' : 'border-gray-200 dark:border-zinc-700 text-gray-500 dark:text-gray-400 hover:border-indigo-300'"
-                                        class="flex flex-col items-center gap-1 rounded-2xl border-2 px-2 py-2.5 text-[10px] font-black uppercase tracking-wide transition active:scale-95">
-                                        <component :is="opt.icon" class="h-5 w-5" />
-                                        {{ opt.label }}
-                                    </button>
-                                </div>
-                            </div>
-                            <label class="block">
-                                <span class="text-[11px] font-black uppercase tracking-widest text-gray-400">Reference {{ isOnline ? '(from gateway)' : '(optional)' }}</span>
-                                <input v-model="payReference" type="text" :placeholder="isOnline ? 'Auto-filled on charge' : 'e.g. OR-12345'"
-                                    class="mt-1.5 w-full rounded-2xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 transition" />
-                            </label>
-                            <p v-if="gatewayError" class="text-[11px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-900/20 rounded-xl px-3 py-2">{{ gatewayError }}</p>
-                            <div class="flex gap-2">
-                                <button @click="closeModal" class="flex-1 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition active:scale-95">Cancel</button>
-                                <button @click="submitPayment" :disabled="saving" class="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 shadow-lg shadow-indigo-500/20 hover:opacity-95 transition active:scale-95 disabled:opacity-50">
-                                    <Loader2 v-if="saving" class="h-4 w-4 animate-spin" /> {{ saving ? (isOnline ? 'Processing…' : 'Saving…') : `Pay ${peso(payAmount || 0)}` }}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </Transition>
+            <!-- Payment history: every collection recorded against the invoice -->
+            <ReceiptsModal
+                :show="showReceipts"
+                :row="receiptRow"
+                title="Receivable Receipts"
+                subtitle="Client payment history"
+                @close="closeReceipts"
+            />
         </div>
     </AuthenticatedLayout>
 </template>

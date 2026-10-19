@@ -2,7 +2,7 @@
 import {
     Factory, LayoutDashboard, ClipboardList, XCircle, Boxes, CheckCircle2,
     Eye, Award, FileText, Sparkles, Palette, Wrench, History, Cog, Flag, FlaskConical,
-    ClipboardCheck, ArrowRightLeft, Leaf, HardHat, Flame, Layers,
+    ClipboardCheck, ArrowRightLeft, Leaf, HardHat, Flame, Layers, Package,
 } from 'lucide-vue-next'
 
 // Static config for the "single manufacturing role" staff view (Case 2 below)
@@ -15,7 +15,7 @@ const STAFF_ROLE_CONFIG = {
     dyeing_fabric_softener: { label: 'Dyeing Fabric Softener', icon: Palette, hasReports: true, hasHistory: true },
     dyeing_squeezer: { label: 'Dyeing Squeezer', icon: Palette, hasReports: true, hasHistory: true },
     dyeing_ironing: { label: 'Dyeing Ironing', icon: Palette, hasReports: true, hasHistory: true },
-    dyeing_packaging: { label: 'Dyeing Packaging', icon: Palette, hasReports: true, hasHistory: true },
+    finishing_packaging: { label: 'Finishing Packaging', icon: Package, hasReports: true, hasHistory: true },
     dyeing_lab_chemist: { label: 'Lab Chemist', icon: FlaskConical, hasReports: false, hasHistory: true, hasLab: true },
     checker_quality: { label: 'Checker Quality', icon: CheckCircle2, hasReports: false, hasHistory: false },
     maintenance_checker: { label: 'Maintenance Checker', icon: Wrench, hasReports: true, hasHistory: false },
@@ -30,9 +30,9 @@ const DEPARTMENT_ROLES = {
     knitting: ['knitting_yarn', 'knitting_mechanic'],
     dyeing: [
         'dyeing_color', 'dyeing_fabric_softener', 'dyeing_squeezer',
-        'dyeing_ironing', 'dyeing_packaging', 'dyeing_lab_chemist',
+        'dyeing_ironing', 'dyeing_lab_chemist',
     ],
-    finishing: ['checker_quality'],
+    finishing: ['finishing_packaging', 'checker_quality'],
     maintenance: ['maintenance_checker', 'pollution_control_operator', 'safety_officer'],
     boiler: ['boiler_operator'],
 }
@@ -124,12 +124,13 @@ export const manModule = {
 
         const qualityCheckerChildren = [
             { label: 'Dashboard', href: '/dashboard/man/checker-quality', icon: LayoutDashboard },
-            { label: 'Production', href: '/dashboard/man/checker-quality/production', icon: ClipboardList },
+            { label: 'Quality Inspection', href: '/dashboard/man/checker-quality/production', icon: ClipboardCheck },
         ]
 
         const managerChildren = [
             { label: 'Dashboard', href: route('man.manager.dashboard'), icon: Factory, permKey: 'dashboard' },
             { label: 'Production Orders', href: route('man.manager.production'), icon: ClipboardList, permKey: 'production' },
+            { label: 'JO Assignments', href: route('man.assignments.index'), icon: ClipboardCheck, permKey: 'production' },
             { label: 'Recipes', href: route('man.recipes'), icon: Layers, permKey: 'production' },
             { label: 'Rejected Items', href: route('man.manager.rejected'), icon: XCircle, permKey: 'reject' },
             { label: 'Production Inventory', href: route('man.inventory.index'), icon: Boxes, permKey: 'inventory' },

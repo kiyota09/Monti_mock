@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Scm;
 
 use App\Http\Controllers\Controller;
+use App\Models\Man\ManufacturingOrder;
+use App\Models\Ord\OrderQueue;
 use App\Models\Ord\PurchaseOrder;
 use App\Models\Ord\SalesOrder;
 use App\Services\Eco\StockSustainabilityService;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ScmSalesOrderController extends Controller
@@ -130,10 +133,36 @@ class ScmSalesOrderController extends Controller
             return redirect()->back()->withErrors(['error' => "Push blocked: live stock cannot sustain {$result['jo_number']}. {$lines}. File procurement from the ECO Push Center DSS check."]);
         }
 
-        $salesOrder->update([
-            'status' => 'in_production',
-            'inv_check_sufficient' => true,
-        ]);
+        DB::transaction(function () use ($salesOrder) {
+            $salesOrder->update([
+                'status' => 'in_production',
+                'inv_check_sufficient' => true,
+            ]);
+
+            // Hand the Job Order to Manufacturing. The knitting supervisor's
+            // "JO Assignments" board (and the knitting intake gates) read
+            // ManufacturingOrders, so pushing without creating one left the JO
+            // invisible to the plant floor.
+            $hasActive = ManufacturingOrder::where('sales_order_id', $salesOrder->id)
+                ->whereIn('status', ['pending', 'in_progress'])
+                ->exists();
+
+            if (! $hasActive) {
+                ManufacturingOrder::create([
+                    'sales_order_id' => $salesOrder->id,
+                    'total_quantity' => (int) $salesOrder->quantity,
+                    'remaining_quantity' => (int) $salesOrder->quantity,
+                    'status' => 'pending',
+                    'notes' => 'Pushed to manufacturing by SCM (stock re-verified live)',
+                ]);
+            }
+
+            OrderQueue::updateOrCreate(
+                ['sales_order_id' => $salesOrder->id],
+                ['stage' => 'man_production', 'man_started_at' => now()]
+            );
+        });
+
         return redirect()->back()->with('success', 'Stock re-verified live — sales order pushed to Manufacturing.');
     }
 }

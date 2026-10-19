@@ -14,6 +14,9 @@ class Package extends Model
         'shift',
         'packaged_at',
         'status',
+        'checked_by',
+        'checked_at',
+        'check_remarks',
         'manufacturing_order_id',
         'fabric_id',
         'quantity',      // added
@@ -21,12 +24,18 @@ class Package extends Model
 
     protected $casts = [
         'packaged_at' => 'datetime',
+        'checked_at'  => 'datetime',
         'status'      => 'string',
     ];
 
     public function operator()
     {
         return $this->belongsTo(User::class, 'operator_id');
+    }
+
+    public function checker()
+    {
+        return $this->belongsTo(User::class, 'checked_by');
     }
 
     public function manufacturingOrder()

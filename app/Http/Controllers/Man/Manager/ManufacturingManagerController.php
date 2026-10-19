@@ -14,8 +14,12 @@ use App\Models\Man\PcoRecord;
 use App\Models\Man\SafetyIncident;
 use App\Models\Vp\VpBulletin;
 use App\Models\Man\ShiftHandover;
+use App\Models\Man\IronJob;
 use App\Models\Man\ManufacturingOrder;
 use App\Models\Man\Package;
+use App\Models\Man\SoftenerJob;
+use App\Models\Man\SqueezerJob;
+use App\Models\Ord\OrderQueue;
 use App\Models\Ord\PurchaseOrder;
 use App\Models\Ord\SalesOrder;
 use App\Models\Core\User;
@@ -77,7 +81,11 @@ class ManufacturingManagerController extends Controller
 
         $receivedOrders = PurchaseOrder::whereHas('queue', function ($q) {
             $q->where('stage', 'man_production');
-        })->count();
+        })->count()
+            // Job Orders pushed from SCM (sales orders) land in the same queue.
+            + OrderQueue::where('stage', 'man_production')
+                ->whereNotNull('sales_order_id')
+                ->count();
 
         $inProduction = ManufacturingOrder::where('status', 'in_progress')->count();
         $activeMachines = Machine::where('status', 'available')->count();
@@ -179,75 +187,71 @@ class ManufacturingManagerController extends Controller
         };
     }
 
-    public function production()
+    public function production(Request $request)
     {
-        // 1. Fetch Purchase Orders (from SCM) with stage 'man_production'
-        //    Exclude those that already have a pending/in_progress manufacturing order
-        $purchaseOrders = PurchaseOrder::with(['client', 'items.product'])
-            ->whereHas('queue', function ($q) {
-                $q->where('stage', 'man_production');
-            })
-            ->whereDoesntHave('manufacturingOrders', function ($q) {
-                $q->whereIn('status', ['pending', 'in_progress']);
-            })
+        $user = $this->getCurrentManager();
+
+        // Supervisors act on their own department; CEO / oversight may inspect
+        // any department via ?department=…  A null department shows the full
+        // pipeline (oversight view).
+        $department = ($user->is_manufacturing_supervisor && $user->supervisor_department)
+            ? $user->supervisor_department
+            : $request->query('department');
+
+        if (! in_array($department, ['knitting', 'dyeing', 'finishing'], true)) {
+            $department = null;
+        }
+
+        $fabrics = Fabric::with('machine', 'operator', 'salesOrder')
+            ->where('status', 'pending')
+            ->orderBy('created_at')
+            ->get();
+
+        $dyeJobs = DyeJob::with('fabric.salesOrder', 'machine', 'operator')
+            ->whereHas('fabric', fn($q) => $q->where('status', 'dyeing'))
+            ->get();
+
+        $softenerJobs = SoftenerJob::with('fabric.salesOrder', 'machine', 'operator', 'squeezerJob')
+            ->whereHas('fabric', fn($q) => $q->where('status', 'softener'))
+            ->get();
+
+        $squeezerJobs = SqueezerJob::with('softenerJob.fabric.salesOrder', 'machine', 'operator', 'ironJob')
+            ->whereHas('softenerJob.fabric', fn($q) => $q->where('status', 'squeezer'))
+            ->get();
+
+        $ironJobs = IronJob::with('squeezerJob.softenerJob.fabric.salesOrder', 'operator')
+            ->whereHas('squeezerJob.softenerJob.fabric', fn($q) => $q->where('status', 'iron'))
+            ->get();
+
+        // Inspector handles 'pending'; the finishing supervisor pushes 'checked'.
+        $packages = Package::with(['fabric.salesOrder.recipe.product', 'operator'])
+            ->whereIn('status', ['pending', 'checked'])
+            ->orderBy('created_at')
             ->get()
-            ->map(function ($order) {
-                $items = $order->items->map(fn($item) => [
-                    'product_name' => $item->product->name ?? 'Unknown',
-                    'product_sku'  => $item->product->sku ?? '',
-                    'quantity'     => $item->quantity,
-                ]);
+            ->map(function ($pkg) {
+                $product = $pkg->fabric->salesOrder->recipe->product ?? null;
                 return [
-                    'type'          => 'purchase_order',
-                    'id'            => $order->id,
-                    'order_number'  => $order->po_number,
-                    'client_name'   => $order->client->company_name ?? 'N/A',
-                    'total_quantity' => $order->items->sum('quantity'),
-                    'items'         => $items,
-                    'created_at'    => $order->created_at,
+                    'id' => $pkg->id,
+                    'code' => $pkg->code,
+                    'quantity' => $pkg->quantity,
+                    'status' => $pkg->status,
+                    'product_name' => $product->name ?? 'Unknown Product',
+                    'product_sku' => $product->sku ?? '',
+                    'fabric_code' => $pkg->fabric->code ?? '',
+                    'yarn_type' => $pkg->fabric->yarn_type ?? '',
+                    'weight' => $pkg->fabric->weight ?? 0,
+                    'operator' => $pkg->operator->name ?? '',
                 ];
             });
-
-        // 2. Fetch Sales Orders (Job Orders) with status 'in_production'
-        //    Exclude those that already have a manufacturing order (via sales_order_id)
-        $salesOrders = SalesOrder::with(['client', 'recipe'])
-            ->where('status', 'in_production')
-            ->whereDoesntHave('manufacturingOrder', function ($q) {
-                $q->whereIn('status', ['pending', 'in_progress']);
-            })
-            ->get()
-            ->map(function ($order) {
-                // Build item representation
-                $items = [];
-                $productName = trim(($order->color ?? '') . ' ' . ($order->yarn_type ?? ''));
-                if (!empty($productName)) {
-                    $items[] = [
-                        'product_name' => $productName,
-                        'quantity'     => $order->quantity ?? 0,
-                    ];
-                } else {
-                    $items[] = [
-                        'product_name' => 'Custom Product',
-                        'quantity'     => $order->quantity ?? 0,
-                    ];
-                }
-
-                return [
-                    'type'          => 'sales_order',
-                    'id'            => $order->id,
-                    'order_number'  => $order->jo_number ?? 'JO-' . $order->id,
-                    'client_name'   => $order->client->company_name ?? 'N/A',
-                    'total_quantity' => $order->quantity ?? 0,
-                    'items'         => $items,
-                    'created_at'    => $order->created_at,
-                ];
-            });
-
-        // Merge both collections and sort by created_at descending
-        $orders = $purchaseOrders->concat($salesOrders)->sortByDesc('created_at')->values();
 
         return Inertia::render('Dashboard/MAN/Manager/Production', [
-            'orders' => $orders,
+            'department' => $department,
+            'fabrics' => $fabrics,
+            'dyeJobs' => $dyeJobs,
+            'softenerJobs' => $softenerJobs,
+            'squeezerJobs' => $squeezerJobs,
+            'ironJobs' => $ironJobs,
+            'packages' => $packages,
         ]);
     }
 
@@ -441,7 +445,7 @@ class ManufacturingManagerController extends Controller
         }
 
         $validated = $request->validate([
-            'manufacturing_role' => 'required|in:knitting_yarn,knitting_mechanic,dyeing_color,dyeing_fabric_softener,dyeing_squeezer,dyeing_ironing,dyeing_lab_chemist,dyeing_packaging,maintenance_checker,pollution_control_operator,safety_officer,boiler_operator,checker_quality',
+            'manufacturing_role' => 'required|in:knitting_yarn,knitting_mechanic,dyeing_color,dyeing_fabric_softener,dyeing_squeezer,dyeing_ironing,dyeing_lab_chemist,finishing_packaging,maintenance_checker,pollution_control_operator,safety_officer,boiler_operator,checker_quality',
         ]);
 
         // Supervisors may only move staff within their own department —
@@ -453,22 +457,5 @@ class ManufacturingManagerController extends Controller
 
         $staff->update(['manufacturing_role' => $validated['manufacturing_role']]);
         return redirect()->back()->with('message', "Staff role updated.");
-    }
-
-    public function sendToLogistics($packageId)
-    {
-        $package = Package::findOrFail($packageId);
-        $package->update(['status' => 'delivered']);
-
-        if ($package->manufacturing_order_id) {
-            $order = $package->manufacturingOrder;
-            $remaining = $order->remaining_quantity - $package->items->sum('quantity');
-            $order->update(['remaining_quantity' => $remaining]);
-            if ($remaining <= 0) {
-                $order->update(['status' => 'completed']);
-            }
-        }
-
-        return redirect()->back()->with('message', 'Package sent to logistics.');
     }
 }

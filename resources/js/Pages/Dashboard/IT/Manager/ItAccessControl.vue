@@ -79,8 +79,8 @@ const displayPositionLabel = (u) => formatPositionLabel(displayPositionKey(u));
 const MAN_ROLE_DEPARTMENT = {
     knitting_yarn: 'knitting', knitting_mechanic: 'knitting',
     dyeing_color: 'dyeing', dyeing_fabric_softener: 'dyeing', dyeing_squeezer: 'dyeing',
-    dyeing_ironing: 'dyeing', dyeing_packaging: 'dyeing', dyeing_lab_chemist: 'dyeing',
-    checker_quality: 'finishing',
+    dyeing_ironing: 'dyeing', dyeing_lab_chemist: 'dyeing',
+    finishing_packaging: 'finishing', checker_quality: 'finishing',
     maintenance_checker: 'maintenance', pollution_control_operator: 'maintenance', safety_officer: 'maintenance',
     boiler_operator: 'boiler',
 };

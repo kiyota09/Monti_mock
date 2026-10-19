@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Inv\BomController;
+use App\Http\Controllers\Man\Manager\ManAssignmentController;
+use App\Http\Controllers\Man\Manager\ManSupervisorGateController;
 use App\Http\Controllers\Man\Manager\ManufacturingManagerController;
 use App\Http\Controllers\Man\ManDashboardController;
 use App\Http\Controllers\Man\ManufacturingInventoryController;
@@ -9,7 +11,7 @@ use App\Http\Controllers\Man\Staff\DyeingColorController;
 use App\Http\Controllers\Man\Staff\DyeingFabricSoftenerController;
 use App\Http\Controllers\Man\Staff\DyeingIroningController;
 use App\Http\Controllers\Man\Staff\DyeingLabChemistController;
-use App\Http\Controllers\Man\Staff\DyeingPackagingController;
+use App\Http\Controllers\Man\Staff\FinishingPackagingController;
 use App\Http\Controllers\Man\Staff\DyeingSqueezerController;
 use App\Http\Controllers\Man\Staff\KnittingYarnController;
 use App\Http\Controllers\Man\Staff\KnittingMechanicController;
@@ -66,12 +68,54 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
             ->middleware('page.permission:access,edit')->name('manager.update-staff-role');
         Route::post('/handover', [ManufacturingManagerController::class, 'storeHandover'])
             ->middleware('page.permission:production,edit')->name('manager.handover.store');
-        Route::post('/packages/{id}/send-to-logistics', [ManufacturingManagerController::class, 'sendToLogistics'])
-            ->middleware('page.permission:production,edit')->name('manager.send-to-logistics');
 
-        // NOTE: quality-checker actions live in the staff group below
-        // (man.staff.checker-quality.*) — the Finishing supervisor reaches
-        // them via man.role:checker_quality; no manager-level duplicates.
+        // ── Supervisor quality gates (department-scoped) ──────────────────────
+        // Ownership: knitting output → knitting supervisor; every dyeing stage →
+        // dyeing supervisor; push-to-logistics → finishing supervisor (after
+        // Checker Quality inspects the package).
+        Route::prefix('gates/knitting')->name('gates.knitting.')
+            ->controller(ManSupervisorGateController::class)
+            ->middleware('man.department:knitting')
+            ->group(function () {
+                Route::post('/order/{id}/check-inventory', 'checkInventory')
+                    ->middleware('page.permission:production,edit')->name('check-inventory');
+                Route::post('/order/{id}/start-production', 'startProduction')
+                    ->middleware('page.permission:production,edit')->name('start-production');
+                Route::post('/fabric/{id}/pass', 'passFabric')
+                    ->middleware('page.permission:production,edit')->name('pass-fabric');
+            });
+
+        Route::prefix('gates/dyeing')->name('gates.dyeing.')
+            ->controller(ManSupervisorGateController::class)
+            ->middleware('man.department:dyeing')
+            ->group(function () {
+                Route::post('/dye/{id}/pass', 'passDye')
+                    ->middleware('page.permission:production,edit')->name('pass-dye');
+                Route::post('/softener/{id}/pass', 'passSoftener')
+                    ->middleware('page.permission:production,edit')->name('pass-softener');
+                Route::post('/squeezer/{id}/pass', 'passSqueezer')
+                    ->middleware('page.permission:production,edit')->name('pass-squeezer');
+                Route::post('/iron/{id}/pass', 'passIron')
+                    ->middleware('page.permission:production,edit')->name('pass-iron');
+            });
+
+        Route::prefix('gates/finishing')->name('gates.finishing.')
+            ->controller(ManSupervisorGateController::class)
+            ->middleware('man.department:finishing')
+            ->group(function () {
+                Route::post('/package/{id}/push-to-logistics', 'pushToLogistics')
+                    ->middleware('page.permission:production,edit')->name('push-to-logistics');
+            });
+
+        // ── Job Order assignment board ────────────────────────────────────────
+        Route::get('/assignments', [ManAssignmentController::class, 'index'])
+            ->middleware('page.permission:production,view')->name('assignments.index');
+        Route::post('/assignments', [ManAssignmentController::class, 'store'])
+            ->middleware('page.permission:production,edit')->name('assignments.store');
+        Route::patch('/assignments/{assignment}', [ManAssignmentController::class, 'update'])
+            ->middleware('page.permission:production,edit')->name('assignments.update');
+        Route::delete('/assignments/{assignment}', [ManAssignmentController::class, 'destroy'])
+            ->middleware('page.permission:production,edit')->name('assignments.destroy');
     });
 
     // ── Recipes (moved from Inventory → Manufacturing; dyeing lab chemist owns it).
@@ -228,9 +272,9 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                 });
             });
 
-        // Dyeing Packaging (ironing flows directly here; forming stage removed)
-        Route::prefix('dyeing-packaging')->name('staff.dyeing-packaging.')->controller(DyeingPackagingController::class)
-            ->middleware('man.role:dyeing_packaging')
+        // Finishing Packaging (ironing flows directly here; forming stage removed)
+        Route::prefix('finishing-packaging')->name('staff.finishing-packaging.')->controller(FinishingPackagingController::class)
+            ->middleware('man.role:finishing_packaging')
             ->group(function () {
                 Route::middleware('page.permission:production,view')->group(function () {
                     Route::get('/', 'index')->name('dashboard');
@@ -305,7 +349,8 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                 });
             });
 
-        // Quality Checker (Staff level) — kept for role‑based access
+        // Quality Checker (Finishing) — inspects packaging outputs only. The
+        // knitting/dyeing gates moved to the department supervisors (man.gates.*).
         Route::prefix('checker-quality')->name('staff.checker-quality.')->controller(CheckerQualityController::class)
             ->middleware(['man.role:checker_quality'])
             ->group(function () {
@@ -317,14 +362,7 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                     Route::get('/work', 'production')->name('page');
                 });
                 Route::middleware('page.permission:production,edit')->group(function () {
-                    Route::post('/order/{id}/check-inventory', 'checkInventory')->name('check-inventory');
-                    Route::post('/order/{id}/start-production', 'startProduction')->name('start-production');
-                    Route::post('/fabric/{id}/pass', 'passFabric')->name('pass-fabric');
-                    Route::post('/dye/{id}/pass', 'passDye')->name('pass-dye');
-                    Route::post('/softener/{id}/pass', 'passSoftener')->name('pass-softener');
-                    Route::post('/squeezer/{id}/pass', 'passSqueezer')->name('pass-squeezer');
-                    Route::post('/iron/{id}/pass', 'passIron')->name('pass-iron');
-                    Route::post('/package/{id}/push-to-logistics', 'pushToLogistics')->name('push-to-logistics');
+                    Route::post('/package/{id}/inspect', 'inspectPackage')->name('inspect-package');
                 });
             });
     });

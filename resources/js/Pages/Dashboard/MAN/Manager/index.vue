@@ -45,8 +45,8 @@ const DEPT_LABELS = {
 };
 const DEPT_ROLES = {
     knitting: ['knitting_yarn', 'knitting_mechanic'],
-    dyeing: ['dyeing_color', 'dyeing_fabric_softener', 'dyeing_squeezer', 'dyeing_ironing', 'dyeing_packaging', 'dyeing_lab_chemist'],
-    finishing: ['checker_quality'],
+    dyeing: ['dyeing_color', 'dyeing_fabric_softener', 'dyeing_squeezer', 'dyeing_ironing', 'dyeing_lab_chemist'],
+    finishing: ['finishing_packaging', 'checker_quality'],
     maintenance: ['maintenance_checker', 'pollution_control_operator', 'safety_officer'],
     boiler: ['boiler_operator'],
 };
@@ -207,7 +207,7 @@ const ALL_ROLE_OPTIONS = [
     { value: 'dyeing_fabric_softener', label: 'Dyeing Fabric Softener' },
     { value: 'dyeing_squeezer', label: 'Dyeing Squeezer' },
     { value: 'dyeing_ironing', label: 'Dyeing Ironing' },
-    { value: 'dyeing_packaging', label: 'Dyeing Packaging' },
+    { value: 'finishing_packaging', label: 'Finishing Packaging' },
     { value: 'dyeing_lab_chemist', label: 'Dyeing Lab Chemist' },
     { value: 'maintenance_checker', label: 'Maintenance Checker' },
     { value: 'pollution_control_operator', label: 'Pollution Control Operator' },

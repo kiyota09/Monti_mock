@@ -7,6 +7,7 @@ use App\Http\Controllers\Client\ClientConversationController;
 use App\Http\Controllers\Client\ClientDashboardController;
 use App\Http\Controllers\Client\ClientInvoiceController;
 use App\Http\Controllers\Client\ClientMessageController;
+use App\Http\Controllers\Client\ClientPaymentController;
 use App\Http\Controllers\Client\ClientProductsController;
 use App\Http\Controllers\Client\ClientPasswordController;
 use App\Http\Controllers\Client\ClientProfileController;
@@ -105,6 +106,12 @@ Route::middleware(['auth:client', 'client.access'])->prefix('partner')->name('cl
     Route::get('/invoices/{order}', [ClientInvoiceController::class, 'show'])->name('invoices.show');
     Route::post('/invoices/{order}/accept', [ClientInvoiceController::class, 'accept'])->name('invoices.accept');
     Route::post('/invoices/{order}/send-po', [ClientInvoiceController::class, 'sendPO'])->name('invoices.send-po');
+    // Payments — the business client settles its receivable invoices through
+    // the shared PayMongo hosted checkout; confirmed charges are written to
+    // the FIN receivables ledger (see ClientPaymentController).
+    Route::get('/payments', [ClientPaymentController::class, 'index'])->name('payments');
+    Route::post('/payments/{invoice}/checkout', [ClientPaymentController::class, 'startCheckout'])->name('payments.checkout');
+    Route::get('/payments/checkout/return', [ClientPaymentController::class, 'checkoutReturn'])->name('payments.checkout.return');
     // Receiving (delivery confirmation)
     Route::get('/receiving', [ClientReceivingController::class, 'index'])->name('receiving');
     Route::post('/receiving/{order}/mark', [ClientReceivingController::class, 'markReceived'])->name('receiving.mark');

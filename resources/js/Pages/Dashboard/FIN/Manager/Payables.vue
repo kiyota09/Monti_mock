@@ -1,22 +1,25 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
+import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ReceiptsModal from '@/Components/ReceiptsModal.vue';
 import {
     Landmark, Search, Sparkles, ReceiptText, Wallet,
     CalendarClock, X, Banknote, Hourglass, BadgeCheck, Tag,
-    Smartphone, CreditCard, Loader2,
+    Smartphone, CreditCard, Loader2, ShieldCheck, ExternalLink,
+    FileText,
 } from 'lucide-vue-next';
 
 const props = defineProps({
     payables: { type: Array, default: () => [] },
     apAging: { type: Array, default: () => [] },
     stats: { type: Object, default: () => ({}) },
-    gateway: { type: Object, default: () => ({ mode: 'simulated', methods: {} }) },
+    gateway: { type: Object, default: () => ({ mode: 'simulated', configured: false, sandbox: true, methods: {} }) },
     isDummy: { type: Boolean, default: false },
 });
 
-// Live rows from props; the record-payment modal posts to the ledger.
+// Live rows from props; the record-payment modal starts a PayMongo checkout.
 const localRows = ref(props.payables.map(r => ({ ...r })));
 
 const searchQuery = ref('');
@@ -71,57 +74,53 @@ const agingGradients = [
     'from-violet-500 via-purple-600 to-fuchsia-700',
 ];
 
-// --- Record-payment sheet (standard payment UI; online methods route
-// through the PayMongo gateway layer, offline ones record directly) ---
+// --- PayMongo hosted checkout ("PayMongo UI"): the modal only collects the
+// amount, then the browser is redirected to PayMongo's own secure checkout
+// page. Nothing is written to the ledger until PayMongo confirms payment. ---
 const showModal = ref(false);
 const activeRow = ref(null);
 const payAmount = ref(0);
-const payMethod = ref('cash');
-const payReference = ref('');
-const saving = ref(false);
+const starting = ref(false);
+const checkoutError = ref('');
 
 const page = usePage();
+const flashMessage = computed(() => page.props.flash?.message || '');
 const gatewayError = computed(() => page.props.errors?.error || '');
+const gatewayConfigured = computed(() => !!props.gateway?.configured);
 
-const methodOptions = [
-    { key: 'cash', label: 'Cash', icon: Banknote },
-    { key: 'bank_transfer', label: 'Bank transfer', icon: Landmark },
-    { key: 'check', label: 'Check', icon: ReceiptText },
-    { key: 'gcash', label: 'GCash', icon: Smartphone },
-    { key: 'maya', label: 'Maya', icon: Wallet },
-    { key: 'card', label: 'Card', icon: CreditCard },
-];
-const onlineKeys = ['gcash', 'maya', 'card'];
-const isOnline = computed(() => onlineKeys.includes(payMethod.value));
+// --- Receipts / payment history: every payment received against a bill
+// (partial or in full), rendered as online-receipt cards. ---
+const showReceipts = ref(false);
+const receiptRow = ref(null);
+
+const openReceipts = (row) => { receiptRow.value = row; showReceipts.value = true; };
+const closeReceipts = () => { showReceipts.value = false; receiptRow.value = null; };
 
 const openModal = (row) => {
     activeRow.value = row;
     payAmount.value = balanceOf(row);
-    payMethod.value = 'cash';
-    payReference.value = '';
+    checkoutError.value = '';
     showModal.value = true;
 };
 const closeModal = () => { showModal.value = false; activeRow.value = null; };
-const submitPayment = () => {
-    if (!activeRow.value || saving.value) return;
+
+const startCheckout = async () => {
+    if (!activeRow.value || starting.value) return;
     const add = Math.max(0, Math.min(Number(payAmount.value || 0), balanceOf(activeRow.value)));
     if (add <= 0) return;
-    saving.value = true;
-    router.post(route('fin.manager.payables.pay', activeRow.value.id), {
-        amount: add,
-        paid_at: new Date().toISOString().split('T')[0],
-        method: payMethod.value,
-        reference: payReference.value || undefined,
-    }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            activeRow.value.paid = Number(activeRow.value.paid ?? 0) + add;
-            if (balanceOf(activeRow.value) <= 0) activeRow.value.status = 'paid';
-            else if (Number(activeRow.value.paid) > 0) activeRow.value.status = 'partial';
-            closeModal();
-        },
-        onFinish: () => { saving.value = false; },
-    });
+    starting.value = true;
+    checkoutError.value = '';
+    try {
+        const { data } = await axios.post(route('fin.manager.payables.checkout', activeRow.value.id), { amount: add });
+        if (data?.checkout_url) {
+            window.location.href = data.checkout_url;
+            return;
+        }
+        checkoutError.value = data?.message || 'Could not start PayMongo checkout.';
+    } catch (e) {
+        checkoutError.value = e?.response?.data?.message || 'Could not start PayMongo checkout.';
+    }
+    starting.value = false;
 };
 
 // --- Add-bill modal (live ledger post) ---
@@ -182,6 +181,16 @@ const submitBill = () => {
                         </div>
                     </div>
                 </div>
+
+                <!-- Payment result flash -->
+                <Transition name="modal">
+                    <div v-if="flashMessage || gatewayError" class="flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-bold"
+                        :class="flashMessage ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300' : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'">
+                        <BadgeCheck v-if="flashMessage" class="h-5 w-5 shrink-0" />
+                        <X v-else class="h-5 w-5 shrink-0" />
+                        <span>{{ flashMessage || gatewayError }}</span>
+                    </div>
+                </Transition>
 
                 <!-- Aging summary cards -->
                 <div v-if="apAging.length" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -261,11 +270,18 @@ const submitBill = () => {
                                             <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> {{ r.status }}
                                         </span>
                                     </td>
-                                    <td class="px-5 py-3.5 text-right">
-                                        <button @click="openModal(r)" :disabled="balanceOf(r) <= 0"
-                                            class="rounded-xl bg-indigo-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-95">
-                                            Record payment
-                                        </button>
+                                    <td class="px-5 py-3.5">
+                                        <div class="flex items-center justify-end gap-2">
+                                            <button @click="openReceipts(r)"
+                                                class="relative inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-white dark:bg-zinc-900 px-3 py-1.5 text-[11px] font-black text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition active:scale-95">
+                                                <FileText class="h-3.5 w-3.5" /> Receipts
+                                                <span v-if="r.receipt_count" class="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-black text-white">{{ r.receipt_count }}</span>
+                                            </button>
+                                            <button @click="openModal(r)" :disabled="balanceOf(r) <= 0"
+                                                class="rounded-xl bg-indigo-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-95">
+                                                Pay now
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             </TransitionGroup>
@@ -290,7 +306,11 @@ const submitBill = () => {
 
             </div>
 
-            <!-- Record-payment modal (live ledger post) -->
+            <!-- Receipts / payment history modal (shared component) -->
+            <ReceiptsModal :show="showReceipts" :row="receiptRow" @close="closeReceipts" />
+
+            <!-- PayMongo checkout modal: collect the amount, then redirect the
+                 browser to PayMongo's own hosted checkout page to complete it. -->
             <Transition name="modal">
                 <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div class="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" @click="closeModal" />
@@ -298,8 +318,10 @@ const submitBill = () => {
                         <div class="bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-5 text-white">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-100">Record payment</p>
-                                    <h3 class="text-lg font-black tracking-tight">Record payment</h3>
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-100">Secure checkout</p>
+                                    <h3 class="flex items-center gap-2 text-lg font-black tracking-tight">
+                                        <ShieldCheck class="h-5 w-5" /> Pay with PayMongo
+                                    </h3>
                                 </div>
                                 <button @click="closeModal" class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/25 transition active:scale-95">
                                     <X class="h-4 w-4" />
@@ -314,31 +336,30 @@ const submitBill = () => {
                                 <p class="text-gray-400 font-medium mt-1">Balance due: <span class="font-black text-indigo-600 dark:text-indigo-300">{{ peso(balanceOf(activeRow)) }}</span></p>
                             </div>
                             <label class="block">
-                                <span class="text-[11px] font-black uppercase tracking-widest text-gray-400">Amount (PHP)</span>
+                                <span class="text-[11px] font-black uppercase tracking-widest text-gray-400">Amount to pay (PHP)</span>
                                 <input v-model.number="payAmount" type="number" min="0" :max="activeRow ? balanceOf(activeRow) : 0" step="0.01"
                                     class="mt-1.5 w-full rounded-2xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 transition" />
                             </label>
-                            <div>
-                                <span class="text-[11px] font-black uppercase tracking-widest text-gray-400">Payment method</span>
-                                <div class="mt-1.5 grid grid-cols-3 gap-2">
-                                    <button v-for="opt in methodOptions" :key="opt.key" type="button" @click="payMethod = opt.key"
-                                        :class="payMethod === opt.key ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 shadow-md' : 'border-gray-200 dark:border-zinc-700 text-gray-500 dark:text-gray-400 hover:border-indigo-300'"
-                                        class="flex flex-col items-center gap-1 rounded-2xl border-2 px-2 py-2.5 text-[10px] font-black uppercase tracking-wide transition active:scale-95">
-                                        <component :is="opt.icon" class="h-5 w-5" />
-                                        {{ opt.label }}
-                                    </button>
+                            <div class="rounded-2xl border border-gray-100 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-950/40 p-3.5 space-y-2 text-[11px]">
+                                <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                                    <ShieldCheck class="h-4 w-4 text-emerald-500 shrink-0" />
+                                    <span class="font-semibold">You'll continue on PayMongo's secure checkout page.</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                                    <CreditCard class="h-4 w-4 shrink-0" /><Smartphone class="h-4 w-4 shrink-0" /><Wallet class="h-4 w-4 shrink-0" />
+                                    <span class="font-semibold">Card, GCash, Maya &amp; GrabPay accepted.</span>
                                 </div>
                             </div>
-                            <label class="block">
-                                <span class="text-[11px] font-black uppercase tracking-widest text-gray-400">Reference {{ isOnline ? '(from gateway)' : '(optional)' }}</span>
-                                <input v-model="payReference" type="text" :placeholder="isOnline ? 'Auto-filled on charge' : 'e.g. OR-12345'"
-                                    class="mt-1.5 w-full rounded-2xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 transition" />
-                            </label>
-                            <p v-if="gatewayError" class="text-[11px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-900/20 rounded-xl px-3 py-2">{{ gatewayError }}</p>
+                            <p v-if="!gatewayConfigured" class="text-[11px] font-bold text-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-xl px-3 py-2">
+                                PayMongo keys aren't configured. Add PAYMONGO_SECRET_KEY to .env to enable checkout.
+                            </p>
+                            <p v-if="checkoutError || gatewayError" class="text-[11px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-900/20 rounded-xl px-3 py-2">{{ checkoutError || gatewayError }}</p>
                             <div class="flex gap-2">
                                 <button @click="closeModal" class="flex-1 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition active:scale-95">Cancel</button>
-                                <button @click="submitPayment" :disabled="saving" class="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 shadow-lg shadow-indigo-500/20 hover:opacity-95 transition active:scale-95 disabled:opacity-50">
-                                    <Loader2 v-if="saving" class="h-4 w-4 animate-spin" /> {{ saving ? (isOnline ? 'Processing…' : 'Saving…') : `Pay ${peso(payAmount || 0)}` }}
+                                <button @click="startCheckout" :disabled="starting || !gatewayConfigured" class="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 shadow-lg shadow-indigo-500/20 hover:opacity-95 transition active:scale-95 disabled:opacity-50">
+                                    <Loader2 v-if="starting" class="h-4 w-4 animate-spin" />
+                                    <ExternalLink v-else class="h-4 w-4" />
+                                    {{ starting ? 'Redirecting…' : `Pay ${peso(payAmount || 0)}` }}
                                 </button>
                             </div>
                         </div>

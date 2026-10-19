@@ -22,6 +22,12 @@ class PayMongoService
 {
     public const ONLINE_METHODS = ['gcash', 'maya', 'card'];
 
+    /**
+     * Payment methods offered on the PayMongo hosted checkout page. These
+     * are PayMongo's own type names (Maya = "paymaya", GrabPay = "grab_pay").
+     */
+    public const CHECKOUT_METHOD_TYPES = ['card', 'gcash', 'paymaya', 'grab_pay'];
+
     public const METHOD_LABELS = [
         'cash' => 'Cash',
         'bank_transfer' => 'Bank transfer',
@@ -49,6 +55,149 @@ class PayMongoService
     public function label(?string $method): string
     {
         return self::METHOD_LABELS[strtolower((string) $method)] ?? (string) $method;
+    }
+
+    /**
+     * Translate a PayMongo source/method type to our internal label.
+     */
+    public function normalizeMethod(?string $type): ?string
+    {
+        if ($type === null || $type === '') {
+            return null;
+        }
+
+        return match (strtolower($type)) {
+            'paymaya' => 'maya',
+            default => strtolower($type),
+        };
+    }
+
+    /**
+     * Create a PayMongo hosted Checkout Session ("PayMongo UI") and return its
+     * redirect URL. The customer completes payment on PayMongo's own page and
+     * is then redirected to success_url / cancel_url.
+     *
+     * @return array{success:bool, session_id:?string, checkout_url:?string, message:?string, simulated:bool}
+     */
+    public function createCheckoutSession(float $amount, array $meta = []): array
+    {
+        if ($amount <= 0) {
+            return $this->checkoutError('Checkout amount must be greater than zero.');
+        }
+
+        if (! $this->isConfigured()) {
+            return $this->checkoutError('PayMongo is not configured. Add PAYMONGO_SECRET_KEY to your .env file.');
+        }
+
+        $types = $meta['payment_method_types'] ?? self::CHECKOUT_METHOD_TYPES;
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::withBasicAuth(
+                (string) config('services.paymongo.secret', env('PAYMONGO_SECRET_KEY')), ''
+            )->acceptJson()->post('https://api.paymongo.com/v1/checkout_sessions', [
+                'data' => [
+                    'attributes' => [
+                        'send_email_receipt' => false,
+                        'show_description' => true,
+                        'show_line_items' => true,
+                        'description' => $meta['description'] ?? 'Monti payment',
+                        'reference_number' => $meta['reference_number'] ?? null,
+                        'metadata' => $meta['metadata'] ?? [],
+                        'payment_method_types' => array_values($types),
+                        'line_items' => [[
+                            'currency' => 'PHP',
+                            'amount' => (int) round($amount * 100),
+                            'name' => $meta['item_name'] ?? 'Payment',
+                            'description' => $meta['item_description'] ?? 'Payment',
+                            'quantity' => 1,
+                        ]],
+                        'success_url' => $meta['success_url'] ?? route('fin.manager.payables'),
+                        'cancel_url' => $meta['cancel_url'] ?? route('fin.manager.payables'),
+                    ],
+                ],
+            ]);
+
+            if (! $response->successful()) {
+                return $this->checkoutError(
+                    $response->json('errors.0.detail') ?: ('Gateway declined the checkout (' . $response->status() . ').')
+                );
+            }
+
+            $session = $response->json('data', []);
+
+            return [
+                'success' => true,
+                'session_id' => $session['id'] ?? null,
+                'checkout_url' => $session['attributes']['checkout_url'] ?? null,
+                'message' => null,
+                'simulated' => false,
+            ];
+        } catch (\Throwable $e) {
+            return $this->checkoutError('Gateway unreachable: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Verify a Checkout Session against PayMongo and report whether it was
+     * paid, plus the method / payment reference used. This is the local-,
+     * webhook-free completion path used on the success return URL.
+     *
+     * @return array{paid:bool, method:?string, payment_id:?string, amount:?float, status:?string, message:?string}
+     */
+    public function verifyCheckoutSession(?string $sessionId): array
+    {
+        $blank = ['paid' => false, 'method' => null, 'payment_id' => null, 'amount' => null, 'status' => null, 'message' => null];
+
+        if (! $sessionId || ! $this->isConfigured()) {
+            return $blank + ['message' => 'Checkout session unavailable.'];
+        }
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::withBasicAuth(
+                (string) config('services.paymongo.secret', env('PAYMONGO_SECRET_KEY')), ''
+            )->acceptJson()->get('https://api.paymongo.com/v1/checkout_sessions/' . $sessionId);
+
+            if (! $response->successful()) {
+                return $blank + ['message' => 'Could not verify the checkout session (' . $response->status() . ').'];
+            }
+
+            $attrs = $response->json('data.attributes', []);
+
+            foreach (($attrs['payments'] ?? []) as $payment) {
+                $pa = $payment['attributes'] ?? [];
+                if (($pa['status'] ?? null) === 'paid') {
+                    return [
+                        'paid' => true,
+                        'method' => $this->normalizeMethod($pa['source']['type'] ?? null),
+                        'payment_id' => $payment['id'] ?? null,
+                        'amount' => isset($pa['amount']) ? ((float) $pa['amount'] / 100) : null,
+                        'status' => 'paid',
+                        'message' => null,
+                    ];
+                }
+            }
+
+            $intent = $attrs['payment_intent']['attributes'] ?? [];
+            if (($intent['status'] ?? null) === 'succeeded') {
+                return [
+                    'paid' => true,
+                    'method' => $this->normalizeMethod($intent['source']['type'] ?? null),
+                    'payment_id' => $attrs['payment_intent']['id'] ?? null,
+                    'amount' => isset($intent['amount']) ? ((float) $intent['amount'] / 100) : null,
+                    'status' => 'succeeded',
+                    'message' => null,
+                ];
+            }
+
+            return $blank + ['status' => $attrs['status'] ?? null];
+        } catch (\Throwable $e) {
+            return $blank + ['message' => 'Gateway unreachable: ' . $e->getMessage()];
+        }
+    }
+
+    protected function checkoutError(string $message): array
+    {
+        return ['success' => false, 'session_id' => null, 'checkout_url' => null, 'message' => $message, 'simulated' => false];
     }
 
     /**

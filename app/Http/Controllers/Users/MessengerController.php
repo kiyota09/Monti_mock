@@ -40,6 +40,16 @@ class MessengerController extends Controller
         return '📎 Attachment';
     }
 
+    /**
+     * Standalone full-page Messenger (opened in a new tab from the top bar).
+     * The page hydrates from the JSON endpoints below; it merely needs to
+     * render under the auth guard.
+     */
+    public function page(Request $request)
+    {
+        return inertia('Users/Messenger');
+    }
+
     public function threads(Request $request)
     {
         $me = $request->user()->id;

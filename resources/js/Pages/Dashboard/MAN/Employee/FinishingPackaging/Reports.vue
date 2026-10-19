@@ -20,7 +20,7 @@ const form = useForm({
 });
 
 const submitReport = () => {
-    form.post(route('man.staff.dyeing-packaging.report-machine'), {
+    form.post(route('man.staff.finishing-packaging.report-machine'), {
         preserveScroll: true,
         onSuccess: () => {
             showReportForm.value = false;
@@ -31,7 +31,7 @@ const submitReport = () => {
 </script>
 
 <template>
-    <AuthenticatedLayout title="Dyeing Packaging Reports">
+    <AuthenticatedLayout title="Finishing Packaging Reports">
         <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
             <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
 
@@ -46,7 +46,7 @@ const submitReport = () => {
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                                <Sparkles class="h-3.5 w-3.5" /> MAN · Dyeing Packaging
+                                <Sparkles class="h-3.5 w-3.5" /> MAN · Finishing Packaging
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Machine Reports</h1>
                             <span v-if="!canEditProduction" class="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">View only</span>

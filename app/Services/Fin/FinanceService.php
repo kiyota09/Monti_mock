@@ -74,14 +74,47 @@ class FinanceService
         }
     }
 
-    public function invoiceRows()
+    /**
+     * Receivable rows for the FIN Receivables screen. When $clientId is
+     * given, only that business partner's invoices are returned (used by the
+     * partner portal's Payments page).
+     */
+    public function invoiceRows(?int $clientId = null)
     {
         $this->syncInvoices();
 
-        return FinInvoice::withSum('payments as paid_sum', 'amount')
+        $invoices = FinInvoice::withSum('payments as paid_sum', 'amount')
+            ->when($clientId, fn ($q) => $q->where('client_id', $clientId))
             ->latest()
-            ->get()
-            ->map(fn ($inv) => [
+            ->get();
+
+        $invoiceIds = $invoices->pluck('id');
+
+        $payments = $invoiceIds->isEmpty()
+            ? collect()
+            : FinInvoicePayment::whereIn('fin_invoice_id', $invoiceIds)
+                ->orderByDesc('paid_at')->orderByDesc('id')
+                ->get()->groupBy('fin_invoice_id');
+
+        $recorderIds = $payments->flatten()->pluck('recorded_by')->filter()->unique()->values();
+        $recorders = $recorderIds->isEmpty()
+            ? collect()
+            : User::whereIn('id', $recorderIds)->pluck('name', 'id');
+
+        return $invoices->map(function ($inv) use ($payments, $recorders) {
+            $receipts = collect($payments->get($inv->id, collect()))->map(fn ($p) => [
+                'id' => 'FIN-' . $p->id,
+                'source' => 'Finance ledger',
+                'receipt_no' => 'RCPT-' . str_pad((string) $p->id, 5, '0', STR_PAD_LEFT),
+                'amount' => round((float) $p->amount, 2),
+                'paid_at' => $p->paid_at?->format('Y-m-d'),
+                'method' => $this->methodLabel($p->method),
+                'reference' => $p->reference ?: '—',
+                'recorded_by' => $recorders[$p->recorded_by] ?? 'Client portal',
+                'created_at' => $p->created_at?->toIso8601String(),
+            ])->values();
+
+            return [
                 'id' => $inv->id,
                 'invoice_no' => $inv->invoice_no,
                 'client' => $inv->client_name,
@@ -89,8 +122,12 @@ class FinanceService
                 'paid' => round((float) ($inv->paid_sum ?? 0), 2),
                 'due_date' => $inv->due_date?->format('Y-m-d'),
                 'status' => $inv->displayStatus(),
-            ])
-            ->values();
+                'notes' => $inv->notes,
+                'created_at' => $inv->created_at?->format('Y-m-d'),
+                'receipts' => $receipts,
+                'receipt_count' => $receipts->count(),
+            ];
+        })->values();
     }
 
     /**
@@ -146,29 +183,101 @@ class FinanceService
     {
         $this->syncBills();
 
-        return FinBill::withSum('payments as paid_sum', 'amount')
+        $bills = FinBill::withSum('payments as paid_sum', 'amount')
             ->latest()
-            ->get()
-            ->map(function ($bill) {
-                $paid = round($this->billPaidTotal($bill, (float) ($bill->paid_sum ?? 0)), 2);
-                $balance = round((float) $bill->amount - $paid, 2);
-                $status = $balance <= 0 ? 'paid' : ($paid > 0 ? 'partial' : 'unpaid');
-                if ($balance > 0 && $bill->due_date && $bill->due_date->isPast()) {
-                    $status = 'overdue';
-                }
+            ->get();
 
-                return [
-                    'id' => $bill->id,
-                    'bill_no' => $bill->bill_no,
-                    'supplier' => $bill->supplier_name,
-                    'category' => $bill->category,
-                    'amount' => round((float) $bill->amount, 2),
-                    'paid' => $paid,
-                    'due_date' => $bill->due_date?->format('Y-m-d'),
-                    'status' => $status,
-                ];
-            })
+        $billIds = $bills->pluck('id');
+        $invoiceIds = $bills->pluck('purchase_invoice_id')->filter()->unique()->values();
+
+        // Every payment received against these bills, from BOTH ledgers:
+        // FIN bill payments plus cleared procurement payments on the linked
+        // supplier invoice (mirrors billPaidTotal so receipts always sum to
+        // the paid total shown on the row).
+        $finPayments = FinBillPayment::whereIn('fin_bill_id', $billIds)
+            ->orderByDesc('paid_at')->orderByDesc('id')
+            ->get()->groupBy('fin_bill_id');
+
+        $procPayments = $invoiceIds->isEmpty()
+            ? collect()
+            : ProcurementPayment::whereIn('invoice_id', $invoiceIds)
+                ->where('status', 'cleared')
+                ->orderByDesc('paid_date')->orderByDesc('id')
+                ->get()->groupBy('invoice_id');
+
+        $recorderIds = $finPayments->flatten()->pluck('recorded_by')->filter()->unique()->values();
+        $recorders = $recorderIds->isEmpty()
+            ? collect()
+            : User::whereIn('id', $recorderIds)->pluck('name', 'id');
+
+        return $bills->map(function ($bill) use ($finPayments, $procPayments, $recorders) {
+            $paid = round($this->billPaidTotal($bill, (float) ($bill->paid_sum ?? 0)), 2);
+            $balance = round((float) $bill->amount - $paid, 2);
+            $status = $balance <= 0 ? 'paid' : ($paid > 0 ? 'partial' : 'unpaid');
+            if ($balance > 0 && $bill->due_date && $bill->due_date->isPast()) {
+                $status = 'overdue';
+            }
+
+            $receipts = collect();
+
+            foreach ($finPayments->get($bill->id, collect()) as $p) {
+                $receipts->push([
+                    'id' => 'FIN-' . $p->id,
+                    'source' => 'Finance ledger',
+                    'receipt_no' => 'RCPT-' . str_pad((string) $p->id, 5, '0', STR_PAD_LEFT),
+                    'amount' => round((float) $p->amount, 2),
+                    'paid_at' => $p->paid_at?->format('Y-m-d'),
+                    'method' => $this->methodLabel($p->method),
+                    'reference' => $p->reference ?: '—',
+                    'recorded_by' => $recorders[$p->recorded_by] ?? 'System',
+                    'created_at' => $p->created_at?->toIso8601String(),
+                ]);
+            }
+
+            if ($bill->purchase_invoice_id) {
+                foreach ($procPayments->get($bill->purchase_invoice_id, collect()) as $p) {
+                    $receipts->push([
+                        'id' => 'PRO-' . $p->id,
+                        'source' => 'Procurement · ' . $p->payment_number,
+                        'receipt_no' => $p->payment_number,
+                        'amount' => round((float) $p->amount, 2),
+                        'paid_at' => $p->paid_date?->format('Y-m-d'),
+                        'method' => $this->methodLabel($p->method),
+                        'reference' => $p->bank_reference ?: '—',
+                        'recorded_by' => 'Supplier invoice desk',
+                        'created_at' => $p->created_at?->toIso8601String(),
+                    ]);
+                }
+            }
+
+            $receipts = $receipts
+                ->sortByDesc(fn ($r) => ($r['paid_at'] ?? '') . $r['id'])
+                ->values();
+
+            return [
+                'id' => $bill->id,
+                'bill_no' => $bill->bill_no,
+                'supplier' => $bill->supplier_name,
+                'category' => $bill->category,
+                'amount' => round((float) $bill->amount, 2),
+                'paid' => $paid,
+                'due_date' => $bill->due_date?->format('Y-m-d'),
+                'status' => $status,
+                'notes' => $bill->notes,
+                'created_at' => $bill->created_at?->format('Y-m-d'),
+                'receipts' => $receipts,
+                'receipt_count' => $receipts->count(),
+            ];
+        })
             ->values();
+    }
+
+    /**
+     * Human-readable payment method label for receipts.
+     */
+    protected function methodLabel(?string $method): string
+    {
+        return \App\Support\PaymentMethodLabel::label($method);
     }
 
     public function expenseRows()

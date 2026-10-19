@@ -140,7 +140,7 @@ class CeoAccessController extends Controller
         'dyeing_fabric_softener' => 'Dyeing Fabric Softener Staff',
         'dyeing_squeezer' => 'Dyeing Squeezer Staff',
         'dyeing_ironing' => 'Dyeing Ironing Staff',
-        'dyeing_packaging' => 'Dyeing Packaging Staff',
+        'finishing_packaging' => 'Finishing Packaging Staff',
         'dyeing_lab_chemist' => 'Dyeing Lab Chemist',
         'checker_quality' => 'Checker Quality Staff',
         'maintenance_checker' => 'Maintenance Checker Staff',

@@ -10,17 +10,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
-class DyeingPackagingController extends ManufacturingStaffController
+class FinishingPackagingController extends ManufacturingStaffController
 {
     public function index()
     {
-        $pendingCount = Fabric::where('status', 'packed')
+        $pendingQuery = Fabric::where('status', 'packed')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('packages')
                     ->whereColumn('packages.fabric_id', 'fabrics.id');
-            })
-            ->count();
+            });
+        $this->scopeToAssignment($pendingQuery);
+        $pendingCount = $pendingQuery->count();
 
         $recentPackages = Package::with('fabric')
             ->where('operator_id', $this->staff()->id)
@@ -28,17 +29,19 @@ class DyeingPackagingController extends ManufacturingStaffController
             ->take(10)
             ->get();
 
-        $nextQueue = Fabric::where('status', 'packed')
+        $nextQueueQuery = Fabric::where('status', 'packed')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('packages')
                     ->whereColumn('packages.fabric_id', 'fabrics.id');
-            })
+            });
+        $this->scopeToAssignment($nextQueueQuery);
+        $nextQueue = $nextQueueQuery
             ->orderBy('created_at', 'asc')
             ->take(3)
             ->get(['id', 'code', 'yarn_type', 'weight', 'created_at']);
 
-        return Inertia::render('Dashboard/MAN/Employee/DyeingPackaging/Index', [
+        return Inertia::render('Dashboard/MAN/Employee/FinishingPackaging/Index', [
             'stats' => [
                 'pending' => $pendingCount,
                 'total_today' => Package::whereDate('packaged_at', today())->count(),
@@ -58,8 +61,8 @@ class DyeingPackagingController extends ManufacturingStaffController
     public function history()
     {
         return Inertia::render('Dashboard/MAN/Employee/Common/History', [
-            'roleLabel' => 'Dyeing Packaging',
-            'historyRoute' => 'man.staff.dyeing-packaging.history',
+            'roleLabel' => 'Finishing Packaging',
+            'historyRoute' => 'man.staff.finishing-packaging.history',
             'dateColumn' => 'packaged_at',
             'jobs' => $this->staffHistory(Package::class, ['fabric.machine', 'fabric.salesOrder.client', 'fabric.salesOrder.recipe.product', 'operator', 'items'], 'packaged_at'),
         ]);
@@ -67,7 +70,6 @@ class DyeingPackagingController extends ManufacturingStaffController
 
     /**
      * Machine reports (parity with other production roles).
-     * Packaging staff previously had no reporting channel.
      */
     public function reports()
     {
@@ -76,7 +78,7 @@ class DyeingPackagingController extends ManufacturingStaffController
         $myReports = MachineReport::where('reported_by', $this->staff()->id)
             ->with('machine')->latest()->get();
 
-        return Inertia::render('Dashboard/MAN/Employee/DyeingPackaging/Reports', [
+        return Inertia::render('Dashboard/MAN/Employee/FinishingPackaging/Reports', [
             'machines' => $machines,
             'myReports' => $myReports,
         ]);
@@ -101,16 +103,17 @@ class DyeingPackagingController extends ManufacturingStaffController
 
     public function packaging()
     {
-        $fabrics = Fabric::with('salesOrder', 'machine', 'operator')
+        $fabricsQuery = Fabric::with('salesOrder', 'machine', 'operator')
             ->where('status', 'packed')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('packages')
                     ->whereColumn('packages.fabric_id', 'fabrics.id');
-            })  // Exclude fabrics that already have a package
-            ->get();
+            });  // Exclude fabrics that already have a package
+        $this->scopeToAssignment($fabricsQuery);
+        $fabrics = $fabricsQuery->get();
 
-        return Inertia::render('Dashboard/MAN/Employee/DyeingPackaging/DyeingPackaging', [
+        return Inertia::render('Dashboard/MAN/Employee/FinishingPackaging/FinishingPackaging', [
             'fabrics' => $fabrics,
         ]);
     }
@@ -128,6 +131,9 @@ class DyeingPackagingController extends ManufacturingStaffController
         // Ensure the fabric is still ready for packaging and not already packaged
         if ($fabric->status !== 'packed' || $fabric->packages()->exists()) {
             return back()->with('error', 'This fabric is no longer available for packaging.');
+        }
+        if (! $this->isAssignedItem($fabric->manufacturing_order_id, $fabric->sales_order_id)) {
+            return back()->with('error', 'This Job Order is not assigned to you by your supervisor.');
         }
 
         $package = Package::create([

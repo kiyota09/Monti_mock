@@ -8,7 +8,7 @@ import {
     MessageSquare, Megaphone, Bell, Settings, X, Send, Search,
     User, LogOut, Palette, Check, ChevronLeft, Plus, CheckCheck,
     Users, Paperclip, ImagePlus, LogOut as LeaveIcon, Trash2, Pencil,
-    PanelLeft, ChevronRight, LifeBuoy, Info, KeyRound, Clock,
+    PanelLeft, ChevronRight, LifeBuoy, Info, KeyRound, Clock, Maximize2,
 } from 'lucide-vue-next';
 import { useSidebarToggle } from '@/Layouts/composables/useSidebarToggle';
 
@@ -1046,6 +1046,10 @@ onMounted(() => {
                         <button v-if="!composing && !activeThread" @click="startCompose" class="rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-zinc-800" title="New conversation">
                             <Plus class="h-4 w-4" />
                         </button>
+                        <a :href="route('messenger.index')" target="_blank" rel="noopener noreferrer"
+                            class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-zinc-800" title="Open full messenger in a new tab">
+                            <Maximize2 class="h-4 w-4" />
+                        </a>
                         <button @click="closePanels" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"><X class="h-4 w-4" /></button>
                     </div>
 

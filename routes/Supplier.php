@@ -37,6 +37,8 @@ Route::middleware('auth:supplier')->prefix('supplier')->name('supplier.')->group
     Route::get('/orders', [SupplierDashboardController::class, 'purchaseOrders'])->name('orders');
     Route::post('/orders/{id}/status', [SupplierDashboardController::class, 'updateOrderStatus'])->name('orders.update_status');
     Route::post('/orders/{id}/invoice', [SupplierDashboardController::class, 'createInvoice'])->name('orders.invoice');
+    // Payments Monti Textiles has made to this supplier (with receipts).
+    Route::get('/payments', [SupplierDashboardController::class, 'payments'])->name('payments');
     // Product catalog: raw materials this supplier carries.
     Route::get('/products', [SupplierDashboardController::class, 'products'])->name('products');
     Route::post('/products', [SupplierDashboardController::class, 'storeProduct'])->name('products.store');
