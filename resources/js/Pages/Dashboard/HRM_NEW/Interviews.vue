@@ -218,6 +218,7 @@
                                 <option value="Completed">Completed</option>
                                 <option value="Cancelled">Cancelled</option>
                                 <option value="No Show">No Show</option>
+                                <option value="Rescheduled">Rescheduled</option>
                             </select>
                         </div>
                         <div class="overflow-x-auto">
@@ -312,6 +313,7 @@
                                 <option value="Completed">Completed</option>
                                 <option value="Cancelled">Cancelled</option>
                                 <option value="No Show">No Show</option>
+                                <option value="Rescheduled">Rescheduled</option>
                             </select>
                         </div>
                         <div class="overflow-x-auto">
@@ -353,6 +355,7 @@
                                 <option value="Cancelled">Cancelled</option>
                                 <option value="No Show">No Show</option>
                                 <option value="Pending Final Interview">Pending Final Interview</option>
+                                <option value="Rescheduled">Rescheduled</option>
                             </select>
                         </div>
                         <div class="overflow-x-auto">
@@ -506,7 +509,7 @@
                             </div>
                             <div>
                                 <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Interview Result *</h4>
-                                <div class="grid grid-cols-3 gap-3">
+                                <div class="grid grid-cols-2 gap-3">
                                     <label v-for="opt in evaluationResultOptions" :key="opt.value"
                                         :class="[evaluationForm.result === opt.value ? 'border-purple-600 bg-purple-50 ring-1 ring-purple-600' : 'border-slate-200 bg-white hover:border-slate-300']"
                                         class="flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors">
@@ -1130,7 +1133,7 @@
                         </div>
                         <div class="p-4 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-end gap-2 shrink-0">
                             <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openRescheduleModal(selectedInterview)" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md">↻ Reschedule</button>
-                            <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openCancelModal(selectedInterview)" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><X class="w-3.5 h-3.5" />Cancel</button>
+                            <button v-if="false" @click="openCancelModal(selectedInterview)" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><X class="w-3.5 h-3.5" />Cancel</button>
                             <button v-if="['Scheduled','No Show'].includes(selectedInterview.status) && !isCancelledInterview(selectedInterview)" @click="markNoShow(selectedInterview)" class="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><AlertTriangle class="w-3.5 h-3.5" />No Show</button>
                             <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openEvaluationModal(selectedInterview)" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Check class="w-3.5 h-3.5" />Start Evaluation</button>
                             <button v-if="isCancelledInterview(selectedInterview) && selectedInterview.applicant_id && !hasScheduledInterviewFor(selectedInterview)" @click="scheduleNewInterview(selectedInterview)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule New Interview</button>
@@ -1291,7 +1294,6 @@ const ratingScale = [
 const evaluationResultOptions = [
     { value: 'passed', label: 'Passed' },
     { value: 'failed', label: 'Failed' },
-    { value: 'pending_review', label: 'Pending Review' },
 ];
 
 const doNotProceedOption = { value: 'do_not_proceed', label: 'Do Not Proceed', description: 'Do not recommend this candidate for the next steps.' };
@@ -1363,6 +1365,7 @@ const metricsData = computed(() => {
     const interviewScheduled = props.metrics?.interview_scheduled || 0;
     const interviewed = props.metrics?.interviewed || 0;
     const total = props.metrics?.total || 0;
+    const rescheduled = props.metrics?.interview_rescheduled || 0;
     
     return [
         {
@@ -1382,6 +1385,12 @@ const metricsData = computed(() => {
             value: interviewed,
             icon: CheckCircle2,
             subtext: 'Completed interviews'
+        },
+        {
+            label: 'Rescheduled',
+            value: rescheduled,
+            icon: RefreshCw,
+            subtext: 'Rescheduled interviews'
         },
         {
             label: 'Total',
@@ -1570,6 +1579,7 @@ const getInterviewStatusBadge = (status) => {
         'Cancelled': 'bg-rose-100 text-rose-700 border-rose-200',
         'Cancelled by Applicant': 'bg-rose-100 text-rose-700 border-rose-200',
         'No Show': 'bg-red-100 text-red-700 border-red-200',
+        'Rescheduled': 'bg-purple-100 text-purple-700 border-purple-200',
             };
     return classes[status] || 'bg-slate-100 text-slate-600 border-slate-200';
 };
@@ -1791,6 +1801,7 @@ const closeConfirmationModal = () => {
 };
 
 const confirmSchedule = async () => {
+    if (isSubmitting.value) return;
     isSubmitting.value = true;
 
     try {
@@ -1882,6 +1893,7 @@ const openRescheduleModal = (interview) => {
 const closeRescheduleModal = () => { showRescheduleModal.value = false; rescheduleMenuOpen.value = false; };
 
 const rescheduleInterview = async () => {
+    if (isSubmitting.value) return;
     // Temporary interviewer until the HR interviewer selector is enabled.
     rescheduleForm.value.interviewer_id = rescheduleForm.value.interviewer_id || 2;
 
@@ -1899,9 +1911,13 @@ const rescheduleInterview = async () => {
     }
     isSubmitting.value = true;
     try {
-        await axios.post(`/hrm/recruitment/interviews/${rescheduleForm.value.interview_id}/reschedule`, rescheduleForm.value);
+        const response = await axios.post(`/hrm/recruitment/interviews/${rescheduleForm.value.interview_id}/reschedule`, rescheduleForm.value);
         showRescheduleModal.value = false;
-        showToastMessage('Interview Rescheduled', 'The interview schedule was updated successfully.', 'success');
+        if (response.data?.new_interview) {
+            showToastMessage('Interview Rescheduled', 'Previous interview marked as Rescheduled. New interview created successfully.', 'success');
+        } else {
+            showToastMessage('Interview Rescheduled', 'The interview schedule was updated successfully.', 'success');
+        }
         await refreshList();
     } catch (error) { showToastMessage('Error', error.response?.data?.message || 'Failed to reschedule interview.', 'error'); }
     finally { isSubmitting.value = false; }
@@ -1911,11 +1927,15 @@ const approveReschedule = async (interview) => {
     if (!interview || isSubmitting.value) return;
     isSubmitting.value = true;
     try {
-        const { data } = await axios.post(`/hrm/recruitment/interviews/${interview.id}/reschedule/approve`);
-        if (data?.data) {
-            selectedInterview.value = { ...selectedInterview.value, ...data.data };
+        const response = await axios.post(`/hrm/recruitment/interviews/${interview.id}/reschedule/approve`);
+        if (response.data?.data) {
+            selectedInterview.value = { ...selectedInterview.value, ...response.data.data };
         }
-        showToastMessage('Reschedule Approved', 'The interview date has been updated to the requested schedule.', 'success');
+        if (response.data?.new_interview) {
+            showToastMessage('Reschedule Approved', 'Reschedule request approved. New interview created and previous interview marked as Rescheduled.', 'success');
+        } else {
+            showToastMessage('Reschedule Approved', 'The interview date has been updated to the requested schedule.', 'success');
+        }
         await refreshList();
     } catch (error) { showToastMessage('Error', error.response?.data?.message || 'Failed to approve reschedule.', 'error'); }
     finally { isSubmitting.value = false; }

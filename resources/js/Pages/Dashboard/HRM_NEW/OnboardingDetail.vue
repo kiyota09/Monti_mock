@@ -278,14 +278,6 @@
                                     <span class="text-xs font-medium text-slate-700">{{ formatDate(onboarding.start_date) }}</span>
                                 </div>
                                 <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Expected Start</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ formatDate(onboarding.expected_start_date) }}</span>
-                                </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Expected Completion</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ formatDate(onboarding.expected_completion_date) }}</span>
-                                </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
                                     <span class="text-[11px] text-slate-400">Work Location</span>
                                     <span class="text-xs font-medium text-slate-700">{{ onboarding.work_location || '—' }}</span>
                                 </div>
@@ -916,9 +908,9 @@
                     </div>
 
                     <div class="p-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center justify-end gap-3 shrink-0">
-                        <button @click="closeModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all">[ Cancel ]</button>
+                        <button @click="closeModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all">Cancel</button>
                         <button @click="submitHire" :disabled="saving" class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg">
-                            {{ saving ? 'Creating...' : '[ Create Employee ]' }}
+                            {{ saving ? 'Creating...' : 'Create Employee' }}
                         </button>
                     </div>
                 </template>
@@ -957,9 +949,9 @@
                     </div>
 
                     <div class="p-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center justify-end gap-3 shrink-0">
-                        <button @click="backToHireForm" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all">[ Back ]</button>
+                        <button @click="backToHireForm" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all">Back</button>
                         <button @click="confirmHireSubmit" :disabled="saving" class="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg">
-                            {{ saving ? 'Creating...' : '[ Confirm Create ]' }}
+                            {{ saving ? 'Creating...' : 'Confirm Create' }}
                         </button>
                     </div>
                 </template>
@@ -1419,9 +1411,9 @@ const openHireModal = () => {
     const hours = parseHoursRange(props.onboarding.work_schedule);
     hireForm.value = {
         position: d.position || props.onboarding.position || '',
-        position_rank: 'staff',
+        position_rank: d.position_rank || 'staff',
         department: d.department || props.onboarding.department || '',
-        role: guessHireRole(d.department || props.onboarding.department || ''),
+        role: d.role || guessHireRole(d.department || props.onboarding.department || ''),
         employment_type: d.employment_type || props.onboarding.employment_type || 'Regular',
         employment_type_id: '',
         start_date: d.start_date || new Date().toISOString().slice(0, 10),

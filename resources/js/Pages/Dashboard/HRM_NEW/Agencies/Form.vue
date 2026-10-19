@@ -67,6 +67,32 @@ function onFeeInput(e: Event) {
     form.service_fee_value = clean as any;
 }
 
+function onNumericKeydown(e: KeyboardEvent) {
+    const allowed = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+    if (allowed.includes(e.key) || e.ctrlKey || e.metaKey) return;
+    if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+}
+
+function onNumericInput(e: Event) {
+    const el = e.target as HTMLInputElement;
+    const clean = el.value.replace(/[^0-9]/g, '');
+    if (el.value !== clean) el.value = clean;
+}
+
+// TIN: digits and hyphens only, no other special characters.
+function onTinInput(e: Event) {
+    const el = e.target as HTMLInputElement;
+    const clean = el.value.replace(/[^0-9-]/g, '');
+    if (el.value !== clean) el.value = clean;
+    form.tin = clean;
+}
+
+function onTinKeydown(e: KeyboardEvent) {
+    const allowed = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+    if (allowed.includes(e.key) || e.ctrlKey || e.metaKey) return;
+    if (!/^[0-9-]$/.test(e.key)) e.preventDefault();
+}
+
 // Block e/E/+/-/letters at keypress level (number-only field).
 function onFeeKeydown(e: KeyboardEvent) {
     const allowed = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
@@ -94,6 +120,8 @@ watch(() => form.service_fee_type, (t) => {
         }
     }
 });
+
+const today = new Date().toISOString().split('T')[0];
 
 const inputCls = 'w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200';
 const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase';
@@ -126,7 +154,7 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                     </div>
                     <div>
                         <label :class="labelCls">TIN</label>
-                        <input v-model="form.tin" type="text" :class="inputCls" placeholder="Tax identification number" />
+                        <input :value="form.tin" @input="onTinInput" @keydown="onTinKeydown" type="text" inputmode="numeric" :class="inputCls" placeholder="Tax identification number" />
                         <p v-if="form.errors.tin" class="mt-1 text-xs text-rose-600">{{ form.errors.tin }}</p>
                     </div>
                     <div class="sm:col-span-2">
@@ -148,7 +176,7 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                     </div>
                     <div>
                         <label :class="labelCls">Expiry date</label>
-                        <input v-model="form.dole_expiry" type="date" :class="inputCls" />
+                        <input v-model="form.dole_expiry" type="date" :min="today" :class="inputCls" />
                         <p v-if="form.errors.dole_expiry" class="mt-1 text-xs text-rose-600">{{ form.errors.dole_expiry }}</p>
                     </div>
                 </div>
@@ -160,12 +188,12 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label :class="labelCls">Start date</label>
-                        <input v-model="form.contract_start" type="date" :class="inputCls" />
+                        <input v-model="form.contract_start" type="date" :min="today" :class="inputCls" />
                         <p v-if="form.errors.contract_start" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_start }}</p>
                     </div>
                     <div>
                         <label :class="labelCls">End date</label>
-                        <input v-model="form.contract_end" type="date" :class="inputCls" />
+                        <input v-model="form.contract_end" type="date" :min="today" :class="inputCls" />
                         <p v-if="form.errors.contract_end" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_end }}</p>
                     </div>
                 </div>
@@ -258,7 +286,7 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                     </div>
                     <div>
                         <label :class="labelCls">Phone</label>
-                        <input v-model="form.contact_phone" type="text" :class="inputCls" placeholder="Phone number" />
+                        <input :value="form.contact_phone" @input="onNumericInput" @keydown="onNumericKeydown" type="text" inputmode="numeric" :class="inputCls" placeholder="Phone number" />
                         <p v-if="form.errors.contact_phone" class="mt-1 text-xs text-rose-600">{{ form.errors.contact_phone }}</p>
                     </div>
                     <div class="sm:col-span-2">

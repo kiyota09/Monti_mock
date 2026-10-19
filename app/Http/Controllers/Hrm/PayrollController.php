@@ -95,9 +95,9 @@ class PayrollController extends Controller
 
         // Fallback for rows without department: users.department string,
         // else hrm_departments via users.hrm_department_id (real HRM departments).
-        $userByEmpId = User::with('hrmDepartment:id,name')
+        $userByEmpId = User::with(['hrmDepartment:id,name', 'hrmOrgPosition:id,name'])
             ->whereIn('employee_id', $rows->pluck('employee_id')->filter()->unique()->values()->all())
-            ->get(['id', 'employee_id', 'department', 'position', 'hrm_department_id'])->keyBy('employee_id');
+            ->get(['id', 'employee_id', 'department', 'position', 'hrm_department_id', 'hrm_position_id'])->keyBy('employee_id');
 
         $payrollData = $rows->map(function ($payroll) use ($userByEmpId) {
             $deductions = (float) $payroll->late_total_deduction + (float) $payroll->sss_deduction
@@ -110,7 +110,7 @@ class PayrollController extends Controller
                 'id' => $payroll->id,
                 'employee_id' => $payroll->employee_id,
                 'employee_name' => $payroll->employee_name,
-                'job_title' => $payroll->job_title ?? $payroll->role,
+                'job_title' => $payroll->job_title ?? $u?->hrmOrgPosition?->name ?? $payroll->role,
                 'department' => $fallbackDept,
                 'role' => $payroll->role,
                 'period' => $payroll->period,
@@ -398,6 +398,11 @@ class PayrollController extends Controller
             return back()->withErrors(['error' => 'Unknown pay period. Pick a period from the calendar.']);
         }
 
+        // Prevent generating payroll for the current period (advance payroll not allowed).
+        if (!empty($meta['is_current'])) {
+            return back()->withErrors(['error' => "Cannot generate payroll for the current period ({$periodLabel}). Select a completed period."]);
+        }
+
         $start = Carbon::parse($request->cutoff_start);
         $end   = Carbon::parse($request->cutoff_end);
         // Cutoff must live inside the selected pay period.
@@ -413,7 +418,7 @@ class PayrollController extends Controller
 
         $carbonPeriod = CarbonPeriod::create($start, $end);
 
-        $employees = User::with('hrmDepartment:id,name')->whereIn('id', $request->employee_ids)->get();
+        $employees = User::with(['hrmDepartment:id,name', 'hrmOrgPosition:id,name'])->whereIn('id', $request->employee_ids)->get();
         $payrollRecords = [];
         $skipped = [];
 
@@ -469,7 +474,7 @@ class PayrollController extends Controller
                     'role'                   => $employee->position === 'manager' ? 'Manager' : ($employee->position === 'trainee' ? 'Trainee' : 'Staff'),
                     'period'                 => $periodLabel,
                     'department'             => $employee->department ?: ($employee->hrmDepartment?->name ?? null),
-                    'job_title'              => null,
+                    'job_title'              => $employee->hrmOrgPosition?->name,
                     'base_salary'            => $monthly,
                     'monthly_salary'         => $monthly,
                     'allowance'              => 0,
@@ -555,8 +560,20 @@ class PayrollController extends Controller
             'sss_loan' => (float) ($payroll->sss_loan ?? 0),
             'pf_loan' => (float) ($payroll->pf_loan ?? 0),
         ], $freq);
+
+        // Job title: stored snapshot first, else the employee's current org position.
+        $jobTitle = $payroll->job_title;
+        if (!$jobTitle) {
+            $jobTitle = User::with('hrmOrgPosition:id,name')
+                ->where('employee_id', $payroll->employee_id)
+                ->first()?->hrmOrgPosition?->name;
+        }
+
         return Inertia::render('Dashboard/HRM_NEW/PayrollDetail', [
-            'payroll' => array_merge($payroll->toArray(), ['status' => $this->normalizeStatus($payroll->status)]),
+            'payroll' => array_merge($payroll->toArray(), [
+                'status' => $this->normalizeStatus($payroll->status),
+                'job_title' => $jobTitle ?? $payroll->role,
+            ]),
             'calc' => $calc,
             'frequency' => $freq,
             'attendance' => $attendance,

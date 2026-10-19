@@ -1358,11 +1358,18 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">ZIP Code</label>
                                             <input 
                                                 v-model="form.zip_code" 
-                                                type="text" 
+                                                type="text"
+                                                inputmode="numeric"
+                                                pattern="[0-9]*"
+                                                maxlength="10"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
+                                                @input="form.zip_code = String(form.zip_code).replace(/\D/g, '')"
                                             />
+                                            <p v-if="form.errors.zip_code" class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                                {{ form.errors.zip_code }}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -1422,14 +1429,19 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Graduation Year</label>
                                             <input
                                                 v-model="form.graduation_year"
-                                                type="number"
-                                                min="1950"
-                                                :max="new Date().getFullYear() + 10"
+                                                type="text"
+                                                inputmode="numeric"
+                                                pattern="[0-9]*"
+                                                maxlength="4"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
                                                 placeholder="YYYY"
+                                                @input="form.graduation_year = String(form.graduation_year).replace(/\D/g, '').slice(0, 4)"
                                             />
+                                            <p v-if="form.errors.graduation_year" class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                                {{ form.errors.graduation_year }}
+                                            </p>
                                         </div>
                                         <div class="border-t border-slate-100 dark:border-slate-700 my-4"></div>
 
@@ -1452,11 +1464,15 @@ const isDisabled = computed(() => !isEditMode.value)
                                                     <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Year Graduated</label>
                                                     <input 
                                                         v-model="form.elementary_year" 
-                                                        type="text" 
+                                                        type="text"
+                                                        inputmode="numeric"
+                                                        pattern="[0-9]*"
+                                                        maxlength="4"
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
                                                         placeholder="YYYY"
+                                                        @input="form.elementary_year = String(form.elementary_year).replace(/\D/g, '').slice(0, 4)"
                                                     />
                                                 </div>
                                             </div>
@@ -1481,11 +1497,15 @@ const isDisabled = computed(() => !isEditMode.value)
                                                     <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Year Graduated</label>
                                                     <input 
                                                         v-model="form.high_year" 
-                                                        type="text" 
+                                                        type="text"
+                                                        inputmode="numeric"
+                                                        pattern="[0-9]*"
+                                                        maxlength="4"
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
                                                         placeholder="YYYY"
+                                                        @input="form.high_year = String(form.high_year).replace(/\D/g, '').slice(0, 4)"
                                                     />
                                                 </div>
                                             </div>
@@ -1510,11 +1530,15 @@ const isDisabled = computed(() => !isEditMode.value)
                                                     <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Year Graduated</label>
                                                     <input 
                                                         v-model="form.college_year" 
-                                                        type="text" 
+                                                        type="text"
+                                                        inputmode="numeric"
+                                                        pattern="[0-9]*"
+                                                        maxlength="4"
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
                                                         placeholder="YYYY"
+                                                        @input="form.college_year = String(form.college_year).replace(/\D/g, '').slice(0, 4)"
                                                     />
                                                 </div>
                                             </div>
@@ -1539,11 +1563,15 @@ const isDisabled = computed(() => !isEditMode.value)
                                                     <label class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Year Graduated</label>
                                                     <input 
                                                         v-model="form.vocational_year" 
-                                                        type="text" 
+                                                        type="text"
+                                                        inputmode="numeric"
+                                                        pattern="[0-9]*"
+                                                        maxlength="4"
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
                                                         placeholder="YYYY"
+                                                        @input="form.vocational_year = String(form.vocational_year).replace(/\D/g, '').slice(0, 4)"
                                                     />
                                                 </div>
                                             </div>

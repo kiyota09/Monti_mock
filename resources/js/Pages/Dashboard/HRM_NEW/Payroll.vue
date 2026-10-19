@@ -2,7 +2,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import { ref, computed } from 'vue'
-import { Search, Upload, DollarSign, TrendingDown, Wallet, CheckCircle2, Plus, FileText } from 'lucide-vue-next'
+import { Search, Upload, DollarSign, TrendingDown, Wallet, Plus, FileText } from 'lucide-vue-next'
 
 // NOTE (real system): role comes from the login session and is enforced on the
 // server (PayrollController isHR/isManager/isFinance). Never trust the browser
@@ -19,7 +19,6 @@ const props = defineProps({
     departments: { type: Array, default: () => [] },
     stats: { type: Object, default: () => ({}) },
     stepper: { type: Object, default: () => ({ Draft: 0, Submitted: 0, Approved: 0, Paid: 0 }) },
-    remittances: { type: Object, default: () => null },
     audit_log: { type: Array, default: () => [] },
     permissions: { type: Object, default: () => ({}) },
     employees: { type: Array, default: () => [] },
@@ -108,7 +107,6 @@ const metricCards = computed(() => [
     { label: 'Gross pay', value: peso(props.stats.gross_pay || 0), icon: DollarSign, color: 'text-blue-600' },
     { label: 'Deductions', value: peso(props.stats.deductions || 0), icon: TrendingDown, color: 'text-rose-600', negative: true },
     { label: 'Net payroll', value: peso(props.stats.net_payroll || 0), icon: Wallet, color: 'text-emerald-600' },
-    { label: 'Paid so far', value: `${props.stats.paid_count || 0} of ${props.stats.total_count || 0}`, icon: CheckCircle2, color: 'text-amber-600' },
 ])
 
 const initials = (name) => String(name || '?').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
@@ -281,7 +279,7 @@ const exportCsv = async () => {
                 <div v-if="flashMsg" class="mb-4 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold relative">{{ flashMsg }}</div>
                 <div v-if="localMsg" class="mb-4 px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold relative">{{ localMsg }}</div>
 
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 relative">
+                <div class="grid grid-cols-3 gap-4 mb-8 relative">
                     <div v-for="m in metricCards" :key="m.label"
                         class="group bg-white rounded-2xl border border-slate-200/60 p-5 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:border-blue-200/60 shadow-md backdrop-blur-sm">
                         <div class="flex items-center justify-between mb-3">
@@ -310,8 +308,6 @@ const exportCsv = async () => {
                 <div class="flex gap-2 mb-4 relative">
                     <button type="button" @click="tab = 'pay'" class="px-4 py-2 rounded-xl text-xs font-bold border transition"
                         :class="tab === 'pay' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'">Payroll</button>
-                    <button type="button" @click="tab = 'rem'" class="px-4 py-2 rounded-xl text-xs font-bold border transition"
-                        :class="tab === 'rem' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'">Remittances and accruals</button>
                     <button type="button" @click="tab = 'audit'" class="px-4 py-2 rounded-xl text-xs font-bold border transition"
                         :class="tab === 'audit' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'">Audit log</button>
                 </div>
@@ -392,25 +388,6 @@ const exportCsv = async () => {
                     </div>
                 </div>
                 <p v-if="tab === 'pay'" class="text-xs text-slate-500 mt-3 relative">Amounts are in PHP for a semi-monthly period. Rates follow the 2026 SSS, PhilHealth, Pag-IBIG and TRAIN schedules as I understand them. Verify against the official circulars and your accountant before real use.</p>
-
-                <div v-if="tab === 'rem'" class="bg-white rounded-2xl border border-slate-200/60 shadow-lg backdrop-blur-sm overflow-hidden relative">
-                    <div class="p-4 border-b border-slate-100 text-xs text-slate-500">Based on {{ remittances?.count || 0 }} employees with status Approved or Paid in {{ active_period }}.</div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-xs">
-                            <thead><tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                <th class="py-3 px-5">Remittance</th><th class="py-3 px-5 text-right">Withheld</th><th class="py-3 px-5 text-right">Employer share</th><th class="py-3 px-5 text-right">Total to remit</th>
-                            </tr></thead>
-                            <tbody class="divide-y divide-slate-100">
-                                <tr class="hover:bg-blue-50/50"><td class="py-3 px-5 font-semibold">SSS (plus EC)</td><td class="py-3 px-5 text-right">{{ peso(remittances?.sss_withheld) }}</td><td class="py-3 px-5 text-right">{{ peso(remittances?.sss_employer) }}</td><td class="py-3 px-5 text-right font-bold">{{ peso((remittances?.sss_withheld || 0) + (remittances?.sss_employer || 0)) }}</td></tr>
-                                <tr class="hover:bg-blue-50/50"><td class="py-3 px-5 font-semibold">PhilHealth</td><td class="py-3 px-5 text-right">{{ peso(remittances?.philhealth_withheld) }}</td><td class="py-3 px-5 text-right">{{ peso(remittances?.philhealth_employer) }}</td><td class="py-3 px-5 text-right font-bold">{{ peso((remittances?.philhealth_withheld || 0) + (remittances?.philhealth_employer || 0)) }}</td></tr>
-                                <tr class="hover:bg-blue-50/50"><td class="py-3 px-5 font-semibold">Pag-IBIG</td><td class="py-3 px-5 text-right">{{ peso(remittances?.pagibig_withheld) }}</td><td class="py-3 px-5 text-right">{{ peso(remittances?.pagibig_employer) }}</td><td class="py-3 px-5 text-right font-bold">{{ peso((remittances?.pagibig_withheld || 0) + (remittances?.pagibig_employer || 0)) }}</td></tr>
-                                <tr class="hover:bg-blue-50/50"><td class="py-3 px-5 font-semibold">Withholding tax (BIR)</td><td class="py-3 px-5 text-right">{{ peso(remittances?.tax_withheld) }}</td><td class="py-3 px-5 text-right">{{ peso(0) }}</td><td class="py-3 px-5 text-right font-bold">{{ peso(remittances?.tax_withheld) }}</td></tr>
-                                <tr class="hover:bg-blue-50/50"><td class="py-3 px-5 font-semibold">13th-month pay accrual (basic ÷ 12, due by Dec 24)</td><td class="py-3 px-5 text-right">{{ peso(0) }}</td><td class="py-3 px-5 text-right">{{ peso(remittances?.accrual_13th) }}</td><td class="py-3 px-5 text-right font-bold">{{ peso(remittances?.accrual_13th) }}</td></tr>
-                                <tr class="hover:bg-blue-50/50 bg-slate-50"><td class="py-3 px-5 font-semibold">13th-month YTD accrual ({{ remittances?.year }})</td><td class="py-3 px-5 text-right">{{ peso(0) }}</td><td class="py-3 px-5 text-right">{{ peso(remittances?.ytd_accrual_13th) }}</td><td class="py-3 px-5 text-right font-bold">{{ peso(remittances?.ytd_accrual_13th) }}</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
 
                 <div v-if="tab === 'audit'" class="bg-white rounded-2xl border border-slate-200/60 shadow-lg backdrop-blur-sm overflow-hidden relative">
                     <div class="overflow-x-auto">

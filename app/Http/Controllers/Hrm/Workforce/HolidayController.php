@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Hrm\Workforce;
 use App\Http\Controllers\Controller;
 use App\Models\Hrm\EmployeeShift;
 use App\Models\Hrm\Holiday;
+use App\Support\PhilippineHolidays;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -24,15 +25,33 @@ class HolidayController extends Controller
 
     public const POLICIES = ['non_working', 'required_to_work'];
 
-    public function index()
+    public function index(Request $request)
     {
-        $holidays = Holiday::orderBy('holiday_date')->get()->map(fn ($h) => $this->row($h))->values();
+        $year = (int) ($request->query('year') ?? $request->route('year') ?? now()->year);
+        $dbHolidays = Holiday::orderBy('holiday_date')->get()->map(fn ($h) => $this->row($h))->values()->all();
+
+        // Merge with Philippine holidays for the current year
+        $merged = PhilippineHolidays::mergeWithCalculated($dbHolidays, $year);
+        $holidays = collect($merged)->map(function ($h, $date) {
+            return [
+                'id' => null,
+                'date' => $date,
+                'name' => $h[0],
+                'type' => $h[1],
+                'type_label' => $this->typeLabel($h[1]),
+                'policy' => $h[2],
+                'policy_label' => $h[2] === 'required_to_work' ? 'Required to Work' : 'Non-Working Day',
+                'status' => 'approved',
+                'is_ph_holiday' => true,
+            ];
+        })->values();
 
         return Inertia::render('Dashboard/HRM_NEW/Holidays', [
             'holidays' => $holidays,
             'types' => self::TYPES,
             'policies' => self::POLICIES,
             'permissions' => $this->getPagePermissionsForModule('HRM'),
+            'currentYear' => $year,
         ]);
     }
 
@@ -46,12 +65,7 @@ class HolidayController extends Controller
         ]);
         $this->validateCombination($data['holiday_type'], $data['work_policy']);
 
-        $date = substr((string) $data['holiday_date'], 0, 10);
-
-        // Non-working holidays clear any shift scheduled that day.
-        EmployeeShift::where('effective_date', $date)->delete();
-
-        Holiday::create([
+        $holiday = Holiday::create([
             'holiday_date' => $date,
             'holiday_name' => $data['holiday_name'],
             'holiday_type' => $data['holiday_type'],
@@ -72,13 +86,6 @@ class HolidayController extends Controller
             'work_policy' => 'required|in:' . implode(',', self::POLICIES),
         ]);
         $this->validateCombination($data['holiday_type'], $data['work_policy']);
-
-        $oldDate = substr((string) $holiday->holiday_date, 0, 10);
-        $newDate = substr((string) $data['holiday_date'], 0, 10);
-
-        if ($oldDate !== $newDate) {
-            EmployeeShift::where('effective_date', $newDate)->delete();
-        }
 
         $holiday->update([
             'holiday_date' => $newDate,

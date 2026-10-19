@@ -8,6 +8,7 @@ const props = defineProps({
     holidays: { type: Array, default: () => [] },
     types: { type: Array, default: () => ['regular', 'special_non_working', 'non_working'] },
     policies: { type: Array, default: () => ['non_working', 'required_to_work'] },
+    currentYear: { type: Number, default: () => new Date().getFullYear() },
 });
 
 const typeLabel = (t) => ({
@@ -26,9 +27,8 @@ const typeChip = (t) => ({
 }[t] || 'bg-slate-100 text-slate-600 border-slate-200');
 
 // ---- Calendar ----
-const currentDate = ref(new Date());
-const currentYear = computed(() => currentDate.value.getFullYear());
-const currentMonth = computed(() => currentDate.value.getMonth());
+const currentYear = computed(() => props.currentYear);
+const currentMonth = ref(new Date().getMonth());
 const monthName = computed(() => new Date(currentYear.value, currentMonth.value).toLocaleString('default', { month: 'long' }));
 
 const calendarDays = computed(() => {
@@ -51,20 +51,27 @@ const holidaysByDate = computed(() => {
 
 const todayDate = computed(() => {
     const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+    // Only show today if we're viewing current year/month
+    if (n.getFullYear() === currentYear.value && n.getMonth() === currentMonth.value) {
+        return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+    }
+    return '';
 });
 
-const prevMonth = () => { currentDate.value = new Date(currentYear.value, currentMonth.value - 1, 1); };
-const nextMonth = () => { currentDate.value = new Date(currentYear.value, currentMonth.value + 1, 1); };
-const goToday = () => { currentDate.value = new Date(); };
+const prevMonth = () => { currentMonth.value = currentMonth.value === 0 ? 11 : currentMonth.value - 1; };
+const nextMonth = () => { currentMonth.value = currentMonth.value === 11 ? 0 : currentMonth.value + 1; };
+const prevYear = () => { router.get(route('hrm.workforce.holidays.index', { year: props.currentYear - 1 })); };
+const nextYear = () => { router.get(route('hrm.workforce.holidays.index', { year: props.currentYear + 1 })); };
+const goToday = () => { currentMonth.value = new Date().getMonth(); };
 const goBack = () => { router.get(route('hrm.workforce.attendance.index')); };
 
-const upcoming = computed(() =>
-    [...props.holidays]
+const upcoming = computed(() => {
+    if (!todayDate.value) return [];
+    return [...props.holidays]
         .filter((h) => String(h.date).substring(0, 10) >= todayDate.value)
         .sort((a, b) => String(a.date).localeCompare(String(b.date)))
         .slice(0, 8)
-);
+});
 
 // ---- Add / Edit modal (date auto-filled from the clicked day) ----
 const showModal = ref(false);
@@ -76,6 +83,11 @@ const openForDate = (date) => {
     if (!date) return;
     const existing = holidaysByDate.value[date];
     if (existing) {
+        // Philippine holidays (calculated) cannot be edited/deleted
+        if (existing.is_ph_holiday) {
+            alert('This is a standard Philippine holiday. It cannot be modified.');
+            return;
+        }
         editing.value = existing;
         form.value = {
             holiday_date: String(existing.date).substring(0, 10),
@@ -146,9 +158,14 @@ const removeHoliday = () => {
                 <!-- Big calendar -->
                 <div class="xl:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                     <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                        <button @click="prevMonth" class="h-9 w-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all">
-                            <ChevronLeft class="h-5 w-5" />
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button @click="prevYear" class="h-9 w-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all" title="Previous Year">
+                                <ChevronLeft class="h-5 w-5" />
+                            </button>
+                            <button @click="prevMonth" class="h-9 w-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all">
+                                <ChevronLeft class="h-5 w-5" />
+                            </button>
+                        </div>
                         <div class="text-center">
                             <p class="text-lg font-extrabold text-slate-900 leading-tight">{{ monthName }}</p>
                             <p class="text-xs font-semibold text-slate-400">{{ currentYear }}</p>
@@ -156,6 +173,9 @@ const removeHoliday = () => {
                         <div class="flex items-center gap-2">
                             <button @click="goToday" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold transition">Today</button>
                             <button @click="nextMonth" class="h-9 w-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all">
+                                <ChevronRight class="h-5 w-5" />
+                            </button>
+                            <button @click="nextYear" class="h-9 w-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all" title="Next Year">
                                 <ChevronRight class="h-5 w-5" />
                             </button>
                         </div>
@@ -196,7 +216,10 @@ const removeHoliday = () => {
                             <div v-if="cell.date && holidaysByDate[cell.date]"
                                 :class="['rounded-md px-1.5 py-1 leading-snug border', typeChip(holidaysByDate[cell.date].type)]">
                                 <p class="font-extrabold text-[10px] truncate">{{ holidaysByDate[cell.date].name }}</p>
-                                <p class="text-[9px] opacity-80 font-bold truncate">{{ holidaysByDate[cell.date].type_label }}</p>
+                                <div class="flex items-center gap-1 mt-0.5">
+                                    <p class="text-[9px] opacity-80 font-bold truncate">{{ holidaysByDate[cell.date].type_label }}</p>
+                                    <span v-if="holidaysByDate[cell.date].is_ph_holiday" class="px-1 py-0.5 text-[8px] font-bold bg-green-100 text-green-700 rounded">PH</span>
+                                </div>
                             </div>
                             <div v-else-if="cell.date"
                                 class="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-1.5 left-0 right-0 text-center pointer-events-none">
@@ -215,6 +238,7 @@ const removeHoliday = () => {
                             <div class="flex items-center gap-2"><span class="h-3 w-3 rounded bg-amber-300"></span> Special Non-Working Day</div>
                             <div class="flex items-center gap-2"><span class="h-3 w-3 rounded bg-slate-300"></span> Non-Working Day</div>
                             <div class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-blue-600"></span> Today</div>
+                            <div class="flex items-center gap-2"><span class="px-1.5 py-0.5 text-[9px] font-bold bg-green-100 text-green-700 rounded">PH</span> Philippine Holiday (auto)</div>
                         </div>
                     </div>
                     <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
@@ -230,9 +254,10 @@ const removeHoliday = () => {
                                     <p class="font-bold text-xs text-slate-900 truncate">{{ h.name }}</p>
                                     <span class="text-[10px] font-mono text-slate-400 shrink-0">{{ String(h.date).substring(0, 10) }}</span>
                                 </div>
-                                <div class="flex items-center gap-1.5 mt-1.5">
+                                <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                     <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold border', typeChip(h.type)]">{{ h.type_label }}</span>
                                     <span class="text-[10px] text-slate-400 font-semibold">{{ h.policy_label }}</span>
+                                    <span v-if="h.is_ph_holiday" class="px-1.5 py-0.5 text-[9px] font-bold bg-green-100 text-green-700 rounded">PH Holiday</span>
                                 </div>
                             </button>
                         </div>

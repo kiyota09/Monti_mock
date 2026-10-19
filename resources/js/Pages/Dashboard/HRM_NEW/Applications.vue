@@ -1034,6 +1034,19 @@
                                     </div>
                                 </div>
 
+                                <!-- Rejection Reason (required when Reject selected) -->
+                                <div v-if="screeningDecision === 'rejected'" class="mt-4">
+                                    <label class="text-xs font-semibold text-slate-600 block mb-1.5">Rejection Reason <span class="text-rose-500">*</span></label>
+                                    <textarea
+                                        v-model="screeningRejectionReason"
+                                        rows="3"
+                                        class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-rose-500 shadow-sm resize-none"
+                                        placeholder="Enter the reason for rejection (will be sent to applicant)..."
+                                        required
+                                    ></textarea>
+                                    <p class="text-[10px] text-rose-500 mt-1">This reason will be included in the notification sent to the applicant.</p>
+                                </div>
+
                                 <!-- Submit Button -->
                                 <div class="mt-6">
                                     <button
@@ -1419,6 +1432,7 @@ const screeningChecks = ref({
 });
 const screeningNotes = ref('');
 const screeningDecision = ref('');
+const screeningRejectionReason = ref('');
 const screeningSubmitting = ref(false);
 const screeningApplicationId = ref<number | null>(null);
 // The specific job application card being screened (null = legacy applicant-wide).
@@ -1875,6 +1889,17 @@ const closeScreeningModal = () => {
     screeningData.value = { application: {}, personal: {}, address: {}, education: {}, employment: {}, emergency: {}, position: {}, job_posting: {} };
     screeningApplicationId.value = null;
     screeningJobApplicationId.value = null;
+    screeningDecision.value = '';
+    screeningNotes.value = '';
+    screeningRejectionReason.value = '';
+    screeningChecks.value = {
+        resume_reviewed: false,
+        education_verified: false,
+        work_experience_reviewed: false,
+        skills_reviewed: false,
+        qualifications_met: false,
+        applicant_info_reviewed: false,
+    };
     document.body.style.overflow = '';
 };
 
@@ -1890,6 +1915,11 @@ const submitScreening = async () => {
         return;
     }
 
+    if (screeningDecision.value === 'rejected' && !screeningRejectionReason.value.trim()) {
+        showToast('error', 'Validation Error', 'Please provide a rejection reason when rejecting an applicant.');
+        return;
+    }
+
     screeningSubmitting.value = true;
 
     try {
@@ -1902,6 +1932,7 @@ const submitScreening = async () => {
             applicant_info_reviewed: screeningChecks.value.applicant_info_reviewed,
             result: screeningDecision.value,
             notes: screeningNotes.value,
+            rejection_reason: screeningDecision.value === 'rejected' ? screeningRejectionReason.value : null,
             job_application_id: screeningJobApplicationId.value,
         };
 

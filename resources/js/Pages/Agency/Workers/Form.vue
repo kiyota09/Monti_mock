@@ -371,119 +371,245 @@ function closePreview() {
     previewName.value = '';
 }
 
-const inputCls = 'w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200';
-const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase';
-const sectionCls = 'bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5';
-const hintCls = 'mt-1 text-[11px] text-slate-400';
+// ─── Multi-step wizard ───────────────────────────────────────────────
+const steps = [
+    { key: 'personal', title: 'Personal', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+    { key: 'qualifications', title: 'Resume', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+    { key: 'work', title: 'Work', icon: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+    { key: 'documents', title: 'Documents', icon: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
+    { key: 'consent', title: 'Review', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+];
+const step = ref(0);
+const maxStep = computed(() => steps.length - 1);
+const progressWidth = computed(() => `${(step.value / maxStep.value) * 100}%`);
+
+const stepErrors = ref<string[]>([]);
+
+function validateStep(i: number): string[] {
+    const f: any = form as any;
+    const errs: string[] = [];
+    const req = (val: any, label: string) => {
+        if (val === '' || val === null || val === undefined) errs.push(label);
+    };
+    if (i === 0) {
+        req(f.name, 'Full name');
+        req(f.birth_date, 'Birth date');
+        req(f.phone, 'Phone number');
+        req(f.address, 'Complete address');
+    } else if (i === 1) {
+        if (!isEdit && !f.resume) errs.push('Resume / CV');
+        req(f.education, 'Educational attainment');
+        req(f.skills, 'Skills');
+    } else if (i === 2) {
+        req(f.position_skill, 'Position / skill');
+        req(f.availability, 'Availability date');
+    } else if (i === 4) {
+        if (!isEdit && !f.consent_given) errs.push('Consent');
+    }
+    return errs;
+}
+
+function nextStep() {
+    const errs = validateStep(step.value);
+    if (errs.length) { stepErrors.value = errs; return; }
+    stepErrors.value = [];
+    if (step.value < maxStep.value) step.value++;
+}
+function prevStep() {
+    stepErrors.value = [];
+    if (step.value > 0) step.value--;
+}
+function goToStep(i: number) {
+    if (i <= step.value) { stepErrors.value = []; step.value = i; }
+}
+function stepDone(i: number): boolean {
+    return i < step.value && validateStep(i).length === 0;
+}
+
+const inputCls = 'w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 hover:border-slate-300 dark:hover:border-slate-600 transition disabled:opacity-50 disabled:cursor-not-allowed';
+const labelCls = 'block mb-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider';
+const sectionCls = 'rounded-2xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-800/60 shadow-sm shadow-slate-200/50 dark:shadow-none p-5 sm:p-6';
+const hintCls = 'mt-1.5 text-[11px] text-slate-400';
+
+function fieldCls(key: string): string {
+    const base = 'w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-900/70 border rounded-xl text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-4 transition disabled:opacity-50 disabled:cursor-not-allowed';
+    return err(key)
+        ? `${base} border-rose-300 dark:border-rose-500/60 focus:border-rose-400 focus:ring-rose-500/10`
+        : `${base} border-slate-200 dark:border-slate-700 focus:border-indigo-400 focus:ring-indigo-500/10 hover:border-slate-300 dark:hover:border-slate-600`;
+}
+
+const sectionIconCls = 'w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 shrink-0';
+const errCls = 'mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400';
 </script>
 
 <template>
     <Head :title="(isEdit ? 'Edit Worker' : 'Add Worker') + ' - Monti ERP'" />
     <AgencyLayout>
-        <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-            <Link :href="route('agency.workers.index')" class="hover:text-blue-600">Workers</Link>
-            <span>/</span>
-            <span class="font-semibold">{{ isEdit ? 'Edit' : 'Add' }}</span>
+        <nav class="flex items-center gap-1.5 text-xs font-medium text-slate-400 mb-4">
+            <Link :href="route('agency.workers.index')" class="inline-flex items-center gap-1 hover:text-indigo-600 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10" /></svg>
+                Workers
+            </Link>
+            <span class="text-slate-300 dark:text-slate-600">/</span>
+            <span class="font-semibold text-slate-600 dark:text-slate-300">{{ isEdit ? 'Edit worker' : 'Add worker' }}</span>
         </nav>
-        <h1 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-1">
-            {{ isEdit ? 'Edit worker' : 'Add worker' }}
-        </h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
-            {{ isEdit ? 'Status changes stay with HR. You can edit worker details directly, including daily rate.' : 'New workers enter as Pending HR Approval and become Available only after HR approves them.' }}
-        </p>
 
-        <form @submit.prevent="openSaveConfirm" class="space-y-4 max-w-3xl">
-            <div v-if="hasErrors" class="p-4 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
-                <p class="text-xs font-black uppercase tracking-wider text-rose-700 dark:text-rose-400">Could not save — fix the following</p>
-                <ul class="mt-1 text-sm text-rose-700 dark:text-rose-300 list-disc pl-5">
-                    <li v-for="(msg, key) in (form.errors as Record<string,string>)" :key="key">{{ msg }}</li>
-                </ul>
-                <p class="mt-1 text-[11px] text-rose-500">Nothing was saved, so the form still shows the old data.</p>
+        <!-- Gradient hero + stepper -->
+        <div class="relative overflow-hidden rounded-3xl bg-slate-900 p-6 sm:p-7 text-white shadow-xl shadow-indigo-900/20 mb-6 w-full">
+            <div class="absolute inset-0 bg-gradient-to-br from-indigo-600 via-violet-600 to-slate-900 opacity-95"></div>
+            <div class="absolute -top-24 -right-16 w-72 h-72 rounded-full bg-white/10 blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-28 -left-10 w-72 h-72 rounded-full bg-indigo-400/20 blur-3xl pointer-events-none"></div>
+            <div class="relative flex items-start justify-between gap-4">
+                <div>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-[10px] uppercase tracking-widest font-bold text-white/80">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        Agency · Workers
+                    </span>
+                    <h1 class="text-2xl sm:text-3xl font-black mt-3 tracking-tight">{{ isEdit ? 'Edit worker' : 'Add worker' }}</h1>
+                    <p class="text-xs text-white/70 mt-2 max-w-xl leading-relaxed">
+                        {{ isEdit ? 'Status changes stay with HR. You can edit worker details directly, including daily rate.' : 'New workers enter as Pending HR Approval and become Available only after HR approves them.' }}
+                    </p>
+                </div>
+                <div class="hidden sm:flex flex-col items-end shrink-0 pl-4">
+                    <span class="text-[10px] uppercase tracking-widest text-white/60 font-bold">Step</span>
+                    <span class="text-4xl font-black leading-none mt-1 tabular-nums">{{ step + 1 }}<span class="text-white/40 text-xl">/{{ steps.length }}</span></span>
+                </div>
             </div>
-            <div v-if="isEdit && props.worker?.status === 'For Correction' && props.worker?.pending_note" class="p-4 rounded-2xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
-                <p class="text-xs font-black uppercase tracking-wider text-orange-700 dark:text-orange-400">HR requested corrections</p>
-                <p class="mt-1 text-sm text-orange-800 dark:text-orange-300 whitespace-pre-line">{{ props.worker.pending_note }}</p>
-                <p class="mt-1 text-[11px] text-orange-600 dark:text-orange-400">Update the details below and save — the worker returns to Pending HR Approval.</p>
+
+            <div class="relative mt-7">
+                <div class="absolute left-0 right-0 top-[18px] h-0.5 rounded-full bg-white/15"></div>
+                <div class="absolute left-0 top-[18px] h-0.5 rounded-full bg-gradient-to-r from-white to-indigo-100 transition-all duration-500 ease-out" :style="{ width: progressWidth }"></div>
+                <div class="relative flex justify-between">
+                    <button v-for="(s, i) in steps" :key="s.key" type="button" @click="goToStep(i)" :disabled="i > step"
+                        class="group flex flex-col items-center gap-2 bg-transparent"
+                        :class="i <= step ? 'cursor-pointer' : 'cursor-not-allowed'">
+                        <span class="w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-200"
+                            :class="stepDone(i) ? 'bg-white text-emerald-600 border-white shadow-lg shadow-emerald-500/30' : i === step ? 'bg-white text-indigo-600 border-white ring-4 ring-white/25 scale-110' : 'bg-slate-800/60 text-white/50 border-white/25 group-hover:border-white/50'">
+                            <svg v-if="stepDone(i)" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                            <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" :d="s.icon" /></svg>
+                        </span>
+                        <span class="text-[10px] font-bold uppercase tracking-wide hidden sm:block transition" :class="i <= step ? 'text-white' : 'text-white/50'">{{ s.title }}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <form @submit.prevent="openSaveConfirm" class="space-y-5 max-w-4xl mx-auto">
+            <div v-if="hasErrors" class="flex items-start gap-3 p-4 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+                <span class="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </span>
+                <div>
+                    <p class="text-xs font-black uppercase tracking-wider text-rose-700 dark:text-rose-400">Could not save — fix the following</p>
+                    <ul class="mt-1 text-sm text-rose-700 dark:text-rose-300 list-disc pl-5">
+                        <li v-for="(msg, key) in (form.errors as Record<string,string>)" :key="key">{{ msg }}</li>
+                    </ul>
+                    <p class="mt-1 text-[11px] text-rose-500">Nothing was saved, so the form still shows the old data.</p>
+                </div>
+            </div>
+            <div v-if="isEdit && props.worker?.status === 'For Correction' && props.worker?.pending_note" class="flex items-start gap-3 p-4 rounded-2xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+                <span class="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.062 18a2 2 0 001.732 3h10.412a2 2 0 001.732-3L13.732 4a2 2 0 00-3.464 0L5.062 18z" /></svg>
+                </span>
+                <div>
+                    <p class="text-xs font-black uppercase tracking-wider text-orange-700 dark:text-orange-400">HR requested corrections</p>
+                    <p class="mt-1 text-sm text-orange-800 dark:text-orange-300 whitespace-pre-line">{{ props.worker.pending_note }}</p>
+                    <p class="mt-1 text-[11px] text-orange-600 dark:text-orange-400">Update the details below and save — the worker returns to Pending HR Approval.</p>
+                </div>
             </div>
             <!-- Personal Information -->
-            <div :class="sectionCls">
-                <h2 class="text-sm font-black uppercase tracking-wider mb-1">Personal Information</h2>
-                <p class="text-[11px] text-slate-400 mb-4">Full legal name, birth date, phone, and complete address are required.</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div v-show="step === 0" :class="sectionCls">
+                <div class="flex items-start gap-3 mb-6 pb-5 border-b border-slate-100 dark:border-slate-700/60">
+                    <span :class="sectionIconCls">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    </span>
                     <div>
-                        <label :class="labelCls">Full name <span class="text-red-500">*</span></label>
-                        <input v-model="form.name" type="text" placeholder="Enter full legal name" :class="inputCls" />
-                        <p v-if="err('name')" class="mt-1 text-xs text-rose-600">{{ err('name') }}</p>
+                        <h2 class="text-sm font-bold text-slate-900 dark:text-white">Personal Information</h2>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Full legal name, birth date, phone, and complete address are required.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
+                    <div>
+                        <label :class="labelCls">Full name <span class="text-rose-500">*</span></label>
+                        <input v-model="form.name" type="text" placeholder="Enter full legal name" :class="fieldCls('name')" />
+                        <p v-if="err('name')" :class="errCls">{{ err('name') }}</p>
                     </div>
                     <div>
-                        <label :class="labelCls">Birth date <span class="text-red-500">*</span></label>
-                        <input v-model="form.birth_date" type="date" :class="inputCls" />
-                        <p v-if="err('birth_date')" class="mt-1 text-xs text-rose-600">{{ err('birth_date') }}</p>
+                        <label :class="labelCls">Birth date <span class="text-rose-500">*</span></label>
+                        <input v-model="form.birth_date" type="date" :class="fieldCls('birth_date')" />
+                        <p v-if="err('birth_date')" :class="errCls">{{ err('birth_date') }}</p>
                     </div>
                     <div>
                         <label :class="labelCls">Gender</label>
-                        <select v-model="form.gender" :class="inputCls">
+                        <select v-model="form.gender" :class="fieldCls('gender')">
                             <option value="">Select...</option>
                             <option>Male</option><option>Female</option>
                         </select>
-                        <p v-if="err('gender')" class="mt-1 text-xs text-rose-600">{{ err('gender') }}</p>
+                        <p v-if="err('gender')" :class="errCls">{{ err('gender') }}</p>
                     </div>
                     <div>
-                        <label :class="labelCls">Phone number <span class="text-red-500">*</span></label>
-                        <input v-model="form.phone" type="text" placeholder="09XX XXX XXXX" :class="inputCls" />
-                        <p v-if="err('phone')" class="mt-1 text-xs text-rose-600">{{ err('phone') }}</p>
+                        <label :class="labelCls">Phone number <span class="text-rose-500">*</span></label>
+                        <input v-model="form.phone" type="text" placeholder="09XX XXX XXXX" :class="fieldCls('phone')" />
+                        <p v-if="err('phone')" :class="errCls">{{ err('phone') }}</p>
                     </div>
                     <div>
                         <label :class="labelCls">Email address</label>
-                        <input v-model="form.email" type="email" placeholder="name@example.com" :class="inputCls" />
-                        <p v-if="err('email')" class="mt-1 text-xs text-rose-600">{{ err('email') }}</p>
+                        <input v-model="form.email" type="email" placeholder="name@example.com" :class="fieldCls('email')" />
+                        <p v-if="err('email')" :class="errCls">{{ err('email') }}</p>
                     </div>
                     <div class="sm:col-span-2">
-                        <label :class="labelCls">Complete address <span class="text-red-500">*</span></label>
-                        <textarea v-model="form.address" rows="2" placeholder="House no., street, barangay, city, province" :class="inputCls"></textarea>
-                        <p v-if="err('address')" class="mt-1 text-xs text-rose-600">{{ err('address') }}</p>
+                        <label :class="labelCls">Complete address <span class="text-rose-500">*</span></label>
+                        <textarea v-model="form.address" rows="2" placeholder="House no., street, barangay, city, province" :class="fieldCls('address')"></textarea>
+                        <p v-if="err('address')" :class="errCls">{{ err('address') }}</p>
                     </div>
                 </div>
             </div>
 
             <!-- Resume and Qualifications -->
-            <div :class="sectionCls">
-                <h2 class="text-sm font-black uppercase tracking-wider mb-1">Resume and Qualifications</h2>
-                <p class="text-[11px] text-slate-400 mb-4">Resume, educational attainment, and skills are required. Experience and certifications are optional.</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div v-show="step === 1" :class="sectionCls">
+                <div class="flex items-start gap-3 mb-6 pb-5 border-b border-slate-100 dark:border-slate-700/60">
+                    <span :class="sectionIconCls">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    </span>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 dark:text-white">Resume and Qualifications</h2>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Resume, educational attainment, and skills are required. Experience and certifications are optional.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
                     <div class="sm:col-span-2">
-                        <label :class="labelCls">Upload Resume / CV <span v-if="!isEdit" class="text-red-500">*</span></label>
-                        <input ref="resumeInputRef" type="file" accept=".pdf,.doc,.docx" :class="inputCls" @change="onResumeChange" />
+                        <label :class="labelCls">Upload Resume / CV <span v-if="!isEdit" class="text-rose-500">*</span></label>
+                        <input ref="resumeInputRef" type="file" accept=".pdf,.doc,.docx" :class="fieldCls('resume')" @change="onResumeChange" />
                         <p :class="hintCls">PDF or DOCX · max 10MB · Required for full profile submission</p>
                         <div v-if="form.resume" class="mt-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between gap-2">
                             <p class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate">Selected: {{ (form.resume as File).name }}</p>
                             <div class="shrink-0 flex items-center gap-1">
-                                <button type="button" @click="openLocalPreview(form.resume as File)" class="text-[11px] font-bold text-blue-600 hover:underline">View</button>
+                                <button type="button" @click="openLocalPreview(form.resume as File)" class="text-[11px] font-bold text-indigo-600 hover:underline">View</button>
                                 <button type="button" @click="removeNewResume" title="Remove selected file" class="w-6 h-6 inline-flex items-center justify-center rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-black">×</button>
                             </div>
                         </div>
                         <div v-else-if="resumeName" class="mt-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between gap-2">
                             <p class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate">Uploaded: {{ resumeName }}</p>
                             <div class="shrink-0 flex items-center gap-1">
-                                <button v-if="props.worker?.resume_url" type="button" @click="openRemotePreview(props.worker.resume_url, resumeName || 'Resume')" class="text-[11px] font-bold text-blue-600 hover:underline">View</button>
+                                <button v-if="props.worker?.resume_url" type="button" @click="openRemotePreview(props.worker.resume_url, resumeName || 'Resume')" class="text-[11px] font-bold text-indigo-600 hover:underline">View</button>
                                 <button type="button" @click="removeUploadedResume" :disabled="deletingDocId !== null" title="Remove uploaded resume (kept in database)" class="w-6 h-6 inline-flex items-center justify-center rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-black disabled:opacity-40">×</button>
                             </div>
                         </div>
-                        <p v-if="err('resume')" class="mt-1 text-xs text-rose-600">{{ err('resume') }}</p>
+                        <p v-if="err('resume')" :class="errCls">{{ err('resume') }}</p>
                     </div>
                     <div class="sm:col-span-2">
-                        <label :class="labelCls">Educational attainment <span class="text-red-500">*</span></label>
-                        <textarea v-model="form.education" rows="2" placeholder="e.g. High school graduate, TESDA NC II..." :class="inputCls"></textarea>
-                        <p v-if="err('education')" class="mt-1 text-xs text-rose-600">{{ err('education') }}</p>
+                        <label :class="labelCls">Educational attainment <span class="text-rose-500">*</span></label>
+                        <textarea v-model="form.education" rows="2" placeholder="e.g. High school graduate, TESDA NC II..." :class="fieldCls('education')"></textarea>
+                        <p v-if="err('education')" :class="errCls">{{ err('education') }}</p>
                     </div>
                     <div class="sm:col-span-2">
                         <label :class="labelCls">Previous work experience</label>
                         <textarea v-model="form.work_experience" rows="2" placeholder="Previous employers, roles, inclusive dates..." :class="inputCls"></textarea>
                     </div>
                     <div>
-                        <label :class="labelCls">Skills <span class="text-red-500">*</span></label>
-                        <textarea v-model="form.skills" rows="2" placeholder="e.g. Sewing, packing, machine operation..." :class="inputCls"></textarea>
-                        <p v-if="err('skills')" class="mt-1 text-xs text-rose-600">{{ err('skills') }}</p>
+                        <label :class="labelCls">Skills <span class="text-rose-500">*</span></label>
+                        <textarea v-model="form.skills" rows="2" placeholder="e.g. Sewing, packing, machine operation..." :class="fieldCls('skills')"></textarea>
+                        <p v-if="err('skills')" :class="errCls">{{ err('skills') }}</p>
                     </div>
                     <div>
                         <label :class="labelCls">Training and certifications</label>
@@ -493,11 +619,27 @@ const hintCls = 'mt-1 text-[11px] text-slate-400';
             </div>
 
             <!-- Work and Deployment Details -->
-            <div :class="sectionCls">
-                <h2 class="text-sm font-black uppercase tracking-wider mb-1">Work and Deployment Details</h2>
-                <p class="text-[11px] text-slate-400 mb-4">Propose the position and availability. Monti confirms the final department, assignment, and agreed terms.</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div v-show="step === 2" :class="sectionCls">
+                <div class="flex items-start gap-3 mb-6 pb-5 border-b border-slate-100 dark:border-slate-700/60">
+                    <span :class="sectionIconCls">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                    </span>
                     <div>
+                        <h2 class="text-sm font-bold text-slate-900 dark:text-white">Work and Deployment Details</h2>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Propose the position and availability. Monti confirms the final department, assignment, and agreed terms.</p>
+                    </div>
+                </div>
+
+                <div class="mb-6 flex items-start gap-2.5 p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50">
+                    <svg class="w-4 h-4 text-indigo-500 dark:text-indigo-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <p class="text-[11px] text-indigo-700 dark:text-indigo-300 leading-relaxed">Fields marked <span class="text-rose-500 font-bold">*</span> are required to continue. You can refine these details later — HR sets the final terms.</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
+                    <p class="sm:col-span-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <span class="w-1 h-1 rounded-full bg-indigo-500"></span> Assignment
+                    </p>
+                    <div class="sm:col-span-2">
                         <label :class="labelCls">Proposed department / assignment</label>
                         <select v-model="form.proposed_department" :class="inputCls">
                             <option value="">Select department...</option>
@@ -506,32 +648,36 @@ const hintCls = 'mt-1 text-[11px] text-slate-400';
                         <p v-if="departmentOptions.length === 0" class="mt-1 text-xs text-amber-600">No departments — HR adds them under HRM → Departments.</p>
                     </div>
                     <div>
-                        <label :class="labelCls">Position / skill <span class="text-red-500">*</span></label>
-                        <select v-model="form.position_skill" :class="inputCls" :disabled="!form.proposed_department">
+                        <label :class="labelCls">Position / skill <span class="text-rose-500">*</span></label>
+                        <select v-model="form.position_skill" :class="fieldCls('position_skill')" :disabled="!form.proposed_department">
                             <option value="">{{ !form.proposed_department ? 'Select department first...' : 'Select position...' }}</option>
                             <option v-for="p in filteredPositions" :key="p.id + '-' + p.name" :value="p.name">{{ p.name }}</option>
                         </select>
-                        <p v-if="err('position_skill')" class="mt-1 text-xs text-rose-600">{{ err('position_skill') }}</p>
+                        <p v-if="err('position_skill')" :class="errCls">{{ err('position_skill') }}</p>
                         <p v-else-if="!form.proposed_department" class="mt-1 text-xs text-slate-400">Select a department first to see its positions.</p>
                         <p v-else-if="form.proposed_department && filteredPositions.length === 0" class="mt-1 text-xs text-amber-600">No positions under this department — HR adds them under HRM → Positions.</p>
                     </div>
                     <div>
                         <label :class="labelCls">Years of experience</label>
-                        <input v-model="form.years_experience" type="number" min="0" max="60" step="0.5" placeholder="e.g. 2.5" :class="inputCls" />
-                        <p v-if="err('years_experience')" class="mt-1 text-xs text-rose-600">{{ err('years_experience') }}</p>
+                        <input v-model="form.years_experience" type="number" min="0" max="60" step="0.5" placeholder="e.g. 2.5" :class="fieldCls('years_experience')" />
+                        <p v-if="err('years_experience')" :class="errCls">{{ err('years_experience') }}</p>
                     </div>
+
+                    <p class="sm:col-span-2 mt-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <span class="w-1 h-1 rounded-full bg-indigo-500"></span> Availability &amp; terms
+                    </p>
                     <div>
-                        <label :class="labelCls">Availability date <span class="text-red-500">*</span></label>
-                        <input v-model="form.availability" type="date" :class="inputCls" />
+                        <label :class="labelCls">Availability date <span class="text-rose-500">*</span></label>
+                        <input v-model="form.availability" type="date" :class="fieldCls('availability')" />
                         <p v-if="legacyAvailability" class="mt-1 text-[11px] text-slate-400">Previous value: {{ legacyAvailability }} — pick a calendar date to update it.</p>
-                        <p v-if="err('availability')" class="mt-1 text-xs text-rose-600">{{ err('availability') }}</p>
+                        <p v-if="err('availability')" :class="errCls">{{ err('availability') }}</p>
                     </div>
                     <div>
                         <label :class="labelCls">Daily rate (₱)</label>
-                        <input v-model="form.daily_rate" type="number" min="0" step="0.01" placeholder="e.g. 650" :class="inputCls" />
-                        <p v-if="err('daily_rate')" class="mt-1 text-xs text-rose-600">{{ err('daily_rate') }}</p>
+                        <input v-model="form.daily_rate" type="number" min="0" step="0.01" placeholder="e.g. 650" :class="fieldCls('daily_rate')" />
+                        <p v-if="err('daily_rate')" :class="errCls">{{ err('daily_rate') }}</p>
                     </div>
-                    <div>
+                    <div class="sm:col-span-2">
                         <label :class="labelCls">Employment arrangement</label>
                         <select v-model="form.employment_arrangement" :class="inputCls">
                             <option value="">Select...</option>
@@ -544,10 +690,17 @@ const hintCls = 'mt-1 text-[11px] text-slate-400';
             </div>
 
             <!-- Government and Supporting Documents -->
-            <div :class="sectionCls">
-                <h2 class="text-sm font-black uppercase tracking-wider mb-1">Government and Supporting Documents</h2>
-                <p class="text-[11px] text-slate-400 mb-4">Optional at registration — HR collects what the assignment requires. HR verifies each file as Pending, Verified, Rejected, or Expired.</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div v-show="step === 3" :class="sectionCls">
+                <div class="flex items-start gap-3 mb-6 pb-5 border-b border-slate-100 dark:border-slate-700/60">
+                    <span :class="sectionIconCls">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                    </span>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 dark:text-white">Government and Supporting Documents</h2>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Optional at registration — HR collects what the assignment requires. HR verifies each file as Pending, Verified, Rejected, or Expired.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
                     <div>
                         <label :class="labelCls">Government ID type</label>
                         <select v-model="form.gov_id_type" :class="inputCls">
@@ -559,8 +712,8 @@ const hintCls = 'mt-1 text-[11px] text-slate-400';
                     </div>
                     <div>
                         <label :class="labelCls">Government ID number</label>
-                        <input v-model="form.gov_id_number" type="text" placeholder="ID number" :class="inputCls" />
-                        <p v-if="err('gov_id_number')" class="mt-1 text-xs text-rose-600">{{ err('gov_id_number') }}</p>
+                        <input v-model="form.gov_id_number" type="text" placeholder="ID number" :class="fieldCls('gov_id_number')" />
+                        <p v-if="err('gov_id_number')" :class="errCls">{{ err('gov_id_number') }}</p>
                     </div>
                     <div v-for="c in docCategories" :key="c.key" class="sm:col-span-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700">
                         <label :class="labelCls">{{ c.title }}</label>
@@ -571,7 +724,7 @@ const hintCls = 'mt-1 text-[11px] text-slate-400';
                             <ul class="divide-y divide-slate-100 dark:divide-slate-700/50 text-xs px-2 pb-1">
                                 <li v-for="d in (existingByType[c.key] || [])" :key="d.id" class="py-1.5 flex items-center justify-between gap-2">
                                     <div class="min-w-0">
-                                        <button type="button" @click="openRemotePreview(d.url, d.original_name || d.label || d.doc_type)" class="font-semibold text-blue-600 hover:underline truncate">{{ d.original_name || d.label || d.doc_type }}</button>
+                                        <button type="button" @click="openRemotePreview(d.url, d.original_name || d.label || d.doc_type)" class="font-semibold text-indigo-600 hover:underline truncate">{{ d.original_name || d.label || d.doc_type }}</button>
                                         <p v-if="d.issue_date || d.expiry_date" class="text-[11px] text-slate-400">{{ d.issue_date ? 'Start: ' + d.issue_date : '' }}{{ d.issue_date && d.expiry_date ? ' · ' : '' }}{{ d.expiry_date ? 'Expiry: ' + d.expiry_date : '' }}</p>
                                     </div>
                                     <div class="shrink-0 flex items-center gap-1">
@@ -585,7 +738,7 @@ const hintCls = 'mt-1 text-[11px] text-slate-400';
                             <div class="flex items-center justify-between gap-2">
                                 <p class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 truncate">{{ f.name }}</p>
                                 <div class="shrink-0 flex items-center gap-1">
-                                    <button type="button" @click="openLocalPreview(f)" class="text-[11px] font-bold text-blue-600 hover:underline">View</button>
+                                    <button type="button" @click="openLocalPreview(f)" class="text-[11px] font-bold text-indigo-600 hover:underline">View</button>
                                     <button type="button" @click="removeNewCategoryFile(c.key, i)" title="Remove selected file" class="w-6 h-6 inline-flex items-center justify-center rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-black">×</button>
                                 </div>
                             </div>
@@ -606,10 +759,17 @@ const hintCls = 'mt-1 text-[11px] text-slate-400';
             </div>
 
             <!-- Emergency Contact -->
-            <div :class="sectionCls">
-                <h2 class="text-sm font-black uppercase tracking-wider mb-1">Emergency Contact</h2>
-                <p class="text-[11px] text-slate-400 mb-4">Optional initially — may be required before deployment.</p>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div v-show="step === 4" :class="sectionCls">
+                <div class="flex items-start gap-3 mb-6 pb-5 border-b border-slate-100 dark:border-slate-700/60">
+                    <span :class="sectionIconCls">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h2.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                    </span>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 dark:text-white">Emergency Contact</h2>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Optional initially — may be required before deployment.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-5 gap-y-4">
                     <div>
                         <label :class="labelCls">Contact name</label>
                         <input v-model="form.emergency_name" type="text" :class="inputCls" />
@@ -630,25 +790,63 @@ const hintCls = 'mt-1 text-[11px] text-slate-400';
             </div>
 
             <!-- Submission and Consent -->
-            <div :class="sectionCls">
-                <h2 class="text-sm font-black uppercase tracking-wider mb-1">Submission and Consent <span class="text-red-500">*</span></h2>
-                <p class="text-[11px] text-slate-400 mb-4">Initial status: Pending HR Approval.</p>
-                <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 cursor-pointer">
-                    <input v-model="form.consent_given" type="checkbox" :true-value="true" :false-value="false" class="mt-1 w-4 h-4 accent-blue-600" />
+            <div v-show="step === 4" :class="sectionCls">
+                <div class="flex items-start gap-3 mb-6 pb-5 border-b border-slate-100 dark:border-slate-700/60">
+                    <span :class="sectionIconCls">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9c0-1.042-.133-2.052-.382-3.016z" /></svg>
+                    </span>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 dark:text-white">Submission and Consent <span class="text-rose-500">*</span></h2>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Initial status: Pending HR Approval.</p>
+                    </div>
+                </div>
+                <label class="flex items-start gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition cursor-pointer">
+                    <input v-model="form.consent_given" type="checkbox" :true-value="true" :false-value="false" class="mt-0.5 w-4 h-4 rounded accent-indigo-600" />
                     <span class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                         I confirm that the agency is authorized to submit this worker's information and supporting files,
                         and that the worker has been informed of the privacy notice ({{ privacy_notice_version }}).
                         <span v-if="!isEdit" class="font-bold text-slate-900 dark:text-white">Required to submit.</span>
                     </span>
                 </label>
-                <p v-if="err('consent_given')" class="mt-1 text-xs text-rose-600">{{ err('consent_given') }}</p>
+                <p v-if="err('consent_given')" :class="errCls">{{ err('consent_given') }}</p>
             </div>
 
-            <div class="flex items-center justify-end gap-3 pb-8">
-                <Link :href="route('agency.workers.index')" class="px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition">Cancel</Link>
-                <button type="submit" :disabled="form.processing" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/30 disabled:opacity-60">
-                    {{ form.processing ? 'Saving...' : isEdit ? 'Save changes' : 'Submit for HR approval' }}
+            <div v-if="stepErrors.length" class="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <span class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.062 18a2 2 0 001.732 3h10.412a2 2 0 001.732-3L13.732 4a2 2 0 00-3.464 0L5.062 18z" /></svg>
+                </span>
+                <div>
+                    <p class="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">Please complete before continuing</p>
+                    <ul class="mt-1 text-xs text-amber-700 dark:text-amber-300 list-disc pl-5">
+                        <li v-for="e in stepErrors" :key="e">{{ e }}</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-3 pb-8 pt-2">
+                <button v-if="step > 0" type="button" @click="prevStep"
+                    class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 hover:-translate-x-0.5 transition shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                    Back
                 </button>
+                <span v-else class="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Step {{ step + 1 }} of {{ steps.length }}
+                </span>
+
+                <div class="flex items-center gap-2">
+                    <Link :href="route('agency.workers.index')" class="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm">Cancel</Link>
+                    <button v-if="step < maxStep" type="button" @click="nextStep"
+                        class="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/30 hover:translate-x-0.5 transition">
+                        Next
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                    <button v-else type="submit" :disabled="form.processing"
+                        class="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/30 disabled:opacity-60 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                        {{ form.processing ? 'Saving...' : isEdit ? 'Save changes' : 'Submit for HR approval' }}
+                    </button>
+                </div>
             </div>
         </form>
 
@@ -679,7 +877,7 @@ const hintCls = 'mt-1 text-[11px] text-slate-400';
                 </div>
                 <div class="px-5 py-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-2">
                     <button type="button" @click="showSaveConfirm = false" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">Back</button>
-                    <button type="button" @click="confirmSave" :disabled="form.processing" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50">{{ form.processing ? 'Saving…' : isEdit ? 'Confirm & save' : 'Confirm & submit' }}</button>
+                    <button type="button" @click="confirmSave" :disabled="form.processing" class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs font-bold transition disabled:opacity-50">{{ form.processing ? 'Saving…' : isEdit ? 'Confirm & save' : 'Confirm & submit' }}</button>
                 </div>
             </div>
         </div>

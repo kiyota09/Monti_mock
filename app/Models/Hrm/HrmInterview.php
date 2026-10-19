@@ -16,6 +16,7 @@ class HrmInterview extends Model
         'meeting_link', 'notes', 'status', 'cancel_reason',
         'reschedule_status', 'reschedule_date', 'reschedule_start_time',
         'reschedule_end_time', 'reschedule_reason', 'reschedule_requested_at',
+        'rescheduled_from_id', 'rescheduled_to_id',
         'cancelled_by',
     ];
     protected $casts = [

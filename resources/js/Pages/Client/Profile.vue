@@ -553,7 +553,7 @@ onMounted(() => nextTick(() => initClientMap()));
                                     </div>
                                     <div>
                                         <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Postal Code</label>
-                                        <input v-model="form.postal_code" type="text" maxlength="20" inputmode="numeric" placeholder="e.g. 1100"
+                                        <input :value="form.postal_code" @input="onNumericInput" @keydown="onNumericKeydown" type="text" maxlength="20" inputmode="numeric" placeholder="e.g. 1100"
                                             class="w-full px-4 py-3 rounded-2xl bg-white dark:bg-zinc-800 border border-transparent focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 outline-none text-sm transition">
                                     </div>
                                 </div>

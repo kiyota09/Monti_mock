@@ -416,7 +416,11 @@ class HandleInertiaRequests extends Middleware
     protected function getModulePages(string $module): array
     {
         $map = [
-            'HRM' => ['dashboard', 'employee', 'application', 'interview', 'trainee', 'onboarding', 'payroll', 'analytics'],
+            // Keep in sync with resources/js/Layouts/modules/SidebarHrm.vue
+            // and Database\Seeders\AddHrmManagerPermissionsSeeder::HRM_PAGES.
+            // A page missing here is missing from the auto-granted HRM set,
+            // so the sidebar link disappears on a freshly migrated database.
+            'HRM' => ['dashboard', 'employee', 'workforce', 'recruitment', 'application', 'interview', 'onboarding', 'onboarding_templates', 'organization', 'performance', 'training', 'attendance', 'leave', 'archive', 'trainee', 'payroll', 'compensation', 'analytics', 'agencies', 'workers', 'requests', 'agency_attendance', 'agency_billing'],
             'CRM' => ['dashboard', 'leads', 'customer_profiles', 'opportunities', 'inquiry', 'messaging', 'approvals', 'quotations', 'activities', 'cases', 'campaigns', 'investigation'],
             'SCM' => ['dashboard', 'sales', 'procurement', 'planning', 'purchase', 'deliveries', 'vendor', 'analytics'],
             'FIN' => ['dashboard', 'receivables', 'payables', 'expenses', 'payroll', 'reports', 'approvals'],

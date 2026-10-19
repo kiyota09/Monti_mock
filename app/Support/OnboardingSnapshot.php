@@ -40,6 +40,10 @@ class OnboardingSnapshot
                 'name' => $ti->name,
                 'status' => 'Pending',
                 'due_date' => self::dueDate($ti->due_rule_type, $ti->due_rule_value, $base),
+                // Snapshot the HR reference file so the applicant portal can
+                // show it and it survives template-item edits/deletes.
+                'attachment_path' => $ti->attachment_path,
+                'attachment_name' => $ti->attachment_name,
             ]);
             $items++;
         }

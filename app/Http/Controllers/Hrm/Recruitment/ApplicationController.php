@@ -8,6 +8,7 @@ use App\Models\Hrm\ApplicantJobApplication;
 use App\Models\Hrm\ApplicantStatusHistory;
 use App\Models\Hrm\HrmApplicationScreening;
 use App\Models\Hrm\HrmJobPosting;
+use App\Support\NotifiesApplicant;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -213,10 +214,11 @@ class ApplicationController extends Controller
             'applicant_info_reviewed' => 'nullable|boolean',
             'result' => 'required|in:passed,rejected',
             'notes' => 'nullable|string',
+            'rejection_reason' => 'required_if:result,rejected|nullable|string',
             'job_posting_id' => 'nullable|exists:hrm_job_postings,id',
             'job_application_id' => 'nullable|exists:applicant_job_applications,id',
         ]);
-        HrmApplicationScreening::create($data + [
+        $screening = HrmApplicationScreening::create($data + [
             'applicant_id' => $application->id, 'screened_by' => $request->user()->id,
         ]);
         $next = $data['result'] === 'passed' ? 'Shortlisted' : 'Rejected';
@@ -226,12 +228,22 @@ class ApplicationController extends Controller
                 return response()->json(['message' => 'This application is already ' . strtolower($ja->status) . ' and cannot be screened.'], 422);
             }
             $ja->update(['status' => $next]);
-            $this->refreshApplicantSummary($application, $next === 'Rejected' ? $data['notes'] ?? null : null);
+            $this->refreshApplicantSummary($application, $next === 'Rejected' ? $data['rejection_reason'] ?? $data['notes'] ?? null : null);
         } else {
             $application->update(['status' => $next]);
             ApplicantJobApplication::where('applicant_id', $application->id)
                 ->whereNotIn('status', ['Withdrawn', 'Hired'])
                 ->update(['status' => $next]);
+        }
+
+        if ($data['result'] === 'rejected') {
+            NotifiesApplicant::push(
+                $application,
+                'screening_rejected',
+                'Screening Result: Not Selected',
+                'Your application was not selected to move forward. Reason: ' . ($data['rejection_reason'] ?? 'No specific reason provided.'),
+                ['job_application_id' => $ja?->id, 'rejection_reason' => $data['rejection_reason']]
+            );
         }
 
         return response()->json(['ok' => true, 'status' => $next]);

@@ -34,6 +34,7 @@
                                 'bg-blue-400': metric.tone === 'info',
                                 'bg-emerald-500': metric.tone === 'success',
                                 'bg-rose-500': metric.tone === 'danger',
+                                'bg-purple-500': metric.tone === 'purple',
                             }"
                         ></span>
                         <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">{{ metric.label }}</div>
@@ -65,6 +66,7 @@
                                 <option value="Scheduled">Scheduled</option>
                                 <option value="Completed">Completed</option>
                                 <option value="Cancelled">Cancelled</option>
+                                <option value="Rescheduled">Rescheduled</option>
                             </select>
                         </div>
                     </div>
@@ -193,12 +195,6 @@
                             </div>
                             <div>
                                 <h3 class="text-xl font-black text-slate-900 dark:text-white">{{ selectedInterview.position || 'Interview' }}</h3>
-                                <span
-                                    :class="[
-                                        'px-3 py-1 rounded-full text-[11px] font-bold border mt-1 inline-flex',
-                                        getStatusBadgeClass(selectedInterview.status)
-                                    ]"
-                                >{{ statusLabel(selectedInterview) }}</span>
                             </div>
                         </div>
                         <button
@@ -262,42 +258,7 @@
                         </div>
                     </div>
 
-                    <!-- Status Timeline -->
-                    <div>
-                        <h4 class="text-sm font-black text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
-                            </svg>
-                            Status
-                        </h4>
-                        <div class="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                            <div class="flex items-center gap-3">
-                                <div
-                                    class="w-3 h-3 rounded-full"
-                                    :class="{
-                                        'bg-blue-500': selectedInterview.status === 'Scheduled',
-                                        'bg-emerald-500': selectedInterview.status === 'Completed',
-                                        'bg-rose-500': selectedInterview.status === 'Cancelled',
-                                    }"
-                                ></div>
-                                <span class="text-sm font-bold text-slate-900 dark:text-white">
-                                    {{ statusLabel(selectedInterview) }}
-                                    <span v-if="selectedInterview.status === 'Scheduled'" class="text-xs text-slate-500 dark:text-slate-400 font-normal">
-                                        - Waiting for interview date
-                                    </span>
-                                    <span v-else-if="selectedInterview.status === 'Completed'" class="text-xs text-emerald-600 dark:text-emerald-400 font-normal">
-                                        - Interview completed
-                                    </span>
-                                    <span v-else-if="selectedInterview.status === 'Cancelled'" class="text-xs text-rose-600 dark:text-rose-400 font-normal">
-                                        - {{ selectedInterview.cancelled_by === 'applicant' ? 'You cancelled this interview. Your application is still active.' : 'Interview cancelled' }}
-                                    </span>
-                                </span>
-                            </div>
-                            <div v-if="selectedInterview.created_at" class="mt-2 text-[11px] text-slate-400 dark:text-slate-400">
-                                Scheduled on {{ formatDateTime(selectedInterview.created_at) }}
-                            </div>
-                        </div>
-                    </div>
+                    
                 </div>
 
                 <!-- Modal Footer -->
@@ -435,12 +396,14 @@ const metrics = computed(() => {
     const scheduled = interviews.value.filter(i => i.status === 'Scheduled').length;
     const completed = interviews.value.filter(i => i.status === 'Completed').length;
     const cancelled = interviews.value.filter(i => i.status === 'Cancelled').length;
+    const rescheduled = interviews.value.filter(i => i.status === 'Rescheduled').length;
 
     return [
         { label: 'Total', value: total, subtext: 'All interviews', tone: 'navy' },
         { label: 'Scheduled', value: scheduled, subtext: 'Upcoming interviews', tone: 'info' },
         { label: 'Completed', value: completed, subtext: 'Finished interviews', tone: 'success' },
         { label: 'Cancelled', value: cancelled, subtext: 'Cancelled interviews', tone: 'danger' },
+        { label: 'Rescheduled', value: rescheduled, subtext: 'Rescheduled interviews', tone: 'purple' },
     ];
 });
 
@@ -509,6 +472,7 @@ function getStatusBadgeClass(status: string): string {
         'Scheduled': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
         'Completed': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
         'Cancelled': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+        'Rescheduled': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
     };
     return classes[status] || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
 }

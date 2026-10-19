@@ -93,7 +93,7 @@ const sanitizePaste = (e: ClipboardEvent) => {
 watch(() => form.identity, (val) => {
     let filtered = val.replace(/[^a-zA-Z0-9@.\-_]/g, '');
 
-    if (filtered.toLowerCase().startsWith('monti')) {
+    if (filtered.toLowerCase().startsWith('monti') || filtered.toLowerCase().startsWith('emp-')) {
         filtered = filtered.toUpperCase();
     }
 
@@ -125,9 +125,9 @@ const submit = () => {
             return;
         }
     } else {
-        if (!form.identity.startsWith('MONTI')) {
-            toast.error('Employee ID must start with MONTI (e.g. MONTI-1234-5).');
-            triggerWarning('Must start with MONTI.');
+        if (!form.identity.startsWith('MONTI') && !form.identity.startsWith('EMP-')) {
+            toast.error('Employee ID must start with MONTI or EMP- (e.g. EMP-0055).');
+            triggerWarning('Must start with MONTI or EMP-.');
             return;
         }
     }

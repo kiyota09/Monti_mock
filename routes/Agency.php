@@ -6,7 +6,7 @@ use App\Http\Controllers\Auth\PasswordRecoveryController;
 use App\Http\Controllers\Agency\AgencyDashboardController;
 use App\Http\Controllers\Agency\AttendancePortalController;
 use App\Http\Controllers\Agency\BillingPortalController;
-use App\Http\Controllers\Agency\NotificationController;
+// use App\Http\Controllers\Agency\NotificationController;
 use App\Http\Controllers\Agency\PasswordController;
 use App\Http\Controllers\Agency\RequestPortalController;
 use App\Http\Controllers\Agency\WorkerPortalController;
@@ -62,5 +62,5 @@ Route::middleware('auth:agency')->prefix('agency')->name('agency.')->group(funct
     Route::get('/billing/{statement}/export-excel', [BillingPortalController::class, 'exportExcel'])->name('billing.export-excel');
 
     // Notifications (bell next to Settings — HR activity for this agency).
-    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    // Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
 });

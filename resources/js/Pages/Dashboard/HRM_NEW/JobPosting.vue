@@ -502,18 +502,6 @@
                       </option>
                     </select>
                   </div>
-                  <div class="col-span-2">
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Hiring Manager <span class="text-slate-400 font-normal">(Optional)</span></label>
-                    <select v-model="form.hiring_manager" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
-                      <option value="">Select Hiring Manager (optional)</option>
-                      <option v-for="emp in filteredHiringManagers || []" :key="emp.id" :value="emp.name">
-                        {{ emp.name }} — {{ emp.job_position }}{{ emp.department ? ' (' + emp.department + ')' : '' }}
-                      </option>
-                    </select>
-                    <p class="text-[10px] text-slate-400 mt-1">
-                      {{ hiringManagerHint }}
-                    </p>
-                  </div>
                 </div>
               </div>
 
@@ -641,9 +629,21 @@
                     <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 cursor-not-allowed opacity-75 flex items-center gap-2">
                       <span v-if="form.salary_max !== null && form.salary_max !== ''" class="font-semibold">{{ formatCurrency(form.salary_max) }}</span>
                       <span v-else class="text-slate-400">Auto from position</span>
-                    </div>
+                  </div>
+                  <div v-show="showHiringManager" class="col-span-2">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Hiring Manager <span class="text-slate-400 font-normal">(Optional)</span></label>
+                    <select v-model="form.hiring_manager" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
+                      <option value="">Select Hiring Manager (optional)</option>
+                      <option v-for="emp in filteredHiringManagers || []" :key="emp.id" :value="emp.name">
+                        {{ emp.name }} — {{ emp.job_position }}{{ emp.department ? ' (' + emp.department + ')' : '' }}
+                      </option>
+                    </select>
+                    <p class="text-[10px] text-slate-400 mt-1">
+                      {{ hiringManagerHint }}
+                    </p>
                   </div>
                 </div>
+              </div>
                 <p class="text-[10px] text-slate-400 mt-2">Read-only — taken from the selected position. Update it on the Positions page.</p>
               </div>
 
@@ -736,6 +736,7 @@ const page = usePage();
 const showArchived = ref(false);
 const activeModal = ref(null);
 const modalType = ref('create');
+const showHiringManager = ref(false);
 const activeMenu = ref(null);
 const menuRef = ref(null);
 const menuAnchor = ref(null);

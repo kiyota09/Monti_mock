@@ -14,6 +14,7 @@ return [
         'trainee'      => 'Trainee',
         'onboarding'   => 'Onboarding',
         'payroll'      => 'Payroll',
+        'compensation' => 'Compensation & Salary',
         'analytics'    => 'Analytics',
         // HRM_NEW dynamic pages (old 8 keys kept for BC)
         'workforce'    => 'Workforce',

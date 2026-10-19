@@ -41,7 +41,11 @@ class EmployeeWelcomeMail extends Mailable
 
     public function build()
     {
+        $from = config('mail.from.address');
+
         return $this->subject("Welcome to Monti Corporation, {$this->employeeName}!")
-            ->view('emails.employee-welcome');
+            ->when($from, fn ($mail) => $mail->replyTo($from, config('mail.from.name')))
+            ->view('emails.employee-welcome')
+            ->text('emails.employee-welcome-text');
     }
 }
