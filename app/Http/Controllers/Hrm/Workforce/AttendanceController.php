@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Core\User;
 use App\Models\Hrm\AttendanceLog;
 use App\Models\Hrm\HrmDepartment;
+use App\Models\Hrm\HrmShift;
 use App\Models\Hrm\LeaveRequest;
 use App\Traits\HasPagePermissions;
 use Carbon\Carbon;
@@ -94,11 +95,26 @@ class AttendanceController extends Controller
             $isHistory ? $from : $date,
             $isHistory ? $to : $date
         );
-        $records = $items->filter(fn ($l) => $l !== null)->map(function ($log) use ($shiftMap, $isHistory, $holMap) {
+
+        // Shift Management is the source of truth for the schedule start and
+        // grace period. Employees may be linked directly (hrm_shift_user) or
+        // through the roster shift type (Morning/Afternoon/Graveyard).
+        $assignedShifts = \DB::table('hrm_shift_user as su')
+            ->join('hrm_shifts as hs', 'hs.id', '=', 'su.shift_id')
+            ->where('hs.is_active', true)
+            ->get(['su.user_id', 'hs.name', 'hs.start_time', 'hs.grace_minutes'])
+            ->keyBy('user_id');
+        $hrmShifts = HrmShift::where('is_active', true)
+            ->orderBy('id')
+            ->get(['id', 'name', 'start_time', 'grace_minutes']);
+
+        $records = $items->filter(fn ($l) => $l !== null)->map(function ($log) use ($shiftMap, $isHistory, $holMap, $assignedShifts, $hrmShifts) {
             $shift = $isHistory ? $shiftMap->get($log->user_id.'|'.substr((string) $log->date, 0, 10)) : $shiftMap->get($log->user_id);
             $shiftLabel = $shift ? trim(($shift->shift_type ?? '') . ($shift->schedule_range ? ' (' . $shift->schedule_range . ')' : '')) : '—';
             $dateKey = substr((string) $log->date, 0, 10);
-            $status = $this->display($log->status);
+            $config = $this->resolveShiftConfig((int) $log->user_id, $shift, $assignedShifts, $hrmShifts);
+            $lateMinutes = $this->lateMinutes($log, $shift, $config);
+            $status = $this->effectiveStatus($log->status, $lateMinutes);
             $remarks = $log->remarks ?? '';
             if ($status === 'Absent' && isset($holMap[$dateKey])) {
                 $status = 'Holiday';
@@ -117,7 +133,7 @@ class AttendanceController extends Controller
                 'time_out' => $log->clock_out ?: '—',
                 'hours' => $this->hours($log->clock_in, $log->clock_out),
                 'ot' => $this->ot($log->clock_in, $log->clock_out),
-                'late_minutes' => $this->lateMinutes($log, $shift),
+                'late_minutes' => $lateMinutes,
                 'status' => $status,
                 'status_raw' => $log->status,
                 'remarks' => $remarks,
@@ -146,19 +162,26 @@ class AttendanceController extends Controller
             $sumShiftMap = \App\Models\Hrm\EmployeeShift::whereBetween('effective_date', [$from, $to])
                 ->get(['user_id', 'effective_date', 'shift_type', 'schedule_range'])
                 ->keyBy(fn ($s) => $s->user_id.'|'.substr((string) $s->effective_date, 0, 10));
-            $summary = $dayLogs->groupBy('user_id')->map(function ($rows) use ($sumShiftMap) {
+            $summary = $dayLogs->groupBy('user_id')->map(function ($rows) use ($sumShiftMap, $assignedShifts, $hrmShifts) {
                 $first = $rows->first();
                 $lateMins = 0;
+                $present = 0;
+                $late = 0;
                 foreach ($rows as $r) {
                     $sh = $sumShiftMap->get($r->user_id.'|'.substr((string) $r->date, 0, 10));
-                    $lateMins += $this->lateMinutes($r, $sh);
+                    $cfg = $this->resolveShiftConfig((int) $r->user_id, $sh, $assignedShifts, $hrmShifts);
+                    $mins = $this->lateMinutes($r, $sh, $cfg);
+                    $lateMins += $mins;
+                    $st = $this->effectiveStatus($r->status, $mins);
+                    if ($st === 'Present') $present++;
+                    if ($st === 'Late') $late++;
                 }
                 return [
                     'user_id' => $first->user_id,
                     'employee' => $first->user?->name ?? ('User #'.$first->user_id),
                     'employee_id' => $first->user?->employee_id,
-                    'present' => $rows->whereIn('status', ['On-Time', 'Present'])->count(),
-                    'late' => $rows->where('status', 'Late')->count(),
+                    'present' => $present,
+                    'late' => $late,
                     'late_minutes' => $lateMins,
                     'total' => $rows->count(),
                     'dates' => $rows->pluck('date')->unique()->sort()->values()->all(),
@@ -166,13 +189,32 @@ class AttendanceController extends Controller
             })->sortByDesc('present')->values()->all();
         }
 
+        // Recompute present/late from the grace-aware shift rules.
+        $presentCount = 0;
+        $lateCount = 0;
+        $absentCount = 0;
+        foreach ($dayLogs as $log) {
+            $shift = $isHistory
+                ? $shiftMap->get($log->user_id.'|'.substr((string) $log->date, 0, 10))
+                : $shiftMap->get($log->user_id);
+            $config = $this->resolveShiftConfig((int) $log->user_id, $shift, $assignedShifts, $hrmShifts);
+            $status = $this->effectiveStatus($log->status, $this->lateMinutes($log, $shift, $config));
+            if ($status === 'Present') {
+                $presentCount++;
+            } elseif ($status === 'Late') {
+                $lateCount++;
+            } elseif ($status === 'Absent' && ! isset($holMap[substr((string) $log->date, 0, 10)])) {
+                $absentCount++;
+            }
+        }
+
         return Inertia::render('Dashboard/HRM_NEW/Attendance', [
             'records' => $records,
             'pagination' => $pagination,
             'metrics' => [
-                ['label' => $isHistory ? 'Present (range)' : 'Present Today', 'value' => (string) $dayLogs->whereIn('status', ['On-Time', 'Present'])->count()],
-                ['label' => 'Late', 'value' => (string) $dayLogs->where('status', 'Late')->count()],
-                ['label' => 'Absent', 'value' => (string) $dayLogs->where('status', 'Absent')->reject(fn ($l) => isset($holMap[substr((string) $l->date, 0, 10)]))->count()],
+                ['label' => $isHistory ? 'Present (range)' : 'Present Today', 'value' => (string) $presentCount],
+                ['label' => 'Late', 'value' => (string) $lateCount],
+                ['label' => 'Absent', 'value' => (string) $absentCount],
                 ['label' => 'On Leave', 'value' => (string) $onLeave],
             ],
             'filters' => ['date' => $date, 'from' => $isHistory ? $from : '', 'to' => $isHistory ? $to : '', 'search' => $request->get('search', ''), 'department' => $request->get('department', '')],
@@ -205,12 +247,22 @@ class AttendanceController extends Controller
                     ->keyBy(fn ($s) => $s->user_id.'|'.substr((string) $s->effective_date, 0, 10))
                 : \App\Models\Hrm\EmployeeShift::where('effective_date', $date)
                     ->get(['user_id', 'shift_type', 'schedule_range'])->keyBy('user_id');
+            $assignedShifts = \DB::table('hrm_shift_user as su')
+                ->join('hrm_shifts as hs', 'hs.id', '=', 'su.shift_id')
+                ->where('hs.is_active', true)
+                ->get(['su.user_id', 'hs.name', 'hs.start_time', 'hs.grace_minutes'])
+                ->keyBy('user_id');
+            $hrmShifts = HrmShift::where('is_active', true)
+                ->orderBy('id')
+                ->get(['id', 'name', 'start_time', 'grace_minutes']);
             $base = AttendanceLog::with(['user.hrmDepartment:id,name'])
             ->whereNotIn('user_id', function ($sub) { $sub->select('users.id')->from('users')->join('workers', 'workers.email', '=', 'users.personal_email')->whereNotNull('users.personal_email'); });
             if ($isHistory) $base->whereBetween('date', [$from, $to])->orderBy('date'); else $base->where('date', $date);
-            $base->chunk(500, function ($rows) use ($out, $shiftMap, $isHistory) {
+            $base->chunk(500, function ($rows) use ($out, $shiftMap, $isHistory, $assignedShifts, $hrmShifts) {
                 foreach ($rows as $log) {
                     $shift = $isHistory ? $shiftMap->get($log->user_id.'|'.substr((string) $log->date, 0, 10)) : $shiftMap->get($log->user_id);
+                    $config = $this->resolveShiftConfig((int) $log->user_id, $shift, $assignedShifts, $hrmShifts);
+                    $late = $this->lateMinutes($log, $shift, $config);
                     fputcsv($out, [
                         $log->date,
                         $log->user?->name,
@@ -220,8 +272,8 @@ class AttendanceController extends Controller
                         $log->clock_in, $log->clock_out,
                         $this->hours($log->clock_in, $log->clock_out),
                         $this->ot($log->clock_in, $log->clock_out),
-                        $this->lateMinutes($log, $shift),
-                        $this->display($log->status), $log->remarks,
+                        $late,
+                        $this->effectiveStatus($log->status, $late), $log->remarks,
                     ]);
                 }
             });
@@ -288,23 +340,98 @@ class AttendanceController extends Controller
         };
     }
 
-    /** Minutes past shift start (0 when on time / no shift / no clock-in). */
-    private function lateMinutes($log, $shift): int
+    /**
+     * Resolve the Shift Management record that governs this employee's
+     * schedule. Direct assignments win; otherwise match the roster shift
+     * type (Morning / Afternoon / Graveyard) to a configured shift name.
+     */
+    private function resolveShiftConfig(int $userId, $shift, $assignedShifts, $hrmShifts)
+    {
+        if (isset($assignedShifts[$userId])) {
+            return $assignedShifts[$userId];
+        }
+
+        $type = strtolower(trim((string) ($shift->shift_type ?? '')));
+        if ($type === '') {
+            return null;
+        }
+
+        foreach ($hrmShifts as $candidate) {
+            $name = strtolower((string) ($candidate->name ?? ''));
+            $match = in_array($type, ['graveyard', 'night'], true)
+                ? (str_contains($name, 'graveyard') || str_contains($name, 'night'))
+                : str_contains($name, $type);
+
+            if ($match) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Shift start as H:i:s. Shift Management wins when configured, then
+     * the roster schedule_range, then shift-type defaults.
+     */
+    private function shiftStartString($shift, $config = null): ?string
+    {
+        if ($config !== null) {
+            if (empty($config->start_time)) {
+                return null; // Flexible shift — no fixed start, never late.
+            }
+            try {
+                return Carbon::parse($config->start_time)->format('H:i:s');
+            } catch (\Throwable) {
+                // Fall through to the roster/default parser.
+            }
+        }
+
+        if (! $shift) {
+            return null;
+        }
+
+        return $this->shiftStartFor($shift);
+    }
+
+    /**
+     * Minutes past shift start (0 when on time, within grace, no shift,
+     * no clock-in, or a flexible shift without a start time).
+     */
+    private function lateMinutes($log, $shift, $config = null): int
     {
         try {
             if (!$log || !$log->clock_in) return 0;
+            if (!$shift && $config === null) return 0;
             $dateStr = substr((string) ($log->date ?? ''), 0, 10);
             if (!$dateStr) return 0;
-            $startStr = $this->shiftStartFor($shift);
+            $startStr = $this->shiftStartString($shift, $config);
+            if ($startStr === null) return 0;
             $shiftStart = Carbon::parse($dateStr.' '.$startStr, 'Asia/Manila');
             $clockIn = Carbon::parse($dateStr.' '.$log->clock_in, 'Asia/Manila');
             if ($clockIn->gt($shiftStart)) {
-                return (int) abs($clockIn->diffInMinutes($shiftStart));
+                $minutes = (int) abs($clockIn->diffInMinutes($shiftStart));
+                $grace = max(0, (int) (is_object($config) ? ($config->grace_minutes ?? 15) : 15));
+                return $minutes > $grace ? $minutes : 0;
             }
             return 0;
         } catch (\Throwable) {
             return 0;
         }
+    }
+
+    /**
+     * Grace-aware status: present logs become Late when they exceed the
+     * shift grace period, and Late logs fall back to Present when inside it.
+     */
+    private function effectiveStatus(?string $raw, int $lateMinutes): string
+    {
+        $lower = strtolower(trim((string) $raw));
+        if (in_array($lower, ['present', 'on-time', 'ontime', 'late'], true)) {
+            return $lateMinutes > 0 ? 'Late' : 'Present';
+        }
+
+        return $this->display($raw);
     }
 
     private function worked(?string $in, ?string $out): ?float

@@ -356,6 +356,33 @@ class FinanceService
             ->values();
     }
 
+    public function payrollEmployees()
+    {
+        $runs = Payroll::whereIn('status', ['pending', 'approved'])
+            ->with('user')
+            ->get();
+
+        return $runs->map(function ($run) {
+            $deductions = (float) $run->sss_deduction + (float) $run->philhealth_deduction
+                + (float) $run->pagibig_deduction + (float) $run->tax_withheld
+                + (float) $run->sss_loan + (float) $run->pf_loan
+                + (float) $run->late_total_deduction;
+
+            return [
+                'id' => $run->employee_id,
+                'employee_id' => $run->user->employee_id ?? '—',
+                'name' => $run->user->name ?? 'Unknown',
+                'department' => trim((string) ($run->user->department ?? '')) !== ''
+                    ? trim((string) $run->user->department)
+                    : 'Operations',
+                'position' => $run->user->position ?? '—',
+                'gross_pay' => round((float) $run->gross_pay, 2),
+                'deductions' => round($deductions, 2),
+                'net_pay' => round((float) $run->net_pay, 2),
+            ];
+        })->values();
+    }
+
     public function stats(): array
     {
         $now = now();

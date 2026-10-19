@@ -174,9 +174,8 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
+                                <template v-for="l in requestList" :key="l.id">
                                 <tr
-                                    v-for="l in requestList"
-                                    :key="l.id"
                                     class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all duration-200 text-xs"
                                 >
                                     <td class="py-3 px-5">
@@ -240,23 +239,84 @@
                                         </span>
                                     </td>
                                     <td class="py-3 px-5">
-                                        <div v-if="l.status === 'Pending'" class="flex justify-end gap-1">
+                                        <div v-if="l.status === 'Pending'" class="flex justify-end">
                                             <button
-                                                @click="approve(l)"
-                                                class="p-2 bg-white border border-slate-200 hover:bg-gradient-to-r hover:from-emerald-50 hover:to-emerald-100 hover:text-emerald-600 hover:border-emerald-200 rounded-xl text-emerald-500 text-xs font-bold transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center gap-1"
+                                                @click="toggleReview(l)"
+                                                class="p-2 bg-white border border-slate-200 hover:bg-gradient-to-r hover:from-blue-50 hover:to-blue-100 hover:text-blue-600 hover:border-blue-200 rounded-xl text-blue-500 text-xs font-bold transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center gap-1"
                                             >
-                                                <Check class="w-4 h-4" /> Approve
-                                            </button>
-                                            <button
-                                                @click="askReject(l)"
-                                                class="p-2 bg-white border border-slate-200 hover:bg-gradient-to-r hover:from-rose-50 hover:to-rose-100 hover:text-rose-600 hover:border-rose-200 rounded-xl text-rose-500 text-xs font-bold transition-all duration-200 shadow-sm hover:shadow-md inline-flex items-center gap-1"
-                                            >
-                                                <X class="w-4 h-4" /> Reject
+                                                <Eye class="w-4 h-4" /> Review
+                                                <ChevronDown
+                                                    :class="[
+                                                        'w-3.5 h-3.5 transition-transform duration-200',
+                                                        reviewId === l.id ? 'rotate-180' : '',
+                                                    ]"
+                                                />
                                             </button>
                                         </div>
                                         <div v-else class="text-right text-[10px] text-slate-400 font-medium">{{ l.reason || '—' }}</div>
                                     </td>
                                 </tr>
+                                <tr
+                                    v-if="l.status === 'Pending' && reviewId === l.id"
+                                    class="bg-blue-50/40"
+                                >
+                                    <td colspan="6" class="px-5 pb-4 pt-0">
+                                        <div class="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+                                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                                <div>
+                                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Review request</p>
+                                                    <p class="text-xs font-semibold text-slate-700 mt-1">
+                                                        {{ l.employee }} · {{ l.type }} · {{ l.dates }} · {{ l.days }} days
+                                                    </p>
+                                                    <p class="text-[11px] text-slate-400 mt-0.5">
+                                                        Reason: {{ l.reason || 'No reason provided' }}
+                                                    </p>
+                                                </div>
+                                                <div v-if="reviewMode !== 'reject'" class="flex gap-2">
+                                                    <button
+                                                        @click="askApprove(l)"
+                                                        class="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-emerald-500 hover:shadow-md active:scale-95"
+                                                    >
+                                                        <Check class="w-4 h-4" /> Approve
+                                                    </button>
+                                                    <button
+                                                        @click="startReject"
+                                                        class="inline-flex items-center gap-1 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-rose-500 hover:shadow-md active:scale-95"
+                                                    >
+                                                        <X class="w-4 h-4" /> Reject
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div v-if="reviewMode === 'reject'" class="mt-4 border-t border-slate-100 pt-4">
+                                                <label class="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                                    Reason for rejection <span class="text-slate-400 normal-case tracking-normal font-medium">(optional)</span>
+                                                </label>
+                                                <textarea
+                                                    v-model="rejectReason"
+                                                    rows="3"
+                                                    placeholder="Explain why this request is rejected..."
+                                                    class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition focus:border-transparent focus:ring-2 focus:ring-rose-500"
+                                                ></textarea>
+                                                <div class="mt-3 flex justify-end gap-2">
+                                                    <button
+                                                        @click="cancelReject"
+                                                        class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-200"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        @click="askConfirmReject"
+                                                        class="inline-flex items-center gap-1 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-rose-500 active:scale-95"
+                                                    >
+                                                        <X class="w-4 h-4" /> Reject Request
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                </template>
                                 <tr v-if="requestList.length === 0">
                                     <td colspan="6" class="py-10 text-center text-sm text-slate-400">No leave requests found.</td>
                                 </tr>
@@ -312,18 +372,44 @@
             </div>
         </div>
 
-        <!-- Reject Modal -->
-        <div v-if="showRejectModal" class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showRejectModal = false">
+        <!-- Approve Confirmation Modal -->
+        <div v-if="approveTarget" class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="approveTarget = null">
             <div class="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
                 <div class="p-5 border-b border-slate-100">
-                    <h3 class="text-sm font-bold text-slate-900">Reject leave for {{ rejectTarget?.employee }}?</h3>
-                    <p class="text-xs text-slate-500 mt-1">Optionally add a note. The employee portal and Workforce queue update instantly.</p>
+                    <h3 class="text-sm font-bold text-slate-900">Approve leave request?</h3>
+                    <p class="text-xs text-slate-500 mt-1">The employee will be notified and the leave balance updated.</p>
                 </div>
                 <div class="p-5 space-y-4">
-                    <textarea v-model="rejectReason" rows="3" placeholder="Reason (optional)" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-rose-500"></textarea>
+                    <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-xs text-slate-600">
+                        <p class="font-bold text-slate-800">{{ approveTarget.employee }}</p>
+                        <p class="mt-0.5">{{ approveTarget.type }} · {{ approveTarget.dates }} · {{ approveTarget.days }} days</p>
+                    </div>
                     <div class="flex gap-2">
-                        <button @click="showRejectModal = false" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold">Cancel</button>
-                        <button @click="confirmReject" :disabled="submitting" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">Reject</button>
+                        <button @click="approveTarget = null" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold">Cancel</button>
+                        <button @click="confirmApprove" :disabled="submitting" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">Confirm Approval</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reject Confirmation Modal -->
+        <div v-if="rejectTarget" class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="rejectTarget = null">
+            <div class="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+                <div class="p-5 border-b border-slate-100">
+                    <h3 class="text-sm font-bold text-slate-900">Confirm rejection for {{ rejectTarget.employee }}?</h3>
+                    <p class="text-xs text-slate-500 mt-1">The employee portal and Workforce queue update instantly.</p>
+                </div>
+                <div class="p-5 space-y-4">
+                    <div class="rounded-xl bg-rose-50 border border-rose-100 p-3 text-xs text-slate-600">
+                        <p class="font-bold text-slate-800">{{ rejectTarget.type }} · {{ rejectTarget.dates }} · {{ rejectTarget.days }} days</p>
+                        <p class="mt-1">
+                            <span class="font-semibold text-slate-500">Reason:</span>
+                            {{ rejectReason.trim() || 'No reason provided' }}
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="rejectTarget = null" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold">Cancel</button>
+                        <button @click="confirmReject" :disabled="submitting" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">Confirm Rejection</button>
                     </div>
                 </div>
             </div>
@@ -335,7 +421,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import { TreePalm, Hospital, Siren, Baby, ClipboardList, Check, X } from 'lucide-vue-next';
+import { TreePalm, Hospital, Siren, Baby, ClipboardList, Check, X, Eye, ChevronDown } from 'lucide-vue-next';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 
@@ -353,9 +439,11 @@ const page = usePage();
 const search = ref(props.filters?.search || '');
 const filterStatus = ref(props.filters?.status || '');
 const showRequestModal = ref(false);
-const showRejectModal = ref(false);
-const rejectTarget = ref(null);
+const reviewId = ref(null);
+const reviewMode = ref('actions');
 const rejectReason = ref('');
+const approveTarget = ref(null);
+const rejectTarget = ref(null);
 const submitting = ref(false);
 const form = ref({ user_id: '', leave_type: '', start_date: '', end_date: '', reason: '' });
 
@@ -410,20 +498,51 @@ const submitRequest = () => {
     });
 };
 
-const approve = (l) => {
+const toggleReview = (l) => {
     if (!l?.id) return;
-    router.post(route('hrm.workforce.leave.approve', l.id), {}, {
+    if (reviewId.value === l.id) {
+        closeReview();
+        return;
+    }
+    reviewId.value = l.id;
+    reviewMode.value = 'actions';
+    rejectReason.value = '';
+};
+
+const closeReview = () => {
+    reviewId.value = null;
+    reviewMode.value = 'actions';
+    rejectReason.value = '';
+};
+
+const startReject = () => {
+    reviewMode.value = 'reject';
+};
+
+const cancelReject = () => {
+    reviewMode.value = 'actions';
+    rejectReason.value = '';
+};
+
+const askApprove = (l) => {
+    if (!l?.id) return;
+    approveTarget.value = l;
+};
+
+const confirmApprove = () => {
+    if (!approveTarget.value?.id) return;
+    submitting.value = true;
+    router.post(route('hrm.workforce.leave.approve', approveTarget.value.id), {}, {
         preserveScroll: true,
-        onSuccess: () => toast.success('Leave approved.'),
+        onSuccess: () => { toast.success('Leave approved.'); approveTarget.value = null; closeReview(); },
         onError: () => toast.error('Failed to approve leave.'),
+        onFinish: () => { submitting.value = false; },
     });
 };
 
-const askReject = (l) => {
-    if (!l?.id) return;
-    rejectTarget.value = l;
-    rejectReason.value = '';
-    showRejectModal.value = true;
+const askConfirmReject = () => {
+    const l = requestList.value.find((r) => r.id === reviewId.value);
+    if (l) rejectTarget.value = l;
 };
 
 const confirmReject = () => {
@@ -431,7 +550,7 @@ const confirmReject = () => {
     submitting.value = true;
     router.post(route('hrm.workforce.leave.reject', rejectTarget.value.id), { reason: rejectReason.value }, {
         preserveScroll: true,
-        onSuccess: () => { toast.success('Leave rejected.'); showRejectModal.value = false; rejectTarget.value = null; },
+        onSuccess: () => { toast.success('Leave rejected.'); rejectTarget.value = null; closeReview(); },
         onError: () => toast.error('Failed to reject leave.'),
         onFinish: () => { submitting.value = false; },
     });

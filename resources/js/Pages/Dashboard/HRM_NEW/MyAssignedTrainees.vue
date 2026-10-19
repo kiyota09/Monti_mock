@@ -95,7 +95,8 @@ const openDetail = (t) => {
     showWeeklyConfirm.value = false;
     showFinalConfirm.value = false;
     weeklyNotesError.value = false;
-    loadWeeklyForm(t.current_week || 1);
+    const firstUnsaved = weekOptions.value.find((w) => !weekSaved(w));
+    loadWeeklyForm(firstUnsaved || 1);
     finalForm.value = {
         attendance: 5, knowledge: 5, practical_skills: 5, work_behavior: 5, safety_compliance: 5,
         notes: '', recommendation: 'regularization',
@@ -350,7 +351,7 @@ const finalUnlocked = computed(() => weeklyComplete.value || readyForFinal.value
 
 const saveWeekly = () => {
     if (!selected.value || saving.value) return;
-    if (currentWeekSaved.value || terminatedEarly.value) return;
+    if (terminatedEarly.value) return;
     if (terminationNeedsNotes.value) { weeklyNotesError.value = true; return; }
     weeklyNotesError.value = false;
     showWeeklyConfirm.value = true;
@@ -358,7 +359,7 @@ const saveWeekly = () => {
 
 const confirmWeeklySave = () => {
     if (!selected.value || saving.value) return;
-    if (currentWeekSaved.value || terminatedEarly.value) { showWeeklyConfirm.value = false; return; }
+    if (terminatedEarly.value) { showWeeklyConfirm.value = false; return; }
     if (terminationNeedsNotes.value) { weeklyNotesError.value = true; showWeeklyConfirm.value = false; return; }
     saving.value = true;
     const id = selected.value.id;
@@ -615,25 +616,25 @@ const finalDoneScore = ref(null);
                             <div v-if="terminatedEarly" class="mb-3 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800 flex items-center gap-2">
                                 <Lock class="w-4 h-4 shrink-0" /><span><b>Training terminated early (Week {{ terminationWeek }}) — remaining weeks cancelled.</b> No final evaluation will happen.</span>
                             </div>
-                            <div v-if="currentWeekSaved" class="mb-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 flex items-center gap-2">
-                                <Lock class="w-4 h-4 shrink-0" /><span><b>Week {{ weeklyForm.week_number }} submitted — locked.</b> This evaluation can no longer be modified.</span>
+                            <div v-if="currentWeekSaved" class="mb-3 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 flex items-center gap-2">
+                                <ClipboardList class="w-4 h-4 shrink-0" /><span><b>Week {{ weeklyForm.week_number }} already submitted.</b> You can adjust and save again.</span>
                             </div>
                             <!-- Week calendar: slidable strip, every week-end due date, overdue unevaluated in red -->
                             <div class="flex items-center gap-1.5 mb-3">
                                 <button type="button" @click="slideWeeks(-1)" class="shrink-0 w-7 h-7 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center"><ChevronLeft class="w-4 h-4" /></button>
                                 <div ref="weekStrip" class="flex gap-1.5 overflow-x-auto pb-1 snap-x snap-mandatory week-strip">
-                                    <button v-for="w in weekOptions" :key="'cal-' + w" type="button" @click="loadWeeklyForm(w)" :disabled="weekSaved(w) || terminatedEarly" :title="weekSaved(w) ? 'Week ' + w + ' submitted — locked' : (terminatedEarly ? 'Training terminated — remaining weeks cancelled' : 'Week ' + w + ' — due ' + weekEndLabel(w))" :class="['shrink-0 snap-start px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-all whitespace-nowrap inline-flex items-center gap-1', Number(weeklyForm.week_number) === Number(w) ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200', weekSaved(w) ? 'bg-emerald-50 text-emerald-700 border-emerald-200 opacity-70 cursor-not-allowed' : (terminatedEarly ? 'bg-slate-100 text-slate-400 border-slate-200 opacity-70 cursor-not-allowed' : (weekOverdue(w) ? 'bg-red-50 text-red-700 border-red-300' : 'bg-white text-slate-600'))]">
-                                        <Lock v-if="weekSaved(w)" class="w-3 h-3" />W{{ w }} · {{ weekEndLabel(w) }}
+                                    <button v-for="w in weekOptions" :key="'cal-' + w" type="button" @click="loadWeeklyForm(w)" :disabled="terminatedEarly" :title="terminatedEarly ? 'Training terminated — remaining weeks cancelled' : 'Week ' + w + ' — due ' + weekEndLabel(w)" :class="['shrink-0 snap-start px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-all whitespace-nowrap inline-flex items-center gap-1', Number(weeklyForm.week_number) === Number(w) ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200', weekSaved(w) ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (terminatedEarly ? 'bg-slate-100 text-slate-400 border-slate-200 opacity-70 cursor-not-allowed' : (weekOverdue(w) ? 'bg-red-50 text-red-700 border-red-300' : 'bg-white text-slate-600'))]">
+                                        W{{ w }} · {{ weekEndLabel(w) }}
                                     </button>
                                 </div>
                                 <button type="button" @click="slideWeeks(1)" class="shrink-0 w-7 h-7 rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center"><ChevronRight class="w-4 h-4" /></button>
                             </div>
                             <div class="text-xs font-bold mb-2">Week {{ weeklyForm.week_number }} of {{ weekOptions.length }} weeks (from training duration)</div>
-                            <div :class="(currentWeekSaved || terminatedEarly) ? 'opacity-50 pointer-events-none select-none' : ''">
+                            <div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                                 <label v-for="c in [['attendance','Attendance & Punctuality'],['knowledge','Knowledge & Learning'],['practical_skills','Practical Skills'],['work_behavior','Work Behavior'],['safety_compliance','Safety Compliance']]" :key="c[0]" class="flex items-center justify-between gap-2">
                                     <span>{{ c[1] }}</span>
-                                    <select v-model.number="weeklyForm[c[0]]" :disabled="currentWeekSaved" class="w-24 px-2 py-1.5 border border-slate-200 rounded-lg disabled:bg-slate-100">
+                                    <select v-model.number="weeklyForm[c[0]]" class="w-24 px-2 py-1.5 border border-slate-200 rounded-lg">
                                         <option :value="1">1 / 5</option><option :value="2">2 / 5</option><option :value="3">3 / 5</option><option :value="4">4 / 5</option><option :value="5">5 / 5</option>
                                     </select>
                                 </label>
@@ -642,12 +643,12 @@ const finalDoneScore = ref(null);
                             <button type="button" @click="showAttendanceModal = true" class="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-xs font-bold transition-all shadow-sm">
                                 <ClipboardList class="w-4 h-4" /> View Week {{ weeklyForm.week_number }} Evaluation Details
                             </button>
-                            <textarea v-model="weeklyForm.notes" :disabled="currentWeekSaved" @input="weeklyNotesError = false" placeholder="Notes" class="mt-3 w-full px-3 py-2 border border-slate-200 rounded-xl text-xs disabled:bg-slate-100" rows="2"></textarea>
+                            <textarea v-model="weeklyForm.notes" @input="weeklyNotesError = false" placeholder="Notes" class="mt-3 w-full px-3 py-2 border border-slate-200 rounded-xl text-xs" rows="2"></textarea>
                             <div class="mt-3 text-xs font-bold">Manager's Recommendation</div>
                             <div class="flex flex-wrap gap-4 mt-1 text-xs">
-                                <label :class="['flex items-center gap-1.5', isLastTrainingWeek ? 'opacity-40 cursor-not-allowed' : '']"><input v-model="weeklyForm.recommendation" :disabled="currentWeekSaved || isLastTrainingWeek" type="radio" value="continue" /> Continue Training</label>
-                                <label class="flex items-center gap-1.5"><input v-model="weeklyForm.recommendation" :disabled="currentWeekSaved" type="radio" value="ready_final" /> Ready for Final Evaluation</label>
-                                <label class="flex items-center gap-1.5"><input v-model="weeklyForm.recommendation" :disabled="currentWeekSaved" type="radio" value="early_termination" /> Early Termination</label>
+                                <label :class="['flex items-center gap-1.5', isLastTrainingWeek ? 'opacity-40 cursor-not-allowed' : '']"><input v-model="weeklyForm.recommendation" :disabled="isLastTrainingWeek" type="radio" value="continue" /> Continue Training</label>
+                                <label class="flex items-center gap-1.5"><input v-model="weeklyForm.recommendation" type="radio" value="ready_final" /> Ready for Final Evaluation</label>
+                                <label class="flex items-center gap-1.5"><input v-model="weeklyForm.recommendation" type="radio" value="early_termination" /> Early Termination</label>
                             </div>
                             <p v-if="isLastTrainingWeek && !currentWeekSaved && !terminatedEarly" class="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Final week of training — <b>Continue Training is unavailable.</b> Choose Ready for Final Evaluation or Early Termination.</p>
                             <div v-if="weeklyForm.recommendation === 'early_termination' && !currentWeekSaved && !terminatedEarly" class="mt-3 bg-red-50 border border-red-300 rounded-xl p-3 text-xs text-red-800">
@@ -661,9 +662,8 @@ const finalDoneScore = ref(null);
                             <div v-if="(selected.weekly_evaluations || []).length" class="mt-3 text-[11px] text-slate-500">
                                 Past weeks: <span v-for="w in selected.weekly_evaluations" :key="w.id" class="font-bold text-slate-700 mr-2">W{{ w.week_number }} {{ Number(w.overall).toFixed(1) }}/5</span>
                             </div>
-                            <button v-if="currentWeekSaved" disabled class="mt-4 px-5 py-2.5 bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-not-allowed"><Lock class="w-4 h-4" /> Saved — Locked</button>
-                            <button v-else-if="terminatedEarly" disabled class="mt-4 px-5 py-2.5 bg-red-100 text-red-700 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-not-allowed"><Lock class="w-4 h-4" /> Terminated — Locked</button>
-                            <button v-else @click="saveWeekly" :disabled="saving" class="mt-4 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">[ Save Evaluation ]</button>
+                            <button v-if="terminatedEarly" disabled class="mt-4 px-5 py-2.5 bg-red-100 text-red-700 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-not-allowed"><Lock class="w-4 h-4" /> Terminated — Locked</button>
+                            <button v-else @click="saveWeekly" :disabled="saving" class="mt-4 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">Save Evaluation</button>
                         </section>
 
                         <!-- Final Evaluation -->
@@ -686,7 +686,7 @@ const finalDoneScore = ref(null);
                             <div v-if="selected.final_score !== null && selected.final_score !== undefined" class="mt-2 text-[11px] text-slate-500">Saved final: <b>{{ selected.final_score }}/100</b><span v-if="selected.manager_recommendation"> · {{ selected.manager_recommendation }}</span></div>
                             <button v-if="finalSubmitted" disabled class="mt-4 px-5 py-2.5 bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-not-allowed"><Lock class="w-4 h-4" /> Submitted — Locked</button>
                             <button v-else-if="terminatedEarly" disabled class="mt-4 px-5 py-2.5 bg-red-100 text-red-700 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-not-allowed"><Lock class="w-4 h-4" /> No Final Evaluation — Terminated</button>
-                            <button v-else-if="finalUnlocked" @click="showFinalModal = true" class="mt-4 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold">[ Open Final Evaluation ]</button>
+                            <button v-else-if="finalUnlocked" @click="showFinalModal = true" class="mt-4 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold">Open Final Evaluation</button>
                         </section>
                     </div>
 
@@ -695,7 +695,7 @@ const finalDoneScore = ref(null);
                         <div class="absolute inset-0 bg-slate-900/50" @click="showWeeklyConfirm = false"></div>
                         <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-5">
                             <h3 class="font-black text-slate-900">Submit Week {{ weeklyForm.week_number }} Evaluation?</h3>
-                            <p class="mt-2 text-xs text-slate-600 leading-relaxed">Overall <b>{{ weeklyOverall }}/5</b> · Recommendation <b>{{ weeklyRecLabel(weeklyForm.recommendation) }}</b> will be saved for <b>{{ selected.name }}</b>. Once submitted, <b>this week cannot be modified</b>.</p>
+                            <p class="mt-2 text-xs text-slate-600 leading-relaxed">Overall <b>{{ weeklyOverall }}/5</b> · Recommendation <b>{{ weeklyRecLabel(weeklyForm.recommendation) }}</b> will be saved for <b>{{ selected.name }}</b>.</p>
                             <p v-if="weeklyForm.recommendation === 'early_termination'" class="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 leading-relaxed"><b>Early Termination:</b> no final evaluation will happen and the remaining training will be automatically cancelled.</p>
                             <p v-if="weeklyForm.recommendation === 'ready_final'" class="mt-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 leading-relaxed"><b>Ready for Final:</b> remaining training days are auto-passed and the Final Evaluation unlocks.</p>
                             <div class="mt-4 flex justify-end gap-2">
@@ -742,7 +742,7 @@ const finalDoneScore = ref(null);
                             </div>
                             <div class="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 rounded-b-2xl">
                                 <button @click="showFinalModal = false" :disabled="saving" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold disabled:opacity-50">Cancel</button>
-                                <button @click="submitFinal" :disabled="saving" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">{{ saving ? 'Working…' : '[ Submit the Evaluation ]' }}</button>
+                                <button @click="submitFinal" :disabled="saving" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">{{ saving ? 'Working…' : 'Submit the Evaluation' }}</button>
                             </div>
                         </div>
                     </div>

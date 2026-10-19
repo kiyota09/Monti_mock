@@ -155,19 +155,6 @@ class AssignedTraineesController extends Controller
             return back()->withErrors(['weekly' => $msg]);
         }
 
-        // Lock: once a week evaluation is submitted it cannot be modified.
-        $alreadySaved = TraineeWeeklyEvaluation::where('user_id', $trainee->id)
-            ->where('week_number', $validated['week_number'])
-            ->exists();
-        if ($alreadySaved) {
-            $msg = "Week {$validated['week_number']} evaluation is already submitted and locked.";
-            if ($request->wantsJson()) {
-                return response()->json(['message' => $msg], 422);
-            }
-
-            return back()->withErrors(['weekly' => $msg]);
-        }
-
         $overall = TraineeWeeklyEvaluation::overallFor($validated);
 
         $weekly = TraineeWeeklyEvaluation::updateOrCreate(
@@ -438,19 +425,33 @@ class AssignedTraineesController extends Controller
 
         // Training schedule comes from Create Employee (deployment start +
         // duration/end calendar); fall back to join_date + default weeks.
+        // When the trainee has been reassigned, the week calendar restarts
+        // from the latest transfer's effective date (duration stays the same).
         $weeks = (int) ($t->training_duration_weeks ?? self::TRAINING_WEEKS);
         $weeks = max(1, min(52, $weeks ?: self::TRAINING_WEEKS));
         try {
-            $start = $t->training_start_date
-                ? Carbon::parse($t->training_start_date)
-                : ($t->join_date ? Carbon::parse($t->join_date) : ($t->created_at ? Carbon::parse($t->created_at) : now()));
+            $latestTransfer = \App\Models\Hrm\TraineeTransfer::where('user_id', $t->id)
+                ->whereNotNull('effective_date')
+                ->orderByDesc('effective_date')
+                ->orderByDesc('id')
+                ->first();
+            $start = null;
+            if ($latestTransfer) {
+                $start = Carbon::parse($latestTransfer->effective_date);
+            } elseif ($t->training_start_date) {
+                $start = Carbon::parse($t->training_start_date);
+            } elseif ($t->join_date) {
+                $start = Carbon::parse($t->join_date);
+            } elseif ($t->created_at) {
+                $start = Carbon::parse($t->created_at);
+            } else {
+                $start = now();
+            }
         } catch (\Throwable $e) {
             $start = now();
         }
         try {
-            $expectedEnd = $t->training_end_date
-                ? Carbon::parse($t->training_end_date)
-                : (clone $start)->addWeeks($weeks);
+            $expectedEnd = (clone $start)->addWeeks($weeks);
         } catch (\Throwable $e) {
             $expectedEnd = (clone $start)->addWeeks($weeks);
         }
@@ -481,7 +482,11 @@ class AssignedTraineesController extends Controller
         $latestEval = $latestWeekly['overall'] ?? ($grade?->final_grade !== null ? round(((float) $grade->final_grade) / 20, 2) : null);
 
         // Attendance for this employee (recorded via Time In / Time Out here).
-        $logs = AttendanceLog::where('user_id', $t->id)->orderByDesc('date')->take(14)->get();
+        // Only show logs from the (re)assignment start date forward — older
+        // records belong to the previous assignment's calendar.
+        $logs = AttendanceLog::where('user_id', $t->id)
+            ->where('date', '>=', $start->toDateString())
+            ->orderByDesc('date')->take(14)->get();
         $fmtDay = fn ($r) => $r->date instanceof \Carbon\Carbon ? $r->date->toDateString() : (string) $r->date;
         $attendanceToday = AttendanceLog::where('user_id', $t->id)->where('date', now('Asia/Manila')->startOfDay())->first();
         $attMonth = AttendanceLog::where('user_id', $t->id)->where('date', '>=', now('Asia/Manila')->startOfMonth()->toDateString())->get();
@@ -517,7 +522,9 @@ class AssignedTraineesController extends Controller
             'latest_evaluation_label' => $latestEval !== null ? number_format((float) $latestEval, 1) . '/5' : '—',
             'weekly_evaluations' => $weeklies,
             'attendance' => $attendance,
-            'observations' => TraineeDailyObservation::where('user_id', $t->id)->orderByDesc('date')->take(60)->get()->map(fn ($o) => [
+            'observations' => TraineeDailyObservation::where('user_id', $t->id)
+                ->where('date', '>=', $start->toDateString())
+                ->orderByDesc('date')->take(60)->get()->map(fn ($o) => [
                 'date' => $o->date instanceof \Carbon\Carbon ? $o->date->toDateString() : (string) $o->date,
                 'knowledge' => $o->knowledge !== null ? (float) $o->knowledge : null,
                 'practical_skills' => $o->practical_skills !== null ? (float) $o->practical_skills : null,

@@ -940,7 +940,7 @@ const failTrainee = () => {
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
                 <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-700">
                     <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Trainee <span class="text-blue-600">Training List</span></h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Review completed trainee training and process final evaluation results.</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Review completed trainee training and process final evaluation results. <span class="font-semibold text-slate-600 dark:text-slate-300">Click the table for view.</span></p>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
@@ -954,18 +954,17 @@ const failTrainee = () => {
                                 <th class="px-4 py-3 font-bold">Grade</th>
                                 <th class="px-4 py-3 font-bold">Evaluation</th>
                                 <th class="px-4 py-3 font-bold">Result</th>
-                                <th class="px-4 py-3 font-bold text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                             <tr v-if="filteredTrainees.length === 0">
-                                <td colspan="9" class="px-4 py-12 text-center">
+                                <td colspan="8" class="px-4 py-12 text-center">
                                     <User class="h-10 w-10 text-slate-300 mx-auto mb-3" />
                                     <p class="font-bold text-slate-500">No trainees found</p>
                                     <p class="text-xs text-slate-400 mt-1">All trainees and newly hired employees from different departments and modules appear here for HR to monitor and evaluate.</p>
                                 </td>
                             </tr>
-                            <tr v-for="t in filteredTrainees" :key="t.id" class="hover:bg-blue-50/40 dark:hover:bg-slate-700/30 transition-colors">
+                            <tr v-for="t in filteredTrainees" :key="t.id" @click="openDetails(t)" class="hover:bg-blue-50/40 dark:hover:bg-slate-700/30 transition-colors cursor-pointer">
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-3">
                                         <div class="h-9 w-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center text-xs font-black shrink-0">{{ getInitials(t.name) }}</div>
@@ -989,34 +988,6 @@ const failTrainee = () => {
                                 <td class="px-4 py-3">
                                     <span v-if="t.result" :class="['px-2 py-1 rounded-full text-[11px] font-bold whitespace-nowrap', resultBadge(t.result)]">{{ t.result }}</span>
                                     <span v-else class="text-slate-300 dark:text-slate-600">—</span>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
-                                        <template v-if="t.evaluation_state === 'Ready for Evaluation'">
-                                            <button @click="openEvaluate(t)" :disabled="!canEdit" title="Evaluate"
-                                                class="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-40">
-                                                <ClipboardList class="h-4 w-4" />
-                                            </button>
-                                        </template>
-                                        <template v-if="t.result === 'Failed' || t.result === 'Not Recommended'">
-                                            <button @click="openRetrainModal(t)" :disabled="!canEdit" title="Schedule Retraining"
-                                                class="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-[11px] font-bold uppercase hover:bg-amber-600 transition-all disabled:opacity-40">
-                                                Retrain
-                                            </button>
-                                            <button @click="openTransferModal(t)" :disabled="!canEdit" title="Transfer to Another Position/Department"
-                                                class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[11px] font-bold uppercase hover:bg-indigo-700 transition-all disabled:opacity-40">
-                                                Transfer
-                                            </button>
-                                            <button @click="openFailModal(t)" :disabled="!canEdit" title="End Employment"
-                                                class="px-3 py-1.5 bg-red-600 text-white rounded-lg text-[11px] font-bold uppercase hover:bg-red-700 transition-all disabled:opacity-40">
-                                                End Employment
-                                            </button>
-                                        </template>
-                                        <button @click="openDetails(t)"
-                                            class="px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-200 rounded-lg text-[11px] font-bold uppercase hover:bg-slate-50 transition-all">
-                                            View Details
-                                        </button>
-                                    </div>
                                 </td>
                             </tr>
                         </tbody>

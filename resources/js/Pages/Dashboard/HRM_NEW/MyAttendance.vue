@@ -71,9 +71,19 @@
                 <!-- Attendance History -->
                 <div class="bg-white rounded-2xl border border-slate-200/60 shadow-lg overflow-hidden mb-6 relative">
                     <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                        <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Attendance History</h2>
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Attendance History</h2>
+                            <div class="flex items-center bg-slate-100 rounded-xl p-0.5">
+                                <button @click="viewMode = 'calendar'" :class="['flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition', viewMode === 'calendar' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700']">
+                                    <CalendarDays class="w-3.5 h-3.5" /> Calendar
+                                </button>
+                                <button @click="viewMode = 'table'" :class="['flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition', viewMode === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700']">
+                                    <List class="w-3.5 h-3.5" /> Table
+                                </button>
+                            </div>
+                        </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <input v-model="month" @change="applyFilter" type="month" title="Month selector"
+                            <input v-model="month" @change="onMonthChange" type="month" title="Month selector"
                                 class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm" />
                             <input v-model="date" @change="onDateChange" type="date" title="Date filter"
                                 class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm" />
@@ -85,7 +95,69 @@
                             <button v-if="date || status" @click="clearFilters" class="px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition">Clear</button>
                         </div>
                     </div>
-                    <div class="overflow-x-auto">
+                    <!-- Calendar view -->
+                    <div v-if="viewMode === 'calendar'" class="p-4 md:p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <button @click="shiftMonth(-1)" title="Previous month" class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition">
+                                <ChevronLeft class="w-4 h-4" />
+                            </button>
+                            <p class="text-sm font-bold text-slate-900">{{ monthLabel }}</p>
+                            <button @click="shiftMonth(1)" title="Next month" class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition">
+                                <ChevronRight class="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-7 gap-1 md:gap-2 mb-1.5">
+                            <div v-for="d in dayNames" :key="d" class="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 py-1">{{ d }}</div>
+                        </div>
+                        <div class="grid grid-cols-7 gap-1 md:gap-2">
+                            <template v-for="cell in calendarDays" :key="cell.key">
+                                <div v-if="cell.empty" class="h-16 md:h-24 rounded-xl bg-slate-50/50"></div>
+                                <button v-else type="button" @click="selectedDate = cell.date"
+                                    :title="cell.record ? `${cell.record.date_label} · ${cell.record.status}${cell.record.remark && cell.record.remark !== '—' ? ' · ' + cell.record.remark : ''}${cell.record.time_in !== '—' ? ' · ' + cell.record.time_in + ' - ' + cell.record.time_out : ''}` : cell.date"
+                                    :class="['h-16 md:h-24 w-full rounded-xl border p-1.5 md:p-2 text-left transition flex flex-col overflow-hidden',
+                                        calendarCard(cell.record?.status),
+                                        selectedDate === cell.date ? 'ring-2 ring-blue-500 ring-offset-1' : '']">
+                                    <span class="flex items-center justify-between gap-1">
+                                        <span class="text-xs font-bold text-slate-800">{{ cell.day }}</span>
+                                        <span v-if="cell.record && cell.record.status !== '—'" :class="['w-1.5 h-1.5 rounded-full shrink-0', statusStyle(cell.record.status).dot]"></span>
+                                    </span>
+                                    <span v-if="cell.record && cell.record.status !== '—'" class="mt-1 text-[9px] md:text-[10px] font-semibold leading-tight truncate text-slate-600">{{ cell.record.status }}</span>
+                                    <span v-if="cell.record && cell.record.remark && cell.record.remark !== '—'" class="text-[8px] md:text-[9px] font-medium leading-tight text-slate-500 truncate" :title="cell.record.remark">{{ cell.record.remark }}</span>
+                                    <span v-if="cell.record && cell.record.time_in !== '—'" class="hidden md:block mt-auto text-[9px] text-slate-500 leading-tight truncate">{{ cell.record.time_in }}</span>
+                                </button>
+                            </template>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 pt-4 border-t border-slate-100">
+                            <span v-for="l in legend" :key="l.label" class="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500">
+                                <span :class="['w-2 h-2 rounded-full', l.dot]"></span>{{ l.label }}
+                            </span>
+                        </div>
+                        <div v-if="selectedDate" class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <p class="text-xs font-bold text-slate-800">{{ selectedDateLabel }}</p>
+                                <button @click="selectedDate = ''" class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition" title="Close">
+                                    <X class="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                            <div v-if="selectedRecord" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+                                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Schedule</p><p class="font-semibold text-slate-700 mt-0.5">{{ selectedRecord.schedule }}</p></div>
+                                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Time In</p><p class="font-semibold text-slate-700 mt-0.5">{{ selectedRecord.time_in }}</p></div>
+                                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Time Out</p><p class="font-semibold text-slate-700 mt-0.5">{{ selectedRecord.time_out }}</p></div>
+                                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Hours</p><p class="font-semibold text-slate-700 mt-0.5">{{ selectedRecord.hours }}</p></div>
+                                <div>
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase">Status</p>
+                                    <span :class="['inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border', statusStyle(selectedRecord.status).badge]">
+                                        <span :class="['w-1.5 h-1.5 rounded-full', statusStyle(selectedRecord.status).dot]"></span>{{ selectedRecord.status }}
+                                    </span>
+                                </div>
+                                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Remark</p><p class="font-semibold text-slate-700 mt-0.5 truncate" :title="selectedRecord.remark">{{ selectedRecord.remark }}</p></div>
+                            </div>
+                            <p v-else class="text-xs text-slate-400">No attendance record for this day.</p>
+                        </div>
+                    </div>
+
+                    <!-- Table view -->
+                    <div v-if="viewMode === 'table'" class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -167,7 +239,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import { CalendarPlus } from "lucide-vue-next";
+import { CalendarPlus, CalendarDays, List, ChevronLeft, ChevronRight, X } from "lucide-vue-next";
 
 const props = defineProps({
     today: { type: Object, default: () => ({}) },
@@ -226,9 +298,83 @@ const onDateChange = () => {
     if (date.value) month.value = String(date.value).slice(0, 7);
     applyFilter();
 };
+const onMonthChange = () => {
+    date.value = '';
+    selectedDate.value = '';
+    applyFilter();
+};
 const clearFilters = () => {
     date.value = '';
     status.value = '';
+    applyFilter();
+};
+
+// ---- Calendar view ----
+const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const viewMode = ref('calendar');
+const selectedDate = ref('');
+
+const historyMap = computed(() => {
+    const map = {};
+    props.history.forEach((h) => { map[h.date] = h; });
+    return map;
+});
+
+const calendarDays = computed(() => {
+    const [y, m] = String(month.value || '').split('-').map(Number);
+    if (!y || !m) return [];
+    const leading = new Date(y, m - 1, 1).getDay();
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < leading; i++) cells.push({ key: `pad-${i}`, empty: true });
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        cells.push({ key: dateStr, day: d, date: dateStr, record: historyMap.value[dateStr] || null });
+    }
+    while (cells.length % 7 !== 0) cells.push({ key: `tail-${cells.length}`, empty: true });
+    return cells;
+});
+
+const monthLabel = computed(() => {
+    const [y, m] = String(month.value || '').split('-').map(Number);
+    if (!y || !m) return '';
+    return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+});
+
+const selectedRecord = computed(() => selectedDate.value ? (historyMap.value[selectedDate.value] || null) : null);
+const selectedDateLabel = computed(() => {
+    if (!selectedDate.value) return '';
+    return new Date(`${selectedDate.value}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+});
+
+const calendarCard = (s) => ({
+    'Present': 'bg-emerald-50 border-emerald-200 hover:border-emerald-400',
+    'Late': 'bg-amber-50 border-amber-200 hover:border-amber-400',
+    'Absent': 'bg-rose-50 border-rose-200 hover:border-rose-400',
+    'On Leave': 'bg-blue-50 border-blue-200 hover:border-blue-400',
+    'Incomplete': 'bg-purple-50 border-purple-200 hover:border-purple-400',
+    'In Progress': 'bg-orange-50 border-orange-200 hover:border-orange-400',
+    'Rest Day': 'bg-slate-50 border-slate-200 hover:border-slate-300',
+    'Holiday': 'bg-cyan-50 border-cyan-200 hover:border-cyan-400',
+}[s] || 'bg-white border-slate-200 hover:border-slate-300');
+
+const legend = [
+    { label: 'Present', dot: 'bg-emerald-500' },
+    { label: 'Late', dot: 'bg-amber-400' },
+    { label: 'Absent', dot: 'bg-rose-500' },
+    { label: 'On Leave', dot: 'bg-blue-500' },
+    { label: 'Incomplete', dot: 'bg-purple-500' },
+    { label: 'Rest Day', dot: 'bg-slate-300' },
+    { label: 'Holiday', dot: 'bg-cyan-500' },
+];
+
+const shiftMonth = (delta) => {
+    const [y, m] = String(month.value || '').split('-').map(Number);
+    const base = y && m ? new Date(y, m - 1, 1) : new Date();
+    base.setMonth(base.getMonth() + delta);
+    month.value = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
+    date.value = '';
+    selectedDate.value = '';
     applyFilter();
 };
 

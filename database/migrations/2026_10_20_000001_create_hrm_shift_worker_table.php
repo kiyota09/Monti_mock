@@ -1,0 +1,30 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (Schema::hasTable('hrm_shift_worker')) {
+            return;
+        }
+
+        Schema::create('hrm_shift_worker', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('shift_id')->constrained('hrm_shifts')->onDelete('cascade');
+            $table->foreignId('worker_id')->constrained('workers')->onDelete('cascade');
+            $table->date('effective_date')->nullable();
+            $table->timestamps();
+
+            $table->unique(['shift_id', 'worker_id']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('hrm_shift_worker');
+    }
+};

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Hrm\Workforce;
 
 use App\Http\Controllers\Controller;
+use App\Models\Core\Notification;
 use App\Models\Core\User;
 use App\Models\Hrm\HrmLeaveBalance;
 use App\Models\Hrm\HrmLeaveType;
@@ -107,6 +108,7 @@ class LeaveManagementController extends Controller
     {
         $leave->update(['status' => 'approved']);
         $this->bumpBalance($leave, +1);
+        $this->notifyDecision($leave, 'approved');
 
         return back()->with('success', 'Leave approved.');
     }
@@ -114,14 +116,53 @@ class LeaveManagementController extends Controller
     public function reject(Request $request, LeaveRequest $leave)
     {
         $request->validate(['reason' => 'nullable|string|max:500']);
+        $reason = trim((string) $request->input('reason', ''));
         // Was it previously approved? Roll the balance back.
         $wasApproved = strtolower((string) $leave->status) === 'approved';
         $leave->update(['status' => 'rejected']);
         if ($wasApproved) {
             $this->bumpBalance($leave, -1);
         }
+        $this->notifyDecision($leave, 'rejected', $reason);
 
         return back()->with('success', 'Leave rejected.');
+    }
+
+    /**
+     * Notify the requesting employee about the decision, including the
+     * rejection reason when one was provided.
+     */
+    private function notifyDecision(LeaveRequest $leave, string $decision, string $reason = ''): void
+    {
+        try {
+            $approved = $decision === 'approved';
+            $type = $this->label($leave->leave_type);
+            $range = $this->range($leave->start_date, $leave->end_date);
+            $days = $this->days($leave->start_date, $leave->end_date);
+
+            $title = $approved ? 'Leave request approved' : 'Leave request rejected';
+            $body = sprintf(
+                'Your %s leave request for %s (%d day%s) has been %s.',
+                $type,
+                $range,
+                $days,
+                $days === 1 ? '' : 's',
+                $approved ? 'approved' : 'rejected'
+            );
+            if (! $approved && $reason !== '') {
+                $body .= ' Reason: ' . $reason;
+            }
+
+            Notification::notify(
+                (int) $leave->user_id,
+                'leave',
+                $title,
+                $body,
+                'employee.ui.leave'
+            );
+        } catch (\Throwable $e) {
+            // Notifications must never break the approval flow.
+        }
     }
 
     private function days($start, $end): int

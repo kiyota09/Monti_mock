@@ -94,6 +94,7 @@ class FinDashboardController extends Controller
     {
         return Inertia::render('Dashboard/FIN/Manager/Payroll', [
             'payroll' => $this->finance->payrollRows(),
+            'employees' => $this->finance->payrollEmployees(),
             'stats' => $this->finance->stats(),
             'isDummy' => false,
         ]);

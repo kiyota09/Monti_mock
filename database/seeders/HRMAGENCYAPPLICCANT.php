@@ -41,7 +41,7 @@ use Illuminate\Support\Facades\DB;
  *   5. Onboarding template per department (items + activities)
  *   6. Applicants currently onboarding (snapshotted + partial progress)
  *   7. Employees with 2 months of attendance (absent/late/leave mixed in)
- *   8. Trainees on a 2-3 week program with attendance + evaluations
+ *   8. Staff on a 2-3 week program with attendance + evaluations
  *   9. Manpower agencies / workers / requests / assignment + billing sample
  *
  * Idempotent: rows are keyed on unique columns (email/code) so re-running
@@ -95,7 +95,7 @@ class HRMAGENCYAPPLICCANT extends Seeder
 
         $trainings = $this->seedTrainings($managers[array_key_first($managers)] ?? null);
         $this->seedEmployeesWithAttendance($departments, $managers);
-        $this->seedTrainees($departments, $managers, $trainings);
+        $this->seedStaff($departments, $managers, $trainings);
 
         $this->seedAgencies();
 
@@ -582,7 +582,7 @@ class HRMAGENCYAPPLICCANT extends Seeder
     }
 
     // ------------------------------------------------------------------
-    // 8. Trainees (2-3 week program)
+    // 8. Staff (2-3 week program)
     // ------------------------------------------------------------------
 
     /** @return array<int,HrmTraining> */
@@ -612,7 +612,7 @@ class HRMAGENCYAPPLICCANT extends Seeder
         return $trainings;
     }
 
-    private function seedTrainees($departments, array $managers, array $trainings): void
+    private function seedStaff($departments, array $managers, array $trainings): void
     {
         $deptList = array_values($departments->all());
 
@@ -620,7 +620,7 @@ class HRMAGENCYAPPLICCANT extends Seeder
             $dept = $deptList[($i + 2) % count($deptList)];
             $role = $this->roleFor($dept->category);
             $manager = $managers[$dept->id] ?? null;
-            $email = 'trainee'.($i + 1).'@monti.com';
+            $email = 'staff'.($i + 1).'@monti.com';
             $first = $this->faker->firstName();
             $last = $this->faker->lastName();
 
@@ -640,12 +640,12 @@ class HRMAGENCYAPPLICCANT extends Seeder
                 'must_change_password' => false,
                 'email_verified_at' => now(),
                 'role' => $role,
-                'position' => 'trainee',
+                'position' => 'staff',
                 'is_active' => true,
                 'department' => $dept->name,
                 'hrm_role_id' => $this->roleMap[$role] ?? null,
                 'hrm_department_id' => $dept->id,
-                'hrm_position_id' => HrmPosition::where('management_level', 'Trainee')->value('id'),
+                'hrm_position_id' => $this->staffPosition($dept)?->id,
                 'hrm_employment_type_id' => $this->probationaryId,
                 'manager_id' => $manager?->id,
                 'immediate_supervisor' => $manager?->name,

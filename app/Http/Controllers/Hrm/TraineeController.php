@@ -8,8 +8,11 @@ use App\Models\Hrm\HrmDepartment;
 use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\HrmTraining;
 use App\Models\Hrm\HrmTrainingEnrollment;
+use App\Models\Hrm\AttendanceLog;
+use App\Models\Hrm\TraineeDailyObservation;
 use App\Models\Hrm\TraineeGrade;
 use App\Models\Hrm\TraineeTransfer;
+use App\Models\Hrm\TraineeWeeklyEvaluation;
 use App\Models\Core\User;
 use App\Support\ReapplyCooldown;
 use Illuminate\Http\Request;
@@ -655,6 +658,12 @@ class TraineeController extends Controller
             ]));
             HrmTrainingEnrollment::where('user_id', $trainee->id)
                 ->update(['status' => 'Enrolled', 'progress' => 0, 'completed_at' => null]);
+            // Fresh weekly cycle: old week records belong to the previous
+            // assignment's calendar — delete them so W1/W2 restart from the
+            // reassignment effective date.
+            TraineeWeeklyEvaluation::where('user_id', $trainee->id)->delete();
+            AttendanceLog::where('user_id', $trainee->id)->delete();
+            TraineeDailyObservation::where('user_id', $trainee->id)->delete();
             $msg = $trainee->name . ' reassigned to ' . $validated['to_position'] . ' — ' . $dept->name . ' (reporting to ' . $newManager->name . ') effective ' . \Carbon\Carbon::parse($validated['effective_date'])->toDateString() . '.';
         } elseif ($validated['decision'] === 'reject_reassignment') {
             $grade->update(array_merge($review, [
@@ -814,6 +823,12 @@ class TraineeController extends Controller
             ]);
             HrmTrainingEnrollment::where('user_id', $trainee->id)
                 ->update(['status' => 'Enrolled', 'progress' => 0, 'completed_at' => null]);
+            // Fresh weekly cycle: old week records belong to the previous
+            // assignment's calendar — delete them so W1/W2 restart from the
+            // transfer effective date.
+            TraineeWeeklyEvaluation::where('user_id', $trainee->id)->delete();
+            AttendanceLog::where('user_id', $trainee->id)->delete();
+            TraineeDailyObservation::where('user_id', $trainee->id)->delete();
         }
 
         if ($request->wantsJson()) {
