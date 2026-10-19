@@ -849,18 +849,6 @@ class PayrollController extends Controller
             return back()->withErrors(['error' => 'None of the selected rows are submitted.']);
         }
         $payroll->update(['status' => 'Approved']);
-
-        // Record as Finance Expense
-        \App\Models\Fin\FinExpense::create([
-            'expense_date' => now(),
-            'category' => 'Payroll',
-            'description' => 'Payroll approval for ' . $payroll->employee_name . ' (' . $payroll->period . ')',
-            'amount' => $payroll->net_pay,
-            'department' => $payroll->department,
-            'recorded_by' => auth()->id(),
-            'payroll_id' => $payroll->id,
-        ]);
-
         $this->auditPayroll('Approved: '.$payroll->employee_name, $payroll->id, 'approved');
         return back()->with('message', 'Approved.');
     }
@@ -875,24 +863,7 @@ class PayrollController extends Controller
         if ($rows->isEmpty()) {
             return back()->withErrors(['error' => 'None of the selected rows are submitted.']);
         }
-        
-        DB::transaction(function () use ($rows) {
-            foreach ($rows as $p) {
-                $p->update(['status' => 'Approved']);
-
-                // Record as Finance Expense
-                \App\Models\Fin\FinExpense::create([
-                    'expense_date' => now(),
-                    'category' => 'Payroll',
-                    'description' => 'Payroll approval for ' . $p->employee_name . ' (' . $p->period . ')',
-                    'amount' => $p->net_pay,
-                    'department' => $p->department,
-                    'recorded_by' => auth()->id(),
-                    'payroll_id' => $p->id,
-                ]);
-            }
-        });
-
+        foreach ($rows as $p) $p->update(['status' => 'Approved']);
         $this->auditPayroll('Approved — '.$this->auditNames($rows), null, 'approved');
         return back()->with('message', 'Approved ('.$rows->count().').');
     }

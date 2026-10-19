@@ -9,9 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         // New holiday type option: Non-Working Day.
-        if (DB::getDriverName() !== 'sqlite') {
-            DB::statement("ALTER TABLE holidays MODIFY holiday_type ENUM('regular', 'special_non_working', 'special_working', 'non_working') NOT NULL DEFAULT 'regular'");
-        }
+        DB::statement("ALTER TABLE holidays MODIFY holiday_type ENUM('regular', 'special_non_working', 'special_working', 'non_working') NOT NULL DEFAULT 'regular'");
 
         if (! Schema::hasColumn('holidays', 'work_policy')) {
             DB::statement("ALTER TABLE holidays ADD COLUMN work_policy ENUM('non_working', 'required_to_work') NOT NULL DEFAULT 'non_working' AFTER holiday_type");
@@ -23,8 +21,6 @@ return new class extends Migration
         if (Schema::hasColumn('holidays', 'work_policy')) {
             DB::statement('ALTER TABLE holidays DROP COLUMN work_policy');
         }
-        if (DB::getDriverName() !== 'sqlite') {
-            DB::statement("ALTER TABLE holidays MODIFY holiday_type ENUM('regular', 'special_non_working', 'special_working') NOT NULL DEFAULT 'regular'");
-        }
+        DB::statement("ALTER TABLE holidays MODIFY holiday_type ENUM('regular', 'special_non_working', 'special_working') NOT NULL DEFAULT 'regular'");
     }
 };

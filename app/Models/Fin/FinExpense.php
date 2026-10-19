@@ -7,16 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 class FinExpense extends Model
 {
     protected $fillable = [
-        'expense_date', 'category', 'description', 'amount', 'department', 'recorded_by', 'payroll_id',
+        'expense_date', 'category', 'description', 'amount', 'department', 'recorded_by',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'expense_date' => 'date',
     ];
-
-    public function payroll()
-    {
-        return $this->belongsTo(\App\Models\Hrm\Payroll::class, 'payroll_id');
-    }
 }
