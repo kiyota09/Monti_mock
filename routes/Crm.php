@@ -304,6 +304,9 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::get('/messages', [MessageController::class, 'index'])
         ->middleware('page.permission:messaging,view')
         ->name('messages');
+    Route::patch('/messages/call-settings', [MessageController::class, 'updateCallSettings'])
+        ->middleware('page.permission:messaging,edit')
+        ->name('messages.call-settings');
     Route::get('/messages/incoming-calls', [MessageController::class, 'incomingCalls'])
         ->middleware('page.permission:messaging,view')
         ->name('messages.incoming-calls');

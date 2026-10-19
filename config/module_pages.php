@@ -54,10 +54,33 @@ return [
     ],
 
     'man' => [
+        // Shared overview (supervisors / legacy MAN staff)
         'dashboard'  => 'Dashboard',
-        'production' => 'Production',
-        'reject'     => 'Rejected',
-        'inventory'  => 'Inventory',
+        'production' => 'Production Orders',
+        'reject'     => 'Rejected Items',
+        'inventory'  => 'Production Inventory',
+        'recipes'    => 'Recipes',
+        // Role workspaces (one key per manufacturing_role)
+        'knitting_yarn'          => 'Knitting Yarn',
+        'knitting_mechanic'      => 'Machine Setups',
+        'dyeing_color'           => 'Dyeing Color',
+        'dyeing_fabric_softener' => 'Fabric Softener',
+        'dyeing_squeezer'        => 'Dyeing Squeezer',
+        'dyeing_ironing'         => 'Dyeing Ironing',
+        'dyeing_lab_chemist'     => 'Shade Development',
+        'finishing_packaging'    => 'Finishing Packaging',
+        'checker_quality'        => 'Quality Inspection',
+        'maintenance_checker'    => 'Maintenance',
+        'pollution_control'      => 'Pollution Control Logs',
+        'safety_officer'         => 'Safety Incidents',
+        'boiler_operator'        => 'Boiler Logs',
+        // Role sub-pages
+        'history'       => 'My History',
+        'reports'       => 'Reports',
+        'flag_reports'  => 'Flag Reports',
+        'lab_tests'     => 'Tests & CoA',
+        'lab_inventory' => 'Lab Inventory',
+        'lab_transfer'  => 'Bulk Transfer',
     ],
 
     'inv' => [

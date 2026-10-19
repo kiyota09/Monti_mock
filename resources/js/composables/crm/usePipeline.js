@@ -107,6 +107,32 @@ export function orderStages(stages) {
     );
 }
 
+/**
+ * The stage a deal must advance to next. Won counts as a normal next step;
+ * Lost is never part of the progression (it can be reached at any time).
+ */
+export function nextStageOf(stages, currentStageId) {
+    const ordered = orderStages(stages).filter((s) => !s.is_lost);
+    const index = ordered.findIndex((s) => Number(s.id) === Number(currentStageId));
+    if (index === -1 || ordered[index].is_won || ordered[index].is_lost) return null;
+    return ordered[index + 1] || null;
+}
+
+/**
+ * Deals may stay put, move to a Lost stage at any time, or advance to exactly
+ * the next pipeline stage. Skipping ahead (e.g. 10% straight to Won) is not
+ * allowed, so every business client passes through each stage.
+ */
+export function canAdvanceTo(stages, currentStageId, targetStage) {
+    if (!targetStage) return false;
+    if (Number(targetStage.id) === Number(currentStageId)) return true;
+    const from = orderStages(stages).find((s) => Number(s.id) === Number(currentStageId));
+    if (!from || from.is_won || from.is_lost) return false;
+    if (targetStage.is_lost) return true;
+    const next = nextStageOf(stages, currentStageId);
+    return !!next && Number(next.id) === Number(targetStage.id);
+}
+
 /** Board-level filtering: My Pipeline + search (title or contact name). */
 export function filterOpps(opps, { mine, userId, search }) {
     let list = opps || [];

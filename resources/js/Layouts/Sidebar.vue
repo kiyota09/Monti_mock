@@ -7,6 +7,7 @@ import {
     Receipt, HelpCircle, User, Truck, Navigation, Clock, CalendarDays,
     History, HandCoins, Building2, UserCog2, ShieldCheck,
     FileText, Megaphone, Stamp, Bell, Printer, Target, Wrench, Repeat, ClipboardList, Zap, ScanSearch, Users, Wallet,
+    Route, ClipboardCheck, AlertTriangle, PackageX, FileWarning,
 } from 'lucide-vue-next'
 
 import { useDropdown, useDynamicDropdowns, useSidebarScroll } from './composables/useSidebarPersistence'
@@ -65,8 +66,8 @@ const {
 } = useManufacturingSupervisor(user)
 
 // ─── AUTH-STATE FLAGS ─────────────────────────────────────────────────────────
-const isDriver = computed(() => user.value?.driver !== null || user.value?.log_role === 'driver')
-const isConductor = computed(() => user.value?.conductor !== null || user.value?.log_role === 'conductor')
+const isDriver = computed(() => user.value?.log_role === 'driver' || (user.value?.driver !== null && user.value?.driver !== undefined))
+const isConductor = computed(() => user.value?.log_role === 'conductor' || (user.value?.conductor !== null && user.value?.conductor !== undefined))
 const isEmployeePortal = computed(() => currentUrl.value.startsWith('/dashboard/employee-ui'))
     const isClient = computed(() => !!client.value)
     const isSupplier = computed(() => !!supplier.value || currentUrl.value.startsWith('/supplier'))
@@ -89,7 +90,7 @@ const navItems = computed(() => {
         const portalPages = [
             { key: 'dashboard', label: 'Dashboard', href: route('client.dashboard'), icon: LayoutDashboard },
             { key: 'products', label: 'Products', href: route('client.products'), icon: ShoppingBag },
-            { key: 'conversations', label: 'Conversations', href: route('client.conversations'), icon: MessageSquare },
+            { key: 'conversations', label: 'Inquiries', href: route('client.conversations'), icon: MessageSquare },
             { key: 'messages', label: 'Messages', href: route('client.messages'), icon: MessageSquare },
             { key: 'orders', label: 'Orders', href: route('client.orders'), icon: ShoppingCart },
             { key: 'tracking', label: 'Order Tracking', href: route('client.tracking'), icon: Navigation },
@@ -186,9 +187,30 @@ const navItems = computed(() => {
 
     if (user.value?.role?.toUpperCase() === 'LOG' && userPosition === 'staff') {
         if (isDriver.value) {
-            items.push({ label: 'My Deliveries', href: route('logistics.driver.portal'), icon: Truck })
+            const portal = route('logistics.driver.portal', {}, false)
+            items.push(
+                { isHeading: true, label: 'Driver Portal' },
+                { label: 'Dashboard', href: portal, icon: LayoutDashboard },
+                { label: 'My Trips', href: `${portal}?tab=trips`, icon: Route },
+                { label: 'Proof of Delivery', href: `${portal}?tab=pod`, icon: ClipboardCheck },
+                { label: 'Inspection', href: `${portal}?tab=inspection`, icon: Wrench },
+                { label: 'Incidents', href: `${portal}?tab=incidents`, icon: AlertTriangle },
+                { label: 'Hours of Service', href: `${portal}?tab=hos`, icon: Clock },
+                { label: 'Earnings', href: `${portal}?tab=earnings`, icon: Wallet },
+                { label: 'Documents', href: `${portal}?tab=documents`, icon: FileText },
+            )
         } else if (isConductor.value) {
-            items.push({ label: 'My Trips', href: route('logistics.conductor.portal'), icon: Navigation })
+            const portal = route('logistics.conductor.portal', {}, false)
+            items.push(
+                { isHeading: true, label: 'Conductor Portal' },
+                { label: 'Dashboard', href: portal, icon: LayoutDashboard },
+                { label: 'My Trips', href: `${portal}?tab=trips`, icon: Route },
+                { label: 'Load Check', href: `${portal}?tab=load`, icon: ClipboardCheck },
+                { label: 'Collections', href: `${portal}?tab=collections`, icon: HandCoins },
+                { label: 'Returns', href: `${portal}?tab=returns`, icon: PackageX },
+                { label: 'Reports', href: `${portal}?tab=reports`, icon: FileWarning },
+                { label: 'History', href: `${portal}?tab=history`, icon: History },
+            )
         }
         return items
     }

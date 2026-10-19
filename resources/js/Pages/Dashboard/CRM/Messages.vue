@@ -1,12 +1,12 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import {
     MessagesSquare, Send, Loader2, Search, ChevronLeft, Paperclip, X, Smile,
     CornerUpLeft, MoreVertical, Phone, Video, History, FileText, Download,
-    Trash2, PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ban, Users,
+    Trash2, PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ban, Users, Settings2,
 } from 'lucide-vue-next';
 import { useCallCenter } from '@/composables/crm/useCallCenter';
 import { usePartnerCallCenter } from '@/composables/crm/usePartnerCallCenter';
@@ -18,6 +18,7 @@ const props = defineProps({
     messages: { type: Array, default: () => [] },
     callLogs: { type: Array, default: () => [] },
     totalUnread: { type: Number, default: 0 },
+    callsEnabled: { type: Boolean, default: true },
 });
 
 const SELF = 'crm';
@@ -40,6 +41,9 @@ const reactionPickerId = ref(null);
 const openMenuId = ref(null);
 const imageViewer = ref(null);
 const showCallLog = ref(false);
+const showCallSettings = ref(false);
+const callsEnabled = ref(props.callsEnabled !== false);
+const callSettingsForm = useForm({ calls_enabled: callsEnabled.value });
 const fileInput = ref(null);
 let pollTimer = null;
 
@@ -293,7 +297,7 @@ const unsend = async (m, scope) => {
 };
 
 const startCall = async (type) => {
-    if (!activeClient.value) return;
+    if (!activeClient.value || !callsEnabled.value) return;
     sendError.value = '';
     const message = await partnerCall.startOutgoing({
         type,
@@ -380,7 +384,25 @@ const toggleTeam = () => {
     if (showTeam.value) loadTeam();
 };
 
+const openCallSettings = () => {
+    callSettingsForm.calls_enabled = callsEnabled.value;
+    showCallSettings.value = true;
+};
+
+const saveCallSettings = () => {
+    callSettingsForm.patch(route('crm.messages.call-settings'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            callsEnabled.value = callSettingsForm.calls_enabled;
+            showCallSettings.value = false;
+            showTeam.value = false;
+            if (!callsEnabled.value) showCallLog.value = false;
+        },
+    });
+};
+
 const callTeammate = (contact, type) => {
+    if (!callsEnabled.value) return;
     showTeam.value = false;
     if (callCenterState.active || callCenterState.starting) return;
     placeCall(contact, type);
@@ -431,13 +453,18 @@ onUnmounted(() => {
                             {{ totalUnread }} unread
                         </span>
 
-                        <div class="relative">
-                            <button type="button" @click.stop="toggleTeam"
+                        <div class="relative flex items-center gap-2">
+                            <button v-if="callsEnabled" type="button" @click.stop="toggleTeam"
                                 class="flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-bold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
                                 <Users class="h-4 w-4" /> Call team
                             </button>
+                            <button type="button" @click.stop="openCallSettings" title="Call settings"
+                                aria-label="Call settings"
+                                class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
+                                <Settings2 class="h-4 w-4" />
+                            </button>
 
-                            <div v-if="showTeam" @click.stop
+                            <div v-if="showTeam && callsEnabled" @click.stop
                                 class="absolute right-0 top-full z-40 mt-2 w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white text-gray-900 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 dark:text-white">
                                 <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5 dark:border-zinc-800">
                                     <p class="text-xs font-black uppercase tracking-wider text-gray-500">Call a teammate</p>
@@ -535,11 +562,11 @@ onUnmounted(() => {
                                         {{ activeClient.contact_person || activeClient.email || 'Business Partner' }}
                                     </p>
                                 </div>
-                                <button @click="startCall('audio')" title="Voice call"
+                                <button v-if="callsEnabled" @click="startCall('audio')" title="Voice call"
                                     class="flex h-9 w-9 items-center justify-center rounded-full text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/50">
                                     <Phone class="h-4 w-4" />
                                 </button>
-                                <button @click="startCall('video')" title="Video call"
+                                <button v-if="callsEnabled" @click="startCall('video')" title="Video call"
                                     class="flex h-9 w-9 items-center justify-center rounded-full text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/50">
                                     <Video class="h-4 w-4" />
                                 </button>
@@ -703,6 +730,51 @@ onUnmounted(() => {
                         </template>
                         <div v-else class="flex flex-1 items-center justify-center text-sm text-gray-400">Select a partner to start chatting.</div>
                     </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- Call settings -->
+        <div v-if="showCallSettings" @click.self="showCallSettings = false"
+            class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+            <div class="w-full max-w-sm rounded-3xl border border-gray-100 bg-white p-6 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-black text-gray-900 dark:text-white">Call settings</h3>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Turn voice and video calling on or off for CRM and business partners.
+                        </p>
+                    </div>
+                    <button @click="showCallSettings = false" aria-label="Close call settings"
+                        class="rounded-lg p-1 text-gray-400 transition hover:bg-slate-100 hover:text-gray-700 dark:hover:bg-zinc-800 dark:hover:text-white">
+                        <X class="h-5 w-5" />
+                    </button>
+                </div>
+
+                <button type="button" @click="callSettingsForm.calls_enabled = !callSettingsForm.calls_enabled"
+                    class="mt-5 flex w-full items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-slate-50 px-4 py-3.5 text-left transition hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700">
+                    <span>
+                        <span class="block text-sm font-bold text-gray-900 dark:text-white">Allow calls</span>
+                        <span class="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">
+                            {{ callSettingsForm.calls_enabled ? 'Call and video buttons are visible.' : 'All call buttons are hidden.' }}
+                        </span>
+                    </span>
+                    <span :class="callSettingsForm.calls_enabled ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-zinc-600'"
+                        class="relative inline-flex h-6 w-11 flex-none items-center rounded-full transition">
+                        <span :class="callSettingsForm.calls_enabled ? 'translate-x-6' : 'translate-x-0.5'"
+                            class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition" />
+                    </span>
+                </button>
+
+                <div class="mt-5 flex gap-2">
+                    <button type="button" @click="showCallSettings = false"
+                        class="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-black uppercase text-gray-500 transition hover:bg-gray-200 dark:bg-zinc-800 dark:text-gray-300 dark:hover:bg-zinc-700">
+                        Cancel
+                    </button>
+                    <button type="button" @click="saveCallSettings" :disabled="callSettingsForm.processing"
+                        class="flex-1 rounded-xl bg-indigo-600 py-2.5 text-xs font-black uppercase text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        Save
+                    </button>
                 </div>
             </div>
         </div>

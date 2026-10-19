@@ -28,6 +28,21 @@ class CrmStage extends Model
         return (bool) $this->is_won || (bool) $this->is_lost;
     }
 
+    /**
+     * Columns in board order: open stages by probability, then Won, then Lost.
+     * Mirrors orderStages() on the frontend so move validation agrees with UI.
+     */
+    public static function pipelineOrder(): \Illuminate\Support\Collection
+    {
+        return static::query()
+            ->orderByRaw('CASE WHEN is_won = 1 THEN 1 WHEN is_lost = 1 THEN 2 ELSE 0 END')
+            ->orderBy('default_probability')
+            ->orderBy('sequence')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+    }
+
     public function opportunities(): HasMany
     {
         return $this->hasMany(CrmOpportunity::class, 'stage_id')->orderByDesc('updated_at');

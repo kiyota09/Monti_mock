@@ -55,7 +55,7 @@ const onCardChange = (e) => {
     // (prevents null-element crashes from stale Sortable nodes).
     const added = e?.added;
     if (!added?.element) return;
-    // Forward-only rule lives in the parent; reject before hitting the server.
+    // Sequential-stage rule lives in the parent; reject before hitting the server.
     if (props.canDrop && props.canDrop(added.element, props.stage) === false) {
         emit('card-blocked', { opportunity: added.element, toStage: props.stage });
         return;

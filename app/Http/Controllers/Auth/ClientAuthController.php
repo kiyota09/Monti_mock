@@ -7,7 +7,6 @@ use App\Http\Controllers\Auth\Concerns\LogsOutEveryGuard;
 use App\Models\Crm\Client;
 use App\Models\Crm\CrmContact;
 use App\Models\Crm\CrmLogoPartner;
-use App\Support\ClientAccess;
 use App\Support\ClientPortal;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\Request;
@@ -100,12 +99,8 @@ class ClientAuthController extends Controller
             $request->session()->forget('representative_id');
             $request->session()->regenerate();
 
-            // A restricted owner (matched to a non-primary contact) lands on the
-            // first page it is actually allowed to open, not a blanket 403.
-            $allowed = ClientAccess::accessPages($client, null);
-            $home = $allowed === null ? null : ClientPortal::firstRoute($allowed);
-
-            return redirect()->intended(route($home ?? 'client.dashboard'));
+            // The account owner always lands on the dashboard with full access.
+            return redirect()->intended(route('client.dashboard'));
         }
 
         // Not the account owner? Try to sign in as an approved representative.

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Concerns\PresentsClientChat;
 use App\Http\Controllers\Controller;
+use App\Models\Core\AppSetting;
 use App\Models\Crm\ClientCallSignal;
 use App\Models\Crm\ClientMessage;
 use App\Models\Crm\ClientMessageReaction;
@@ -73,6 +74,7 @@ class ClientMessageController extends Controller
         return Inertia::render('Client/Messages', [
             'messages' => $this->thread($clientId),
             'callLogs' => $this->callLogs($clientId),
+            'callsEnabled' => AppSetting::getBool('calls_enabled', true),
         ]);
     }
 
@@ -277,6 +279,10 @@ class ClientMessageController extends Controller
 
     public function startCall(Request $request)
     {
+        if (! AppSetting::getBool('calls_enabled', true)) {
+            return response()->json(['message' => 'Calling is currently disabled.'], 403);
+        }
+
         $clientId = $this->clientId();
         $data = $request->validate(['type' => 'required|in:audio,video']);
 

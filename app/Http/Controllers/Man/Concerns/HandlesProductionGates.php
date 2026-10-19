@@ -281,10 +281,19 @@ trait HandlesProductionGates
             return back()->with('error', 'No product associated with this package.');
         }
 
-        DB::transaction(function () use ($package, $product) {
+        // Logistics resolves the destination client through the Job Order, so
+        // fall back to the fabric's sales order when the package was created
+        // without a manufacturing_order_id.
+        $manufacturingOrderId = $package->manufacturing_order_id
+            ?? $package->fabric?->manufacturing_order_id
+            ?? ($package->fabric?->sales_order_id
+                ? ManufacturingOrder::where('sales_order_id', $package->fabric->sales_order_id)->value('id')
+                : null);
+
+        DB::transaction(function () use ($package, $product, $manufacturingOrderId) {
             WarehousePackage::create([
                 'package_number'         => $package->code,
-                'manufacturing_order_id' => $package->manufacturing_order_id,
+                'manufacturing_order_id' => $manufacturingOrderId,
                 'product_id'             => $product->id,
                 'quantity'               => $package->quantity,
                 'status'                 => 'pushed_to_logistics',

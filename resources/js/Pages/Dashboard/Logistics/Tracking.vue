@@ -24,6 +24,12 @@
                             <span class="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
                                 <span class="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" /> {{ activeDeliveries.length }} active
                             </span>
+                            <span v-if="simEnabled" class="flex items-center gap-1.5 rounded-full bg-amber-400/90 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-amber-950 ring-1 ring-white/25">
+                                <FlaskConical class="h-3.5 w-3.5" /> Simulation
+                            </span>
+                            <button @click="showSettings = true" title="Tracking settings" class="flex items-center gap-2 rounded-2xl bg-white/15 px-3 py-2.5 text-xs font-black uppercase tracking-wide text-white ring-1 ring-white/25 backdrop-blur transition-all duration-200 hover:bg-white/25 active:scale-95">
+                                <Settings class="h-4 w-4" /> Settings
+                            </button>
                             <button @click="refreshData" class="flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wide text-indigo-700 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95">
                                 <RefreshCw class="h-4 w-4" /> Refresh
                             </button>
@@ -126,9 +132,9 @@
                                         <div class="text-xs text-gray-500">{{ delivery.truck?.truck_number || '—' }}</div>
                                     </td>
                                     <td class="px-6 py-4">
-                                        <div class="text-sm font-bold text-gray-900 dark:text-white">{{ delivery.route?.name || '—' }}</div>
+                                        <div class="text-sm font-bold text-gray-900 dark:text-white">{{ delivery.route?.name || (delivery.stops?.length ? delivery.stops.length + ' stops' : '—') }}</div>
                                         <div class="text-xs text-gray-500 truncate max-w-[200px]">
-                                            {{ delivery.route?.origin }} → {{ delivery.route?.destination }}
+                                            {{ delivery.origin_label || delivery.route?.origin || 'Monti HQ' }} → {{ delivery.stops?.length ? delivery.stops.length + ' drop-off(s)' : (delivery.route?.destination || '—') }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
@@ -143,12 +149,19 @@
                                         {{ delivery.packages?.length || 0 }}
                                     </td>
                                     <td class="px-6 py-4 text-right">
-                                        <button
-                                            @click="flyToDelivery(delivery)"
-                                            class="inline-flex items-center gap-1 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-600 hover:text-white transition-all hover:-translate-y-0.5"
-                                        >
-                                            <Eye class="h-3.5 w-3.5" /> View on Map
-                                        </button>
+                                        <div class="inline-flex items-center gap-2">
+                                            <button v-if="canEditDispatch && delivery.status === 'dispatched'"
+                                                @click="deliverLoad(delivery)"
+                                                class="inline-flex items-center gap-1 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700 transition-all hover:-translate-y-0.5">
+                                                <Navigation class="h-3.5 w-3.5" /> Deliver
+                                            </button>
+                                            <button
+                                                @click="flyToDelivery(delivery)"
+                                                class="inline-flex items-center gap-1 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-600 hover:text-white transition-all hover:-translate-y-0.5"
+                                            >
+                                                <Eye class="h-3.5 w-3.5" /> View on Map
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             </TransitionGroup>
@@ -161,6 +174,58 @@
                 </div>
             </div>
         </div>
+
+        <!-- Settings modal -->
+        <Teleport to="body">
+            <Transition name="modal">
+                <div v-if="showSettings" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div class="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" @click="showSettings = false" />
+                    <div class="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900">
+                        <div class="flex items-center justify-between bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 px-5 py-4 text-white">
+                            <div class="flex items-center gap-2">
+                                <Settings class="h-5 w-5" />
+                                <div>
+                                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-blue-100">Tracking</p>
+                                    <h3 class="text-base font-black">Settings</h3>
+                                </div>
+                            </div>
+                            <button type="button" @click="showSettings = false" class="rounded-xl p-1.5 hover:bg-white/20">
+                                <X class="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div class="space-y-4 p-5">
+                            <div class="flex items-start justify-between gap-4 rounded-2xl border border-gray-100 p-4 dark:border-zinc-800">
+                                <div class="min-w-0">
+                                    <p class="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-white">
+                                        <FlaskConical class="h-4 w-4 text-amber-500" /> Delivery simulation testing
+                                    </p>
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        When ON, the Driver Portal shows a <span class="font-bold">Simulate delivery now</span> button that moves the truck along the route — for testing only.
+                                        When OFF, drivers use real-time GPS and the system tracks them until arrival.
+                                    </p>
+                                </div>
+                                <button type="button" role="switch" :aria-checked="simEnabled" :disabled="!canEditTracking || savingSim"
+                                    @click="toggleSimulation"
+                                    :class="simEnabled ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-zinc-700'"
+                                    class="relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50">
+                                    <span :class="simEnabled ? 'translate-x-5' : 'translate-x-1'" class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform" />
+                                </button>
+                            </div>
+                            <p v-if="!canEditTracking" class="rounded-2xl bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                                You need edit permission on the Tracking page to change this.
+                            </p>
+                            <div class="flex justify-end">
+                                <button type="button" @click="showSettings = false"
+                                    class="rounded-2xl bg-gray-100 px-5 py-2.5 text-xs font-black uppercase tracking-wide text-gray-600 hover:bg-gray-200 dark:bg-zinc-800 dark:text-gray-300">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
     </AuthenticatedLayout>
 </template>
 
@@ -168,15 +233,36 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { MapPin, RefreshCw, Globe, Truck, Eye } from 'lucide-vue-next';
+import { MapPin, RefreshCw, Globe, Truck, Eye, Navigation, Settings, X, FlaskConical } from 'lucide-vue-next';
+import { usePageAccess } from '@/composables/usePageAccess';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+
+const { canEdit } = usePageAccess();
 
 const props = defineProps({
     deliveries: { type: Array, default: () => [] },
     filter: { type: String, default: 'all' },
     montiLocation: { type: Object, default: null },
+    deliverySimulation: { type: Boolean, default: false },
 });
+
+const showSettings = ref(false);
+const simEnabled = ref(!!props.deliverySimulation);
+const savingSim = ref(false);
+watch(() => props.deliverySimulation, (v) => { simEnabled.value = !!v; });
+
+const toggleSimulation = () => {
+    if (savingSim.value) return;
+    const next = !simEnabled.value;
+    savingSim.value = true;
+    router.patch(route('logistics.tracking.delivery-simulation'), { enabled: next }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => { simEnabled.value = next; },
+        onFinish: () => { savingSim.value = false; },
+    });
+};
 
 const currentFilter = ref(props.filter || 'all');
 let map = null;
@@ -191,7 +277,7 @@ const montiLng = props.montiLocation ? Number(props.montiLocation.longitude) : d
 
 const filteredDeliveries = computed(() => {
     if (currentFilter.value === 'all') return props.deliveries;
-    if (currentFilter.value === 'scheduled') return props.deliveries.filter(d => d.status === 'pending');
+    if (currentFilter.value === 'scheduled') return props.deliveries.filter(d => d.status === 'dispatched');
     if (currentFilter.value === 'active') return props.deliveries.filter(d => ['dispatched', 'in_transit'].includes(d.status));
     if (currentFilter.value === 'delivered') return props.deliveries.filter(d => d.status === 'delivered');
     return props.deliveries;
@@ -235,6 +321,24 @@ const formatStatus = (status) => {
 const formatDateTime = (date) => {
     if (!date) return '—';
     return new Date(date).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+const parseGeometry = (geom) => {
+    if (!geom) return null;
+    if (typeof geom === 'string') {
+        try { geom = JSON.parse(geom); } catch { return null; }
+    }
+    return Array.isArray(geom) && geom.length > 1 ? geom : null;
+};
+
+const canEditDispatch = computed(() => canEdit('LOG', 'dispatch'));
+const canEditTracking = computed(() => canEdit('LOG', 'tracking'));
+
+const deliverLoad = (delivery) => {
+    router.post(route('logistics.dispatch.deliver', delivery.id), {}, {
+        preserveScroll: true,
+        onSuccess: () => router.reload({ only: ['deliveries'] }),
+    });
 };
 
 // ---------- Map ----------
@@ -282,24 +386,20 @@ const drawActiveDeliveries = () => {
     polylinesLayer.clearLayers();
 
     activeDeliveries.value.forEach((delivery) => {
-        const route = delivery.route;
-        if (!route) return;
+        // Prefer the delivery's own multi-stop geometry, then fall back to route.
+        const geometry = parseGeometry(delivery.route_geometry) || parseGeometry(delivery.route?.route_geometry);
+        const stops = (delivery.stops || []).filter(s => s.latitude != null && s.longitude != null);
 
         let polyline;
-        if (route.route_geometry) {
-            let geom = route.route_geometry;
-            if (typeof geom === 'string') {
-                try { geom = JSON.parse(geom); } catch { geom = null; }
-            }
-            if (Array.isArray(geom) && geom.length > 1) {
-                polyline = L.polyline(geom, { color: '#6366f1', weight: 5, opacity: 0.8 });
-            }
-        }
-        if (!polyline && route.origin_lat && route.destination_lat) {
+        if (geometry && geometry.length > 1) {
+            polyline = L.polyline(geometry, { color: '#6366f1', weight: 5, opacity: 0.8 });
+        } else if (stops.length > 1) {
+            polyline = L.polyline(stops.map(s => [Number(s.latitude), Number(s.longitude)]), { color: '#6366f1', weight: 4, dashArray: '10, 6', opacity: 0.75 });
+        } else if (delivery.route?.origin_lat && delivery.route?.destination_lat) {
             polyline = L.polyline(
                 [
-                    [Number(route.origin_lat), Number(route.origin_lng)],
-                    [Number(route.destination_lat), Number(route.destination_lng)],
+                    [Number(delivery.route.origin_lat), Number(delivery.route.origin_lng)],
+                    [Number(delivery.route.destination_lat), Number(delivery.route.destination_lng)],
                 ],
                 { color: '#f59e0b', weight: 4, dashArray: '10, 6', opacity: 0.7 }
             );
@@ -309,21 +409,34 @@ const drawActiveDeliveries = () => {
                 <strong>${delivery.delivery_number}</strong><br>
                 ${delivery.driver?.user?.name || 'No driver'}<br>
                 Truck: ${delivery.truck?.truck_number || '—'}<br>
+                Stops: ${stops.length}<br>
                 Status: ${formatStatus(delivery.status)}
             `);
             polyline.addTo(polylinesLayer);
         }
 
-        // Destination marker
-        if (route.destination_lat && route.destination_lng) {
-            L.marker([Number(route.destination_lat), Number(route.destination_lng)], { icon: buildDestIcon() })
-                .bindPopup(`<strong>Destination</strong><br>${route.destination}`)
+        // Stop markers (numbered).
+        stops.forEach((stop, idx) => {
+            L.marker([Number(stop.latitude), Number(stop.longitude)], {
+                icon: L.divIcon({
+                    className: '',
+                    html: `<div style="background:${stop.status === 'delivered' ? '#10b981' : '#6366f1'};color:white;border-radius:9999px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">${stop.sequence || idx + 1}</div>`,
+                    iconSize: [24, 24], iconAnchor: [12, 12],
+                }),
+            }).bindPopup(`<strong>${stop.sequence || idx + 1}. ${stop.label || 'Stop'}</strong><br>${stop.address || ''}`)
+              .addTo(markersLayer);
+        });
+
+        // Legacy single-destination marker when no stops exist.
+        if (!stops.length && delivery.route?.destination_lat && delivery.route?.destination_lng) {
+            L.marker([Number(delivery.route.destination_lat), Number(delivery.route.destination_lng)], { icon: buildDestIcon() })
+                .bindPopup(`<strong>Destination</strong><br>${delivery.route.destination}`)
                 .addTo(markersLayer);
         }
 
-        // Truck marker – placed at origin for now (future GPS can update this)
-        const truckLat = route.origin_lat || montiLat;
-        const truckLng = route.origin_lng || montiLng;
+        // Truck marker – placed at origin for now (future GPS can update this).
+        const truckLat = delivery.origin_lat || delivery.route?.origin_lat || montiLat;
+        const truckLng = delivery.origin_lng || delivery.route?.origin_lng || montiLng;
         L.marker([Number(truckLat), Number(truckLng)], { icon: buildTruckIcon() })
             .bindPopup(`
                 <strong>${delivery.delivery_number}</strong><br>
@@ -348,21 +461,20 @@ const drawActiveDeliveries = () => {
 
 const flyToDelivery = (delivery) => {
     if (!map) return;
-    const route = delivery.route;
-    if (route?.route_geometry) {
-        let geom = route.route_geometry;
-        if (typeof geom === 'string') {
-            try { geom = JSON.parse(geom); } catch { geom = null; }
-        }
-        if (Array.isArray(geom) && geom.length > 1) {
-            map.fitBounds(L.polyline(geom).getBounds(), { padding: [50, 50] });
-            return;
-        }
+    const geometry = parseGeometry(delivery.route_geometry) || parseGeometry(delivery.route?.route_geometry);
+    if (geometry) {
+        map.fitBounds(L.polyline(geometry).getBounds(), { padding: [50, 50] });
+        return;
     }
-    if (route?.origin_lat && route?.destination_lat) {
+    const stops = (delivery.stops || []).filter(s => s.latitude != null && s.longitude != null);
+    if (stops.length > 1) {
+        map.fitBounds(L.polyline(stops.map(s => [Number(s.latitude), Number(s.longitude)])).getBounds(), { padding: [50, 50] });
+        return;
+    }
+    if (delivery.route?.origin_lat && delivery.route?.destination_lat) {
         map.fitBounds([
-            [Number(route.origin_lat), Number(route.origin_lng)],
-            [Number(route.destination_lat), Number(route.destination_lng)],
+            [Number(delivery.route.origin_lat), Number(delivery.route.origin_lng)],
+            [Number(delivery.route.destination_lat), Number(delivery.route.destination_lng)],
         ], { padding: [50, 50] });
     }
 };

@@ -16,7 +16,7 @@ class ClientPortal
     public const PAGES = [
         'dashboard'     => 'Dashboard',
         'products'      => 'Products',
-        'conversations' => 'Conversations',
+        'conversations' => 'Inquiries',
         'messages'      => 'Messages',
         'orders'        => 'Orders',
         'tracking'      => 'Order Tracking',

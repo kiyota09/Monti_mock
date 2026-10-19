@@ -9,6 +9,7 @@ use App\Models\Core\User;
 use App\Models\Core\UserModuleAccess;
 use App\Models\It\ItAccessLog;
 use App\Models\Man\ManufacturingSupervisorRole;
+use App\Support\ManufacturingPages;
 use App\Support\ManufacturingRoles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -134,9 +135,34 @@ class ItAccessControlController extends Controller
         return ManufacturingRoles::departmentForRole($role);
     }
 
+    /**
+     * Resolve a LOG staff member's plant role (driver vs conductor).
+     * Prefers the users.log_role column; falls back to the driver/conductor
+     * records (loaded via withExists) for accounts provisioned before the
+     * column was populated. Non-LOG accounts always return null.
+     */
+    protected function logRoleFor(User $user): ?string
+    {
+        if (strtoupper((string) $user->role) !== 'LOG') {
+            return null;
+        }
+        if (in_array($user->log_role, ['driver', 'conductor'], true)) {
+            return $user->log_role;
+        }
+        if (! empty($user->driver_exists)) {
+            return 'driver';
+        }
+        if (! empty($user->conductor_exists)) {
+            return 'conductor';
+        }
+
+        return null;
+    }
+
     public function index()
     {
         $users = User::with(['moduleAccess', 'pagePermissions'])
+            ->withExists(['driver', 'conductor'])
             ->whereNotIn('role', ['CEO', 'COO'])
             ->orderBy('role')
             ->orderBy('name')
@@ -156,6 +182,8 @@ class ItAccessControlController extends Controller
                 'manufacturing_department' => $u->is_manufacturing_supervisor
                     ? $u->supervisor_department
                     : $this->manufacturingDepartmentFor($u->manufacturing_role),
+                // Logistics plant-staff track: driver vs conductor label.
+                'log_role' => $this->logRoleFor($u),
                 'is_active' => (bool) $u->is_active,
                 'suspended_until' => $u->suspended_until,
                 'is_manufacturing_supervisor' => (bool) $u->is_manufacturing_supervisor,
@@ -212,6 +240,11 @@ class ItAccessControlController extends Controller
             'assignableRoles' => $this->assignableRoles,
             'assignablePositions' => $this->assignablePositions,
             'pendingRequests' => $pendingRequests,
+            // Role-aware MAN page catalog so IT sees every page a plant
+            // employee handles (e.g. Dyeing Lab Chemist -> Shades, Tests &
+            // CoA, Lab Inventory, Bulk Transfer, History, Recipes).
+            'manRolePages' => ManufacturingPages::ROLE_PAGES,
+            'manOverviewPages' => ManufacturingPages::OVERVIEW,
         ]);
     }
 
@@ -735,7 +768,12 @@ class ItAccessControlController extends Controller
         foreach ($modules as $module) {
             $upper = strtoupper($module);
             $default = ($lockedRoot && $upper === strtoupper($lockedRoot)) ? 'edit' : 'disabled';
-            foreach (array_keys($map[$upper] ?? []) as $page) {
+            // MAN is role-aware: seed only the pages this employee actually
+            // handles instead of the whole module union.
+            $modulePageKeys = $upper === 'MAN'
+                ? array_keys(ManufacturingPages::forUser($user))
+                : array_keys($map[$upper] ?? []);
+            foreach ($modulePageKeys as $page) {
                 $key = $upper . '.' . strtolower($page);
                 if (! $existing->has($key)) {
                     PagePermission::create([

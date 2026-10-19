@@ -10,7 +10,7 @@ import ActivityModal from '@/Components/crm/pipeline/ActivityModal.vue';
 import ActivityDetailModal from '@/Components/crm/pipeline/ActivityDetailModal.vue';
 import CardDocumentsModal from '@/Components/crm/pipeline/CardDocumentsModal.vue';
 import ModalShell from '@/Components/crm/pipeline/ModalShell.vue';
-import { filterOpps, activityCounts, orderStages, peso } from '@/composables/crm/usePipeline';
+import { filterOpps, activityCounts, orderStages, canAdvanceTo, nextStageOf, peso } from '@/composables/crm/usePipeline';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 
@@ -84,19 +84,12 @@ const activeView = ref('board');
 const archivedList = computed(() => props.archived || []);
 
 // ── Card drag between stages ──
-// Forward-only rule: a deal may advance to a stage of equal/higher default
-// probability, and may always be dropped into a Lost stage. Dropping it back
-// into an earlier (lower-probability) stage is rejected.
+// Sequential rule: a deal may only advance to the stage immediately after its
+// current one (Won is the final step). Lost is allowed from any open stage.
 const cardResetToken = ref(0);
-const stageById = (id) => orderedStages.value.find((s) => Number(s.id) === Number(id)) || null;
 
-const canDropInto = (opportunity, toStage) => {
-    if (!toStage) return false;
-    if (toStage.is_lost) return true;
-    const from = stageById(opportunity.stage_id);
-    if (!from) return true;
-    return Number(toStage.default_probability ?? 0) >= Number(from.default_probability ?? 0);
-};
+const canDropInto = (opportunity, toStage) =>
+    canAdvanceTo(orderedStages.value, opportunity.stage_id, toStage);
 
 const onCardMoved = ({ opportunity, toStage }) => {
     if (!canEditOpp.value) return;
@@ -111,9 +104,11 @@ const onCardMoved = ({ opportunity, toStage }) => {
 // A blocked drop never hits the server, so nudge every column to re-read the
 // unchanged props and snap the card back to where it started.
 const onCardBlocked = ({ opportunity, toStage }) => {
-    const from = stageById(opportunity.stage_id);
+    const next = nextStageOf(orderedStages.value, opportunity.stage_id);
     toast.error(
-        `“${opportunity.title}” can only move forward — ${toStage.name} is behind ${from?.name ?? 'its stage'}. Drop it into a Lost stage to close it.`,
+        next
+            ? `"${opportunity.title}" must move to ${next.name} next before it can reach ${toStage.name}.`
+            : `"${opportunity.title}" cannot move to ${toStage.name} from a closed stage.`,
     );
     cardResetToken.value++;
 };

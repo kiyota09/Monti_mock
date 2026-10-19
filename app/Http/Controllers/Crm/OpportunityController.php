@@ -145,13 +145,9 @@ class OpportunityController extends Controller
             $from = $opportunity->stageRef?->name ?? $opportunity->stage;
             $to = CrmStage::find($data['stage_id']);
 
-            // Same forward-only rule as drag-and-drop moves.
-            $fromStage = $opportunity->stageRef;
-            if ($fromStage && ! $to->is_lost
-                && (int) $to->default_probability < (int) $fromStage->default_probability) {
-                return back()->withErrors([
-                    'error' => "Deals only move forward — “{$to->name}” is behind “{$fromStage->name}”. Move it to a Lost stage to close it.",
-                ]);
+            // Same sequential rule as drag-and-drop and the chevron bar.
+            if ($error = $this->sequentialMoveError($opportunity, $to)) {
+                return back()->withErrors(['error' => $error]);
             }
 
             $data['probability'] = $data['probability'] ?? $to->default_probability;
@@ -311,14 +307,10 @@ class OpportunityController extends Controller
             return back()->withErrors(['error' => 'Choose a target stage.']);
         }
 
-        // Forward-only rule: a deal may only advance to a stage with an equal or
-        // higher default probability, or be dropped into a Lost stage.
-        $fromStage = $opportunity->stageRef ?? CrmStage::find($opportunity->stage_id);
-        if ($fromStage && ! $target->is_lost
-            && (int) $target->default_probability < (int) $fromStage->default_probability) {
-            return back()->withErrors([
-                'error' => "Deals only move forward — “{$target->name}” is behind “{$fromStage->name}”. Move it to a Lost stage to close it.",
-            ]);
+        // Sequential rule: a deal may only advance to the stage immediately
+        // after its current one, or be dropped into a Lost stage to close it.
+        if ($error = $this->sequentialMoveError($opportunity, $target)) {
+            return back()->withErrors(['error' => $error]);
         }
 
         $from = $opportunity->stageRef?->name ?? $opportunity->stage;
@@ -442,6 +434,38 @@ class OpportunityController extends Controller
         ]);
 
         return back()->with('message', "Deal moved to {$data['stage']}.");
+    }
+
+    /**
+     * Returns an error message when the move would skip pipeline stages, or
+     * null when the transition is allowed. Lost stages are always allowed from
+     * an open stage; remaining put is a no-op; closed deals cannot move again.
+     */
+    protected function sequentialMoveError(CrmOpportunity $opportunity, CrmStage $target): ?string
+    {
+        $from = $opportunity->stageRef ?? CrmStage::find($opportunity->stage_id);
+        if (! $from) {
+            return null;
+        }
+        if ((int) $from->id === (int) $target->id) {
+            return null;
+        }
+        if ($from->is_won || $from->is_lost) {
+            return "This deal is already closed in \"{$from->name}\" and cannot move again.";
+        }
+        if ($target->is_lost) {
+            return null;
+        }
+
+        $stages = CrmStage::pipelineOrder();
+        $index = $stages->search(fn ($stage) => (int) $stage->id === (int) $from->id);
+        $next = $index === false ? null : $stages->get($index + 1);
+        if (! $next || (int) $next->id !== (int) $target->id) {
+            $nextName = $next?->name ?? 'the next stage';
+            return "Deals must move step by step - move this deal to \"{$nextName}\" before \"{$target->name}\".";
+        }
+
+        return null;
     }
 
     protected function maybeCloseLead(CrmOpportunity $opportunity, CrmStage $target): void

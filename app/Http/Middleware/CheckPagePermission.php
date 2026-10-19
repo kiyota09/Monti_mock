@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\ManufacturingPages;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -69,6 +70,36 @@ class CheckPagePermission
                     return $next($request);
                 }
                 // Fall through to the strict row check below.
+            }
+        }
+
+        // ── MAN role workspaces: legacy / supervisor fallback ────────────
+        // Plant staff pages used to be gated by the single "production" page.
+        // Keep that grant working when IT has not yet saved the new per-role
+        // rows (explicit Disabled rows still win — they were handled above).
+        if ($module === 'MAN' && $record === null && ManufacturingPages::isRolePage($page)) {
+            $manStaffTrack = $user->is_manufacturing_supervisor
+                || (strtoupper((string) $user->role) === 'MAN'
+                    && in_array($user->position, ['manager', 'staff'], true));
+
+            if ($manStaffTrack) {
+                $fallback = $user->pagePermissions()
+                    ->whereIn('module', ['MAN', 'man'])
+                    ->get(['module', 'page', 'permission_level'])
+                    ->first(fn ($row) => strtolower((string) $row->page) === 'production');
+
+                if ($fallback !== null) {
+                    $fallbackLevel = strtolower($fallback->permission_level ?? 'edit');
+                    if ($fallbackLevel === 'disabled') {
+                        abort(403, "The '{$page}' page in the {$module} module is disabled for this account by IT Access Control.");
+                    }
+                    $sufficient = $requiredLevel === 'view'
+                        ? in_array($fallbackLevel, ['view', 'edit'], true)
+                        : $fallbackLevel === 'edit';
+                    if ($sufficient) {
+                        return $next($request);
+                    }
+                }
             }
         }
 

@@ -119,10 +119,12 @@ class CrmOpportunity extends Model
             return [];
         }
         $order = ['qualification', 'sampling', 'quotation', 'negotiation'];
+        $index = array_search($from, $order, true);
+        if ($index === false) {
+            return [];
+        }
+        $next = $order[$index + 1] ?? 'won';
 
-        return array_merge(
-            array_values(array_diff($order, [$from])),
-            self::TERMINAL
-        );
+        return array_values(array_unique([$next, 'lost']));
     }
 }

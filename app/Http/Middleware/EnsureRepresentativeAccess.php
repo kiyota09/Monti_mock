@@ -11,17 +11,16 @@ use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Enforces the page-level access granted to every non-primary business-partner
- * login — both delegated representatives and the account owner itself.
+ * Enforces the page-level access granted to delegated business-partner
+ * representatives.
  *
  * Every partner login authenticates against the `client` guard as the owning
  * business-partner account (so data-scoped portal controllers keep working).
  * A representative session additionally carries `representative_id`; the owner
- * session does not, so it is resolved to the contact sharing its email. In both
- * cases:
- *   - Representative / Access Control pages are off-limits unless primary.
- *   - Every other partner page must be in that identity's access_pages.
- * The primary — and only the primary — is unrestricted.
+ * session does not. The owner login is therefore always unrestricted, while a
+ * representative:
+ *   - cannot open Representative / Access Control pages unless primary;
+ *   - may only open pages in that contact's access_pages.
  */
 class EnsureRepresentativeAccess
 {

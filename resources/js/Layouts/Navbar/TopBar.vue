@@ -263,6 +263,41 @@ const readAllAgencyNotifs = () => {
     agencyNotifsUnread.value = 0;
 };
 
+// ─── Client notifications (partner portal) ───────────────
+// Server-backed delivery/logistics alerts for the signed-in business
+// client; read state is persisted server-side.
+const clientNotifs = ref([]);
+const clientNotifsUnread = ref(Number(page.props.client_notifications_unread || 0));
+const clientNotifLoading = ref(false);
+const loadClientNotifs = async () => {
+    if (!isClient.value) return;
+    clientNotifLoading.value = true;
+    try {
+        const { data } = await axios.get(route('client.notifications.index'));
+        clientNotifs.value = data.items || [];
+        clientNotifsUnread.value = data.unread || 0;
+    } catch { /* offline — keep last list */ }
+    clientNotifLoading.value = false;
+};
+const openClientNotifPanel = async () => {
+    if (openPanel.value === 'client_notif') { openPanel.value = null; return; }
+    openPanel.value = 'client_notif';
+    await loadClientNotifs();
+};
+const openClientNotif = async (n) => {
+    if (!n.is_read) {
+        try { await axios.patch(route('client.notifications.read', n.id)); } catch { /* noop */ }
+        n.is_read = true;
+        clientNotifsUnread.value = Math.max(0, clientNotifsUnread.value - 1);
+    }
+    if (n.link_route) { closePanels(); router.visit(route(n.link_route)); }
+};
+const readAllClientNotifs = async () => {
+    try { await axios.post(route('client.notifications.read-all')); } catch { /* noop */ }
+    clientNotifs.value.forEach((n) => { n.is_read = true; });
+    clientNotifsUnread.value = 0;
+};
+
 // ─── Applicant notifications (bell next to Settings) ───────────────
 // Source: applicant_notifications for the logged-in applicant. Read
 // state is server-side; clicking an item opens the full Notifications
@@ -809,6 +844,12 @@ onMounted(() => {
                     <Bell class="h-5 w-5" />
                     <span v-if="counts.notifications_unread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">{{ counts.notifications_unread > 99 ? '99+' : counts.notifications_unread }}</span>
                 </button>
+                <!-- Client notifications (partner portal) -->
+                <button v-if="isClient" @click="openClientNotifPanel" title="Notifications"
+                    :class="['relative rounded-xl p-2.5 transition active:scale-95', openPanel === 'client_notif' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-zinc-800']">
+                    <Bell class="h-5 w-5" />
+                    <span v-if="clientNotifsUnread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">{{ clientNotifsUnread > 99 ? '99+' : clientNotifsUnread }}</span>
+                </button>
                 <!-- Agency notifications (agency only, left of Settings) -->
                 <button v-if="isAgency" @click="openAgencyNotifPanel" title="Notifications"
                     :class="['relative rounded-xl p-2.5 transition active:scale-95', openPanel === 'agency_notif' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-zinc-800']">
@@ -831,11 +872,11 @@ onMounted(() => {
 
         <!-- ═══ Dropdown panels ═══ -->
         <div v-if="openPanel" class="topbar-panels absolute inset-x-0 top-16 flex justify-end px-4 sm:px-6 lg:px-8">
-            <div class="topbar-panel w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div class="topbar-panel w-full max-w-md max-h-[calc(100dvh_-_12.5rem_-_env(safe-area-inset-bottom))] overflow-y-auto overscroll-contain rounded-2xl border border-gray-200 bg-white shadow-2xl md:max-h-[calc(100vh_-_6rem)] dark:border-zinc-700 dark:bg-zinc-900">
 
                 <!-- SETTINGS -->
                 <div v-if="openPanel === 'settings'">
-                    <div class="border-b border-gray-100 px-5 py-4 dark:border-zinc-800">
+                    <div class="border-b border-gray-100 px-4 py-3 dark:border-zinc-800">
                         <!-- Partner portal: show exactly which business account is
                              being accessed (name + email), plus the signed-in
                              representative when the owner delegated access. -->
@@ -862,32 +903,32 @@ onMounted(() => {
                             <p class="truncate text-[11px] font-bold text-gray-400">{{ representative.email }}</p>
                         </div>
                     </div>
-                    <div class="space-y-1 p-3">
+                    <div class="space-y-0.5 p-2">
                         <Link v-if="profileHref && canViewProfile" :href="profileHref" @click="closePanels"
-                            class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
+                            class="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
                             <User class="h-4 w-4 text-indigo-500" /> My Profile
                         </Link>
                         <Link v-if="attendanceHref" :href="attendanceHref" @click="closePanels"
-                            class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
+                            class="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
                             <Clock class="h-4 w-4 text-indigo-500" /> My Attendance
                         </Link>
                         <!-- Help Center + About (internal accounts; portal users keep Profile/Theme/Logout) -->
                         <Link v-if="isInternal" :href="route('help.index')" @click="closePanels"
-                            class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
+                            class="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
                             <LifeBuoy class="h-4 w-4 text-indigo-500" /> Help Center
                         </Link>
                         <Link v-if="isInternal" :href="route('about.index')" @click="closePanels"
-                            class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
+                            class="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
                             <Info class="h-4 w-4 text-indigo-500" /> About
                         </Link>
                         <!-- THEME picker: Light / Dark (fully working) + Blue / Red / Green -->
-                        <div class="rounded-xl px-3 py-2.5">
+                        <div class="rounded-xl px-2.5 py-2">
                             <p class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
                                 <Palette class="h-3.5 w-3.5" /> Theme
                             </p>
                             <div class="mt-2 space-y-1">
                                 <button v-for="t in THEMES" :key="t.key" @click="setTheme(t.key)"
-                                    class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-bold transition hover:bg-gray-100 dark:hover:bg-zinc-800"
+                                    class="flex w-full items-center gap-3 rounded-xl px-2.5 py-1.5 text-sm font-bold transition hover:bg-gray-100 dark:hover:bg-zinc-800"
                                     :class="currentTheme === t.key ? 'text-gray-900 dark:text-white ring-1 ring-inset ring-indigo-500/40 bg-indigo-50/60 dark:bg-indigo-900/20' : 'text-gray-700 dark:text-gray-200'">
                                     <span class="h-4 w-4 shrink-0 rounded-full ring-1 ring-inset ring-black/10" :style="{ backgroundColor: t.dot }" />
                                     <span class="min-w-0 flex-1 text-left">
@@ -900,11 +941,11 @@ onMounted(() => {
                             <p class="mt-2 text-[10px] font-semibold text-gray-400">Applies across the whole ERP system.</p>
                         </div>
                         <button v-if="isClient" @click="openPasswordModal"
-                            class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
+                            class="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-zinc-800">
                             <KeyRound class="h-4 w-4 text-indigo-500" /> Change Password
                         </button>
                         <button @click="showLogoutConfirm = true"
-                            class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20">
+                            class="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20">
                             <LogOut class="h-4 w-4" /> Log Out
                         </button>
                     </div>
@@ -937,6 +978,32 @@ onMounted(() => {
                             </span>
                         </button>
                         <p v-if="!notifs.length" class="px-5 py-10 text-center text-xs font-bold text-gray-400">No notifications yet.</p>
+                    </div>
+                </div>
+
+                <!-- CLIENT NOTIFICATIONS (partner portal) -->
+                <div v-if="openPanel === 'client_notif'">
+                    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-zinc-800">
+                        <p class="text-sm font-black text-gray-900 dark:text-white">Notifications</p>
+                        <div class="flex items-center gap-2">
+                            <button @click="readAllClientNotifs" class="inline-flex items-center gap-1 text-[11px] font-black uppercase text-indigo-600 hover:underline">
+                                <CheckCheck class="h-3.5 w-3.5" /> Read all
+                            </button>
+                            <button @click="closePanels" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"><X class="h-4 w-4" /></button>
+                        </div>
+                    </div>
+                    <div class="max-h-96 overflow-y-auto">
+                        <button v-for="n in clientNotifs" :key="n.id" @click="openClientNotif(n)"
+                            :class="['flex w-full items-start gap-3 border-b border-gray-50 px-5 py-3.5 text-left transition last:border-0 hover:bg-gray-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/60', !n.is_read && 'bg-indigo-50/50 dark:bg-indigo-900/10']">
+                            <span :class="['mt-1.5 h-2 w-2 shrink-0 rounded-full', n.is_read ? 'bg-gray-300 dark:bg-zinc-600' : 'bg-indigo-500 animate-pulse']" />
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-black text-gray-900 dark:text-white">{{ n.title }}</span>
+                                <span v-if="n.body" class="block text-xs text-gray-500">{{ n.body }}</span>
+                                <span class="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-gray-400">{{ n.type }} · {{ fmtTime(n.created_at) }}</span>
+                            </span>
+                        </button>
+                        <p v-if="clientNotifLoading" class="px-5 py-6 text-center text-xs font-bold text-gray-400">Loading…</p>
+                        <p v-else-if="!clientNotifs.length" class="px-5 py-10 text-center text-xs font-bold text-gray-400">No notifications yet.</p>
                     </div>
                 </div>
 

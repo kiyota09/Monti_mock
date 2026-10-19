@@ -121,6 +121,7 @@
                                     <th class="px-6 py-4">Model</th>
                                     <th class="px-6 py-4">Year</th>
                                     <th class="px-6 py-4 text-right">Mileage (km)</th>
+                                    <th class="px-6 py-4 text-center">Capacity</th>
                                     <th class="px-6 py-4 text-center">Status</th>
                                     <th class="px-6 py-4 text-right">Actions</th>
                                 </tr>
@@ -139,6 +140,11 @@
                                     <td class="px-6 py-3 text-sm font-medium text-gray-700 dark:text-gray-200">{{ truck.model }}</td>
                                     <td class="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{{ truck.year }}</td>
                                     <td class="px-6 py-3 text-right text-sm font-bold text-gray-900 dark:text-white">{{ truck.mileage?.toLocaleString() || 0 }}</td>
+                                    <td class="px-6 py-3 text-center">
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 text-[10px] font-black text-indigo-700 dark:text-indigo-300">
+                                            <Package class="h-3 w-3" /> {{ truck.max_packages ?? 0 }} pkg
+                                        </span>
+                                    </td>
                                     <td class="px-6 py-3 text-center">
                                         <span :class="statusBadge(truck.status)" class="px-3 py-1 rounded-full ring-1 text-[9px] font-black uppercase inline-flex items-center gap-1">
                                             <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
@@ -211,6 +217,13 @@
                                 <label class="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Mileage (km)</label>
                                 <input v-model.number="form.mileage" type="number" step="0.01" min="0"
                                     class="w-full rounded-xl border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500">
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Package Capacity *</label>
+                                <input v-model.number="form.max_packages" type="number" required min="1" max="1000"
+                                    class="w-full rounded-xl border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Max packages this truck can carry">
                             </div>
 
                             <div>
@@ -288,7 +301,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
-import { Truck, Plus, Search, Edit, Trash2, X, Loader2, Sparkles, CheckCircle2, Navigation, Wrench } from 'lucide-vue-next';
+import { Truck, Plus, Search, Edit, Trash2, X, Loader2, Sparkles, CheckCircle2, Navigation, Wrench, Package } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
@@ -320,6 +333,7 @@ const form = useForm({
     model: '',
     year: new Date().getFullYear(),
     mileage: 0,
+    max_packages: 20,
     status: 'available',
     remarks: ''
 });
@@ -379,6 +393,7 @@ const openCreateModal = () => {
     form.reset();
     form.year = new Date().getFullYear();
     form.status = 'available';
+    form.max_packages = 20;
     showModal.value = true;
 };
 
@@ -390,6 +405,7 @@ const openEditModal = (truck) => {
     form.model = truck.model;
     form.year = truck.year;
     form.mileage = truck.mileage || 0;
+    form.max_packages = truck.max_packages ?? 20;
     form.status = truck.status;
     form.remarks = truck.remarks || '';
     showModal.value = true;

@@ -44,6 +44,12 @@ const ROLE_ROUTE_SLUGS = {
     pollution_control_operator: 'pollution-control',
 }
 
+// A role's work page key normally equals its manufacturing_role slug. The
+// pollution-control route/page uses the shorter `pollution_control` key.
+const ROLE_WORK_PAGE_KEYS = {
+    pollution_control_operator: 'pollution_control',
+}
+
 function roleToSlug(roleWithUnderscores) {
     return ROLE_ROUTE_SLUGS[roleWithUnderscores] ?? roleWithUnderscores.replace(/_/g, '-')
 }
@@ -52,37 +58,38 @@ function getRoleLinks(route, roleWithUnderscores, label, icon, hasReports = true
     const roleWithHyphens = roleToSlug(roleWithUnderscores)
     const routePrefix = `man.staff.${roleWithHyphens}`
     const links = [
-        { label: 'Dashboard', href: route(`${routePrefix}.dashboard`), icon: LayoutDashboard },
-        { label: label, href: route(`${routePrefix}.page`), icon: icon },
+        { label: 'Dashboard', href: route(`${routePrefix}.dashboard`), icon: LayoutDashboard, permKey: 'dashboard' },
+        { label: label, href: route(`${routePrefix}.page`), icon: icon, permKey: ROLE_WORK_PAGE_KEYS[roleWithUnderscores] || roleWithUnderscores },
     ]
     if (hasHistory) {
-        links.push({ label: 'My History', href: route(`${routePrefix}.history`), icon: History })
+        links.push({ label: 'My History', href: route(`${routePrefix}.history`), icon: History, permKey: 'history' })
     }
     if (hasFlags) {
-        links.push({ label: 'Flag Reports', href: route(`${routePrefix}.flag-reports`), icon: Flag })
+        links.push({ label: 'Flag Reports', href: route(`${routePrefix}.flag-reports`), icon: Flag, permKey: 'flag_reports' })
     }
     if (hasLab) {
-        links.push({ label: 'Tests & CoA', href: route(`${routePrefix}.tests`), icon: ClipboardCheck })
-        links.push({ label: 'Lab Inventory', href: route(`${routePrefix}.inventory`), icon: Boxes })
-        links.push({ label: 'Bulk Transfer', href: route(`${routePrefix}.transfer`), icon: ArrowRightLeft })
+        links.push({ label: 'Tests & CoA', href: route(`${routePrefix}.tests`), icon: ClipboardCheck, permKey: 'lab_tests' })
+        links.push({ label: 'Lab Inventory', href: route(`${routePrefix}.inventory`), icon: Boxes, permKey: 'lab_inventory' })
+        links.push({ label: 'Bulk Transfer', href: route(`${routePrefix}.transfer`), icon: ArrowRightLeft, permKey: 'lab_transfer' })
         // Recipes live in Manufacturing now — the dyeing lab chemist owns them.
-        try { links.push({ label: 'Recipes', href: route('man.recipes'), icon: Layers }) } catch (e) {}
+        try { links.push({ label: 'Recipes', href: route('man.recipes'), icon: Layers, permKey: 'recipes' }) } catch (e) {}
     }
     if (hasReports) {
-        links.push({ label: 'Reports', href: route(`${routePrefix}.reports`), icon: FileText })
+        links.push({ label: 'Reports', href: route(`${routePrefix}.reports`), icon: FileText, permKey: 'reports' })
     }
     return links
 }
 
-function createRoleDropdown(ctx, roleKey, roleLabel, roleIcon, hasReports = true, hasHistory = false, hasFlags = false, hasLab = false) {
+function createRoleDropdown(ctx, roleKey, roleLabel, roleIcon, hasReports = true, hasHistory = false, hasFlags = false, hasLab = false, filterFn = null) {
     const { route, roleDropdowns } = ctx
+    const links = getRoleLinks(route, roleKey, roleLabel, roleIcon, hasReports, hasHistory, hasFlags, hasLab)
     return {
         label: roleLabel,
         icon: roleIcon,
         isDropdown: true,
         isOpen: roleDropdowns.getState(roleKey, false),
         toggle: () => roleDropdowns.toggle(roleKey),
-        children: getRoleLinks(route, roleKey, roleLabel, roleIcon, hasReports, hasHistory, hasFlags, hasLab),
+        children: filterFn ? links.filter(filterFn) : links,
     }
 }
 
@@ -115,11 +122,9 @@ export const manModule = {
         // backend auto-grant, which is also reflected in this list.
         const can = (permKey) => ctx.hasModulePermission('MAN', permKey);
         const hasStaffEntry = can('production') || can('dashboard');
-        // Every plant role workspace link (including its Dashboard tab) is
-        // gated by page.permission:production,view on the backend — a
-        // Dashboard-only grant can never open any of them, so role links
-        // require the production grant. Without it the menu stays empty
-        // (module hidden) instead of offering links that only 403.
+        // Supervisors open staff workspaces through their Production grant
+        // (CheckPagePermission fallback). Staff links are filtered per page,
+        // so a role dropdown only appears when at least one page is granted.
         const hasRoleWorkspace = can('production');
 
         const qualityCheckerChildren = [
@@ -131,7 +136,7 @@ export const manModule = {
             { label: 'Dashboard', href: route('man.manager.dashboard'), icon: Factory, permKey: 'dashboard' },
             { label: 'Production Orders', href: route('man.manager.production'), icon: ClipboardList, permKey: 'production' },
             { label: 'JO Assignments', href: route('man.assignments.index'), icon: ClipboardCheck, permKey: 'production' },
-            { label: 'Recipes', href: route('man.recipes'), icon: Layers, permKey: 'production' },
+            { label: 'Recipes', href: route('man.recipes'), icon: Layers, permKey: 'recipes' },
             { label: 'Rejected Items', href: route('man.manager.rejected'), icon: XCircle, permKey: 'reject' },
             { label: 'Production Inventory', href: route('man.inventory.index'), icon: Boxes, permKey: 'inventory' },
         ]
@@ -192,17 +197,24 @@ export const manModule = {
             }
         } else {
             // Case 2: regular staff with a single manufacturing_role.
-            // Role pages require production — without a usable grant the
-            // menu stays empty so the sidebar hides this module (a
-            // Dashboard-only grant opens nothing: the staff entry only
-            // redirects into the production-gated workspace).
-            if (!hasRoleWorkspace) {
-                return []
-            }
+            // Every page is granted individually, so filter the role menu by
+            // the pages IT enabled. With no usable grant the menu stays empty
+            // and the sidebar hides this module.
             const manufacturingRole = user?.manufacturing_role
             const config = STAFF_ROLE_CONFIG[manufacturingRole]
             if (config) {
-                children = [createRoleDropdown(ctx, manufacturingRole, config.label, config.icon, config.hasReports, config.hasHistory, config.hasFlags, config.hasLab)]
+                const dropdown = createRoleDropdown(
+                    ctx,
+                    manufacturingRole,
+                    config.label,
+                    config.icon,
+                    config.hasReports,
+                    config.hasHistory,
+                    config.hasFlags,
+                    config.hasLab,
+                    (link) => !link.permKey || can(link.permKey),
+                )
+                children = dropdown.children.length ? [dropdown] : []
             }
         }
 

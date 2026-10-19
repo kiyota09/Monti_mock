@@ -47,15 +47,15 @@ class ManDashboardController extends Controller
         ];
 
         if (isset($routes[$role])) {
-            // Every role workspace (including its Dashboard tab) is gated by
-            // page.permission:production,view — a Dashboard-only grant can
-            // never open it. Stop here with a clear notice instead of
-            // redirecting into a "production disabled by IT" 403.
-            if (! $this->hasUsableGrant($user, 'MAN', 'production') && ! $this->hasNativeManAccess($user)) {
+            // The role dashboard is gated by MAN -> Dashboard; each workspace
+            // sub-page (work page, history, reports, lab pages, recipes) has
+            // its own grant. A Dashboard-only account still lands on its
+            // dashboard, but the sidebar only shows the pages IT enabled.
+            if (! $this->hasUsableGrant($user, 'MAN', 'dashboard') && ! $this->hasNativeManAccess($user)) {
                 return $this->limitedAccess(
                     'Plant workspace unavailable.',
-                    'Your account holds the MAN Dashboard page but not Production, and every plant role workspace (including its Dashboard tab) requires the Production grant.',
-                    'Ask IT Access Control to enable MAN → Production (view) for your account, then press Check again.'
+                    'Your account does not hold the MAN Dashboard page.',
+                    'Ask IT Access Control to enable MAN -> Dashboard (view) for your account, then press Check again.'
                 );
             }
 

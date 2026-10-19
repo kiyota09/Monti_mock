@@ -37,11 +37,14 @@ class ClientTrackingController extends Controller
             ->get();
 
         $deliveries = Delivery::with([
-                'driver.user', 'truck', 'route',
+                'driver.user', 'truck', 'route', 'stops',
                 'packages.product', 'packages.manufacturingOrder.salesOrder',
                 'proofOfDelivery',
             ])
-            ->whereHas('route', fn ($q) => $q->where('client_id', $clientId))
+            ->where(function ($q) use ($clientId) {
+                $q->whereHas('stops', fn ($s) => $s->where('client_id', $clientId))
+                  ->orWhereHas('route', fn ($r) => $r->where('client_id', $clientId));
+            })
             ->whereIn('status', ['dispatched', 'in_transit', 'delivered'])
             ->latest('scheduled_departure')
             ->get();
@@ -75,11 +78,14 @@ class ClientTrackingController extends Controller
         abort_unless(in_array($type, ['PO', 'SO'], true), 404);
 
         $deliveries = Delivery::with([
-                'driver.user', 'truck', 'route',
+                'driver.user', 'truck', 'route', 'stops',
                 'packages.product', 'packages.manufacturingOrder.salesOrder',
                 'proofOfDelivery',
             ])
-            ->whereHas('route', fn ($q) => $q->where('client_id', $clientId))
+            ->where(function ($q) use ($clientId) {
+                $q->whereHas('stops', fn ($s) => $s->where('client_id', $clientId))
+                  ->orWhereHas('route', fn ($r) => $r->where('client_id', $clientId));
+            })
             ->whereIn('status', ['dispatched', 'in_transit', 'delivered'])
             ->latest('scheduled_departure')
             ->get();
@@ -168,16 +174,19 @@ class ClientTrackingController extends Controller
 
     private function soTrackRow($so, $deliveries): array
     {
-        $steps = $this->soSteps($so->status);
         $shipment = $this->deliveriesForSos($deliveries, [$so->id])->first();
+        // Logistics is the source of truth once a shipment exists — the SO's
+        // own status lags behind dispatch/transit, so reconcile it here.
+        $effective = $this->effectiveSoStatus($so->status, $shipment);
+        $steps = $this->soSteps($effective);
 
         return [
             'id' => $so->id,
             'type' => 'SO',
             'number' => $so->jo_number,
             'total' => (float) $so->total_amount,
-            'status' => $so->status,
-            'group' => OrderLifecycleService::soGroup($so->status),
+            'status' => $effective,
+            'group' => OrderLifecycleService::soGroup($effective),
             'priority' => $so->priority ?? 'normal',
             'product_name' => $so->bomRecord?->product?->name ?? $so->design ?? 'Custom fabric',
             'quantity' => (float) $so->quantity,
@@ -202,6 +211,40 @@ class ClientTrackingController extends Controller
         ];
     }
 
+    /**
+     * Promote the displayed job-order stage using the linked shipment so the
+     * client tracking card advances past production when the load is
+     * ready / in transit / delivered. Deliberate hold/cancel/return/complete
+     * states are never overwritten.
+     */
+    private function effectiveSoStatus(?string $status, $shipment = null): string
+    {
+        $base = OrderLifecycleService::canonicalSoStatus($status);
+
+        if (in_array($base, ['on_hold', 'returned', 'cancelled', 'completed'], true)) {
+            return (string) $status;
+        }
+
+        $rank = [
+            'pending' => 0, 'confirmed' => 1, 'in_planning' => 2,
+            'in_production' => 3, 'production_done' => 4, 'ready_for_dispatch' => 4,
+            'in_transit' => 5, 'delivered' => 6, 'completed' => 7,
+        ];
+
+        $derived = match ($shipment?->status) {
+            'dispatched' => 'ready_for_dispatch',
+            'in_transit' => 'in_transit',
+            'delivered'  => 'delivered',
+            default      => null,
+        };
+
+        if ($derived && ($rank[$derived] ?? 0) > ($rank[$base] ?? 0)) {
+            return $derived;
+        }
+
+        return (string) $status;
+    }
+
     private function deliveryRow($delivery): array
     {
         return [
@@ -223,6 +266,17 @@ class ClientTrackingController extends Controller
                 'quantity' => $pkg->quantity,
             ]),
             'has_proof' => (bool) $delivery->proofOfDelivery,
+            'rating' => $delivery->rating,
+            'rating_comment' => $delivery->rating_comment,
+            'stops' => $delivery->stops->map(fn ($s) => [
+                'sequence'  => $s->sequence,
+                'label'     => $s->label,
+                'address'   => $s->address,
+                'latitude'  => $s->latitude,
+                'longitude' => $s->longitude,
+                'status'    => $s->status,
+            ])->values(),
+            'route_geometry' => $delivery->route_geometry,
         ];
     }
 

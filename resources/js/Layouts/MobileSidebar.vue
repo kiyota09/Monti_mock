@@ -5,7 +5,8 @@ import { computed, ref, watch, nextTick } from 'vue'
 import {
     ShieldCheck, X, LayoutDashboard, ShoppingCart, ShoppingBag, MessageSquare,
     Receipt, HelpCircle, User, Truck, Navigation, Clock, CalendarDays,
-    History, HandCoins, FileText, Bell, UserCog2, Wallet,
+    History, HandCoins, FileText, Bell, UserCog2, Wallet, Route, ClipboardCheck, Wrench, AlertTriangle,
+    PackageX, FileWarning,
 } from 'lucide-vue-next'
 
 import { MODULES } from './navItems/navConfig'
@@ -74,19 +75,24 @@ const portalItems = computed(() => {
         ]
     }
     if (isClient.value) {
-        return [
-            { id: 'client_dashboard', label: 'Dashboard', icon: LayoutDashboard, href: safeRoute('client.dashboard', '/client/dashboard') },
-            { id: 'client_products', label: 'Products', icon: ShoppingBag, href: safeRoute('client.products', '/client/products') },
-            { id: 'client_conversations', label: 'Conversations', icon: MessageSquare, href: safeRoute('client.conversations', '/client/conversations') },
-            { id: 'client_messages', label: 'Messages', icon: MessageSquare, href: safeRoute('client.messages', '/client/messages') },
-            { id: 'client_orders', label: 'Orders', icon: ShoppingCart, href: safeRoute('client.orders', '/client/orders') },
-            { id: 'client_tracking', label: 'Order Tracking', icon: Navigation, href: safeRoute('client.tracking', '/client/tracking') },
-            { id: 'client_invoices', label: 'Invoices', icon: Receipt, href: safeRoute('client.invoices', '/client/invoices') },
-            { id: 'client_payments', label: 'Payments', icon: Wallet, href: safeRoute('client.payments', '/client/payments') },
-            { id: 'client_receiving', label: 'Receiving', icon: Truck, href: safeRoute('client.receiving', '/client/receiving') },
-            { id: 'client_profile', label: 'Profile', icon: User, href: safeRoute('client.profile.edit', '/client/profile') },
-            { id: 'client_support', label: 'Support', icon: HelpCircle, href: safeRoute('client.support', '/client/support') },
+        const portalPages = [
+            { key: 'dashboard', id: 'client_dashboard', label: 'Dashboard', icon: LayoutDashboard, href: safeRoute('client.dashboard', '/partner/dashboard') },
+            { key: 'products', id: 'client_products', label: 'Products', icon: ShoppingBag, href: safeRoute('client.products', '/partner/products') },
+            { key: 'conversations', id: 'client_conversations', label: 'Inquiries', icon: MessageSquare, href: safeRoute('client.conversations', '/partner/conversations') },
+            { key: 'messages', id: 'client_messages', label: 'Messages', icon: MessageSquare, href: safeRoute('client.messages', '/partner/messages') },
+            { key: 'orders', id: 'client_orders', label: 'Orders', icon: ShoppingCart, href: safeRoute('client.orders', '/partner/orders') },
+            { key: 'tracking', id: 'client_tracking', label: 'Order Tracking', icon: Navigation, href: safeRoute('client.tracking', '/partner/tracking') },
+            { key: 'invoices', id: 'client_invoices', label: 'Invoices', icon: Receipt, href: safeRoute('client.invoices', '/partner/invoices') },
+            { key: 'payments', id: 'client_payments', label: 'Payments', icon: Wallet, href: safeRoute('client.payments', '/partner/payments') },
+            { key: 'receiving', id: 'client_receiving', label: 'Receiving', icon: Truck, href: safeRoute('client.receiving', '/partner/receiving') },
+            { key: 'profile', id: 'client_profile', label: 'Profile', icon: User, href: safeRoute('client.profile.edit', '/partner/profile') },
+            { key: 'support', id: 'client_support', label: 'Support', icon: HelpCircle, href: safeRoute('client.support', '/partner/support') },
         ]
+
+        const portal = page.props.auth.client_portal || null
+        const allowed = portal ? portal.access_pages : null
+
+        return allowed ? portalPages.filter((p) => allowed.includes(p.key)) : portalPages
     }
     if (isEmployeePortal.value) {
         return [
@@ -98,13 +104,30 @@ const portalItems = computed(() => {
     // LOG plant staff: drivers / conductors get only their portal (mirrors
     // Sidebar.vue). Staff with neither record get no nav, same as desktop.
     if (isLogDriver.value) {
+        const portal = (() => {
+            try { return route('logistics.driver.portal', {}, false) } catch { return '/dashboard/logistics/driver-portal' }
+        })()
         return [
-            { id: 'log_driver_portal', label: 'My Deliveries', icon: Truck, href: safeRoute('logistics.driver.portal', '/dashboard/logistics/driver-portal') },
+            { id: 'log_driver_dashboard', label: 'Dashboard', icon: LayoutDashboard, href: portal },
+            { id: 'log_driver_trips', label: 'My Trips', icon: Route, href: `${portal}?tab=trips` },
+            { id: 'log_driver_pod', label: 'Proof of Delivery', icon: ClipboardCheck, href: `${portal}?tab=pod` },
+            { id: 'log_driver_inspection', label: 'Inspection', icon: Wrench, href: `${portal}?tab=inspection` },
+            { id: 'log_driver_incidents', label: 'Incidents', icon: AlertTriangle, href: `${portal}?tab=incidents` },
+            { id: 'log_driver_hos', label: 'Hours of Service', icon: Clock, href: `${portal}?tab=hos` },
+            { id: 'log_driver_earnings', label: 'Earnings', icon: Wallet, href: `${portal}?tab=earnings` },
+            { id: 'log_driver_documents', label: 'Documents', icon: FileText, href: `${portal}?tab=documents` },
         ]
     }
     if (isLogConductor.value) {
+        const portal = safeRoute('logistics.conductor.portal', '/dashboard/logistics/conductor-portal')
         return [
-            { id: 'log_conductor_portal', label: 'My Trips', icon: Navigation, href: safeRoute('logistics.conductor.portal', '/dashboard/logistics/conductor-portal') },
+            { id: 'log_conductor_dashboard', label: 'Dashboard', icon: LayoutDashboard, href: portal },
+            { id: 'log_conductor_trips', label: 'My Trips', icon: Route, href: `${portal}?tab=trips` },
+            { id: 'log_conductor_load', label: 'Load Check', icon: ClipboardCheck, href: `${portal}?tab=load` },
+            { id: 'log_conductor_collections', label: 'Collections', icon: HandCoins, href: `${portal}?tab=collections` },
+            { id: 'log_conductor_returns', label: 'Returns', icon: PackageX, href: `${portal}?tab=returns` },
+            { id: 'log_conductor_reports', label: 'Reports', icon: FileWarning, href: `${portal}?tab=reports` },
+            { id: 'log_conductor_history', label: 'History', icon: History, href: `${portal}?tab=history` },
         ]
     }
     if (isLogStaff.value) {
