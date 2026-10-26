@@ -11,6 +11,7 @@ use App\Models\Hrm\HrmEmploymentType;
 use App\Models\Hrm\HrmJobPosting;
 use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\HrmShift;
+use App\Services\Hrm\ApplicantApplicationHoldService;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,7 +49,9 @@ class JobPostingController extends Controller
         $postings->setCollection($postings->getCollection()->map(function ($p) {
             $positionName = $p->position?->name;
             $typeName = $p->employmentType?->name;
-            $total = ApplicantJobApplication::where('job_posting_id', $p->id)->count()
+            $total = ApplicantApplicationHoldService::withoutHolds(
+                    ApplicantJobApplication::where('job_posting_id', $p->id)
+                )->count()
                 + Applicant::where('job_posting_id', $p->id)->count();
             $published = optional($p->published_at)?->toDateString();
             // Drop the loaded relation objects so the flattened strings win serialization.
@@ -65,7 +68,7 @@ class JobPostingController extends Controller
             'postingsData' => $postings,
             'filters' => $request->only(['search', 'status', 'department', 'showArchived']),
             'filterOptions' => [
-                'departments' => HrmDepartment::select('id', 'name')->get(),
+                'departments' => HrmDepartment::whereNull('archived_at')->orderBy('name')->get(['id', 'name']),
                 'statuses' => ['Draft', 'Published', 'Closed', 'Archived'],
                 'employmentTypes' => HrmEmploymentType::select('id', 'name')->get(),
             ],
@@ -75,7 +78,8 @@ class JobPostingController extends Controller
                 'closed' => HrmJobPosting::where('status', 'Closed')->count(),
                 'archived' => HrmJobPosting::whereNotNull('archived_at')->count(),
                 'vacancies' => (int) HrmJobPosting::sum('vacancies'),
-                'total_applicants' => ApplicantJobApplication::count() + Applicant::whereNotNull('job_posting_id')->count(),
+                'total_applicants' => ApplicantApplicationHoldService::withoutHolds(ApplicantJobApplication::query())->count()
+                    + Applicant::whereNotNull('job_posting_id')->count(),
                 'hired' => Applicant::where('status', 'Hired')->count(),
                 'urgent' => HrmJobPosting::where('hiring_priority', 'Urgent')->count(),
             ],
@@ -143,6 +147,7 @@ class JobPostingController extends Controller
             'internal_notes' => 'nullable|string',
             'require_initial_interview' => 'nullable|boolean',
             'require_final_interview' => 'nullable|boolean',
+            'training_required' => 'nullable|boolean',
             'closing_date' => 'nullable|date',
             'expected_start_date' => 'nullable|date',
             'department' => 'nullable|string',
@@ -188,6 +193,7 @@ class JobPostingController extends Controller
             'internal_notes' => 'nullable|string',
             'require_initial_interview' => 'nullable|boolean',
             'require_final_interview' => 'nullable|boolean',
+            'training_required' => 'nullable|boolean',
             'closing_date' => 'nullable|date',
             'expected_start_date' => 'nullable|date',
             'department' => 'nullable|string',
@@ -238,7 +244,9 @@ class JobPostingController extends Controller
     public function destroy(HrmJobPosting $jobPosting)
     {
         // Blocked while applications exist (ported from super_monti).
-        $applicationCount = ApplicantJobApplication::where('job_posting_id', $jobPosting->id)->count()
+        $applicationCount = ApplicantApplicationHoldService::withoutHolds(
+                ApplicantJobApplication::where('job_posting_id', $jobPosting->id)
+            )->count()
             + Applicant::where('job_posting_id', $jobPosting->id)->count();
         if ($applicationCount > 0) {
             return back()->with('error', 'Cannot delete posting with existing applications.');
@@ -289,7 +297,8 @@ class JobPostingController extends Controller
             'drafts' => HrmJobPosting::whereNull('archived_at')->where('status', 'Draft')->count(),
             'closed' => HrmJobPosting::whereNull('archived_at')->whereIn('status', ['Closed', 'Filled'])->count(),
             'archived' => HrmJobPosting::whereNotNull('archived_at')->count(),
-            'total_applicants' => ApplicantJobApplication::count() + Applicant::whereNotNull('job_posting_id')->count(),
+            'total_applicants' => ApplicantApplicationHoldService::withoutHolds(ApplicantJobApplication::query())->count()
+                + Applicant::whereNotNull('job_posting_id')->count(),
             'total_hired' => Applicant::where('status', 'Hired')->count(),
             'by_status' => HrmJobPosting::select('status', DB::raw('count(*) as count'))->groupBy('status')->get(),
             'by_employment_type' => HrmJobPosting::select('employment_type_id', DB::raw('count(*) as count'))
@@ -372,8 +381,12 @@ class JobPostingController extends Controller
                         $p->employmentType?->name ?? '',
                         $p->salary_min, $p->salary_max,
                         $p->vacancies, $p->filled_vacancies,
-                        ApplicantJobApplication::where('job_posting_id', $p->id)->count(),
-                        ApplicantJobApplication::where('job_posting_id', $p->id)->where('status', 'Hired')->count(),
+                        ApplicantApplicationHoldService::withoutHolds(
+                            ApplicantJobApplication::where('job_posting_id', $p->id)
+                        )->count(),
+                        ApplicantApplicationHoldService::withoutHolds(
+                            ApplicantJobApplication::where('job_posting_id', $p->id)->where('status', 'Hired')
+                        )->count(),
                         $p->status, $p->recruiter, $p->hiring_manager, $p->work_location,
                         optional($p->published_at)?->format('Y-m-d H:i:s'),
                         optional($p->closing_date)?->format('Y-m-d'),

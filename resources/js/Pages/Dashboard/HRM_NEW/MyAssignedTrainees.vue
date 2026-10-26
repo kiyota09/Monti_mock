@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
+import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Search, ClipboardList, X, Star, Lock, ChevronLeft, ChevronRight, Eye } from 'lucide-vue-next';
 
 const props = defineProps({
     trainees: { type: Array, default: () => [] },
+    probationary: { type: Array, default: () => [] },
     summary: { type: Object, default: () => ({ total: 0, in_training: 0, due_evaluation: 0, final_evaluation: 0, completed: 0, extended: 0 }) },
     departments: { type: Array, default: () => [] },
     positions: { type: Array, default: () => [] },
@@ -16,6 +18,25 @@ const props = defineProps({
 
 const page = usePage();
 const saving = ref(false);
+const showProbationEvaluation = ref(false);
+const savingProbationEvaluation = ref(false);
+const probationEvaluationError = ref('');
+const probationEmployee = ref(null);
+const probationCriteria = [
+    { key: 'quality', label: 'Quality of Work', help: 'Accuracy and compliance with work standards' },
+    { key: 'productivity', label: 'Productivity', help: 'Completes assigned work within expected timelines' },
+    { key: 'attendance', label: 'Attendance and Punctuality', help: 'Follows work schedule and attendance rules' },
+    { key: 'communication', label: 'Communication', help: 'Communicates clearly and professionally' },
+    { key: 'teamwork', label: 'Teamwork', help: 'Works effectively with colleagues' },
+    { key: 'job_knowledge', label: 'Job Knowledge', help: 'Understands the duties and procedures of the role' },
+];
+const probationEvaluationForm = ref({ id: null, period_label: '', period_start: '', period_end: '', scores: {}, strengths: '', improvements: '', comments: '', recommendation: 'Continue probation', status: 'Draft' });
+const probationRecommendations = [
+    { value: 'Continue probation', label: 'Continue probationary employment' },
+    { value: 'Improvement plan', label: 'Continue with an improvement plan' },
+    { value: 'Regularize', label: 'Recommend regularization (final evaluation only)' },
+    { value: 'Do not regularize', label: 'Recommend non-regularization (with documented reasons)' },
+];
 
 // ---- Filters ----
 const search = ref('');
@@ -23,6 +44,7 @@ const statusFilter = ref('All');
 const positionFilter = ref('All');
 const departmentFilter = ref('All');
 const programFilter = ref('All');
+const assignmentView = ref('training');
 
 const statusOptions = ['All', 'Not Started', 'In Progress', 'Evaluation Due', 'Final Evaluation', 'Completed', 'Extended'];
 
@@ -35,6 +57,16 @@ const filtered = computed(() => {
         const okD = departmentFilter.value === 'All' || t.department === departmentFilter.value;
         const okG = programFilter.value === 'All' || t.training_program === programFilter.value;
         return okQ && okS && okP && okD && okG;
+    });
+});
+
+const filteredProbationary = computed(() => {
+    const q = search.value.trim().toLowerCase();
+    return (props.probationary || []).filter((t) => {
+        const okQ = !q || [t.name, t.employee_id, t.position, t.department, t.employment_type].join(' ').toLowerCase().includes(q);
+        const okP = positionFilter.value === 'All' || t.position === positionFilter.value;
+        const okD = departmentFilter.value === 'All' || t.department === departmentFilter.value;
+        return okQ && okP && okD;
     });
 });
 
@@ -56,6 +88,69 @@ const fmtDate = (d) => {
     const dt = new Date(d);
     return isNaN(dt) ? '—' : dt.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 };
+
+const probationEvaluationFinal = computed(() => {
+    const end = probationEmployee.value?.probation_end;
+    if (!end) return false;
+    const days = Math.ceil((new Date(`${String(end).slice(0, 10)}T00:00:00`) - new Date(new Date().toDateString())) / 86400000);
+    return days <= 30;
+});
+const probationStatusLabel = computed(() => {
+    const status = probationEvaluationForm.value.status;
+    if (status === 'Submitted') return 'Submitted for HR review';
+    if (status === 'Finalized') return 'Finalized';
+    return 'Pending · Not yet submitted';
+});
+function openProbationEvaluation(employee) {
+    probationEmployee.value = employee;
+    probationEvaluationError.value = '';
+    const saved = employee.probation_evaluation;
+    const today = new Date();
+    const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const start = employee.probation_start && employee.probation_start <= todayValue ? employee.probation_start : todayValue;
+    const elapsedMonths = Math.max(1, Math.floor((today - new Date(`${start}T00:00:00`)) / (30 * 86400000)) + 1);
+    const evaluationKind = probationEvaluationFinal.value ? 'Final evaluation' : (saved ? 'Follow-up evaluation' : 'Initial evaluation');
+    probationEvaluationForm.value = {
+        id: saved?.id || null,
+        period_label: saved?.period_label || `Month ${elapsedMonths} · ${evaluationKind}`,
+        period_start: saved?.period_start || start,
+        period_end: saved?.period_end || todayValue,
+        scores: Object.fromEntries(probationCriteria.map(({ key }) => [key, saved?.scores?.[key] ?? ''])),
+        strengths: saved?.strengths || '', improvements: saved?.improvements || '', comments: saved?.comments || '',
+        recommendation: saved?.recommendation === 'Regularize' ? 'Regularize' : saved?.recommendation === 'Do not regularize' ? 'Do not regularize' : saved?.recommendation === 'Further review' ? 'Improvement plan' : (saved?.recommendation || 'Continue probation'),
+        status: saved?.status || 'Draft',
+    };
+    showProbationEvaluation.value = true;
+}
+async function saveProbationEvaluation(submit) {
+    if (!probationEmployee.value || savingProbationEvaluation.value) return;
+    if (submit && ['Regularize', 'Do not regularize'].includes(probationEvaluationForm.value.recommendation) && !probationEvaluationFinal.value) {
+        probationEvaluationError.value = 'Regularization or non-regularization recommendations are available only for a final evaluation due within 30 days.';
+        return;
+    }
+    probationEvaluationError.value = '';
+    savingProbationEvaluation.value = true;
+    try {
+        await axios.post(route('hrm.assigned-trainees.probation-evaluation', probationEmployee.value.id), {
+            evaluation_id: probationEvaluationForm.value.id,
+            period_label: probationEvaluationForm.value.period_label,
+            period_start: probationEvaluationForm.value.period_start,
+            period_end: probationEvaluationForm.value.period_end,
+            scores: probationEvaluationForm.value.scores,
+            strengths: probationEvaluationForm.value.strengths,
+            improvements: probationEvaluationForm.value.improvements,
+            comments: probationEvaluationForm.value.comments,
+            recommendation: probationEvaluationForm.value.recommendation,
+            submit,
+        });
+        showProbationEvaluation.value = false;
+        router.reload({ only: ['probationary'] });
+    } catch (e) {
+        probationEvaluationError.value = e.response?.data?.message || Object.values(e.response?.data?.errors || {}).flat()[0] || 'Could not save the evaluation.';
+    } finally {
+        savingProbationEvaluation.value = false;
+    }
+}
 
 // ---- Detail ----
 const selected = ref(null);
@@ -478,11 +573,11 @@ const finalDoneScore = ref(null);
 </script>
 
 <template>
-    <Head title="My Assigned Trainees" />
+    <Head title="My Assigned Personnel" />
     <AuthenticatedLayout>
         <div class="p-6 space-y-6">
             <div>
-                <h1 class="text-xl font-black text-slate-900">My Assigned Trainees</h1>
+                <h1 class="text-xl font-black text-slate-900">My Assigned Personnel</h1>
                 <p class="text-xs text-slate-500 mt-1">Monitor the training progress and evaluate employees assigned to you.</p>
             </div>
 
@@ -506,13 +601,22 @@ const finalDoneScore = ref(null);
                 </div>
             </div>
 
+            <div class="flex items-center gap-2">
+                <button @click="assignmentView = 'training'" :class="['px-4 py-2 rounded-xl text-xs font-bold border transition-colors', assignmentView === 'training' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50']">
+                    Training <span class="ml-1 opacity-75">({{ (props.trainees || []).length }})</span>
+                </button>
+                <button @click="assignmentView = 'probationary'" :class="['px-4 py-2 rounded-xl text-xs font-bold border transition-colors', assignmentView === 'probationary' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50']">
+                    Probationary <span class="ml-1 opacity-75">({{ (props.probationary || []).length }})</span>
+                </button>
+            </div>
+
             <!-- Filters -->
             <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm grid grid-cols-1 md:grid-cols-5 gap-3">
                 <div class="relative md:col-span-1">
                     <Search class="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                    <input v-model="search" placeholder="Search trainee" class="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs" />
+                    <input v-model="search" :placeholder="assignmentView === 'training' ? 'Search trainee' : 'Search employee'" class="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs" />
                 </div>
-                <select v-model="statusFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                <select v-if="assignmentView === 'training'" v-model="statusFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
                     <option v-for="s in statusOptions" :key="s" :value="s">{{ s === 'All' ? 'Training Status' : s }}</option>
                 </select>
                 <select v-model="positionFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
@@ -523,14 +627,14 @@ const finalDoneScore = ref(null);
                     <option value="All">Department</option>
                     <option v-for="d in departments" :key="d.id" :value="d.name">{{ d.name }}</option>
                 </select>
-                <select v-model="programFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                <select v-if="assignmentView === 'training'" v-model="programFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
                     <option value="All">Training Program</option>
                     <option v-for="g in programs" :key="g" :value="g">{{ g }}</option>
                 </select>
             </div>
 
             <!-- Trainee List -->
-            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+            <div v-if="assignmentView === 'training'" class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-xs">
                         <thead class="bg-slate-50 text-slate-500 uppercase text-[10px]">
@@ -564,6 +668,44 @@ const finalDoneScore = ref(null);
                             </tr>
                             <tr v-if="!filtered.length">
                                 <td colspan="10" class="px-4 py-10 text-center text-slate-400">No trainees assigned to you.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div v-else class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-[10px]">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Employee</th>
+                                <th class="px-4 py-3 text-left">Employee ID</th>
+                                <th class="px-4 py-3 text-left">Position</th>
+                                <th class="px-4 py-3 text-left">Department</th>
+                                <th class="px-4 py-3 text-left">Employment Type</th>
+                                <th class="px-4 py-3 text-left">Start Date</th>
+                                <th class="px-4 py-3 text-left">Probation End</th>
+                                <th class="px-4 py-3 text-left">Status</th>
+                                <th class="px-4 py-3 text-left">Evaluation</th>
+                                <th class="px-4 py-3 text-left">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="t in filteredProbationary" :key="t.id" class="border-t border-slate-100 hover:bg-slate-50">
+                                <td class="px-4 py-3 font-bold text-slate-800">{{ t.name }}</td>
+                                <td class="px-4 py-3 font-mono">{{ t.employee_id }}</td>
+                                <td class="px-4 py-3">{{ t.position }}</td>
+                                <td class="px-4 py-3">{{ t.department }}</td>
+                                <td class="px-4 py-3">{{ t.employment_type }}</td>
+                                <td class="px-4 py-3">{{ fmtDate(t.probation_start) }}</td>
+                                <td class="px-4 py-3">{{ fmtDate(t.probation_end) }}</td>
+                                <td class="px-4 py-3">{{ t.employment_status_label }}</td>
+                                <td class="px-4 py-3"><span v-if="t.probation_evaluation" class="font-semibold" :class="t.probation_evaluation.status === 'Finalized' ? 'text-emerald-700' : t.probation_evaluation.status === 'Submitted' ? 'text-blue-700' : 'text-amber-700'">{{ t.probation_evaluation.status }} · {{ Number(t.probation_evaluation.overall_score).toFixed(1) }}%</span><span v-else class="text-slate-400">Not started</span></td>
+                                <td class="px-4 py-3"><button @click="openProbationEvaluation(t)" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-[11px]">{{ !t.probation_evaluation ? 'Evaluate' : t.probation_evaluation.status === 'Draft' ? 'Continue evaluation' : 'View evaluation' }}</button></td>
+                            </tr>
+                            <tr v-if="!filteredProbationary.length">
+                                <td colspan="10" class="px-4 py-10 text-center text-slate-400">No probationary employees assigned to you.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -856,6 +998,59 @@ const finalDoneScore = ref(null);
                         </div>
                     </div>
                 </div>
+            </div>
+            <div v-if="showProbationEvaluation && probationEmployee" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4" @click.self="showProbationEvaluation = false">
+                <section role="dialog" aria-modal="true" aria-labelledby="probation-evaluation-title" class="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+                    <header class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white p-5">
+                        <div><p class="text-[10px] font-bold uppercase tracking-widest text-blue-700">Probationary Employee Evaluation</p><h2 id="probation-evaluation-title" class="mt-1 text-lg font-black text-slate-900">Manager evaluation</h2><p class="mt-1 text-xs text-slate-500">{{ probationEmployee.name }} · {{ probationEmployee.employee_id }}</p></div>
+                        <button @click="showProbationEvaluation = false" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X class="h-4 w-4" /></button>
+                    </header>
+                    <div class="space-y-5 p-5">
+                        <section class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs sm:grid-cols-2">
+                            <div><span class="text-slate-500">Employee</span><p class="mt-1 font-bold">{{ probationEmployee.position }} · {{ probationEmployee.name }}</p></div>
+                            <div><span class="text-slate-500">Employment type</span><p class="mt-1 font-bold">{{ probationEmployee.employment_type }} · Active</p></div>
+                            <div><span class="text-slate-500">Evaluation period</span><p class="mt-1 font-bold">{{ probationEvaluationForm.period_label }}</p></div>
+                            <div><span class="text-slate-500">Evaluation status</span><p class="mt-1 font-bold" :class="probationEvaluationForm.status === 'Submitted' ? 'text-blue-700' : probationEvaluationForm.status === 'Finalized' ? 'text-emerald-700' : 'text-amber-700'">{{ probationStatusLabel }}</p></div>
+                            <div><span class="text-slate-500">Probation end date</span><p class="mt-1 font-bold">{{ fmtDate(probationEmployee.probation_end) }}</p></div>
+                            <div><span class="text-slate-500">Timeline</span><p class="mt-1 font-bold">{{ fmtDate(probationEmployee.probation_start) }} – {{ fmtDate(probationEmployee.probation_end) }}</p></div>
+                        </section>
+
+                        <section>
+                            <div class="mb-3"><h3 class="text-sm font-black text-slate-900">1. Performance Criteria</h3><p class="mt-1 text-[11px] text-slate-500">Rate each criterion from 1 (below expectations) to 5 (excellent).</p></div>
+                            <div class="space-y-2">
+                                <label v-for="criterion in probationCriteria" :key="criterion.key" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                                    <span><span class="block text-xs font-bold text-slate-800">{{ criterion.label }}</span><span class="mt-0.5 block text-[10px] text-slate-500">{{ criterion.help }}</span></span>
+                                    <select v-model="probationEvaluationForm.scores[criterion.key]" :disabled="probationEvaluationForm.status !== 'Draft'" class="w-28 rounded-lg border-slate-200 text-xs disabled:bg-slate-100"><option value="">Score</option><option v-for="scoreValue in 5" :key="scoreValue" :value="scoreValue">{{ scoreValue }} / 5</option></select>
+                                </label>
+                            </div>
+                        </section>
+
+                        <section class="space-y-3">
+                            <h3 class="text-sm font-black text-slate-900">2. Manager’s Feedback</h3>
+                            <label class="block text-xs font-bold">Strengths<textarea v-model="probationEvaluationForm.strengths" :disabled="probationEvaluationForm.status !== 'Draft'" rows="2" placeholder="Key strengths demonstrated during probation" class="mt-1 w-full rounded-xl border-slate-200 text-xs disabled:bg-slate-100" /></label>
+                            <label class="block text-xs font-bold">Areas for Improvement<textarea v-model="probationEvaluationForm.improvements" :disabled="probationEvaluationForm.status !== 'Draft'" rows="2" placeholder="Specific areas and actions to improve" class="mt-1 w-full rounded-xl border-slate-200 text-xs disabled:bg-slate-100" /></label>
+                            <label class="block text-xs font-bold">Comments and Supporting Evidence<textarea v-model="probationEvaluationForm.comments" :disabled="probationEvaluationForm.status !== 'Draft'" rows="3" placeholder="Include examples and supporting details" class="mt-1 w-full rounded-xl border-slate-200 text-xs disabled:bg-slate-100" /></label>
+                        </section>
+
+                        <section>
+                            <h3 class="mb-2 text-sm font-black text-slate-900">3. Manager’s Recommendation</h3>
+                            <div class="space-y-2 rounded-xl border border-slate-100 p-3">
+                                <label v-for="choice in probationRecommendations" :key="choice.value" class="flex items-start gap-2 text-xs" :class="choice.value === 'Regularize' || choice.value === 'Do not regularize' ? 'text-slate-500' : 'text-slate-700'">
+                                    <input v-model="probationEvaluationForm.recommendation" type="radio" :value="choice.value" :disabled="probationEvaluationForm.status !== 'Draft' || ((choice.value === 'Regularize' || choice.value === 'Do not regularize') && !probationEvaluationFinal)" class="mt-0.5" />
+                                    <span>{{ choice.label }}<span v-if="(choice.value === 'Regularize' || choice.value === 'Do not regularize') && !probationEvaluationFinal" class="block text-[10px] text-slate-400">Available for the final evaluation near the probation end date.</span></span>
+                                </label>
+                            </div>
+                        </section>
+                        <p v-if="probationEvaluationError" class="rounded-lg bg-rose-50 p-3 text-xs font-medium text-rose-700">{{ probationEvaluationError }}</p>
+                    </div>
+                    <footer class="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50 p-4">
+                        <button @click="showProbationEvaluation = false" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600">{{ probationEvaluationForm.status === 'Draft' ? 'Cancel' : 'Close' }}</button>
+                        <template v-if="probationEvaluationForm.status === 'Draft'">
+                            <button @click="saveProbationEvaluation(false)" :disabled="savingProbationEvaluation" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">Save draft</button>
+                            <button @click="saveProbationEvaluation(true)" :disabled="savingProbationEvaluation" class="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{{ savingProbationEvaluation ? 'Submitting…' : 'Submit for HR review' }}</button>
+                        </template>
+                    </footer>
+                </section>
             </div>
         </div>
     </AuthenticatedLayout>

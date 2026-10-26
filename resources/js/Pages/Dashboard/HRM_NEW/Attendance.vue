@@ -172,17 +172,17 @@
                                 <tr
                                     class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500"
                                 >
-                                    <th class="py-3 px-5">Date</th>
-                                    <th class="py-3 px-5">Employee</th>
-                                    <th class="py-3 px-5">Employee ID</th>
-                                    <th class="py-3 px-5">Department</th>
-                                    <th class="py-3 px-5">Shift</th>
-                                    <th class="py-3 px-5">Time In</th>
-                                    <th class="py-3 px-5">Time Out</th>
-                                    <th class="py-3 px-5">Hours</th>
-                                    <th class="py-3 px-5 text-center">Late min</th>
-                                    <th class="py-3 px-5 text-center">Status</th>
-                                    <th class="py-3 px-5">Remarks</th>
+                                    <th class="py-2 px-3">Date</th>
+                                    <th class="py-2 px-3">Employee</th>
+                                    <th class="py-2 px-3">Employee ID</th>
+                                    <th class="py-2 px-3">Department</th>
+                                    <th class="py-2 px-3">Shift</th>
+                                    <th class="py-2 px-3">Time In</th>
+                                    <th class="py-2 px-3">Time Out</th>
+                                    <th class="py-2 px-3">Hours</th>
+                                    <th class="py-2 px-3 text-center">Late min</th>
+                                    <th class="py-2 px-3 text-center">Status</th>
+                                    <th class="py-2 px-3">Remarks</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -191,13 +191,13 @@
                                     :key="a.id"
                                     class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all duration-200 text-xs"
                                 >
-                                    <td class="py-3 px-5 text-slate-500 whitespace-nowrap">
+                                    <td class="py-2 px-3 text-slate-500 whitespace-nowrap">
                                         {{ a.date }}
                                     </td>
-                                    <td class="py-3 px-5">
-                                        <div class="flex items-center gap-3">
+                                    <td class="py-2 px-3">
+                                        <div class="flex items-center gap-2">
                                             <div
-                                                class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-[10px] font-bold text-blue-600 shadow-inner"
+                                                class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-[9px] font-bold text-blue-600 shadow-inner"
                                             >
                                                 {{ initials(a.employee) }}
                                             </div>
@@ -207,28 +207,28 @@
                                             >
                                         </div>
                                     </td>
-                                    <td class="py-3 px-5 font-mono text-slate-600">
+                                    <td class="py-2 px-3 font-mono text-slate-600">
                                         {{ a.employee_id || '—' }}
                                     </td>
-                                    <td class="py-3 px-5 text-slate-600">
+                                    <td class="py-2 px-3 text-slate-600">
                                         {{ a.department || '—' }}
                                     </td>
-                                    <td class="py-3 px-5 text-slate-600">
+                                    <td class="py-2 px-3 text-slate-600">
                                         {{ a.shift || '—' }}
                                     </td>
-                                    <td class="py-3 px-5 font-medium">
+                                    <td class="py-2 px-3 font-medium">
                                         {{ a.time_in }}
                                     </td>
-                                    <td class="py-3 px-5 font-medium">
+                                    <td class="py-2 px-3 font-medium">
                                         {{ a.time_out }}
                                     </td>
-                                    <td class="py-3 px-5 font-semibold">
+                                    <td class="py-2 px-3 font-semibold">
                                         {{ a.hours }}
                                     </td>
-                                    <td class="py-3 px-5 text-center font-semibold" :class="a.late_minutes ? 'text-rose-600' : 'text-slate-300'">
+                                    <td class="py-2 px-3 text-center font-semibold" :class="a.late_minutes ? 'text-rose-600' : 'text-slate-300'">
                                         {{ a.late_minutes || '—' }}
                                     </td>
-                                    <td class="py-3 px-5 text-center">
+                                    <td class="py-2 px-3 text-center">
                                         <span
                                             :class="[
                                                 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-sm border',
@@ -241,7 +241,7 @@
                                             {{ a.status }}
                                         </span>
                                     </td>
-                                    <td class="py-3 px-5 text-slate-500 max-w-48">
+                                    <td class="py-2 px-3 text-slate-500 max-w-48">
                                         <div class="flex items-center gap-2">
                                             <span class="block truncate flex-1" :title="a.remarks || ''">{{ a.remarks || '—' }}</span>
                                             <button v-if="canEdit" @click="openRemark(a)" title="Edit remark"

@@ -1,186 +1,187 @@
 <template>
     <AuthenticatedLayout>
-        <div class="flex min-h-screen bg-white">
-            <div class="flex-1 p-8 text-[#1C2126] font-sans min-w-0 relative">
+        <div class="flex min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+            <div class="flex-1 p-8 text-slate-900 font-sans min-w-0 relative flex flex-col">
+                <!-- Subtle Background Pattern -->
+                <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
 
                 <!-- Professional Header -->
-                <header class="mb-8 relative">
-                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <header class="mb-6 relative shrink-0">
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         <div>
-                            <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
+                            <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
                                 <span class="hover:text-slate-700 cursor-pointer transition-colors">Dashboard</span>
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
                                 </svg>
                                 <span class="text-slate-800 font-semibold">Recruitment</span>
+                                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                                </svg>
+                                <span class="text-blue-600 font-semibold">Interviews</span>
                             </nav>
-                            <h1 class="text-4xl font-bold tracking-tight text-slate-900">
-                                Interviews
-                            </h1>
-                            <p class="text-sm text-slate-500 mt-1.5">
-                                Manage candidates who have been shortlisted or scheduled for interviews.
-                            </p>
-                        </div>
-
-                        <div class="flex flex-wrap items-center gap-3">
-                            <button
-                                @click="activeTab = 'schedule'"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-md hover:shadow-lg"
-                            >
-                                <Calendar class="w-4 h-4" />Schedule Interview
-                            </button>
+                            <h1 class="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Interviews</h1>
+                            <p class="text-sm text-slate-500 mt-0.5">Manage candidates who have been shortlisted or scheduled for interviews.</p>
                         </div>
                     </div>
                 </header>
 
                 <!-- KPI METRICS ROW -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4 shrink-0">
                     <div
                         v-for="metric in metricsData"
                         :key="metric.label"
-                        class="group bg-white rounded-2xl border border-slate-200 p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 shadow-sm"
+                        class="group bg-white rounded-xl border border-slate-200/60 p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-blue-200/60 shadow-md backdrop-blur-sm cursor-pointer"
+                        @click="metric.tab && (activeTab = metric.tab)"
                     >
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">{{ metric.label }}</span>
-                            <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition-all duration-300">
-                                <component :is="metric.icon" class="w-5 h-5 text-slate-900" />
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[9px] font-semibold text-slate-500 uppercase tracking-wider">{{ metric.label }}</span>
+                            <div :class="['w-7 h-7 rounded-lg flex items-center justify-center shadow-inner', metric.bg]">
+                                <component :is="metric.icon" class="w-3.5 h-3.5" :class="metric.color" />
                             </div>
                         </div>
-                        <div class="text-2xl font-bold text-slate-900">{{ metric.value }}</div>
-                        <div v-if="metric.subtext" class="text-xs text-slate-400 mt-1">{{ metric.subtext }}</div>
+                        <div class="text-lg font-bold" :class="metric.color">{{ metric.value }}</div>
+                        <div class="text-[9px] text-slate-400 truncate">{{ metric.subtext }}</div>
                     </div>
                 </div>
 
                 <!-- ============================================ -->
-                <!-- TOGGLE BUTTONS                                -->
+                <!-- FILTER / TAB BAR                              -->
                 <!-- ============================================ -->
-                <div class="flex gap-2 mb-6">
-                    <button
-                        @click="activeTab = 'schedule'"
-                        class="px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2"
-                        :class="activeTab === 'schedule' 
-                            ? 'bg-blue-600 text-white shadow-md hover:bg-blue-700' 
-                            : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'"
-                    >
-                        <span><ClipboardList class="w-4 h-4" /></span> Candidates to Schedule
-                        <span 
-                            class="text-xs px-2 py-0.5 rounded-full"
-                            :class="activeTab === 'schedule' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'"
+                <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm p-4 mb-4 shrink-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button
+                            @click="activeTab = 'schedule'"
+                            class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2"
+                            :class="activeTab === 'schedule'
+                                ? 'bg-blue-600 text-white shadow-md hover:bg-blue-700'
+                                : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'"
                         >
-                            {{ shortlistedCandidates.length }}
-                        </span>
-                    </button>
-                    <button
-                        @click="activeTab = 'upcoming'"
-                        class="px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2"
-                        :class="activeTab === 'upcoming' 
-                            ? 'bg-purple-600 text-white shadow-md hover:bg-purple-700' 
-                            : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'"
-                    >
-                        <span><Calendar class="w-4 h-4" /></span> Upcoming Interviews
-                        <span 
-                            class="text-xs px-2 py-0.5 rounded-full"
-                            :class="activeTab === 'upcoming' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'"
+                            <ClipboardList class="w-3.5 h-3.5" /> Candidates to Schedule
+                            <span
+                                class="text-[10px] px-1.5 py-0.5 rounded-full"
+                                :class="activeTab === 'schedule' ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-slate-500'"
+                            >
+                                {{ shortlistedCandidates.length }}
+                            </span>
+                        </button>
+                        <button
+                            @click="activeTab = 'upcoming'"
+                            class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2"
+                            :class="activeTab === 'upcoming'
+                                ? 'bg-purple-600 text-white shadow-md hover:bg-purple-700'
+                                : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'"
                         >
-                            {{ upcomingInterviews.length }}
-                        </span>
-                    </button>
-                    <button
-                        @click="activeTab = 'final'"
-                        class="px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2"
-                        :class="activeTab === 'final' 
-                            ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700' 
-                            : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'"
-                    >
-                        <span><ClipboardList class="w-4 h-4" /></span> Final Interviews
-                        <span 
-                            class="text-xs px-2 py-0.5 rounded-full"
-                            :class="activeTab === 'final' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'"
+                            <Calendar class="w-3.5 h-3.5" /> Upcoming Interviews
+                            <span
+                                class="text-[10px] px-1.5 py-0.5 rounded-full"
+                                :class="activeTab === 'upcoming' ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-slate-500'"
+                            >
+                                {{ upcomingInterviews.length }}
+                            </span>
+                        </button>
+                        <button
+                            @click="activeTab = 'final'"
+                            class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2"
+                            :class="activeTab === 'final'
+                                ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700'
+                                : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'"
                         >
-                            {{ finalInterviews.length }}
-                        </span>
-                    </button>
-                    <button
-                        @click="activeTab = 'completed'"
-                    class="px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2"
-                    :class="activeTab === 'completed' ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-700' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'"
-                >
-                    <span><CheckCircle2 class="w-4 h-4" /></span> Interview History
-                    <span class="text-xs px-2 py-0.5 rounded-full" :class="activeTab === 'completed' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'">{{ completedInterviews.length }}</span>
-                    </button>
+                            <ClipboardList class="w-3.5 h-3.5" /> Final Interviews
+                            <span
+                                class="text-[10px] px-1.5 py-0.5 rounded-full"
+                                :class="activeTab === 'final' ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-slate-500'"
+                            >
+                                {{ finalInterviews.length }}
+                            </span>
+                        </button>
+                        <button
+                            @click="activeTab = 'completed'"
+                            class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2"
+                            :class="activeTab === 'completed'
+                                ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-700'
+                                : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'"
+                        >
+                            <CheckCircle2 class="w-3.5 h-3.5" /> Interview History
+                            <span
+                                class="text-[10px] px-1.5 py-0.5 rounded-full"
+                                :class="activeTab === 'completed' ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-slate-500'"
+                            >
+                                {{ completedInterviews.length }}
+                            </span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- ============================================ -->
                 <!-- SECTION 1: CANDIDATES TO SCHEDULE             -->
                 <!-- ============================================ -->
-                <div v-show="activeTab === 'schedule'" class="mb-8">
-                    <div class="bg-white rounded-2xl border border-slate-200 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-                        <div class="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <div v-show="activeTab === 'schedule'">
+                    <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
+                        <div class="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
                             <div class="relative flex-1 min-w-[200px]">
-                                <span class="absolute inset-y-0 left-0 flex items-center pl-3"><Search class="w-4 h-4 text-slate-400" /></span>
+                                <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                 <input
                                     v-model="searchQuery"
                                     type="text"
                                     placeholder="Search candidates..."
-                                    class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
+                                    class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
                                 />
                             </div>
                         </div>
                         <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse">
-                                <thead>
-                                    <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                        <th class="py-3 px-5">Candidate</th>
-                                        <th class="py-3 px-5">Position</th>
-                                        <th class="py-3 px-5">Contact</th>
-                                        <th class="py-3 px-5 text-center">Status</th>
-                                        <th class="py-3 px-5 text-right">Action</th>
+                            <table class="min-w-full divide-y divide-slate-200">
+                                <thead class="bg-slate-50/80 border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Candidate</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Position</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Contact</th>
+                                        <th class="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
                                     <tr
                                         v-for="app in filteredShortlistedCandidates"
                                         :key="app.id"
-                                        class="hover:bg-blue-50 transition-all duration-200 group"
+                                        class="hover:bg-blue-50/40 transition-colors group"
                                     >
-                                        <td class="py-3 px-5">
+                                        <td class="px-4 py-3">
                                             <div class="flex items-center gap-3">
-                                                <div
-                                                    class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-md"
-                                                >
+                                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">
                                                     {{ getInitials(app.first_name, app.last_name) }}
                                                 </div>
                                                 <div>
-                                                    <div class="text-xs font-bold text-slate-900">{{ app.first_name }} {{ app.last_name }}</div>
+                                                    <div class="text-xs font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{{ app.first_name }} {{ app.last_name }}</div>
                                                     <div class="text-[10px] text-slate-400">#{{ app.id }}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-5">
-                                            <span class="text-xs text-slate-700">{{ app.job_posting?.title || 'N/A' }}</span>
+                                        <td class="px-4 py-3">
+                                            <div class="text-xs font-medium text-slate-700">{{ app.job_posting?.title || 'N/A' }}</div>
                                             <div class="text-[10px] text-slate-400">{{ app.job_posting?.department || '' }}</div>
                                         </td>
-                                        <td class="py-3 px-5">
+                                        <td class="px-4 py-3">
                                             <div class="text-xs text-slate-700">{{ app.email || 'N/A' }}</div>
                                             <div class="text-[10px] text-slate-400">{{ app.phone || 'N/A' }}</div>
                                         </td>
-<td class="py-3 px-5 text-center">
-                                            <span v-if="app.status === 'Shortlisted'" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">
+                                        <td class="px-4 py-3 text-center">
+                                            <span v-if="app.status === 'Shortlisted'" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm">
                                                 <Star class="w-3 h-3" />Shortlisted
                                             </span>
-                                            <span v-else class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-sm">
+                                            <span v-else class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm">
                                                 <Calendar class="w-3 h-3" />Interview Scheduled
                                             </span>
                                         </td>
-                                        <td class="py-3 px-5 text-right">
+                                        <td class="px-4 py-3 text-right">
                                             <button
                                                 v-if="app.status === 'Shortlisted'"
                                                 @click="openScheduleModal(app)"
-                                                class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
+                                                class="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-lg text-[10px] font-bold transition-all duration-200 shadow-md hover:shadow-lg"
                                             >
-<span class="inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule</span>
+                                                <Calendar class="w-3.5 h-3.5" />Schedule
                                             </button>
-                                            <span v-else class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                            <span v-else class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
                                                 <Calendar class="w-3 h-3" />Scheduled
                                             </span>
                                         </td>
@@ -188,8 +189,12 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div v-if="filteredShortlistedCandidates.length === 0" class="text-center py-8">
-                            <p class="text-sm text-slate-500">No candidates available for scheduling.</p>
+                        <div v-if="filteredShortlistedCandidates.length === 0" class="text-center py-16">
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center mx-auto mb-4 shadow-inner">
+                                <Search class="w-6 h-6 text-slate-400" />
+                            </div>
+                            <h3 class="text-base font-bold text-slate-900 mb-1">No candidates available for scheduling</h3>
+                            <p class="text-xs text-slate-500">Candidates will appear here once they are shortlisted.</p>
                         </div>
                     </div>
                 </div>
@@ -198,20 +203,20 @@
                 <!-- SECTION 2: UPCOMING INTERVIEWS                -->
                 <!-- ============================================ -->
                 <div v-show="activeTab === 'upcoming'">
-                    <div class="bg-white rounded-2xl border border-slate-200 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-                        <div class="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
+                    <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
+                        <div class="p-4 border-b border-slate-200 flex flex-wrap items-center gap-3">
                             <div class="relative flex-1 min-w-[200px]">
-                                <span class="absolute inset-y-0 left-0 flex items-center pl-3"><Search class="w-4 h-4 text-slate-400" /></span>
+                                <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                 <input
                                     v-model="interviewSearchQuery"
                                     type="text"
                                     placeholder="Search interviews..."
-                                    class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm transition-all duration-200"
+                                    class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm transition-all duration-200"
                                 />
                             </div>
                             <select
                                 v-model="filterStatus"
-                                class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-purple-500 shadow-sm transition-all duration-200 cursor-pointer"
+                                class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-purple-500 shadow-sm transition-all duration-200 cursor-pointer"
                             >
                                 <option value="">All Statuses</option>
                                 <option value="Scheduled">Scheduled</option>
@@ -222,66 +227,64 @@
                             </select>
                         </div>
                         <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse">
-                                <thead>
-                                    <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                        <th class="py-3 px-5">Candidate</th>
-                                        <th class="py-3 px-5">Position</th>
-                                        <th class="py-3 px-5">Date & Time</th>
-                                        <th class="py-3 px-5">Interviewer</th>
-                                        <th class="py-3 px-5 text-center">Status</th>
-                                        <th class="py-3 px-5 text-right">Action</th>
+                            <table class="min-w-full divide-y divide-slate-200">
+                                <thead class="bg-slate-50/80 border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Candidate</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Position</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date &amp; Time</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Interviewer</th>
+                                        <th class="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
                                     <tr
                                         v-for="interview in filteredUpcomingInterviews"
                                         :key="interview.id"
-                                        class="hover:bg-purple-50 transition-all duration-200 group"
+                                        class="hover:bg-purple-50/40 transition-colors group"
                                     >
-                                        <td class="py-3 px-5">
+                                        <td class="px-4 py-3">
                                             <div class="flex items-center gap-3">
-                                                <div
-                                                    class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-md"
-                                                >
+                                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">
                                                     {{ getInitials(interview.candidate_name) }}
                                                 </div>
                                                 <div>
-                                                    <div class="text-xs font-bold text-slate-900">{{ interview.candidate_name }}</div>
+                                                    <div class="text-xs font-bold text-slate-800 group-hover:text-purple-700 transition-colors">{{ interview.candidate_name }}</div>
                                                     <div class="text-[10px] text-slate-400">#{{ interview.application_id }}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-5">
+                                        <td class="px-4 py-3">
                                             <span class="text-xs text-slate-700">{{ interview.position || 'N/A' }}</span>
                                         </td>
-                                        <td class="py-3 px-5">
+                                        <td class="px-4 py-3">
                                             <div class="text-xs font-medium text-slate-900">{{ formatDate(interview.date) }}</div>
                                             <div class="text-[10px] text-slate-500">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</div>
                                         </td>
-                                        <td class="py-3 px-5">
+                                        <td class="px-4 py-3">
                                             <span class="text-xs text-slate-700">{{ interview.interviewer?.name || 'Not assigned' }}</span>
                                         </td>
-                                        <td class="py-3 px-5 text-center">
+                                        <td class="px-4 py-3 text-center">
                                             <span
                                                 :class="[
-                                                    'inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold',
+                                                    'inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold border shadow-sm',
                                                     getInterviewStatusBadge(interview.status)
                                                 ]"
                                             >{{ interview.status || 'Scheduled' }}</span>
                                         </td>
-                                        <td class="py-3 px-5 text-right">
+                                        <td class="px-4 py-3 text-right">
                                             <div class="flex items-center justify-end gap-1">
                                                 <button
                                                     @click="viewInterviewDetails(interview)"
                                                     class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-purple-50 hover:border-purple-300 text-slate-600 hover:text-purple-600 rounded-lg text-[10px] font-semibold transition-all duration-200"
                                                 >
-<span class="inline-flex items-center gap-1"><Eye class="w-3.5 h-3.5" />View</span>
+                                                    <span class="inline-flex items-center gap-1"><Eye class="w-3.5 h-3.5" />View</span>
                                                 </button>
                                                 <button
                                                     v-if="interview.meeting_link && interview.status === 'Scheduled'"
                                                     @click="openMeeting(interview.meeting_link)"
-                                                    class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
+                                                    class="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white rounded-lg text-[10px] font-bold transition-all duration-200 shadow-md hover:shadow-lg"
                                                 >
                                                     Join
                                                 </button>
@@ -291,8 +294,12 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div v-if="filteredUpcomingInterviews.length === 0" class="text-center py-8">
-                            <p class="text-sm text-slate-500">No upcoming interviews found.</p>
+                        <div v-if="filteredUpcomingInterviews.length === 0" class="text-center py-16">
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center mx-auto mb-4 shadow-inner">
+                                <Calendar class="w-6 h-6 text-slate-400" />
+                            </div>
+                            <h3 class="text-base font-bold text-slate-900 mb-1">No upcoming interviews found</h3>
+                            <p class="text-xs text-slate-500">Scheduled interviews will appear here.</p>
                         </div>
                     </div>
                 </div>
@@ -301,13 +308,13 @@
                 <!-- SECTION 3: INTERVIEW HISTORY                  -->
                 <!-- ============================================ -->
                 <div v-show="activeTab === 'completed'">
-                    <div class="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
-                        <div class="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
+                    <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
+                        <div class="p-4 border-b border-slate-200 flex flex-wrap items-center gap-3">
                             <div class="relative flex-1 min-w-[200px]">
-                                <span class="absolute inset-y-0 left-0 flex items-center pl-3"><Search class="w-4 h-4 text-slate-400" /></span>
-                                <input v-model="interviewSearchQuery" type="text" placeholder="Search interview history..." class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm" />
+                                <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input v-model="interviewSearchQuery" type="text" placeholder="Search interview history..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm transition-all duration-200" />
                             </div>
-                            <select v-model="historyFilterStatus" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-emerald-500 shadow-sm transition-all duration-200 cursor-pointer">
+                            <select v-model="historyFilterStatus" class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-emerald-500 shadow-sm transition-all duration-200 cursor-pointer">
                                 <option value="All">All Statuses</option>
                                 <option value="Scheduled">Scheduled</option>
                                 <option value="Completed">Completed</option>
@@ -317,24 +324,38 @@
                             </select>
                         </div>
                         <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse">
-                                <thead><tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                    <th class="py-3 px-5">Candidate</th><th class="py-3 px-5">Position</th><th class="py-3 px-5 text-center">Type</th><th class="py-3 px-5">Date</th><th class="py-3 px-5">Interviewer</th><th class="py-3 px-5 text-center">Status</th><th class="py-3 px-5 text-right">Action</th>
-                                </tr></thead>
+                            <table class="min-w-full divide-y divide-slate-200">
+                                <thead class="bg-slate-50/80 border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Candidate</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Position</th>
+                                        <th class="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Type</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Interviewer</th>
+                                        <th class="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
+                                    </tr>
+                                </thead>
                                 <tbody class="divide-y divide-slate-100">
-                                    <tr v-for="interview in filteredHistoryInterviews" :key="'history-'+interview.id" class="hover:bg-emerald-50 transition-colors">
-                                        <td class="py-3 px-5 text-xs font-bold text-slate-900">{{ interview.candidate_name }}</td>
-                                        <td class="py-3 px-5 text-xs text-slate-700">{{ interview.position || 'N/A' }}</td>
-                                        <td class="py-3 px-5 text-center"><span :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border', getInterviewTypeBadge(interview)]">{{ getInterviewTypeLabel(interview) }}</span></td>
-                                        <td class="py-3 px-5 text-xs text-slate-700">{{ formatDate(interview.date) }}<div class="text-[10px] text-slate-500">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</div></td>
-                                        <td class="py-3 px-5 text-xs text-slate-700">{{ interview.interviewer?.name || getInterviewerName(interview.interviewer_id) }}</td>
-                                        <td class="py-3 px-5 text-center"><span :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border', getInterviewStatusBadge(interviewStatusLabel(interview))]">{{ interviewStatusLabel(interview) }}</span></td>
-                                        <td class="py-3 px-5 text-right"><button @click="viewInterviewDetails(interview)" class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 text-slate-600 hover:text-emerald-600 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1"><Eye class="w-3.5 h-3.5" />View</button></td>
+                                    <tr v-for="interview in filteredHistoryInterviews" :key="'history-'+interview.id" class="hover:bg-emerald-50/40 transition-colors">
+                                        <td class="px-4 py-3 text-xs font-bold text-slate-800">{{ interview.candidate_name }}</td>
+                                        <td class="px-4 py-3 text-xs text-slate-700">{{ interview.position || 'N/A' }}</td>
+                                        <td class="px-4 py-3 text-center"><span :class="['inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold border shadow-sm', getInterviewTypeBadge(interview)]">{{ getInterviewTypeLabel(interview) }}</span></td>
+                                        <td class="px-4 py-3"><div class="text-xs font-medium text-slate-700">{{ formatDate(interview.date) }}</div><div class="text-[10px] text-slate-500">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</div></td>
+                                        <td class="px-4 py-3 text-xs text-slate-700">{{ interview.interviewer?.name || getInterviewerName(interview.interviewer_id) }}</td>
+                                        <td class="px-4 py-3 text-center"><span :class="['inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold border shadow-sm', getInterviewStatusBadge(interviewStatusLabel(interview))]">{{ interviewStatusLabel(interview) }}</span></td>
+                                        <td class="px-4 py-3 text-right"><button @click="viewInterviewDetails(interview)" class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 text-slate-600 hover:text-emerald-600 rounded-lg text-[10px] font-semibold inline-flex items-center gap-1 transition-all duration-200"><Eye class="w-3.5 h-3.5" />View</button></td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
-                        <div v-if="filteredHistoryInterviews.length === 0" class="text-center py-8"><p class="text-sm text-slate-500">No interview history found.</p></div>
+                        <div v-if="filteredHistoryInterviews.length === 0" class="text-center py-16">
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center mx-auto mb-4 shadow-inner">
+                                <CheckCircle2 class="w-6 h-6 text-slate-400" />
+                            </div>
+                            <h3 class="text-base font-bold text-slate-900 mb-1">No interview history found</h3>
+                            <p class="text-xs text-slate-500">Completed interviews will appear here.</p>
+                        </div>
                     </div>
                 </div>
 
@@ -342,13 +363,13 @@
                 <!-- SECTION 4: FINAL INTERVIEWS                  -->
                 <!-- ============================================ -->
                 <div v-show="activeTab === 'final'">
-                    <div class="bg-white rounded-2xl border border-slate-200 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-                        <div class="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
+                    <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
+                        <div class="p-4 border-b border-slate-200 flex flex-wrap items-center gap-3">
                             <div class="relative flex-1 min-w-[200px]">
-                                <span class="absolute inset-y-0 left-0 flex items-center pl-3"><Search class="w-4 h-4 text-slate-400" /></span>
-                                <input v-model="interviewSearchQuery" type="text" placeholder="Search final interviews..." class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm transition-all duration-200" />
+                                <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input v-model="interviewSearchQuery" type="text" placeholder="Search final interviews..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm transition-all duration-200" />
                             </div>
-                            <select v-model="finalFilterStatus" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all duration-200 cursor-pointer">
+                            <select v-model="finalFilterStatus" class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all duration-200 cursor-pointer">
                                 <option value="All">All Statuses</option>
                                 <option value="Scheduled">Scheduled</option>
                                 <option value="Completed">Completed</option>
@@ -359,63 +380,69 @@
                             </select>
                         </div>
                         <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse">
-                                <thead>
-                                    <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                        <th class="py-3 px-5">Candidate</th>
-                                        <th class="py-3 px-5">Position</th>
-                                        <th class="py-3 px-5">Date & Time</th>
-                                        <th class="py-3 px-5">Interviewer</th>
-                                        <th class="py-3 px-5 text-center">Status</th>
-                                        <th class="py-3 px-5">Recommendation</th>
-                                        <th class="py-3 px-5 text-right">Action</th>
+                            <table class="min-w-full divide-y divide-slate-200">
+                                <thead class="bg-slate-50/80 border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Candidate</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Position</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date &amp; Time</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Interviewer</th>
+                                        <th class="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Recommendation</th>
+                                        <th class="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
-                                    <tr v-for="interview in filteredFinalInterviews" :key="interview.key" class="hover:bg-indigo-50 transition-all duration-200 group">
-                                        <td class="py-3 px-5">
+                                    <tr v-for="interview in filteredFinalInterviews" :key="interview.key" class="hover:bg-indigo-50/40 transition-colors group">
+                                        <td class="px-4 py-3">
                                             <div class="flex items-center gap-3">
-                                                <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-md">{{ getInitials(interview.candidate_name) }}</div>
+                                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">{{ getInitials(interview.candidate_name) }}</div>
                                                 <div>
-                                                    <div class="text-xs font-bold text-slate-900">{{ interview.candidate_name }}</div>
+                                                    <div class="text-xs font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">{{ interview.candidate_name }}</div>
                                                     <div class="text-[10px] text-slate-400">#{{ interview.application_id }}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-5"><span class="text-xs text-slate-700">{{ interview.position || 'N/A' }}</span></td>
-                                        <td class="py-3 px-5">
+                                        <td class="px-4 py-3"><span class="text-xs text-slate-700">{{ interview.position || 'N/A' }}</span></td>
+                                        <td class="px-4 py-3">
                                             <template v-if="interview._queue">
-                                                <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">Not yet scheduled</span>
+                                                <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Not yet scheduled</span>
                                             </template>
                                             <template v-else>
                                                 <div class="text-xs font-medium text-slate-900">{{ formatDate(interview.date) }}</div>
                                                 <div class="text-[10px] text-slate-500">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</div>
                                             </template>
                                         </td>
-                                        <td class="py-3 px-5">
+                                        <td class="px-4 py-3">
                                             <span v-if="interview._queue" class="text-[10px] text-slate-400">Pending</span>
                                             <span v-else class="text-xs text-slate-700">{{ interview.interviewer?.name || 'Not assigned' }}</span>
                                         </td>
-                                        <td class="py-3 px-5 text-center">
-                                            <span v-if="interview._queue" class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">Pending Final Interview</span>
-                                            <span v-else :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold', getInterviewStatusBadge(interviewStatusLabel(interview))]">{{ interviewStatusLabel(interview) }}</span>
+                                        <td class="px-4 py-3 text-center">
+                                            <span v-if="interview._queue" class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Pending Final Interview</span>
+                                            <span v-else :class="['inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold border shadow-sm', getInterviewStatusBadge(interviewStatusLabel(interview))]">{{ interviewStatusLabel(interview) }}</span>
                                             <div v-if="interview.reschedule_status === 'requested'" class="mt-1">
-                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700 border border-orange-200"><RefreshCw class="w-2.5 h-2.5" />Reschedule requested</span>
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 text-orange-700 border border-orange-200"><RefreshCw class="w-2.5 h-2.5" />Reschedule requested</span>
                                             </div>
                                         </td>
-                                        <td class="py-3 px-5">
-                                            <span v-if="interview.evaluation?.recommendation" :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border', getEvaluationRecommendationBadge(interview.evaluation.recommendation)]">{{ getEvaluationRecommendationLabel(interview.evaluation.recommendation) }}</span>
+                                        <td class="px-4 py-3">
+                                            <span v-if="interview.evaluation?.recommendation" :class="['inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold border', getEvaluationRecommendationBadge(interview.evaluation.recommendation)]">{{ getEvaluationRecommendationLabel(interview.evaluation.recommendation) }}</span>
                                             <span v-else class="text-[10px] text-slate-400">Not evaluated</span>
                                         </td>
-                                        <td class="py-3 px-5 text-right">
-                                            <button v-if="interview._queue" @click="scheduleFinalInterview(interview._sourceInterview)" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-semibold transition-all duration-200 shadow-md hover:shadow-lg"><span class="inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule Final Interview</span></button>
-                                            <button v-else @click="viewInterviewDetails(interview)" class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 text-slate-600 hover:text-indigo-600 rounded-lg text-[10px] font-semibold transition-all duration-200"><span class="inline-flex items-center gap-1"><Eye class="w-3.5 h-3.5" />View</span></button>
+                                        <td class="px-4 py-3 text-right">
+                                            <button v-if="interview._queue" @click="scheduleFinalInterview(interview._sourceInterview)" class="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-lg text-[10px] font-bold transition-all duration-200 shadow-md hover:shadow-lg"><Calendar class="w-3.5 h-3.5" />Schedule Final Interview</button>
+                                            <button v-else @click="viewInterviewDetails(interview)" class="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 text-slate-600 hover:text-indigo-600 rounded-lg text-[10px] font-semibold transition-all duration-200"><Eye class="w-3.5 h-3.5" />View</button>
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
-                        <div v-if="filteredFinalInterviews.length === 0" class="text-center py-8"><p class="text-sm text-slate-500">No final interviews found.</p></div>
+                        <div v-if="filteredFinalInterviews.length === 0" class="text-center py-16">
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center mx-auto mb-4 shadow-inner">
+                                <ClipboardList class="w-6 h-6 text-slate-400" />
+                            </div>
+                            <h3 class="text-base font-bold text-slate-900 mb-1">No final interviews found</h3>
+                            <p class="text-xs text-slate-500">Final-stage candidates will appear here.</p>
+                        </div>
                     </div>
                 </div>
 
@@ -814,24 +841,24 @@
                                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Start Time</label>
                                     <div class="relative">
                                         <select v-model="scheduleForm.start_time" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer appearance-none">
-                                            <option value="08:00">8:00 AM</option>
-                                            <option value="08:30">8:30 AM</option>
-                                            <option value="09:00">9:00 AM</option>
-                                            <option value="09:30">9:30 AM</option>
-                                            <option value="10:00">10:00 AM</option>
-                                            <option value="10:30">10:30 AM</option>
-                                            <option value="11:00">11:00 AM</option>
-                                            <option value="11:30">11:30 AM</option>
-                                            <option value="12:00">12:00 PM</option>
-                                            <option value="13:00">1:00 PM</option>
-                                            <option value="13:30">1:30 PM</option>
-                                            <option value="14:00">2:00 PM</option>
-                                            <option value="14:30">2:30 PM</option>
-                                            <option value="15:00">3:00 PM</option>
-                                            <option value="15:30">3:30 PM</option>
-                                            <option value="16:00">4:00 PM</option>
-                                            <option value="16:30">4:30 PM</option>
-                                            <option value="17:00">5:00 PM</option>
+                                            <option value="08:00" :disabled="isPastStartTime('08:00')">8:00 AM</option>
+                                            <option value="08:30" :disabled="isPastStartTime('08:30')">8:30 AM</option>
+                                            <option value="09:00" :disabled="isPastStartTime('09:00')">9:00 AM</option>
+                                            <option value="09:30" :disabled="isPastStartTime('09:30')">9:30 AM</option>
+                                            <option value="10:00" :disabled="isPastStartTime('10:00')">10:00 AM</option>
+                                            <option value="10:30" :disabled="isPastStartTime('10:30')">10:30 AM</option>
+                                            <option value="11:00" :disabled="isPastStartTime('11:00')">11:00 AM</option>
+                                            <option value="11:30" :disabled="isPastStartTime('11:30')">11:30 AM</option>
+                                            <option value="12:00" :disabled="isPastStartTime('12:00')">12:00 PM</option>
+                                            <option value="13:00" :disabled="isPastStartTime('13:00')">1:00 PM</option>
+                                            <option value="13:30" :disabled="isPastStartTime('13:30')">1:30 PM</option>
+                                            <option value="14:00" :disabled="isPastStartTime('14:00')">2:00 PM</option>
+                                            <option value="14:30" :disabled="isPastStartTime('14:30')">2:30 PM</option>
+                                            <option value="15:00" :disabled="isPastStartTime('15:00')">3:00 PM</option>
+                                            <option value="15:30" :disabled="isPastStartTime('15:30')">3:30 PM</option>
+                                            <option value="16:00" :disabled="isPastStartTime('16:00')">4:00 PM</option>
+                                            <option value="16:30" :disabled="isPastStartTime('16:30')">4:30 PM</option>
+                                            <option value="17:00" :disabled="isPastStartTime('17:00')">5:00 PM</option>
                                         </select>
                                         <div class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
                                             <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -844,26 +871,26 @@
                                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">End Time</label>
                                     <div class="relative">
                                         <select v-model="scheduleForm.end_time" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer appearance-none">
-                                            <option value="08:30">8:30 AM</option>
-                                            <option value="09:00">9:00 AM</option>
-                                            <option value="09:30">9:30 AM</option>
-                                            <option value="10:00">10:00 AM</option>
-                                            <option value="10:30">10:30 AM</option>
-                                            <option value="11:00">11:00 AM</option>
-                                            <option value="11:30">11:30 AM</option>
-                                            <option value="12:00">12:00 PM</option>
-                                            <option value="12:30">12:30 PM</option>
-                                            <option value="13:00">1:00 PM</option>
-                                            <option value="13:30">1:30 PM</option>
-                                            <option value="14:00">2:00 PM</option>
-                                            <option value="14:30">2:30 PM</option>
-                                            <option value="15:00">3:00 PM</option>
-                                            <option value="15:30">3:30 PM</option>
-                                            <option value="16:00">4:00 PM</option>
-                                            <option value="16:30">4:30 PM</option>
-                                            <option value="17:00">5:00 PM</option>
-                                            <option value="17:30">5:30 PM</option>
-                                            <option value="18:00">6:00 PM</option>
+                                            <option value="08:30" :disabled="!isEndTimeAfterStart('08:30')">8:30 AM</option>
+                                            <option value="09:00" :disabled="!isEndTimeAfterStart('09:00')">9:00 AM</option>
+                                            <option value="09:30" :disabled="!isEndTimeAfterStart('09:30')">9:30 AM</option>
+                                            <option value="10:00" :disabled="!isEndTimeAfterStart('10:00')">10:00 AM</option>
+                                            <option value="10:30" :disabled="!isEndTimeAfterStart('10:30')">10:30 AM</option>
+                                            <option value="11:00" :disabled="!isEndTimeAfterStart('11:00')">11:00 AM</option>
+                                            <option value="11:30" :disabled="!isEndTimeAfterStart('11:30')">11:30 AM</option>
+                                            <option value="12:00" :disabled="!isEndTimeAfterStart('12:00')">12:00 PM</option>
+                                            <option value="12:30" :disabled="!isEndTimeAfterStart('12:30')">12:30 PM</option>
+                                            <option value="13:00" :disabled="!isEndTimeAfterStart('13:00')">1:00 PM</option>
+                                            <option value="13:30" :disabled="!isEndTimeAfterStart('13:30')">1:30 PM</option>
+                                            <option value="14:00" :disabled="!isEndTimeAfterStart('14:00')">2:00 PM</option>
+                                            <option value="14:30" :disabled="!isEndTimeAfterStart('14:30')">2:30 PM</option>
+                                            <option value="15:00" :disabled="!isEndTimeAfterStart('15:00')">3:00 PM</option>
+                                            <option value="15:30" :disabled="!isEndTimeAfterStart('15:30')">3:30 PM</option>
+                                            <option value="16:00" :disabled="!isEndTimeAfterStart('16:00')">4:00 PM</option>
+                                            <option value="16:30" :disabled="!isEndTimeAfterStart('16:30')">4:30 PM</option>
+                                            <option value="17:00" :disabled="!isEndTimeAfterStart('17:00')">5:00 PM</option>
+                                            <option value="17:30" :disabled="!isEndTimeAfterStart('17:30')">5:30 PM</option>
+                                            <option value="18:00" :disabled="!isEndTimeAfterStart('18:00')">6:00 PM</option>
                                         </select>
                                         <div class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
                                             <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -873,6 +900,7 @@
                                     </div>
                                     <p v-if="validationErrors.includes('End time must be after start time.')" class="text-xs text-red-500 mt-1">End time must be after start time.</p>
                                 </div>
+                                <p v-if="validationErrors.includes('Start time cannot be in the past.')" class="text-xs text-red-500 mt-1 col-span-2">Start time must be later than the current time.</p>
                             </div>
 
                             <!-- Interview Method -->
@@ -1236,6 +1264,21 @@ const interviewRows = computed(() => normalizeRows(interviews.value));
 
 // Get today's date for min attribute
 const todayDate = ref('');
+const getLocalDateString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const isPastStartTime = (time) => {
+    if (!scheduleForm.value.date || scheduleForm.value.date !== todayDate.value) return false;
+    const [hours, minutes] = time.split(':').map(Number);
+    const now = new Date();
+    return hours * 60 + minutes <= now.getHours() * 60 + now.getMinutes();
+};
+const isEndTimeAfterStart = (time) => Boolean(scheduleForm.value.start_time) && time > scheduleForm.value.start_time;
 
 // Schedule Form
 const scheduleForm = ref({
@@ -1252,6 +1295,7 @@ const scheduleForm = ref({
     location: '',
     meeting_link: '',
     notes: '',
+    department: '',
 });
 
 const rescheduleForm = ref({
@@ -1372,31 +1416,46 @@ const metricsData = computed(() => {
             label: 'Shortlisted',
             value: shortlisted,
             icon: Star,
-            subtext: 'Ready for interview'
+            subtext: 'Ready for interview',
+            bg: 'bg-amber-50',
+            color: 'text-amber-600',
+            tab: 'schedule'
         },
         {
             label: 'Interview Scheduled',
             value: interviewScheduled,
             icon: Calendar,
-            subtext: 'Upcoming interviews'
+            subtext: 'Upcoming interviews',
+            bg: 'bg-blue-50',
+            color: 'text-blue-600',
+            tab: 'upcoming'
         },
         {
             label: 'Interviewed',
             value: interviewed,
             icon: CheckCircle2,
-            subtext: 'Completed interviews'
+            subtext: 'Completed interviews',
+            bg: 'bg-emerald-50',
+            color: 'text-emerald-600',
+            tab: 'completed'
         },
         {
             label: 'Rescheduled',
             value: rescheduled,
             icon: RefreshCw,
-            subtext: 'Rescheduled interviews'
+            subtext: 'Rescheduled interviews',
+            bg: 'bg-orange-50',
+            color: 'text-orange-600',
+            tab: 'upcoming'
         },
         {
             label: 'Total',
             value: total,
             icon: BarChart3,
-            subtext: 'All candidates'
+            subtext: 'All candidates',
+            bg: 'bg-violet-50',
+            color: 'text-violet-600',
+            tab: null
         }
     ];
 });
@@ -1699,6 +1758,9 @@ const validateScheduleForm = () => {
     if (!scheduleForm.value.start_time) {
         errors.push('Please select a start time.');
     }
+    if (scheduleForm.value.date === todayDate.value && scheduleForm.value.start_time && isPastStartTime(scheduleForm.value.start_time)) {
+        errors.push('Start time cannot be in the past.');
+    }
     if (!scheduleForm.value.end_time) {
         errors.push('Please select an end time.');
     }
@@ -1741,11 +1803,12 @@ const closeProfileModal = () => {
 };
 
 const openScheduleModal = (applicant = null, type = 'Initial Interview', positionHint = '') => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     todayDate.value = today;
     validationErrors.value = [];
     
     if (applicant) {
+        const department = applicant.job_posting?.department || '';
         scheduleForm.value = {
             application_id: applicant.id,
             job_posting_id: applicant.job_posting?.id || applicant.job_posting_id || applicant.jobPosting?.id || null,
@@ -1760,6 +1823,7 @@ const openScheduleModal = (applicant = null, type = 'Initial Interview', positio
             location: '',
             meeting_link: '',
             notes: '',
+            department,
         };
     } else {
         scheduleForm.value = {
@@ -1776,10 +1840,12 @@ const openScheduleModal = (applicant = null, type = 'Initial Interview', positio
             location: '',
             meeting_link: '',
             notes: '',
+            department: '',
         };
     }
     
     showScheduleModal.value = true;
+    fetchInterviewers(scheduleForm.value.department);
 };
 
 const closeScheduleModal = () => {
@@ -1888,6 +1954,8 @@ const openRescheduleModal = (interview) => {
     };
     showRescheduleModal.value = true;
     showDetailModal.value = false;
+    // Fetch all interviewers for reschedule (no department filter)
+    fetchInterviewers();
 };
 
 const closeRescheduleModal = () => { showRescheduleModal.value = false; rescheduleMenuOpen.value = false; };
@@ -2164,9 +2232,10 @@ const selectCandidate = async () => {
     finally { isSubmitting.value = false; }
 };
 
-const fetchInterviewers = async () => {
+const fetchInterviewers = async (department = '') => {
     try {
-        const response = await axios.get('/hrm/recruitment/interviewers');
+        const params = department ? { department } : {};
+        const response = await axios.get('/hrm/recruitment/interviewers', { params });
         const rows = Array.isArray(response.data) ? response.data : [];
         // Safety net: collapse same-name entries so one person appears once.
         const seen = new Set();
@@ -2205,7 +2274,7 @@ const refreshList = async () => {
 // ============================================
 onMounted(() => {
     // Set today's date for min attribute
-    todayDate.value = new Date().toISOString().split('T')[0];
+    todayDate.value = getLocalDateString();
     
     if (props.applicants && props.applicants.length > 0) {
         applicants.value = props.applicants;
@@ -2303,5 +2372,10 @@ select {
     to {
         transform: rotate(360deg);
     }
+}
+
+.bg-grid-slate-100 {
+    background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+    background-size: 24px 24px;
 }
 </style>

@@ -11,6 +11,8 @@ use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\TraineeGrade;
 use App\Models\Hrm\TraineeDailyObservation;
 use App\Models\Hrm\TraineeWeeklyEvaluation;
+use App\Models\Hrm\ProbationEvaluation;
+use App\Http\Controllers\Hrm\Workforce\ProbationEvaluationController;
 use App\Support\ReapplyCooldown;
 use App\Traits\HasPagePermissions;
 use Carbon\Carbon;
@@ -36,6 +38,7 @@ class AssignedTraineesController extends Controller
             'traineeTransfers',
             'hrmOrgPosition:id,name',
             'hrmDepartment:id,name',
+            'hrmEmploymentType:id,name',
             'manager:id,name',
             'weeklyEvaluations' => fn ($q) => $q->orderBy('week_number'),
         ];
@@ -50,7 +53,10 @@ class AssignedTraineesController extends Controller
         $assignedNewHires = User::whereIn('position', ['staff', 'supervisor', 'manager', 'secretary', 'special_officer', 'vice_president'])
             ->where('manager_id', $viewer?->id)
             ->where('is_active', true)
-            ->where('created_at', '>=', now()->subDays(60))
+            ->where(function ($q) {
+                $q->where('created_at', '>=', now()->subDays(60))
+                    ->orWhereNotNull('training_duration_weeks');
+            })
             ->with($with)
             ->orderByDesc('created_at')
             ->take(100)
@@ -63,11 +69,44 @@ class AssignedTraineesController extends Controller
         $appliedMap = Applicant::whereIn('email', $users->pluck('email')->filter()->unique()->all())
             ->orderBy('id')->get()->keyBy('email');
 
-        $rows = $users->map(fn ($u) => self::assignedRow($u, $appliedMap[$u->email]->position_applied ?? null))->values();
+        $rows = $users->map(function ($u) use ($appliedMap) {
+            $row = self::assignedRow($u, $appliedMap[$u->email]->position_applied ?? null);
+            $employmentType = $u->hrmEmploymentType?->name;
+            $isTraining = $u->position === 'trainee' || ! empty($u->training_duration_weeks);
+            $isProbationary = ! $isTraining && empty($u->regularization_date) && (
+                str_contains(strtolower((string) $employmentType), 'probation')
+                || ! empty($u->probation_end_date)
+                || str_contains(strtolower((string) $u->employment_status), 'probation')
+            );
+
+            return array_merge($row, [
+                'assignment_type' => $isTraining ? 'training' : ($isProbationary ? 'probationary' : null),
+                'employment_type' => $employmentType ?: '—',
+                'probation_start' => $u->join_date ? (string) $u->join_date : null,
+                'probation_end' => $u->probation_end_date ? (string) $u->probation_end_date : null,
+            ]);
+        })->values();
+        $probationEvaluationMap = ProbationEvaluation::whereIn('user_id', $rows->where('assignment_type', 'probationary')->pluck('id'))
+            ->orderByDesc('period_end')->orderByDesc('id')->get()->groupBy('user_id')->map->first();
+        $rows = $rows->map(function ($row) use ($probationEvaluationMap) {
+            $record = $probationEvaluationMap->get($row['id']);
+            $row['probation_evaluation'] = $record ? [
+                'id' => $record->id, 'period_label' => $record->period_label,
+                'period_start' => $record->period_start?->toDateString(), 'period_end' => $record->period_end?->toDateString(),
+                'due_date' => $record->due_date?->toDateString(), 'scores' => $record->scores,
+                'overall_score' => $record->overall_score, 'comments' => $record->comments,
+                'strengths' => $record->strengths, 'improvements' => $record->improvements,
+                'recommendation' => $record->recommendation, 'status' => $record->status,
+            ] : null;
+            return $row;
+        });
+        $trainingRows = $rows->where('assignment_type', 'training')->values();
+        $probationaryRows = $rows->where('assignment_type', 'probationary')->values();
 
         return Inertia::render('Dashboard/HRM_NEW/MyAssignedTrainees', [
-            'trainees' => $rows,
-            'summary' => self::summary($rows),
+            'trainees' => $trainingRows,
+            'probationary' => $probationaryRows,
+            'summary' => self::summary($trainingRows),
             'departments' => HrmDepartment::whereNull('archived_at')->orderBy('name')->select('id', 'name')->get(),
             'positions' => HrmPosition::whereNull('archived_at')->orderBy('name')->select('id', 'name', 'department_id')->get(),
             'programs' => $rows->pluck('training_program')->filter()->unique()->values()->all(),
@@ -123,6 +162,52 @@ class AssignedTraineesController extends Controller
             'weights' => TraineeGrade::EVALUATION_WEIGHTS,
             'passing_grade' => TraineeGrade::PASSING_GRADE,
         ]);
+    }
+
+    public function saveProbationEvaluation(Request $request, $id)
+    {
+        $employee = User::with('hrmEmploymentType')->findOrFail($id);
+        self::authorizeAssignedAccess($request->user(), $employee);
+        $hasProbationRecord = str_contains(strtolower((string) $employee->hrmEmploymentType?->name), 'probation')
+            || ! empty($employee->probation_end_date)
+            || str_contains(strtolower((string) $employee->employment_status), 'probation');
+        abort_unless($hasProbationRecord && empty($employee->regularization_date), 422, 'This employee is not assigned as probationary.');
+
+        $data = $request->validate([
+            'evaluation_id' => 'nullable|integer|exists:hrm_probation_evaluations,id',
+            'period_label' => 'required|string|max:80',
+            'period_start' => 'required|date', 'period_end' => 'required|date|after_or_equal:period_start',
+            'scores' => 'required|array', 'scores.*' => 'required|numeric|min:1|max:5',
+            'strengths' => 'nullable|string|max:5000', 'improvements' => 'nullable|string|max:5000',
+            'comments' => 'nullable|string|max:10000',
+            'recommendation' => 'required|in:Continue probation,Improvement plan,Regularize,Do not regularize',
+            'submit' => 'sometimes|boolean',
+        ]);
+        foreach (array_keys(ProbationEvaluationController::CRITERIA) as $criterion) {
+            if (! array_key_exists($criterion, $data['scores'])) {
+                return response()->json(['message' => 'Please score all six evaluation criteria.'], 422);
+            }
+        }
+        if (in_array($data['recommendation'], ['Regularize', 'Do not regularize'], true)
+            && ! str_contains(strtolower($data['period_label']), 'final evaluation')) {
+            return response()->json(['message' => 'Regularization and non-regularization recommendations are reserved for final evaluations.'], 422);
+        }
+
+        $evaluation = ! empty($data['evaluation_id'])
+            ? ProbationEvaluation::where('user_id', $employee->id)->findOrFail($data['evaluation_id'])
+            : new ProbationEvaluation(['user_id' => $employee->id, 'evaluator_id' => $request->user()->id]);
+        abort_unless($evaluation->status === null || $evaluation->status === 'Draft', 422, 'This evaluation has already been submitted.');
+        $criteriaScores = collect($data['scores'])->only(array_keys(ProbationEvaluationController::CRITERIA));
+        $evaluation->fill([
+            'period_label' => $data['period_label'], 'period_start' => $data['period_start'],
+            'period_end' => $data['period_end'], 'due_date' => $employee->probation_end_date,
+            'scores' => $criteriaScores->all(), 'overall_score' => round($criteriaScores->avg() * 20, 2),
+            'strengths' => $data['strengths'] ?? null, 'improvements' => $data['improvements'] ?? null,
+            'comments' => $data['comments'] ?? null, 'recommendation' => $data['recommendation'],
+            'status' => ($data['submit'] ?? false) ? 'Submitted' : 'Draft',
+        ])->save();
+
+        return response()->json(['evaluation' => $evaluation->fresh()]);
     }
 
     /**

@@ -6,17 +6,20 @@ import { createSSRApp, DefineComponent, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const pages = import.meta.glob<DefineComponent>('./Pages/**/*.vue');
+
+const resolveInertiaPage = (name: string) => {
+    const requested = `./Pages/${name}.vue`;
+    const matched = Object.keys(pages).find((path) => path.toLowerCase() === requested.toLowerCase()) || requested;
+    return resolvePageComponent(matched, pages);
+};
 
 createServer((page) =>
     createInertiaApp({
         page,
         render: renderToString,
         title: (title) => `${title} - ${appName}`,
-        resolve: (name) =>
-            resolvePageComponent(
-                `./Pages/${name}.vue`,
-                import.meta.glob<DefineComponent>('./Pages/**/*.vue'),
-            ),
+        resolve: (name) => resolveInertiaPage(name),
         setup({ App, props, plugin }) {
             return createSSRApp({ render: () => h(App, props) })
                 .use(plugin)

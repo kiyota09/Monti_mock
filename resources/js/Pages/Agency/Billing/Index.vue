@@ -3,7 +3,7 @@
 import { ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
-import { Eye, FileDown, FileSpreadsheet } from 'lucide-vue-next';
+import { Eye, FileDown, FileSpreadsheet, Plus } from 'lucide-vue-next';
 
 const props = defineProps<{
     statements: Array<{
@@ -44,8 +44,18 @@ function money(v: any): string {
 <template>
     <Head title="Billing - Monti ERP" />
     <AgencyLayout>
-        <h1 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Billing</h1>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5 mb-4">Issued and paid statements for your agency.</p>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+                <h1 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Billing</h1>
+                <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Issued and paid statements for your agency.</p>
+            </div>
+            <Link
+                :href="route('agency.billing.create')"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition shadow-lg shadow-blue-500/30 active:scale-95"
+            >
+                <Plus class="w-4 h-4" /> Create Invoice
+            </Link>
+        </div>
 
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-end gap-3 bg-slate-50/50 dark:bg-slate-800/50">

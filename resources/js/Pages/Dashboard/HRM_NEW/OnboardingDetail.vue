@@ -386,13 +386,14 @@
                                                 <!-- Actions -->
                                                 <div class="flex items-center gap-2 shrink-0">
                                                     <button
+                                                        v-if="section !== 'HR Processing'"
                                                         @click="openItemModal(item, section)"
                                                         class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-[10px] font-bold transition-all duration-200"
                                                     >
                                                         Details
                                                     </button>
                                                     <!-- Task / Verification: HR sets status directly -->
-                                                    <div v-if="item.is_task">
+                                                    <div v-if="item.is_task && section !== 'HR Processing'">
                                                         <select
                                                             :value="item.status"
                                                             @change="updateTaskStatus(item, $event.target.value)"
@@ -403,7 +404,7 @@
                                                     </div>
 
                                                     <!-- Applicant item: review workflow -->
-                                                    <template v-else>
+                                                    <template v-else-if="section !== 'HR Processing'">
                                                         <button
                                                             v-if="canReview(item)"
                                                             @click="reviewItem(item, 'approve')"
@@ -716,27 +717,34 @@
                                     <input v-model="hireForm.department" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 shadow-sm cursor-not-allowed" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">System Role * (users.role)</label>
-                                    <select v-model="hireForm.role" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
-                                        <option value="" disabled>Select role</option>
-                                        <option v-for="r in roleOptions" :key="r" :value="r">{{ r }}</option>
-                                    </select>
-                                    <p class="text-[10px] text-slate-500 mt-1">Written to the employee record. Prefilled from department — confirm it.</p>
-                                </div>
-                                <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Employment Type *</label>
                                     <input v-model="hireForm.employment_type" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 shadow-sm cursor-not-allowed" />
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Deployment start date *</label>
-                                    <input v-model="hireForm.start_date" type="date" @change="recalcTrainingEnd" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <input v-model="hireForm.start_date" type="date" @change="recalcTrainingEnd(); recalcProbationEnd()" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
                                     <p v-if="conversion?.defaults?.start_date_hint" class="text-[10px] text-slate-500 mt-1">{{ conversion.defaults.start_date_hint }}</p>
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Training duration (weeks) *</label>
-                                    <input v-model.number="hireForm.training_duration_weeks" type="number" min="1" max="52" @change="recalcTrainingEnd" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                <div v-if="probationaryHire">
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Probation duration (months) *</label>
+                                    <input :value="hireForm.probation_duration_months" type="number" min="1" max="6" step="1" @input="onProbationDurationInput" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <p class="text-[10px] text-slate-500 mt-1">Maximum probation period is 6 months.</p>
                                 </div>
-                                <div>
+                                <div v-if="probationaryHire">
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Evaluation interval (months) *</label>
+                                    <input v-model.number="hireForm.probation_evaluation_interval_months" type="number" min="1" :max="hireForm.probation_duration_months || 6" step="1" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <p class="text-[10px] text-slate-500 mt-1">Auto-set to half the probation duration; editable. For example, 6 months gives a 3-month evaluation interval.</p>
+                                </div>
+                                <div v-if="probationaryHire">
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Probation end date</label>
+                                    <input v-model="hireForm.probation_end_date" type="date" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 shadow-sm" />
+                                </div>
+                                <div v-if="conversion?.job_posting?.training_required">
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Training duration (weeks) *</label>
+                                    <input :value="hireForm.training_duration_weeks" type="number" min="1" max="4" @input="onTrainingDurationInput" @change="recalcTrainingEnd" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <p class="text-[10px] text-slate-500 mt-1">Maximum training duration is 4 weeks (1 month).</p>
+                                </div>
+                                <div v-if="conversion?.job_posting?.training_required">
                                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Training end date *</label>
                                     <input v-model="hireForm.training_end_date" type="date" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
                                     <p class="text-[10px] text-slate-500 mt-1">Auto-set from start + duration — editable calendar.</p>
@@ -779,7 +787,7 @@
                                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Shift *</label>
                                     <select v-model="hireForm.shift" @change="applyShiftHours" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <template v-if="(shifts || []).length">
-                                            <option v-for="sh in shifts" :key="sh.id" :value="sh.name">{{ sh.name }}{{ sh.code ? ' (' + sh.code + ')' : '' }}</option>
+                                            <option v-for="sh in shifts" :key="sh.id" :value="sh.name">{{ sh.name }}</option>
                                         </template>
                                         <template v-else>
                                             <option>Morning Shift</option>
@@ -939,8 +947,11 @@
                                 <div class="flex justify-between py-1"><span class="text-slate-400">Reporting Manager</span><span class="font-semibold">{{ hireForm.reporting_manager || '—' }}</span></div>
                                 <div class="flex justify-between py-1"><span class="text-slate-400">Employment Type</span><span class="font-semibold">{{ hireForm.employment_type || '—' }}</span></div>
                                 <div class="flex justify-between py-1"><span class="text-slate-400">Deployment start date</span><span class="font-semibold">{{ hireForm.start_date || '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Training duration</span><span class="font-semibold">{{ hireForm.training_duration_weeks ? hireForm.training_duration_weeks + ' weeks' : '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Training end date</span><span class="font-semibold">{{ hireForm.training_end_date || '—' }}</span></div>
+                                <div v-if="trainingRequired" class="flex justify-between py-1"><span class="text-slate-400">Training duration</span><span class="font-semibold">{{ hireForm.training_duration_weeks ? hireForm.training_duration_weeks + ' weeks' : '—' }}</span></div>
+                                <div v-if="trainingRequired" class="flex justify-between py-1"><span class="text-slate-400">Training end date</span><span class="font-semibold">{{ hireForm.training_end_date || '—' }}</span></div>
+                                <div v-if="probationaryHire" class="flex justify-between py-1"><span class="text-slate-400">Probation duration</span><span class="font-semibold">{{ hireForm.probation_duration_months }} months</span></div>
+                                <div v-if="probationaryHire" class="flex justify-between py-1"><span class="text-slate-400">Evaluation interval</span><span class="font-semibold">Every {{ hireForm.probation_evaluation_interval_months }} months</span></div>
+                                <div v-if="probationaryHire" class="flex justify-between py-1"><span class="text-slate-400">Probation end date</span><span class="font-semibold">{{ hireForm.probation_end_date || '—' }}</span></div>
                                 <div class="flex justify-between py-1"><span class="text-slate-400">Work Location</span><span class="font-semibold">{{ hireForm.work_location || '—' }}</span></div>
                                 <div class="flex justify-between py-1"><span class="text-slate-400">Work Schedule</span><span class="font-semibold">{{ hireScheduleLabel }}</span></div>
                                 <div class="flex justify-between py-1"><span class="text-slate-400">Employment Status</span><span class="font-semibold">{{ hireForm.employee_status || '—' }}</span></div>
@@ -1018,6 +1029,8 @@ watch(() => page.props.errors, (errors) => {
 }, { deep: true });
 
 const displayTemplate = computed(() => props.templateName || props.onboarding.template || '');
+const trainingRequired = computed(() => props.conversion?.job_posting?.training_required === true);
+const probationaryHire = computed(() => String(hireForm.value.employment_type || '').toLowerCase().includes('probation'));
 
 const initials = computed(() => {
     const parts = props.onboarding.name.trim().split(/\s+/);
@@ -1323,6 +1336,7 @@ const applyShiftHours = () => {
 const hireForm = ref({
     position: '', position_rank: 'staff', department: '', role: '', employment_type: 'Regular', employment_type_id: '',
     start_date: '', training_duration_weeks: '', training_end_date: '', reporting_manager: '', reporting_manager_id: '', employee_status: 'Pending Training',
+    probation_duration_months: '', probation_evaluation_interval_months: '', probation_end_date: '',
     work_location: 'Main Manufacturing Plant', work_mode: 'Onsite',
     shift: 'Morning Shift', work_schedule: 'Monday – Friday',
     work_schedule_start: 'Monday', work_schedule_end: 'Friday',
@@ -1335,15 +1349,63 @@ const hireForm = ref({
 
 // Training end = deployment start + duration weeks (calendar stays editable).
 // Blank duration stays blank — no auto default.
+const onTrainingDurationInput = (e) => {
+    const raw = e.target.value;
+    if (raw === '') {
+        hireForm.value.training_duration_weeks = '';
+        return;
+    }
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1 || n > 4) {
+        e.target.value = hireForm.value.training_duration_weeks ?? '';
+        return;
+    }
+    hireForm.value.training_duration_weeks = n;
+    recalcTrainingEnd();
+};
+
 const recalcTrainingEnd = () => {
     const weeks = Number(hireForm.value.training_duration_weeks);
-    if (!weeks || weeks < 1 || weeks > 52) return;
+    if (!weeks || weeks < 1 || weeks > 4) return;
     const start = hireForm.value.start_date;
     if (!start) return;
     const d = new Date(start + 'T00:00:00');
     if (isNaN(d)) return;
     d.setDate(d.getDate() + weeks * 7);
     hireForm.value.training_end_date = d.toISOString().slice(0, 10);
+};
+
+const onProbationDurationInput = (e) => {
+    const raw = e.target.value;
+    if (raw === '') {
+        hireForm.value.probation_duration_months = '';
+        hireForm.value.probation_evaluation_interval_months = '';
+        hireForm.value.probation_end_date = '';
+        return;
+    }
+    const months = Number(raw);
+    if (!Number.isInteger(months) || months < 1 || months > 6) {
+        e.target.value = hireForm.value.probation_duration_months || '';
+        return;
+    }
+    hireForm.value.probation_duration_months = months;
+    hireForm.value.probation_evaluation_interval_months = Math.max(1, Math.floor(months / 2));
+    recalcProbationEnd();
+};
+
+const recalcProbationEnd = () => {
+    const months = Number(hireForm.value.probation_duration_months);
+    const start = hireForm.value.start_date;
+    if (!probationaryHire.value || !start || !Number.isInteger(months) || months < 1 || months > 6) {
+        hireForm.value.probation_end_date = '';
+        return;
+    }
+    const [year, month, day] = start.split('-').map(Number);
+    const targetMonth = month - 1 + months;
+    const targetYear = year + Math.floor(targetMonth / 12);
+    const normalizedMonth = targetMonth % 12;
+    const finalDay = Math.min(day, new Date(targetYear, normalizedMonth + 1, 0).getDate());
+    hireForm.value.probation_end_date = `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`;
 };
 
 const hireScheduleLabel = computed(() =>
@@ -1409,16 +1471,24 @@ const openHireModal = () => {
     const d = c.defaults || {};
     const range = parseScheduleRange(d.work_schedule || props.onboarding.work_schedule);
     const hours = parseHoursRange(props.onboarding.work_schedule);
+    const employmentType = d.employment_type || props.onboarding.employment_type || 'Regular';
+    const isProbationary = String(employmentType).toLowerCase().includes('probation');
+    const probationMonths = isProbationary ? Math.min(6, Math.max(1, Number(d.probation_duration_months) || 6)) : '';
     hireForm.value = {
         position: d.position || props.onboarding.position || '',
         position_rank: d.position_rank || 'staff',
         department: d.department || props.onboarding.department || '',
         role: d.role || guessHireRole(d.department || props.onboarding.department || ''),
-        employment_type: d.employment_type || props.onboarding.employment_type || 'Regular',
+        employment_type: employmentType,
         employment_type_id: '',
         start_date: d.start_date || new Date().toISOString().slice(0, 10),
         training_duration_weeks: '',
         training_end_date: '',
+        probation_duration_months: probationMonths,
+        probation_evaluation_interval_months: isProbationary
+            ? Math.min(probationMonths, Math.max(1, Number(d.probation_evaluation_interval_months) || Math.floor(probationMonths / 2) || 1))
+            : '',
+        probation_end_date: d.probation_end_date || '',
         reporting_manager: d.reporting_manager || props.onboarding.assigned_manager || '',
         reporting_manager_id: d.reporting_manager_id || '',
         employee_status: 'Pending Training',
@@ -1442,6 +1512,7 @@ const openHireModal = () => {
     // change), so Morning opens at 8:00 AM – 5:00 PM right away. Still editable.
     // Duration stays blank — end is set once HR types start + duration.
     applyShiftHours();
+    recalcProbationEnd();
     // Pre-select matching employment-type id when names line up.
     const match = (props.employmentTypes || []).find((t) => t.name === hireForm.value.employment_type);
     if (match) hireForm.value.employment_type_id = match.id;
@@ -1486,8 +1557,11 @@ const submitHire = () => {
     if (!f.department?.trim()) { toast.error('Department is required.'); return; }
     if (!f.role) { toast.error('System Role is required.'); return; }
     if (!f.start_date) { toast.error('Start date is required.'); return; }
-    if (!f.training_duration_weeks || Number(f.training_duration_weeks) < 1) { toast.error('Training duration is required.'); return; }
-    if (!f.training_end_date) { toast.error('Training end date is required.'); return; }
+    if (probationaryHire.value && (!Number.isInteger(Number(f.probation_duration_months)) || Number(f.probation_duration_months) < 1 || Number(f.probation_duration_months) > 6)) { toast.error('Probation duration must be from 1 to 6 months.'); return; }
+    if (probationaryHire.value && (!Number.isInteger(Number(f.probation_evaluation_interval_months)) || Number(f.probation_evaluation_interval_months) < 1 || Number(f.probation_evaluation_interval_months) > Number(f.probation_duration_months))) { toast.error('Evaluation interval must be between 1 month and the probation duration.'); return; }
+    if (trainingRequired.value && (!f.training_duration_weeks || Number(f.training_duration_weeks) < 1)) { toast.error('Training duration is required.'); return; }
+    if (trainingRequired.value && Number(f.training_duration_weeks) > 4) { toast.error('Training duration cannot exceed 4 weeks.'); return; }
+    if (trainingRequired.value && !f.training_end_date) { toast.error('Training end date is required.'); return; }
     if (f.basic_salary !== '' && isNaN(parseFloat(f.basic_salary))) { toast.error('Basic salary must be numeric.'); return; }
     // Open the review step as its own modal — actual creation happens on confirm.
     activeModal.value = 'hire-review';

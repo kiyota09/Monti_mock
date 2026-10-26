@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Core\User;
 use App\Models\Hrm\HrmDepartment;
 use App\Models\Hrm\HrmPosition;
+use App\Support\ManufacturingRoles;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,7 +44,7 @@ class PositionController extends Controller
             'positionsData' => $positions,
             'filters' => $request->only(['search', 'department', 'status']),
             'filterOptions' => [
-                'departments' => HrmDepartment::select('id', 'name')->get(),
+                'departments' => HrmDepartment::select('id', 'name', 'category')->get(),
                 'managementLevels' => ['Executive', 'Managerial', 'Supervisory', 'Individual Contributor', 'Trainee'],
             ],
             'metrics' => [
@@ -53,8 +54,9 @@ class PositionController extends Controller
                 'totalFilled' => (int) User::whereNotNull('hrm_position_id')->count(),
                 'totalVacant' => max(0, (int) HrmPosition::sum('approved_headcount') - (int) User::whereNotNull('hrm_position_id')->count()),
             ],
-            'departments' => HrmDepartment::select('id', 'name')->get(),
+            'departments' => HrmDepartment::select('id', 'name', 'category')->get(),
             'allPositions' => HrmPosition::select('id', 'name', 'department_id')->get(),
+            'manufacturingRoles' => collect(ManufacturingRoles::LABELS)->map(fn ($label, $slug) => ['value' => $slug, 'label' => $label])->values(),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
     }
@@ -81,6 +83,8 @@ class PositionController extends Controller
         'status' => 'nullable|in:active,inactive',
     ]);
 
+        $this->validateManufacturingPosition($request, $data);
+
         if (empty($data['code'])) {
             $data['code'] = self::nextCode();
         }
@@ -90,6 +94,19 @@ class PositionController extends Controller
         return back()->with('success', 'Position created.');
     }
 
+    private function validateManufacturingPosition(Request $request, array $data, ?HrmPosition $position = null): void
+    {
+        $departmentId = $data['department_id'] ?? $position?->department_id;
+        $department = $departmentId ? HrmDepartment::find($departmentId) : null;
+
+        if (strtoupper((string) $department?->category) !== 'MAN') {
+            return;
+        }
+
+        $request->validate([
+            'name' => ['required', \Illuminate\Validation\Rule::in(array_values(ManufacturingRoles::LABELS))],
+        ]);
+    }
     protected static function nextCode(): string
     {
         $next = (int) (HrmPosition::max('id') ?? 0) + 1;
@@ -124,6 +141,7 @@ class PositionController extends Controller
         if (!empty($data['reports_to_id']) && (int) $data['reports_to_id'] === (int) $position->id) {
             $data['reports_to_id'] = null;
         }
+        $this->validateManufacturingPosition($request, $data, $position);
         $position->update($data);
 
         return back()->with('success', 'Position updated.');
@@ -273,9 +291,13 @@ class PositionController extends Controller
 
     public function employees(HrmPosition $position)
     {
+        $employees = User::where('hrm_position_id', $position->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'employee_id']);
+
         return response()->json([
-            'employees' => User::where('hrm_position_id', $position->id)->select('id', 'name', 'email')->paginate(10),
-            'total' => User::where('hrm_position_id', $position->id)->count(),
+            'employees' => $employees,
+            'total' => $employees->count(),
         ]);
     }
 }

@@ -63,7 +63,7 @@
                 </header>
 
                 <!-- KPI METRICS ROW -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 shrink-0">
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4 shrink-0">
                     <div 
                         v-for="metric in metricsData" 
                         :key="metric.label"
@@ -153,18 +153,172 @@
                                 </svg>
                                 History
                             </button>
+                            <div class="inline-flex items-center bg-slate-100 rounded-xl p-0.5">
+                                <button
+                                    @click="viewMode = 'table'"
+                                    :class="viewMode === 'table' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'"
+                                    class="p-1.5 rounded-lg transition-all duration-200"
+                                    title="Table view"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5"/>
+                                    </svg>
+                                </button>
+                                <button
+                                    @click="viewMode = 'card'"
+                                    :class="viewMode === 'card' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'"
+                                    class="p-1.5 rounded-lg transition-all duration-200"
+                                    title="Card view"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- APPLICATION CARDS GRID -->
+                <!-- APPLICATIONS VIEW (TABLE / CARD) -->
                 <div class="bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden flex-1 flex flex-col min-h-0">
                     <div class="flex-1 overflow-auto p-4">
-                        <div v-if="applications && applications.length > 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <div v-if="applications && applications.length > 0">
+
+                        <!-- TABLE VIEW (default) -->
+                        <div v-if="viewMode === 'table'" class="overflow-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="sticky top-0 z-10">
+                                    <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                        <th class="py-3 px-4">Applicant</th>
+                                        <th class="py-3 px-4">Position</th>
+                                        <th class="py-3 px-4 text-center">Status</th>
+                                        <th class="py-3 px-4">Email</th>
+                                        <th class="py-3 px-4">Phone</th>
+                                        <th class="py-3 px-4">Applied</th>
+                                        <th class="py-3 px-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <tr
+                                        v-for="app in filteredApplications"
+                                        :key="cardKey(app)"
+                                        :class="[
+                                            'transition-all duration-200',
+                                            app.is_on_hold
+                                                ? 'bg-orange-50/40 hover:bg-orange-50/70'
+                                                : 'hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent'
+                                        ]"
+                                    >
+                                        <td class="py-3 px-4">
+                                            <div class="flex items-center gap-3">
+                                                <img
+                                                    v-if="getApplicantPhoto(app)"
+                                                    :src="getApplicantPhoto(app)"
+                                                    :alt="`${app.first_name || ''} ${app.last_name || ''}`"
+                                                    class="w-8 h-8 rounded-lg object-cover shadow-inner shrink-0"
+                                                    @error="handleCardImageError($event, app)"
+                                                />
+                                                <div
+                                                    v-else
+                                                    :class="[
+                                                        'w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-[10px] shadow-inner shrink-0',
+                                                        getAvatarColor(displayStatus(app))
+                                                    ]"
+                                                >
+                                                    {{ getInitials(app.first_name, app.last_name) }}
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <div class="text-xs font-bold text-slate-900 truncate">{{ app.first_name }} {{ app.last_name }}</div>
+                                                    <div class="text-[10px] text-slate-400 truncate">{{ app.email || 'No email' }}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <div class="text-xs text-slate-700">{{ app.job_posting?.title || 'N/A' }}</div>
+                                            <div v-if="app.is_on_hold" class="text-[10px] text-orange-600 mt-0.5" :title="app.hold_reason || ''">
+                                                {{ holdSource(app) }}
+                                            </div>
+                                        </td>
+                                        <td class="py-3 px-4 text-center">
+                                            <span
+                                                :class="[
+                                                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold border shadow-sm whitespace-nowrap',
+                                                    getStatusBadgeClass(displayStatus(app))
+                                                ]"
+                                            >
+                                                <span class="w-1.5 h-1.5 rounded-full" :class="getStatusDotClass(displayStatus(app))"></span>
+                                                {{ displayStatus(app) }}
+                                            </span>
+                                            <div v-if="app.is_on_hold" class="text-[9px] text-slate-500 mt-0.5">
+                                                Stage: {{ holdStage(app) }}
+                                            </div>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <div class="text-xs text-slate-600 truncate max-w-[180px]">{{ app.email || 'N/A' }}</div>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <div class="text-xs text-slate-600">{{ app.phone || 'N/A' }}</div>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <div class="text-xs text-slate-500 whitespace-nowrap">{{ getRelativeTime(app.application_date || app.created_at) }}</div>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <div class="flex items-center justify-end gap-1">
+                                                <button
+                                                    @click="viewApplicantProfile(app)"
+                                                    class="px-2.5 py-1.5 bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-700 rounded-lg text-[10px] font-semibold transition-all duration-200 shadow-sm hover:shadow whitespace-nowrap"
+                                                    :disabled="isLoading"
+                                                >
+                                                    {{ isLoading && loadingId === cardKey(app) ? 'Loading...' : 'View' }}
+                                                </button>
+                                                <button
+                                                    v-if="!app.is_on_hold && (app.status === 'Submitted' || app.status === 'Screening')"
+                                                    @click="openScreeningModal(app)"
+                                                    class="px-2.5 py-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-lg text-[10px] font-semibold transition-all duration-200 shadow-sm hover:shadow whitespace-nowrap"
+                                                >
+                                                    {{ app.status === 'Screening' ? 'Continue' : 'Screen' }}
+                                                </button>
+                                                <span
+                                                    v-else-if="app.is_on_hold"
+                                                    class="px-2.5 py-1.5 text-[10px] font-semibold text-orange-600 whitespace-nowrap"
+                                                    :title="app.hold_reason || ''"
+                                                >
+                                                    On Hold
+                                                </span>
+                                                <span
+                                                    v-else-if="app.status === 'Shortlisted'"
+                                                    class="px-2.5 py-1.5 text-[10px] font-semibold text-amber-600"
+                                                >
+                                                    Shortlisted
+                                                </span>
+                                                <span
+                                                    v-else-if="app.status === 'Hired'"
+                                                    class="px-2.5 py-1.5 text-[10px] font-semibold text-emerald-600"
+                                                >
+                                                    Hired
+                                                </span>
+                                                <span
+                                                    v-else-if="app.status === 'Rejected'"
+                                                    class="px-2.5 py-1.5 text-[10px] font-semibold text-rose-600"
+                                                >
+                                                    Rejected
+                                                </span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- CARD VIEW -->
+                        <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                             <div
                                 v-for="app in filteredApplications"
                                 :key="cardKey(app)"
-                                class="bg-white rounded-xl border border-slate-200/60 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-visible group"
+                                :class="[
+                                    'bg-white rounded-xl border hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-visible group',
+                                    app.is_on_hold ? 'border-orange-200 ring-1 ring-orange-100' : 'border-slate-200/60'
+                                ]"
                             >
                                 <!-- Card Header -->
                                 <div class="p-4 border-b border-slate-100 bg-gradient-to-r from-slate-50/50 to-transparent rounded-t-xl">
@@ -181,7 +335,7 @@
                                                 v-else
                                                 :class="[
                                                     'w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-inner transition-all duration-300 group-hover:scale-105',
-                                                    getAvatarColor(app.status)
+                                                    getAvatarColor(displayStatus(app))
                                                 ]"
                                             >
                                                 {{ getInitials(app.first_name, app.last_name) }}
@@ -194,16 +348,23 @@
                                         <span
                                             :class="[
                                                 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold border shadow-sm',
-                                                getStatusBadgeClass(app.status)
+                                                getStatusBadgeClass(displayStatus(app))
                                             ]"
                                         >
-                                            <span class="w-1.5 h-1.5 rounded-full" :class="getStatusDotClass(app.status)"></span>
-                                            {{ app.status || 'Submitted' }}
+                                            <span class="w-1.5 h-1.5 rounded-full" :class="getStatusDotClass(displayStatus(app))"></span>
+                                            {{ displayStatus(app) }}
                                         </span>
                                     </div>
                                     <p class="text-xs text-slate-500">
                                         Applied for: <strong class="text-slate-700">{{ app.job_posting?.title || 'N/A' }}</strong>
                                     </p>
+                                    <div v-if="app.is_on_hold" class="mt-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+                                        <p class="text-[10px] font-bold uppercase tracking-wider text-orange-700">Application on hold</p>
+                                        <p class="text-[10px] text-orange-900 mt-0.5">
+                                            Previous stage: <strong>{{ holdStage(app) }}</strong>
+                                        </p>
+                                        <p class="text-[10px] text-orange-900 mt-0.5">{{ app.hold_reason || holdSource(app) }}</p>
+                                    </div>
                                 </div>
 
                                 <!-- Card Body -->
@@ -356,6 +517,7 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
                         </div>
 
                         <!-- Empty State -->
@@ -1200,9 +1362,6 @@
                                         <option value="Final Interview">Final Interview</option>
                                         <option value="Interviewed">Interviewed</option>
                                         <option value="Selected">Selected</option>
-                                        <option value="Job Offer">Job Offer</option>
-                                        <option value="Offer Accepted">Offer Accepted</option>
-                                        <option value="Pre-employment">Pre-employment</option>
                                         <option value="Onboard">Onboard</option>
                                         <option value="Onboarding">Onboarding</option>
                                         <option value="Hired">Hired</option>
@@ -1300,6 +1459,16 @@ interface Application {
     resume_path?: string;
     job_posting_id?: number | string | null;
     application_date?: string;
+    is_on_hold?: boolean;
+    hold_reason?: string | null;
+    previous_status?: string | null;
+    held_by_application_id?: number | null;
+    held_by?: {
+        id?: number;
+        status?: string;
+        job_posting_id?: number | null;
+        job_title?: string | null;
+    } | null;
     job_posting?: {
         id?: number;
         title?: string;
@@ -1395,6 +1564,7 @@ const isLoading = ref(false);
 const isLoadingProfile = ref(false);
 const loadingId = ref<string | null>(null);
 const activeMenu = ref<string | null>(null);
+const viewMode = ref<'table' | 'card'>('table');
 
 // Unique key per card: one card per job applied, so two cards of the same
 // applicant must not share a key (job_application ids live in their own
@@ -1495,7 +1665,7 @@ const viewTabs = [
 // ============================================
 // DATA
 // ============================================
-const statusOptions = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Job Offer', 'Offer Accepted', 'Pre-employment', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+const statusOptions = ['On Hold', 'Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
 // Applications already at the interview stage show only the View button
 // (the "More" actions menu is hidden).
 const interviewStatuses = ['Interview', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed'];
@@ -1519,17 +1689,21 @@ const positionOptions = computed(() => {
 // COMPUTED
 // ============================================
 const metricsData = computed(() => {
-    const apps = applicationList.value || [];
+    // Held applications are parked outside the active recruitment pipeline.
+    // They stay in the table but must not inflate stage metrics.
+    const apps = (applicationList.value || []).filter(a => !a.is_on_hold);
+    const onHold = (applicationList.value || []).filter(a => a.is_on_hold).length;
     return [
         { label: "Total Applications", value: apps.length, icon: "users", bg: "bg-blue-50", color: "text-blue-600", filter: null },
         { label: "Submitted", value: apps.filter(a => a.status === 'Submitted').length || 0, icon: "clipboard", bg: "bg-amber-50", color: "text-amber-600", filter: "Submitted" },
         { label: "Screening", value: apps.filter(a => a.status === 'Screening').length || 0, icon: "search", bg: "bg-indigo-50", color: "text-indigo-600", filter: "Screening" },
         { label: "Shortlisted", value: apps.filter(a => a.status === 'Shortlisted').length || 0, icon: "star", bg: "bg-purple-50", color: "text-purple-600", filter: "Shortlisted" },
+        { label: "On Hold", value: onHold, icon: "x", bg: "bg-orange-50", color: "text-orange-600", filter: "On Hold" },
     ];
 });
 
 const funnelStages = computed(() => {
-    const apps = applicationList.value || [];
+    const apps = (applicationList.value || []).filter(a => !a.is_on_hold);
     return [
         { name: "Submitted", count: apps.filter(a => a.status === 'Submitted').length || 0, color: "bg-amber-50/80 text-amber-700 border border-amber-100" },
         { name: "Screening", count: apps.filter(a => a.status === 'Screening').length || 0, color: "bg-indigo-50/80 text-indigo-700 border border-indigo-100" },
@@ -1552,10 +1726,25 @@ const filteredApplications = computed(() => {
             (a.job_posting?.title?.toLowerCase().includes(query) || false)
         );
     }
-    if (filterStatus.value) apps = apps.filter(a => a.status === filterStatus.value);
+    if (filterStatus.value) {
+        apps = filterStatus.value === 'On Hold'
+            ? apps.filter(a => !!a.is_on_hold)
+            : apps.filter(a => !a.is_on_hold && a.status === filterStatus.value);
+    }
     if (filterPosition.value) apps = apps.filter(a => a.job_posting?.title === filterPosition.value);
     return apps;
 });
+
+// Hold presentation helpers. The underlying status stays intact; the UI only
+// shows that the application is parked pending the onboarding application.
+const displayStatus = (app?: Application | null) => app?.is_on_hold ? 'On Hold' : (app?.status || 'Submitted');
+const holdStage = (app?: Application | null) => app?.previous_status || app?.status || 'Unknown';
+const holdSource = (app?: Application | null) => {
+    if (!app?.is_on_hold) return '';
+    const title = app.held_by?.job_title || app.job_posting?.title;
+    return title ? `Triggered by the ${title} onboarding` : 'Triggered by another onboarding application';
+};
+const isHeld = (app?: Application | null) => !!app?.is_on_hold;
 
 // ============================================
 // TOAST HELPERS
@@ -1815,6 +2004,12 @@ const closeViewModal = () => {
 // SCREENING MODAL FUNCTIONS
 // ============================================
 const openScreeningModal = async (app: Application) => {
+    const params = new URLSearchParams();
+    if (app.job_application_id) params.set('job_application_id', String(app.job_application_id));
+    activeMenu.value = null;
+    router.visit(`/hrm/recruitment/applications/${app.id}/screening-page${params.size ? `?${params}` : ''}`);
+    return;
+
     const applicationId = app.id;
     screeningApplicationId.value = applicationId;
     screeningJobApplicationId.value = app.job_application_id ?? null;
@@ -1851,7 +2046,7 @@ const openScreeningModal = async (app: Application) => {
             await axios.post(`/hrm/recruitment/applications/${applicationId}/start-screening`, jaParam);
             const response = await axios.get(`/hrm/recruitment/applications/${applicationId}/profile`, { params: jaParam });
             profile = response.data;
-            if (targetCard) targetCard.status = 'Screening';
+            if (targetCard) targetCard!.status = 'Screening';
         }
 
         screeningData.value = profile;

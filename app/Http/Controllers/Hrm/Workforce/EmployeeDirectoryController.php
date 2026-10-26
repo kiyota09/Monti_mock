@@ -154,6 +154,13 @@ class EmployeeDirectoryController extends Controller
             'trainings' => 'nullable|string',
         ]);
 
+        // HR owns employment status and probation dates; regularization must
+        // pass through the finalized probation evaluation workflow.
+        if (strtoupper((string) $request->user()?->role) !== 'HRM'
+            && array_intersect(['hrm_employment_type_id', 'probation_end_date', 'regularization_date'], array_keys($data))) {
+            abort(403, 'Only HR can change employment type or probation dates.');
+        }
+
         // Guard against self-reporting.
         if (! empty($data['manager_id']) && (int) $data['manager_id'] === (int) $employee->id) {
             unset($data['manager_id']);

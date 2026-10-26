@@ -1,9 +1,19 @@
 <script setup lang="ts">
 // Agency portal: statement detail (read-only breakdown + exports)
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { watch } from 'vue';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
 import { FileDown, FileSpreadsheet } from 'lucide-vue-next';
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 import { formatHours } from '@/lib/utils';
+
+const page = usePage();
+watch(() => (page.props as any).flash, (flash: any) => {
+    if (flash?.success) toast.success(flash.success);
+    if (flash?.message) toast.success(flash.message);
+    if (flash?.error) toast.error(flash.error);
+}, { immediate: true, deep: true });
 
 defineProps<{
     statement: {

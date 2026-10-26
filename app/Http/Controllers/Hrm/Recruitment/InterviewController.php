@@ -11,6 +11,7 @@ use App\Models\Hrm\HrmInterview;
 use App\Models\Hrm\HrmInterviewEvaluation;
 use App\Models\Hrm\HrmJobPosting;
 use App\Models\Hrm\HrmOnboarding;
+use App\Services\Hrm\ApplicantApplicationHoldService;
 use App\Support\ReapplyCooldown;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
@@ -23,14 +24,26 @@ class InterviewController extends Controller
 
     public function index()
     {
+        $applicants = Applicant::with('jobPosting')
+            ->whereHas('jobApplications', function ($query) {
+                $query->whereIn('status', ['Shortlisted', 'Interview'])->notOnHold();
+            })
+            ->latest();
+
         return Inertia::render('Dashboard/HRM_NEW/Interviews', [
-            'applicants' => Applicant::with('jobPosting')->whereIn('status', ['Shortlisted', 'Interview'])->latest()->take(50)->get(),
+            'applicants' => $applicants->take(50)->get(),
             'metrics' => [
                 'total' => Applicant::count(),
                 'shortlisted' => Applicant::where('status', 'Shortlisted')->count(),
-                'interview_scheduled' => HrmInterview::where('status', 'Scheduled')->count(),
-                'interviewed' => HrmInterview::where('status', 'Completed')->count(),
-                'interview_rescheduled' => HrmInterview::where('status', 'Rescheduled')->count(),
+                'interview_scheduled' => ApplicantApplicationHoldService::excludeHeldInterviews(
+                    HrmInterview::where('status', 'Scheduled')
+                )->count(),
+                'interviewed' => ApplicantApplicationHoldService::excludeHeldInterviews(
+                    HrmInterview::where('status', 'Completed')
+                )->count(),
+                'interview_rescheduled' => ApplicantApplicationHoldService::excludeHeldInterviews(
+                    HrmInterview::where('status', 'Rescheduled')
+                )->count(),
             ],
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
@@ -38,7 +51,11 @@ class InterviewController extends Controller
 
     public function list()
     {
-        return response()->json(HrmInterview::with(['evaluation', 'applicant', 'interviewer:id,name,email'])->latest()->paginate(20));
+        return response()->json(
+            ApplicantApplicationHoldService::excludeHeldInterviews(
+                HrmInterview::with(['evaluation', 'applicant', 'interviewer:id,name,email'])
+            )->latest()->paginate(20)
+        );
     }
 
     /**
@@ -51,19 +68,33 @@ class InterviewController extends Controller
      * - HRM-native manager/staff with no explicit HRM grants include
      * - anyone with an explicit HRM/interview view|edit grant includes
      */
-    public function interviewers()
+    public function interviewers(Request $request)
     {
-        $users = User::with([
+        $department = $request->query('department');
+
+        $query = User::with([
             'pagePermissions' => fn ($q) => $q->whereIn('module', ['HRM', 'hrm', 'Hrm']),
             'hrmOrgPosition:id,name,code',
-            'hrmDepartment:id,name',
+            'hrmDepartment:id,name,code',
         ])
             ->where('is_active', '!=', 0)
             ->select('id', 'name', 'email', 'role', 'position', 'department', 'hrm_position_id', 'hrm_department_id', 'is_active')
             ->orderBy('name')
-            ->take(200)->get();
+            ->take(200);
 
-        $eligible = $users->filter(fn ($u) => $this->canAccessInterview($u))->values()
+        if ($department) {
+            $query->where(function ($q) use ($department) {
+                $q->whereHas('hrmDepartment', function ($dept) use ($department) {
+                    $dept->whereRaw('LOWER(name) = ?', [strtolower($department)])
+                        ->orWhereRaw('LOWER(code) = ?', [strtolower($department)])
+                        ->orWhereRaw('LOWER(category) = ?', [strtolower($department)]);
+                })->orWhereRaw('LOWER(department) = ?', [strtolower($department)]);
+            });
+        }
+
+        $users = $query->get();
+
+        $eligible = $users->values()
             ->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -78,6 +109,14 @@ class InterviewController extends Controller
             ->sortBy('id')
             ->unique(fn ($u) => mb_strtolower(trim((string) $u['name'])))
             ->values();
+
+        // Filter to only managers if department is specified
+        if ($department) {
+            $eligible = $eligible->filter(fn ($u) =>
+                str_contains(strtolower((string) ($u['job_position'] ?? '')), 'manager') ||
+                strtolower((string) ($u['position'] ?? '')) === 'manager'
+            )->values();
+        }
 
         return response()->json($eligible);
     }
@@ -124,15 +163,26 @@ class InterviewController extends Controller
         if (! $interviewerId) {
             return;
         }
-        $interviewer = User::with(['pagePermissions' => fn ($q) => $q->whereIn('module', ['HRM', 'hrm', 'Hrm'])])->find($interviewerId);
-        if (! $interviewer || ! $this->canAccessInterview($interviewer)) {
-            abort(response()->json(['message' => 'Selected interviewer does not have access to HRM Interview.', 'errors' => ['interviewer_id' => ['Selected interviewer does not have access to HRM Interview.']]], 422));
+        $interviewer = User::with([
+            'pagePermissions' => fn ($q) => $q->whereIn('module', ['HRM', 'hrm', 'Hrm']),
+            'hrmOrgPosition:id,name',
+        ])->find($interviewerId);
+        $isManager = $interviewer && (
+            strtolower((string) $interviewer->position) === 'manager'
+            || str_contains(strtolower((string) $interviewer->hrmOrgPosition?->name), 'manager')
+        );
+        if (! $interviewer || (! $isManager && ! $this->canAccessInterview($interviewer))) {
+            abort(response()->json(['message' => 'Selected interviewer is not eligible.', 'errors' => ['interviewer_id' => ['Selected interviewer is not eligible.']]], 422));
         }
     }
 
     public function fetch()
     {
-        return response()->json(HrmInterview::with(['evaluation', 'applicant', 'interviewer:id,name,email'])->latest()->take(50)->get());
+        return response()->json(
+            ApplicantApplicationHoldService::excludeHeldInterviews(
+                HrmInterview::with(['evaluation', 'applicant', 'interviewer:id,name,email'])
+            )->latest()->take(50)->get()
+        );
     }
 
     /**
@@ -141,11 +191,12 @@ class InterviewController extends Controller
     public function upcoming()
     {
         return response()->json(
-            HrmInterview::with(['applicant', 'evaluation', 'interviewer:id,name,email'])
-                ->where('status', 'Scheduled')
-                ->whereDate('date', '>=', today())
-                ->orderBy('date')->orderBy('start_time')
-                ->get()
+            ApplicantApplicationHoldService::excludeHeldInterviews(
+                HrmInterview::with(['applicant', 'evaluation', 'interviewer:id,name,email'])
+                    ->where('status', 'Scheduled')
+                    ->whereDate('date', '>=', today())
+                    ->orderBy('date')->orderBy('start_time')
+            )->get()
         );
     }
 
@@ -154,9 +205,27 @@ class InterviewController extends Controller
      */
     public function show(HrmInterview $interview)
     {
+        if ($interview->applicant_id
+            && ApplicantApplicationHoldService::isHeldFor((int) $interview->applicant_id, $interview->job_posting_id)) {
+            abort(404);
+        }
+
         return response()->json(
             $interview->loadMissing(['applicant', 'interviewer', 'evaluation', 'jobPosting'])
         );
+    }
+
+    /**
+     * Reject mutations that target an application parked by the onboarding hold.
+     */
+    private function assertInterviewNotHeld(HrmInterview $interview): ?\Illuminate\Http\JsonResponse
+    {
+        if (! $interview->applicant_id
+            || ! ApplicantApplicationHoldService::isHeldFor((int) $interview->applicant_id, $interview->job_posting_id)) {
+            return null;
+        }
+
+        return response()->json(['message' => ApplicantApplicationHoldService::HOLD_MESSAGE], 422);
     }
 
     /**
@@ -166,6 +235,10 @@ class InterviewController extends Controller
      */
     public function update(Request $request, HrmInterview $interview)
     {
+        if ($response = $this->assertInterviewNotHeld($interview)) {
+            return $response;
+        }
+
         $data = $request->validate([
             'type' => 'nullable|in:Initial,Final,Initial Interview,Final Interview',
             'method' => 'nullable|in:Online,Onsite',
@@ -197,6 +270,7 @@ class InterviewController extends Controller
                 $app->update(['status' => 'Interviewed']);
                 ApplicantJobApplication::where('applicant_id', $app->id)
                     ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+                    ->notOnHold()
                     ->update(['status' => 'Interviewed']);
                 ApplicantStatusHistory::create([
                     'applicant_id' => $app->id, 'from_status' => $from,
@@ -209,6 +283,7 @@ class InterviewController extends Controller
                 $app->update(['status' => 'Selected']);
                 ApplicantJobApplication::where('applicant_id', $app->id)
                     ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+                    ->notOnHold()
                     ->update(['status' => 'Selected']);
                 ApplicantStatusHistory::create([
                     'applicant_id' => $app->id, 'from_status' => $from,
@@ -260,6 +335,10 @@ class InterviewController extends Controller
         if (empty($data['job_posting_id']) && ! empty($data['applicant_id'])) {
             $data['job_posting_id'] = $this->resolvePostingId((int) $data['applicant_id']);
         }
+        if (! empty($data['applicant_id'])
+            && ApplicantApplicationHoldService::isHeldFor((int) $data['applicant_id'], $data['job_posting_id'] ?? null)) {
+            return response()->json(['message' => ApplicantApplicationHoldService::HOLD_MESSAGE], 422);
+        }
         $this->ensureInterviewerEligible($data['interviewer_id'] ?? null);
         // Normalize display values ("Initial Interview"/"Final Interview") to DB convention (Initial|Final).
         if (isset($data['type'])) {
@@ -294,6 +373,7 @@ class InterviewController extends Controller
             Applicant::whereKey($interview->applicant_id)->update(['status' => 'Interview']);
             ApplicantJobApplication::where('applicant_id', $interview->applicant_id)
                 ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+                ->notOnHold()
                 ->update(['status' => 'Interview']);
             if ($app = Applicant::find($interview->applicant_id)) {
                 \App\Support\NotifiesApplicant::push($app, 'interview', 'Interview Scheduled', 'Your ' . ($interview->type ?? '') . ' interview has been scheduled.', [
@@ -316,6 +396,10 @@ class InterviewController extends Controller
 
     public function reschedule(Request $request, HrmInterview $interview)
     {
+        if ($response = $this->assertInterviewNotHeld($interview)) {
+            return $response;
+        }
+
         $data = $request->validate([
             'date' => 'required|date',
             'start_time' => 'required|string',
@@ -415,6 +499,10 @@ class InterviewController extends Controller
      */
     public function approveReschedule(Request $request, HrmInterview $interview)
     {
+        if ($response = $this->assertInterviewNotHeld($interview)) {
+            return $response;
+        }
+
         if ($interview->reschedule_status !== 'requested') {
             return response()->json(['message' => 'There is no pending reschedule request for this interview.'], 422);
         }
@@ -501,6 +589,10 @@ class InterviewController extends Controller
      */
     public function denyReschedule(Request $request, HrmInterview $interview)
     {
+        if ($response = $this->assertInterviewNotHeld($interview)) {
+            return $response;
+        }
+
         if ($interview->reschedule_status !== 'requested') {
             return response()->json(['message' => 'There is no pending reschedule request for this interview.'], 422);
         }
@@ -530,6 +622,10 @@ class InterviewController extends Controller
 
     public function cancel(Request $request, HrmInterview $interview)
     {
+        if ($response = $this->assertInterviewNotHeld($interview)) {
+            return $response;
+        }
+
         $interview->update([
             'status' => 'Cancelled',
             'cancelled_by' => 'hrm',
@@ -547,6 +643,10 @@ class InterviewController extends Controller
 
     public function noShow(HrmInterview $interview)
     {
+        if ($response = $this->assertInterviewNotHeld($interview)) {
+            return $response;
+        }
+
         $interview->update(['status' => 'No Show']);
 
         return response()->json(['ok' => true]);
@@ -554,6 +654,10 @@ class InterviewController extends Controller
 
     public function complete(Request $request, HrmInterview $interview)
     {
+        if ($response = $this->assertInterviewNotHeld($interview)) {
+            return $response;
+        }
+
         $request->validate([
             'result' => 'nullable|in:passed,failed,pending_review',
             'recommendation' => 'nullable|in:proceed_to_final_interview,proceed_to_onboarding,proceed_to_onboarding_training,recommend_onboarding_training,do_not_proceed,further_assessment_required,reject',
@@ -636,19 +740,28 @@ class InterviewController extends Controller
     {
         return ApplicantJobApplication::where('applicant_id', $applicantId)
                 ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+                ->notOnHold()
                 ->latest()->value('job_posting_id')
             ?? ApplicantJobApplication::where('applicant_id', $applicantId)
+                ->notOnHold()
                 ->latest()->value('job_posting_id')
             ?? Applicant::whereKey($applicantId)->value('job_posting_id');
     }
 
     private function moveInterviewToOnboarding(HrmInterview $interview, $changedBy): HrmOnboarding
     {
+        return DB::transaction(function () use ($interview, $changedBy) {
         $app = $interview->applicant;
         // Resolve the job when old interviews carry none, so each applied job
         // gets its own onboarding row instead of merging into the first one.
         $postingId = $interview->job_posting_id
             ?? ($interview->applicant_id ? $this->resolvePostingId((int) $interview->applicant_id) : null);
+
+        if ($interview->applicant_id
+            && ApplicantApplicationHoldService::isHeldFor((int) $interview->applicant_id, $postingId)) {
+            abort(422, ApplicantApplicationHoldService::HOLD_MESSAGE);
+        }
+
         if ($postingId && ! $interview->job_posting_id) {
             $interview->update(['job_posting_id' => $postingId]);
         }
@@ -702,12 +815,18 @@ class InterviewController extends Controller
             $from = $app->status;
             $app->update(['status' => 'Onboarding', 'archived' => false]);
             // Flip only this job's application — never sibling applications.
-            $jaQuery = ApplicantJobApplication::where('applicant_id', $app->id)
-                ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired']);
-            if ($postingId) {
-                $jaQuery->where('job_posting_id', $postingId);
+            $targetApplication = ApplicantJobApplication::where('applicant_id', $app->id)
+                ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+                ->notOnHold()
+                ->when($postingId, fn ($q) => $q->where('job_posting_id', $postingId))
+                ->latest()
+                ->first();
+
+            if ($targetApplication) {
+                // The model event closes the loop and holds this applicant's
+                // other active applications automatically.
+                $targetApplication->update(['status' => 'Onboarding']);
             }
-            $jaQuery->update(['status' => 'Onboarding']);
             ApplicantStatusHistory::create([
                 'applicant_id' => $app->id, 'from_status' => $from,
                 'to_status' => 'Onboarding', 'changed_by' => $changedBy,
@@ -716,16 +835,22 @@ class InterviewController extends Controller
         }
 
         return $onboarding;
+        });
     }
 
     public function select(Request $request, HrmInterview $interview)
     {
+        if ($response = $this->assertInterviewNotHeld($interview)) {
+            return $response;
+        }
+
         $interview->update(['status' => 'Completed']);
         if ($app = $interview->applicant) {
             $from = $app->status;
             $app->update(['status' => 'Offered']);
             ApplicantJobApplication::where('applicant_id', $app->id)
                 ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+                ->notOnHold()
                 ->update(['status' => 'Offered']);
             ApplicantStatusHistory::create([
                 'applicant_id' => $app->id, 'from_status' => $from,

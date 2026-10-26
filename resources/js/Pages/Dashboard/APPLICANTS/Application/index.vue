@@ -286,9 +286,9 @@ function withdrawApplication(app: any) {
 
     showModalDialog({
         type: 'withdraw',
-        title: 'Withdraw Application?',
-        message: `Are you sure you want to withdraw your application for "<strong>${app.job_title}</strong>"? This action cannot be undone.`,
-        confirmText: 'Yes, Withdraw',
+        title: 'Cancel Application?',
+        message: `Are you sure you want to cancel your application for "<strong>${app.job_title}</strong>"? This action cannot be undone.`,
+        confirmText: 'Yes, Cancel',
         cancelText: 'Cancel',
         onConfirm: confirmWithdraw
     });
@@ -308,8 +308,8 @@ function confirmWithdraw() {
             // Show success modal
             showModalDialog({
                 type: 'success',
-                title: 'Application Withdrawn',
-                message: `Your application for "<strong>${selectedApp.value.job_title}</strong>" has been withdrawn successfully. You can now re-apply if you wish.`,
+                title: 'Application Cancelled',
+                message: `Your application for "<strong>${selectedApp.value.job_title}</strong>" has been cancelled successfully. You can now re-apply if you wish.`,
                 confirmText: 'OK',
                 cancelText: '',
                 onConfirm: closeModal
@@ -323,12 +323,12 @@ function confirmWithdraw() {
         },
         onError: (errors) => {
             isProcessing.value = false;
-            const errorMsg = Object.values(errors)[0] || 'Failed to withdraw application. Please try again.';
+            const errorMsg = Object.values(errors)[0] || 'Failed to cancel application. Please try again.';
 
             closeModal();
             showModalDialog({
                 type: 'error',
-                title: 'Withdrawal Failed',
+                title: 'Cancellation Failed',
                 message: errorMsg,
                 confirmText: 'OK',
                 cancelText: '',
@@ -470,7 +470,7 @@ function confirmWithdraw() {
                                     @click="withdrawApplication(app)"
                                     class="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg"
                                 >
-                                    Withdraw
+                                    Cancel
                                 </button>
                                 <Link
                                     v-if="app.status === 'Rejected' || app.status === 'Withdrawn'"

@@ -15,11 +15,11 @@ const props = defineProps<{
 const withdrawing = ref(false);
 
 const withdraw = () => {
-    if (!confirm(`Withdraw your application for "${props.application?.job_title}"?`)) return;
+    if (!confirm(`Cancel your application for "${props.application?.job_title}"?`)) return;
     withdrawing.value = true;
     router.post(route('applicant.applications.withdraw', props.application.id), {}, {
-        onSuccess: () => toast.success('Application withdrawn.'),
-        onError: (e) => toast.error(String(Object.values(e || {})[0] || 'Failed to withdraw.')),
+        onSuccess: () => toast.success('Application cancelled.'),
+        onError: (e) => toast.error(String(Object.values(e || {})[0] || 'Failed to cancel.')),
         onFinish: () => { withdrawing.value = false; },
     });
 };
@@ -69,7 +69,7 @@ const value = 'text-sm text-slate-800 dark:text-slate-200';
                         :disabled="withdrawing"
                         class="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 text-sm font-bold rounded-xl border border-rose-200 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition active:scale-95 disabled:opacity-50"
                     >
-                        {{ withdrawing ? 'Withdrawing...' : 'Withdraw' }}
+                        {{ withdrawing ? 'Cancelling...' : 'Cancel' }}
                     </button>
                 </div>
             </div>

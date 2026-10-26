@@ -55,8 +55,10 @@ Route::middleware('auth:agency')->prefix('agency')->name('agency.')->group(funct
     Route::post('/attendance/{attendance}/confirm', [AttendancePortalController::class, 'confirm'])->name('attendance.confirm');
     Route::post('/attendance/{attendance}/dispute', [AttendancePortalController::class, 'dispute'])->name('attendance.dispute');
 
-    // Billing (Issued/Paid only, read-only + exports).
+    // Billing (Issued/Paid only, read-only + exports) + create invoice.
     Route::get('/billing', [BillingPortalController::class, 'index'])->name('billing.index');
+    Route::get('/billing/create', [BillingPortalController::class, 'create'])->name('billing.create');
+    Route::post('/billing', [BillingPortalController::class, 'store'])->name('billing.store');
     Route::get('/billing/{statement}', [BillingPortalController::class, 'show'])->name('billing.show');
     Route::get('/billing/{statement}/export-pdf', [BillingPortalController::class, 'exportPdf'])->name('billing.export-pdf');
     Route::get('/billing/{statement}/export-excel', [BillingPortalController::class, 'exportExcel'])->name('billing.export-excel');

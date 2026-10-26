@@ -22,6 +22,7 @@ use App\Http\Controllers\Hrm\Workforce\DepartmentController as NewDepartmentCont
 use App\Http\Controllers\Hrm\Workforce\PositionController as NewPositionController;
 use App\Http\Controllers\Hrm\Workforce\EmploymentTypeController as NewEmploymentTypeController;
 use App\Http\Controllers\Hrm\Workforce\EmployeeDirectoryController as NewEmployeeDirectoryController;
+use App\Http\Controllers\Hrm\Workforce\ProbationEvaluationController;
 use App\Http\Controllers\Hrm\Workforce\LeaveManagementController as NewLeaveManagementController;
 use App\Http\Controllers\Hrm\Workforce\AttendanceController as NewAttendanceController;
 use App\Http\Controllers\Hrm\Workforce\MyAttendanceController as NewMyAttendanceController;
@@ -278,22 +279,25 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
 
     // My Assigned Trainees (reporting-manager workspace, strictly manager_id == me)
     Route::get('/my-assigned-trainees', [AssignedTraineesController::class, 'index'])
-        ->middleware('page.permission:trainee,view')
+        ->middleware('page.permission:my_assigned_trainees,view')
         ->name('assigned-trainees.index');
     Route::get('/my-assigned-trainees/{id}', [AssignedTraineesController::class, 'show'])
-        ->middleware('page.permission:trainee,view')
+        ->middleware('page.permission:my_assigned_trainees,view')
         ->name('assigned-trainees.show');
     Route::post('/my-assigned-trainees/{id}/weekly', [AssignedTraineesController::class, 'weekly'])
-        ->middleware('page.permission:trainee,edit')
+        ->middleware('page.permission:my_assigned_trainees,edit')
         ->name('assigned-trainees.weekly');
     Route::post('/my-assigned-trainees/{id}/final', [AssignedTraineesController::class, 'final'])
-        ->middleware('page.permission:trainee,edit')
+        ->middleware('page.permission:my_assigned_trainees,edit')
         ->name('assigned-trainees.final');
+    Route::post('/my-assigned-trainees/{id}/probation-evaluation', [AssignedTraineesController::class, 'saveProbationEvaluation'])
+        ->middleware('page.permission:my_assigned_trainees,edit')
+        ->name('assigned-trainees.probation-evaluation');
     Route::post('/my-assigned-trainees/{id}/clock', [AssignedTraineesController::class, 'clock'])
-        ->middleware('page.permission:trainee,edit')
+        ->middleware('page.permission:my_assigned_trainees,edit')
         ->name('assigned-trainees.clock');
     Route::post('/my-assigned-trainees/{id}/observation', [AssignedTraineesController::class, 'observation'])
-        ->middleware('page.permission:trainee,edit')
+        ->middleware('page.permission:my_assigned_trainees,edit')
         ->name('assigned-trainees.observation');
 
     // Bare onboarding URL (e.g. top-bar breadcrumb) → current onboarding page.
@@ -477,6 +481,14 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
 
         Route::get('/positions', [NewPositionController::class, 'index'])
             ->middleware('page.permission:employee,view')->name('positions.index');
+        Route::get('/performance-kpi', [ProbationEvaluationController::class, 'index'])
+            ->middleware('page.permission:employee,view')->name('performance-kpi.index');
+        Route::post('/performance-kpi/evaluations', [ProbationEvaluationController::class, 'store'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.store');
+        Route::put('/performance-kpi/evaluations/{evaluation}', [ProbationEvaluationController::class, 'update'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.update');
+        Route::post('/performance-kpi/evaluations/{evaluation}/review', [ProbationEvaluationController::class, 'review'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.review');
         Route::post('/positions', [NewPositionController::class, 'store'])
             ->middleware('page.permission:employee,edit')->name('positions.store');
         Route::put('/positions/{position}', [NewPositionController::class, 'update'])
@@ -711,9 +723,13 @@ Route::prefix('hrm')->middleware(['auth', 'verified'])->group(function () {
     })->middleware('page.permission:application,view');
     Route::get('/recruitment/applications/hired', [NewApplicationController::class, 'hired'])
         ->middleware('page.permission:application,view');
+    Route::get('/recruitment/applications/{application}/screening-page', [NewApplicationController::class, 'screeningPage'])
+        ->middleware('page.permission:application,edit');
     Route::get('/recruitment/applications/{application}/profile', [NewApplicationController::class, 'profile'])
         ->middleware('page.permission:application,view');
     Route::post('/recruitment/applications/{application}/start-screening', [NewApplicationController::class, 'startScreening'])
+        ->middleware('page.permission:application,edit');
+    Route::post('/recruitment/applications/{application}/screening-draft', [NewApplicationController::class, 'saveScreeningDraft'])
         ->middleware('page.permission:application,edit');
     Route::post('/recruitment/applications/{application}/screening', [NewApplicationController::class, 'screening'])
         ->middleware('page.permission:application,edit');

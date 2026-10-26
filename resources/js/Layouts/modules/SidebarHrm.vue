@@ -50,6 +50,7 @@ export const hrmModule = {
             { label: 'Employees', href: safe('hrm.workforce.employees.index'), icon: Users, permKey: 'employee' },
             { label: 'Departments', href: safe('hrm.workforce.departments.index'), icon: Building2, permKey: 'employee' },
             { label: 'Positions', href: safe('hrm.workforce.positions.index'), icon: Briefcase, permKey: 'employee' },
+            { label: 'Employment Performance & KPI', href: safe('hrm.workforce.performance-kpi.index'), icon: ChartNoAxesCombined, permKey: 'employee' },
             { label: 'Employment Types', href: safe('hrm.workforce.employment-types.index'), icon: Layers, permKey: 'employee' },
             agencyDropdown,
             // Recruitment (routes enforce application/interview).
@@ -65,7 +66,7 @@ export const hrmModule = {
             { label: 'Shift Management', href: safe('hrm.workforce.shifts.index'), icon: CalendarClock, permKey: 'attendance' },
             { label: 'Leave Management', href: safe('hrm.workforce.leave.index'), icon: CalendarDays, permKey: 'leave' },
             { label: 'Trainees', href: safe('hrm.trainee.index'), icon: Award, permKey: 'trainee' },
-            { label: 'My Assigned Trainees', href: safe('hrm.assigned-trainees.index'), icon: GraduationCap, permKey: 'trainee' },
+            { label: 'My Assigned Personnel', href: safe('hrm.assigned-trainees.index'), icon: GraduationCap, permKey: 'my_assigned_trainees' },
             { label: 'Payroll', href: safe('hrm.payroll'), icon: HandCoins, permKey: 'payroll' },
             { label: 'Compensation & Salary Management', href: safe('hrm.compensation'), icon: Wallet, permKey: 'compensation' },
             { label: 'Analytics', href: safe('hrm.analytics'), icon: ChartNoAxesCombined, permKey: 'analytics' },

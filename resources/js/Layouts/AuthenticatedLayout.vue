@@ -110,15 +110,15 @@ const reloadPage = () => {
         <div :class="sidebarCollapsed ? 'md:pl-0' : 'md:pl-64'"
             class="pt-16 md:pt-0 flex flex-col flex-1 min-h-screen transition-all duration-300">
             <TopBar v-if="!hasError" />
-            <main class="py-8 pb-24 md:pb-8 flex-1 bg-gray-50 dark:bg-zinc-900">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <main>
+                <div>
                     <!-- Location status – always visible -->
-                    <div class="mb-4 flex items-center gap-4">
+                    <div class="sticky top-36 z-10 mb-4 flex items-center gap-4 md:top-20">
                         <div v-if="locationReady" class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 flex items-center gap-2">
                             <span class="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
                             Secure Zone Verified
                         </div>
-                        <div v-else class="text-[10px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full animate-pulse border border-blue-100">
+                        <div v-else role="status" class="text-[10px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full animate-pulse border border-blue-100">
                             Searching Perimeter...
                         </div>
                     </div>

@@ -138,7 +138,7 @@
                         class="p-1.5 text-slate-300 cursor-not-allowed"
                         title="Cannot edit archived"
                       ><Lock class="w-4 h-4" /></button>
-                      <button v-if="!type.archived_at" @click="archiveType(type.id)" class="p-1.5 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-all" title="Archive"><Archive class="w-4 h-4" /></button>
+                      <button v-if="!type.archived_at" @click="askArchive(type)" class="p-1.5 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-all" title="Archive"><Archive class="w-4 h-4" /></button>
                       <button v-else @click="restoreType(type.id)" class="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-400 hover:text-emerald-600 transition-all" title="Restore"><Undo2 class="w-4 h-4" /></button>
                     </div>
                   </td>
@@ -238,6 +238,20 @@
           </div>
         </div>
 
+        <!-- ARCHIVE CONFIRMATION -->
+        <div v-if="archiveTarget" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" @click.self="cancelArchive">
+          <section role="dialog" aria-modal="true" aria-labelledby="archive-confirm-title" class="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div class="flex items-start gap-4 p-6">
+              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700"><Archive class="h-5 w-5" /></div>
+              <div><h3 id="archive-confirm-title" class="text-base font-bold text-slate-900">Archive employment type?</h3><p class="mt-1 text-sm leading-relaxed text-slate-600">“{{ archiveTarget.name }}” will be moved to Archived and hidden from active employment type lists.</p></div>
+            </div>
+            <div class="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 p-4">
+              <button @click="cancelArchive" :disabled="archiving" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50">Cancel</button>
+              <button @click="confirmArchive" :disabled="archiving" class="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-50">{{ archiving ? 'Archiving...' : 'Archive Type' }}</button>
+            </div>
+          </section>
+        </div>
+
       </div>
     </div>
   </AuthenticatedLayout>
@@ -264,6 +278,8 @@ const showArchived = ref(false);
 const activeModal = ref(null);
 const searchQuery = ref("");
 const saving = ref(false);
+const archiving = ref(false);
+const archiveTarget = ref(null);
 const error = ref(false);
 
 const form = ref({
@@ -402,13 +418,23 @@ const submitForm = async () => {
     }
 };
 
-const archiveType = async (id) => {
+const askArchive = (type) => { archiveTarget.value = type; };
+const cancelArchive = () => {
+    if (!archiving.value) archiveTarget.value = null;
+};
+
+const confirmArchive = async () => {
+    if (!archiveTarget.value || archiving.value) return;
+    archiving.value = true;
     try {
-        const res = await axios.delete(route("hrm.workforce.employment-types.destroy", { employmentType: id }));
+        const res = await axios.delete(route("hrm.workforce.employment-types.destroy", { employmentType: archiveTarget.value.id }));
         toast.success(res.data?.message || "Employment type archived successfully.");
+        archiveTarget.value = null;
         reloadPage();
     } catch (e) {
         toast.error(e.response?.data?.message || "Failed to archive employment type.");
+    } finally {
+        archiving.value = false;
     }
 };
 

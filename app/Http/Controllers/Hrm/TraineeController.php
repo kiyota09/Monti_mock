@@ -8,6 +8,7 @@ use App\Models\Hrm\HrmDepartment;
 use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\HrmTraining;
 use App\Models\Hrm\HrmTrainingEnrollment;
+use App\Models\Hrm\HrmOnboarding;
 use App\Models\Hrm\AttendanceLog;
 use App\Models\Hrm\TraineeDailyObservation;
 use App\Models\Hrm\TraineeGrade;
@@ -31,6 +32,7 @@ class TraineeController extends Controller
             'traineeTransfers',
             'hrmOrgPosition:id,name',
             'hrmDepartment:id,name',
+            'hrmEmploymentType:id,name',
             'manager:id,name',
         ];
 
@@ -54,6 +56,52 @@ class TraineeController extends Controller
             ->orderByDesc('created_at')
             ->take(50)
             ->get();
+
+        // A recent hire belongs in the training dashboard only when their
+        // probationary job posting explicitly requires training. Resolve the
+        // posting through the same onboarding/applicant links used at hire.
+        $trainingCandidates = $traineeUsers->concat($newStaff);
+        $newHireIds = $trainingCandidates->pluck('id');
+        $newHireEmails = $trainingCandidates->flatMap(fn ($employee) => [$employee->email, $employee->personal_email])
+            ->filter()->unique()->values();
+        $applicantLinks = Applicant::query()
+            ->where(function ($query) use ($newHireIds, $newHireEmails) {
+                $query->whereIn('hired_user_id', $newHireIds)
+                    ->orWhereIn('email', $newHireEmails);
+            })
+            ->with(['jobPosting:id,training_required', 'jobApplications.jobPosting:id,training_required'])
+            ->orderByDesc('id')->get();
+        $applicantsByUser = $applicantLinks->filter(fn ($applicant) => $applicant->hired_user_id)
+            ->unique('hired_user_id')->keyBy('hired_user_id');
+        $applicantsByEmail = $applicantLinks->unique('email')->keyBy('email');
+
+        $onboardingLinks = HrmOnboarding::query()
+            ->where(function ($query) use ($applicantLinks, $newHireEmails) {
+                $query->whereIn('applicant_id', $applicantLinks->pluck('id'))
+                    ->orWhereIn('email', $newHireEmails);
+            })
+            ->with('jobPosting:id,training_required')
+            ->orderByDesc('id')->get();
+        $onboardingsByApplicant = $onboardingLinks->filter(fn ($onboarding) => $onboarding->applicant_id)
+            ->unique('applicant_id')->keyBy('applicant_id');
+        $onboardingsByEmail = $onboardingLinks->unique('email')->keyBy('email');
+
+        $requiresTraining = function ($employee) use ($applicantsByUser, $applicantsByEmail, $onboardingsByApplicant, $onboardingsByEmail) {
+            if (strtolower((string) $employee->hrmEmploymentType?->name) !== 'probationary') {
+                return true;
+            }
+
+            $applicant = $applicantsByUser[$employee->id] ?? $applicantsByEmail[$employee->personal_email ?: $employee->email] ?? null;
+            $onboarding = ($applicant ? $onboardingsByApplicant[$applicant->id] ?? null : null)
+                ?? $onboardingsByEmail[$employee->personal_email ?: $employee->email] ?? null;
+            $posting = $onboarding?->jobPosting
+                ?? $applicant?->jobPosting
+                ?? $applicant?->jobApplications?->first()?->jobPosting;
+
+            return (bool) $posting?->training_required;
+        };
+        $traineeUsers = $traineeUsers->filter($requiresTraining)->values();
+        $newStaff = $newStaff->filter($requiresTraining)->values();
 
         $rows = $traineeUsers->concat($newStaff)
             ->sortByDesc('created_at')

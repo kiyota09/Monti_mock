@@ -17,6 +17,7 @@ use App\Models\Hrm\HrmTraining;
 use App\Models\Hrm\HrmTrainingEnrollment;
 use App\Models\Hrm\SalaryHistory;
 use App\Models\Core\User;
+use App\Services\Hrm\ApplicantApplicationHoldService;
 use App\Support\OnboardingSnapshot;
 use App\Support\TerminatedAccess;
 use App\Traits\HasPagePermissions;
@@ -37,7 +38,7 @@ class StatusController extends Controller
         $viewer = $request->user();
         $fullAccess = self::isFullOnboardingViewer($viewer);
 
-        $q = HrmOnboarding::query();
+        $q = ApplicantApplicationHoldService::excludeHeldOnboardings(HrmOnboarding::query());
         if (! $fullAccess) {
             // Reporting managers only see onboardings assigned to them.
             $q->where('assigned_manager', $viewer?->name);
@@ -61,7 +62,11 @@ class StatusController extends Controller
         })->values()->all();
 
         // Stats respect the same visibility scope so counts never leak others.
-        $statsBase = $fullAccess ? HrmOnboarding::query() : HrmOnboarding::where('assigned_manager', $viewer?->name);
+        $statsBase = $fullAccess
+            ? ApplicantApplicationHoldService::excludeHeldOnboardings(HrmOnboarding::query())
+            : ApplicantApplicationHoldService::excludeHeldOnboardings(
+                HrmOnboarding::where('assigned_manager', $viewer?->name)
+            );
         return Inertia::render('Dashboard/HRM_NEW/Onboarding', [
             'onboardings' => $onboardings,
             'pagination' => [
@@ -87,6 +92,10 @@ class StatusController extends Controller
     public function show(Request $request, HrmOnboarding $onboarding)
     {
         self::authorizeOnboardingAccess($request->user(), $onboarding);
+        if ($onboarding->applicant_id
+            && ApplicantApplicationHoldService::isHeldFor((int) $onboarding->applicant_id, $onboarding->job_posting_id)) {
+            abort(404);
+        }
         $onboarding->load(['items.templateItem', 'activities', 'notes', 'template', 'applicant', 'jobPosting.employmentType']);
         // Readiness + progress scope: Applicant Requirements only. HR
         // Processing / Company Preparation never block completion.
@@ -260,6 +269,7 @@ class StatusController extends Controller
                 'employment_type' => $jaPosting->employmentType?->name,
                 'salary_min' => $jaPosting->salary_min,
                 'salary_max' => $jaPosting->salary_max,
+                'training_required' => (bool) $jaPosting->training_required,
             ] : [
                 // Synthetic fallback so the display never renders null —
                 // built from the onboarding record itself.
@@ -272,6 +282,7 @@ class StatusController extends Controller
                 'employment_type' => $onboarding->employment_type,
                 'salary_min' => null,
                 'salary_max' => null,
+                'training_required' => false,
                 'synthetic' => true,
             ],
             'application' => $latestJa ? [
@@ -509,6 +520,21 @@ class StatusController extends Controller
 
     public function createEmployee(Request $request, HrmOnboarding $onboarding)
     {
+        if ($onboarding->applicant_id
+            && ApplicantApplicationHoldService::isHeldFor((int) $onboarding->applicant_id, $onboarding->job_posting_id)) {
+            abort(422, ApplicantApplicationHoldService::HOLD_MESSAGE);
+        }
+
+        $posting = $onboarding->jobPosting;
+        if (! $posting && $onboarding->applicant_id) {
+            $posting = $onboarding->applicant?->jobApplications()->latest()->first()?->jobPosting;
+        }
+        $trainingRequired = (bool) $posting?->training_required;
+        $requestedEmploymentType = $request->filled('employment_type_id')
+            ? \App\Models\Hrm\HrmEmploymentType::whereKey($request->input('employment_type_id'))->value('name')
+            : $request->input('employment_type');
+        $probationaryHire = str_contains(strtolower((string) $requestedEmploymentType), 'probation');
+
         $data = $request->validate([
             'position' => 'required|string|max:255',
             'position_rank' => 'nullable|string|max:60',
@@ -531,26 +557,40 @@ class StatusController extends Controller
             'payroll_group' => 'nullable|string|max:255',
             'company_email' => 'nullable|email|max:255',
             'create_account' => 'nullable|boolean',
-            'training_duration_weeks' => 'nullable|integer|min:1|max:52',
-            'training_end_date' => 'nullable|date',
+            'training_duration_weeks' => ($trainingRequired ? 'required' : 'nullable') . '|integer|min:1|max:4',
+            'training_end_date' => ($trainingRequired ? 'required' : 'nullable') . '|date',
+            'probation_duration_months' => ($probationaryHire ? 'required' : 'nullable') . '|integer|min:1|max:6',
+            'probation_evaluation_interval_months' => ($probationaryHire ? 'required' : 'nullable') . '|integer|min:1|max:6',
             'emergency_contact_name' => 'nullable|string|max:255',
             'emergency_contact_relationship' => 'nullable|string|max:100',
             'emergency_contact_number' => 'nullable|string|max:40',
         ]);
 
-        // Training schedule: duration (weeks) + end calendar, anchored on the
-        // deployment start date. End wins when both are given; otherwise it is
-        // derived as start + duration (default 8 weeks).
-        $deploymentStart = $data['start_date'] ?? now()->toDateString();
-        $durationWeeks = (int) ($data['training_duration_weeks'] ?? 8);
-        $durationWeeks = max(1, min(52, $durationWeeks ?: 8));
-        try {
-            $trainingEnd = ! empty($data['training_end_date'])
-                ? \Carbon\Carbon::parse($data['training_end_date'])->toDateString()
-                : \Carbon\Carbon::parse($deploymentStart)->addWeeks($durationWeeks)->toDateString();
-        } catch (\Throwable $e) {
-            $trainingEnd = \Carbon\Carbon::parse($deploymentStart)->addWeeks($durationWeeks)->toDateString();
+        if ($probationaryHire && (int) $data['probation_evaluation_interval_months'] > (int) $data['probation_duration_months']) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'probation_evaluation_interval_months' => 'The evaluation interval cannot exceed the probation duration.',
+            ]);
         }
+
+        // Only postings that require training receive a training schedule.
+        $deploymentStart = $data['start_date'] ?? now()->toDateString();
+        $durationWeeks = null;
+        $trainingEnd = null;
+        if ($trainingRequired) {
+            $durationWeeks = max(1, min(4, (int) $data['training_duration_weeks']));
+            try {
+                $trainingEnd = ! empty($data['training_end_date'])
+                    ? \Carbon\Carbon::parse($data['training_end_date'])->toDateString()
+                    : \Carbon\Carbon::parse($deploymentStart)->addWeeks($durationWeeks)->toDateString();
+            } catch (\Throwable $e) {
+                $trainingEnd = \Carbon\Carbon::parse($deploymentStart)->addWeeks($durationWeeks)->toDateString();
+            }
+        }
+        $probationDurationMonths = $probationaryHire ? (int) $data['probation_duration_months'] : null;
+        $probationEvaluationIntervalMonths = $probationaryHire ? (int) $data['probation_evaluation_interval_months'] : null;
+        $probationEndDate = $probationaryHire
+            ? \Carbon\Carbon::parse($deploymentStart)->addMonthsNoOverflow($probationDurationMonths)->toDateString()
+            : null;
 
         $departmentName = $data['department'] ?: ($onboarding->department ?? 'HRM');
         // Explicit role from the form wins; mapping below is only a fallback.
@@ -660,9 +700,12 @@ class StatusController extends Controller
             'hrm_position_id' => $positionModel?->id,
             'hrm_employment_type_id' => $employmentTypeId,
             'join_date' => $data['start_date'],
-            'training_start_date' => $deploymentStart,
+            'training_start_date' => $trainingRequired ? $deploymentStart : null,
             'training_end_date' => $trainingEnd,
             'training_duration_weeks' => $durationWeeks,
+            'probation_duration_months' => $probationDurationMonths,
+            'probation_evaluation_interval_months' => $probationEvaluationIntervalMonths,
+            'probation_end_date' => $probationEndDate,
             'personal_email' => $onboarding->email !== $finalEmail ? $onboarding->email : $person?->email,
             'mobile_number' => $person?->phone_number ?? $person?->contact_number,
             'emergency_contact_name' => $data['emergency_contact_name'] ?? $person?->emergency_name,
@@ -701,9 +744,12 @@ class StatusController extends Controller
             'hrm_position_id' => $positionModel?->id ?? $user->hrm_position_id,
             'hrm_employment_type_id' => $employmentTypeId ?? $user->hrm_employment_type_id,
             'join_date' => $data['start_date'] ?? $user->join_date,
-            'training_start_date' => $deploymentStart,
+            'training_start_date' => $trainingRequired ? $deploymentStart : null,
             'training_end_date' => $trainingEnd,
             'training_duration_weeks' => $durationWeeks,
+            'probation_duration_months' => $probationDurationMonths,
+            'probation_evaluation_interval_months' => $probationEvaluationIntervalMonths,
+            'probation_end_date' => $probationEndDate,
             'work_location' => $data['work_location'] ?? $user->work_location,
             'work_schedule' => $schedule ?: $user->work_schedule,
             'shift' => $data['shift'] ?? $user->shift,
@@ -768,8 +814,10 @@ class StatusController extends Controller
                 $app->update(['status' => 'Hired', 'archived' => false, 'hired_user_id' => $user->id]);
             }
             \App\Models\Hrm\ApplicantJobApplication::where('applicant_id', $app->id)
-                ->whereNotIn('status', ['Withdrawn', 'Rejected'])
+                ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Cancelled', 'Hired'])
+                ->notOnHold()
                 ->update(['status' => 'Hired']);
+            ApplicantApplicationHoldService::closeAllHeldForApplicant((int) $app->id);
             ApplicantStatusHistory::create([
                 'applicant_id' => $app->id, 'from_status' => $previousStatus,
                 'to_status' => 'Hired', 'changed_by' => auth()->id(),

@@ -88,7 +88,8 @@ class User extends Authenticatable
         'company', 'branch', 'business_unit', 'cost_center', 'work_location',
         'department_head', 'immediate_supervisor', 'payroll_group', 'salary_grade',
         'basic_salary', 'bank_account', 'tax_id', 'sss_id', 'work_schedule', 'shift',
-        'timezone', 'biometrics_id', 'probation_end_date', 'regularization_date',
+        'timezone', 'biometrics_id', 'probation_end_date', 'probation_duration_months',
+        'probation_evaluation_interval_months', 'regularization_date',
         'resignation_date', 'last_working_day', 'education', 'certifications',
         'skills', 'languages', 'trainings',
     ];

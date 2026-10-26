@@ -12,6 +12,7 @@ return [
         'application'  => 'Applications',
         'interview'    => 'Interview',
         'trainee'      => 'Trainee',
+        'my_assigned_trainees' => 'My Assigned Trainees',
         'onboarding'   => 'Onboarding',
         'payroll'      => 'Payroll',
         'compensation' => 'Compensation & Salary',

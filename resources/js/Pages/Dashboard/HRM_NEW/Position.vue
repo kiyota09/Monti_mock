@@ -265,6 +265,32 @@
           </div>
         </div>
 
+        <!-- EMPLOYEES ASSIGNED TO POSITION -->
+        <div v-if="showEmployeesModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" @click.self="showEmployeesModal = false">
+          <section role="dialog" aria-modal="true" aria-labelledby="employees-modal-title" class="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <header class="flex items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/70 p-5">
+              <div>
+                <h3 id="employees-modal-title" class="text-lg font-bold text-slate-900">Employees in {{ employeesPosition?.name }}</h3>
+                <p class="mt-1 text-sm text-slate-500">{{ employeeRoster.length }} {{ employeeRoster.length === 1 ? 'employee' : 'employees' }} assigned to this position</p>
+              </div>
+              <button @click="showEmployeesModal = false" aria-label="Close employee list" class="rounded-lg p-2 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800"><X class="h-5 w-5" /></button>
+            </header>
+            <div class="min-h-32 flex-1 overflow-y-auto p-5">
+              <div v-if="loadingEmployees" class="flex items-center justify-center gap-3 py-12 text-sm text-slate-500"><span class="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></span>Loading employees...</div>
+              <div v-else-if="employeesError" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{{ employeesError }}</div>
+              <div v-else-if="employeeRoster.length === 0" class="py-12 text-center"><Users class="mx-auto h-9 w-9 text-slate-300" /><p class="mt-3 text-sm font-semibold text-slate-700">No employees assigned</p><p class="mt-1 text-xs text-slate-500">Employees assigned to this position will appear here.</p></div>
+              <div v-else class="divide-y divide-slate-100 rounded-xl border border-slate-100">
+                <div v-for="employee in employeeRoster" :key="employee.id" class="flex items-center gap-3 px-4 py-3">
+                  <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">{{ employee.name?.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase() }}</span>
+                  <div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold text-slate-800">{{ employee.name }}</p><p class="truncate text-xs text-slate-500">{{ employee.employee_id || employee.email || 'Employee' }}</p></div>
+                  <span class="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 sm:inline-flex">Assigned</span>
+                </div>
+              </div>
+            </div>
+            <footer class="flex justify-end border-t border-slate-100 bg-slate-50/70 p-4"><button @click="showEmployeesModal = false" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Close</button></footer>
+          </section>
+        </div>
+
         <!-- CREATE/EDIT POSITION MODAL -->
         <div v-if="activeModal" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div class="bg-white rounded-2xl border border-slate-200/60 w-full max-w-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
@@ -294,16 +320,23 @@
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Position Name <span class="text-rose-500">*</span></label>
-                    <input v-model="form.name" type="text" placeholder="e.g., Senior Software Engineer" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.name }" />
+                    <input v-model="form.name" type="text" :readonly="isManufacturingDepartment" :placeholder="isManufacturingDepartment ? 'Choose a manufacturing role below' : 'e.g., Senior Software Engineer'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" :class="[{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.name }, isManufacturingDepartment ? 'bg-slate-100 cursor-not-allowed' : '']" />
                     <p v-if="validationErrors.name" class="text-[10px] text-rose-500 mt-1">{{ validationErrors.name }}</p>
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Department <span class="text-rose-500">*</span></label>
-                    <select v-model="form.department_id" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.department_id }">
+                    <select v-model="form.department_id" @change="handleDepartmentChange" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.department_id }">
                       <option value="">Select Department</option>
                       <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
                     </select>
                     <p v-if="validationErrors.department_id" class="text-[10px] text-rose-500 mt-1">{{ validationErrors.department_id }}</p>
+                  </div>
+                  <div v-if="isManufacturingDepartment">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Manufacturing Role <span class="text-rose-500">*</span></label>
+                    <select v-model="manufacturingRole" @change="handleManufacturingRoleChange" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer">
+                      <option value="">Select Manufacturing Role</option>
+                      <option v-for="role in manufacturingRoles" :key="role.value" :value="role.value">{{ role.label }}</option>
+                    </select>
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Reports To <span class="text-slate-400 text-[10px] font-normal">(Optional)</span></label>
@@ -345,20 +378,49 @@
                 <div class="space-y-4">
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Job Description</label>
-                    <textarea v-model="form.description" rows="2" placeholder="Brief overview of the position and its purpose..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 resize-none"></textarea>
+                    <textarea ref="descriptionInput" v-model="form.description" rows="2" @input="autoGrow" placeholder="Brief overview of the position and its purpose..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 resize-none overflow-hidden"></textarea>
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Key Responsibilities</label>
-                    <textarea v-model="form.responsibilities" rows="3" placeholder="• List primary duties and tasks&#10;• Include day-to-day activities&#10;• Specify expected outcomes..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 resize-none"></textarea>
+                    <textarea ref="responsibilitiesInput" v-model="form.responsibilities" rows="3" @input="autoGrow" placeholder="• List primary duties and tasks&#10;• Include day-to-day activities&#10;• Specify expected outcomes..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 resize-none overflow-hidden"></textarea>
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Qualifications</label>
-                    <textarea v-model="form.qualifications" rows="2" placeholder="• Education requirements&#10;• Years of experience&#10;• Specific certifications..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 resize-none"></textarea>
+                    <textarea ref="qualificationsInput" v-model="form.qualifications" rows="2" @input="autoGrow" placeholder="• Education requirements&#10;• Years of experience&#10;• Specific certifications..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 resize-none overflow-hidden"></textarea>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Required Skills</label>
-                    <input v-model="form.required_skills" type="text" placeholder="e.g., Python, AWS, Leadership, Agile, Docker" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                    <p class="text-[10px] text-slate-400 mt-1">Separate skills with commas</p>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <label class="block text-xs font-semibold text-slate-600">Required Skills</label>
+                      <button
+                        type="button"
+                        @click="addSkillInput"
+                        class="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-[11px] font-semibold transition-all duration-200"
+                      >
+                        <Plus class="w-3 h-3" />
+                        Add Skill
+                      </button>
+                    </div>
+                    <div class="space-y-2">
+                      <div v-for="(skill, index) in skillInputs" :key="index" class="flex items-center gap-2">
+                        <input
+                          v-model="skillInputs[index]"
+                          type="text"
+                          placeholder="e.g., Python"
+                          class="flex-1 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
+                        />
+                        <button
+                          type="button"
+                          @click="removeSkillInput(index)"
+                          :disabled="skillInputs.length === 1"
+                          class="p-2 rounded-lg text-slate-400 transition-all duration-200"
+                          :class="skillInputs.length === 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-rose-50 hover:text-rose-600'"
+                          title="Remove skill"
+                        >
+                          <X class="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Click "Add Skill" to include more skills</p>
                   </div>
                 </div>
               </div>
@@ -376,14 +438,14 @@
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Minimum Salary</label>
                     <div class="relative">
                       <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs">₱</span>
-                      <input v-model="salaryMinDisplay" type="text" inputmode="numeric" placeholder="e.g., 50,000" class="w-full pl-8 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
+                      <input v-model="salaryMinDisplay" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="12" placeholder="e.g., 50000" @beforeinput="allowSalaryDigits" class="w-full pl-8 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                     </div>
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Maximum Salary</label>
                     <div class="relative">
                       <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs">₱</span>
-                      <input v-model="salaryMaxDisplay" type="text" inputmode="numeric" placeholder="e.g., 120,000" class="w-full pl-8 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
+                      <input v-model="salaryMaxDisplay" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="12" placeholder="e.g., 120000" @beforeinput="allowSalaryDigits" class="w-full pl-8 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                     </div>
                   </div>
                 </div>
@@ -414,7 +476,7 @@
                 </button>
               </div>
               <div class="flex items-center gap-3 ml-auto">
-                <button @click="closeModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">
+                <button @click="confirmCancel" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">
                   Cancel
                 </button>
                 <button 
@@ -435,10 +497,10 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, onMounted } from 'vue';
+import { ref, computed, reactive, watch, onMounted, nextTick } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Briefcase, Users, CheckCircle2, Target, ClipboardList, Archive, Search, Pencil, Lock, RotateCcw, BarChart3, Clock, AlertTriangle, Trash2 } from 'lucide-vue-next';
+import { Briefcase, Users, CheckCircle2, Target, ClipboardList, Archive, Search, Pencil, Lock, RotateCcw, BarChart3, Clock, AlertTriangle, Trash2, Plus, X } from 'lucide-vue-next';
 
 const props = defineProps({
     positionsData: { type: Object, default: () => ({ data: [] }) },
@@ -447,6 +509,7 @@ const props = defineProps({
     metrics: { type: Object, default: () => ({ active: 0, totalApproved: 0, totalFilled: 0, totalVacant: 0, archived: 0 }) },
     departments: { type: Array, default: () => [] },
     allPositions: { type: Array, default: () => [] },
+    manufacturingRoles: { type: Array, default: () => [] },
 });
 
 // State
@@ -457,6 +520,11 @@ const showConfirmModal = ref(false);
 const showValidationModal = ref(false);
 const validationMessage = ref('');
 const confirmAction = ref(null);
+const showEmployeesModal = ref(false);
+const loadingEmployees = ref(false);
+const employeesError = ref('');
+const employeesPosition = ref(null);
+const employeeRoster = ref([]);
 
 const validationErrors = reactive({
     name: '',
@@ -498,6 +566,8 @@ const filteredPositions = computed(() => {
 });
 
 // Form
+const manufacturingRole = ref('');
+
 const form = reactive({
     id: null, code: '', name: '', description: '', department_id: '',
     reports_to_id: null,
@@ -507,6 +577,67 @@ const form = reactive({
     approved_headcount: 1, required_training: '', required_certifications: '',
     required_equipment: '', status: 'active'
 });
+
+const selectedDepartment = computed(() =>
+    (props.departments || []).find((dept) => String(dept.id) === String(form.department_id)) || null
+);
+const isManufacturingDepartment = computed(() =>
+    String(selectedDepartment.value?.category || '').toUpperCase() === 'MAN'
+);
+
+const handleDepartmentChange = () => {
+    manufacturingRole.value = '';
+    if (isManufacturingDepartment.value) form.name = '';
+};
+
+const handleManufacturingRoleChange = () => {
+    const role = (props.manufacturingRoles || []).find((item) => item.value === manufacturingRole.value);
+    if (role) form.name = role.label;
+};
+
+const manufacturingRoleForName = (name) =>
+    (props.manufacturingRoles || []).find((role) => role.label === name)?.value || '';
+// Auto-expanding textareas for the long-form fields.
+const descriptionInput = ref(null);
+const responsibilitiesInput = ref(null);
+const qualificationsInput = ref(null);
+
+const autoGrow = (e) => {
+    const el = e.target;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+};
+
+const resizeTextareas = () => {
+    [descriptionInput, responsibilitiesInput, qualificationsInput].forEach(r => {
+        const el = r.value;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+    });
+};
+
+// Required skills are edited as a list of inputs, then stored as a CSV string.
+const skillInputs = ref(['']);
+
+const parseSkills = (value) => {
+    const parts = String(value || '').split(',').map(s => s.trim()).filter(Boolean);
+    return parts.length ? parts : [''];
+};
+
+const addSkillInput = () => {
+    skillInputs.value.push('');
+};
+
+const removeSkillInput = (index) => {
+    if (skillInputs.value.length === 1) return;
+    skillInputs.value.splice(index, 1);
+};
+
+const skillsToString = () => skillInputs.value
+    .map(s => s.trim())
+    .filter(Boolean)
+    .join(', ');
 
 // Computed
 const archivedCount = computed(() => {
@@ -560,7 +691,12 @@ const digitsOnly = (v) => String(v ?? '').replace(/[^0-9]/g, '');
 const formatSalaryInput = (v) => {
     const d = digitsOnly(v);
     if (d === '') return '';
-    return Number(d).toLocaleString('en-US');
+    return d;
+};
+const allowSalaryDigits = (event) => {
+    if (event.inputType?.startsWith('delete') || event.inputType?.startsWith('history')) return;
+    if (event.data !== null && /^\d+$/.test(event.data)) return;
+    event.preventDefault();
 };
 const parseSalaryInput = (v) => {
     const d = digitsOnly(v);
@@ -668,6 +804,17 @@ const executeConfirmAction = () => {
         confirmAction.value();
     }
     closeConfirmModal();
+};
+
+const confirmCancel = () => {
+    showConfirmation({
+        title: 'Discard Position Details?',
+        subtitle: 'Your form changes will be lost',
+        message: 'Are you sure you want to cancel and discard the position details you entered?',
+        confirmText: 'Discard Changes',
+        type: 'danger',
+        action: () => closeModal(),
+    });
 };
 
 // ============================================
@@ -780,6 +927,8 @@ const openModal = (type, data = null) => {
             required_training: data.required_training || '', required_certifications: data.required_certifications || '',
             required_equipment: data.required_equipment || '', status: data.status || 'active'
         });
+        manufacturingRole.value = manufacturingRoleForName(data.name);
+        skillInputs.value = parseSkills(data.required_skills);
     } else {
         Object.assign(form, {
             id: null, code: '', name: '', description: '', department_id: '',
@@ -790,7 +939,11 @@ const openModal = (type, data = null) => {
             approved_headcount: 1, required_training: '', required_certifications: '',
             required_equipment: '', status: 'active'
         });
+        manufacturingRole.value = '';
+        skillInputs.value = [''];
     }
+
+    nextTick(resizeTextareas);
 };
 
 const closeModal = () => {
@@ -801,6 +954,7 @@ const closeModal = () => {
 };
 
 const submitForm = async () => {
+    form.required_skills = skillsToString();
     saving.value = true;
     // Surface server-side (422) messages instead of failing silently.
     const showServerErrors = (errors) => {
@@ -858,20 +1012,24 @@ const reactivatePosition = async (id) => {
 };
 
 const viewEmployees = async (position) => {
+    employeesPosition.value = position;
+    employeeRoster.value = [];
+    employeesError.value = '';
+    loadingEmployees.value = true;
+    showEmployeesModal.value = true;
     try {
-        const res = await fetch(route('hrm.workforce.positions.employees', { position: position.id }));
-        const data = await res.json();
-        showConfirmation({
-            title: 'Employees Assigned',
-            subtitle: position.name,
-            message: `${data.employees?.total || 0} employees are currently assigned to this position.`,
-            confirmText: 'Close',
-            type: 'warning',
-            action: () => {}
+        const res = await fetch(route('hrm.workforce.positions.employees', { position: position.id }), {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
         });
+        if (!res.ok) throw new Error('Request failed');
+        const data = await res.json();
+        employeeRoster.value = Array.isArray(data.employees) ? data.employees : (data.employees?.data || []);
     } catch (e) {
         console.error('Failed to load employees:', e);
-        showValidationError('Failed to load employees. Please try again.');
+        employeesError.value = 'Failed to load employees. Please close this window and try again.';
+    } finally {
+        loadingEmployees.value = false;
     }
 };
 

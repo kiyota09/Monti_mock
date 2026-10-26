@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { usePage, Link, router, useForm } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import axios from 'axios';
@@ -97,43 +97,22 @@ watch(currentUrl, syncModuleScope);
 // ─── Logout confirmation ────────────────────────────────────────
 const showLogoutConfirm = ref(false);
 const loggingOut = ref(false);
-const logoutForm = ref(null);
+const csrfToken = ref('');
 
 const refreshCsrfToken = () => {
     csrfToken.value = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || csrfToken.value;
 };
 
-// Logout via fetch (instead of a raw native submit) so a stale CSRF token /
-// expired session (HTTP 419) reloads into the true auth state instead of
-// stranding the user on an error page while still logged in. Falls back to
-// the native form submit if the request itself cannot be made (offline…).
-const submitLogout = async () => {
-    if (loggingOut.value) return;
-    loggingOut.value = true;
-    refreshCsrfToken();
-    try {
-        const res = await fetch(logoutHref.value, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': csrfToken.value, 'Accept': 'text/html' },
-            credentials: 'same-origin',
-            redirect: 'follow',
-        });
-        if (res.ok) {
-            showLogoutConfirm.value = false;
-            window.location.href = '/';
-            return;
-        }
-        if (res.status === 419) {
-            window.location.reload();
-            return;
-        }
-        throw new Error(`Logout failed with status ${res.status}`);
-    } catch {
-        // Last resort: plain native submit (previous behavior).
-        logoutForm.value?.submit();
-    } finally {
-        loggingOut.value = false;
+// Let the browser submit directly so Laravel's redirect is handled normally.
+const prepareLogout = (event) => {
+    if (loggingOut.value) {
+        event.preventDefault();
+        return;
     }
+    refreshCsrfToken();
+    const tokenInput = event.currentTarget.querySelector('input[name="_token"]');
+    if (tokenInput) tokenInput.value = csrfToken.value;
+    loggingOut.value = true;
 };
 
 // ─── Change password (partner portal) ───────────────────────────────
@@ -175,8 +154,16 @@ const showToastMsg = (msg) => {
 
 // ─── Panel plumbing ─────────────────────────────────────────────────
 const openPanel = ref(null); // messenger | memo | notif | settings
+const settingsPanel = ref(null);
+const settingsButton = ref(null);
 const toggle = (name) => { openPanel.value = openPanel.value === name ? null : name; };
 const closePanels = () => { openPanel.value = null; };
+const closeSettingsOnOutsideClick = (event) => {
+    if (openPanel.value !== 'settings') return;
+    const target = event.target;
+    if (settingsPanel.value?.contains(target) || settingsButton.value?.contains(target)) return;
+    closePanels();
+};
 
 // ─── Polling (internal accounts only) ───────────────────────────────
 const counts = ref({ notifications_unread: 0, messages_unread: 0, memos_count: 0 });
@@ -693,11 +680,11 @@ const createThread = async () => {
 
 // ─── Lifecycle ──────────────────────────────────────────────────────
 let msgTimer = null;
-const csrfToken = ref('');
 onMounted(() => {
     csrfToken.value = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     initTheme();
     syncModuleScope();
+    document.addEventListener('click', closeSettingsOnOutsideClick);
     if (isInternal.value) {
         fetchSummary();
         pollTimer = setInterval(fetchSummary, 30000);
@@ -712,6 +699,7 @@ onMounted(() => {
     }
 });
 onBeforeUnmount(() => {
+    document.removeEventListener('click', closeSettingsOnOutsideClick);
     if (clockTimer) clearInterval(clockTimer);
     if (pollTimer) clearInterval(pollTimer);
     if (msgTimer) clearInterval(msgTimer);
@@ -863,7 +851,7 @@ onMounted(() => {
                     <span v-if="applicantNotifsUnread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">{{ applicantNotifsUnread > 99 ? '99+' : applicantNotifsUnread }}</span>
                 </button>
                 <!-- Settings -->
-                <button @click="toggle('settings')" title="Settings"
+                <button ref="settingsButton" @click="toggle('settings')" title="Settings"
                     :class="['rounded-xl p-2.5 transition active:scale-95', openPanel === 'settings' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-zinc-800']">
                     <Settings class="h-5 w-5" />
                 </button>
@@ -871,8 +859,10 @@ onMounted(() => {
         </div>
 
         <!-- ═══ Dropdown panels ═══ -->
-        <div v-if="openPanel" class="topbar-panels absolute inset-x-0 top-16 flex justify-end px-4 sm:px-6 lg:px-8">
-            <div class="topbar-panel w-full max-w-md max-h-[calc(100dvh_-_12.5rem_-_env(safe-area-inset-bottom))] overflow-y-auto overscroll-contain rounded-2xl border border-gray-200 bg-white shadow-2xl md:max-h-[calc(100vh_-_6rem)] dark:border-zinc-700 dark:bg-zinc-900">
+        <!-- Keep this wrapper mounted: its teleported dialogs (logout included)
+             must survive when an outside click closes the dropdown itself. -->
+        <div v-show="openPanel" class="topbar-panels absolute inset-x-0 top-16 flex justify-end px-4 sm:px-6 lg:px-8">
+            <div ref="settingsPanel" class="topbar-panel w-full max-w-md max-h-[calc(100dvh_-_12.5rem_-_env(safe-area-inset-bottom))] overflow-y-auto overscroll-contain rounded-2xl border border-gray-200 bg-white shadow-2xl md:max-h-[calc(100vh_-_6rem)] dark:border-zinc-700 dark:bg-zinc-900">
 
                 <!-- SETTINGS -->
                 <div v-if="openPanel === 'settings'">
@@ -1348,7 +1338,7 @@ onMounted(() => {
                      renders from any tab — it previously only existed while
                      the messenger panel was open) -->
                 <Teleport to="body">
-                    <div v-if="showLogoutConfirm" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showLogoutConfirm = false">
+                    <div v-show="showLogoutConfirm" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showLogoutConfirm = false">
                         <div class="w-full max-w-xs overflow-hidden rounded-3xl bg-white text-center shadow-2xl dark:bg-zinc-900">
                             <div class="px-6 pb-2 pt-6">
                                 <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 dark:bg-rose-900/30">
@@ -1364,10 +1354,8 @@ onMounted(() => {
                                     class="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-black uppercase text-gray-500 hover:bg-gray-200 dark:bg-zinc-800 dark:text-gray-300">
                                     Cancel
                                 </button>
-                                <!-- Fetch POST with 419 recovery + native fallback:
-                                     the session is destroyed server-side for every
-                                     guard, then a full reload lands on /. -->
-                                <form ref="logoutForm" :action="logoutHref" method="POST" class="flex-1" @submit.prevent="submitLogout">
+                                <!-- Standard CSRF-protected logout POST. -->
+                                <form :action="logoutHref" method="POST" class="flex-1" @submit="prepareLogout">
                                     <input type="hidden" name="_token" :value="csrfToken" />
                                     <button type="submit" :disabled="loggingOut"
                                         class="w-full rounded-xl bg-rose-600 py-2.5 text-xs font-black uppercase text-white hover:bg-rose-700 active:scale-95 disabled:opacity-60">

@@ -65,7 +65,7 @@
         </div>
 
         <!-- COMPANY DIRECTORY BROWSER (live DB, all MontiTextile employees) -->
-        <div v-if="!profileOnly" class="bg-white rounded-2xl border border-slate-200/60 shadow-lg backdrop-blur-sm p-5 mb-6 relative">
+        <div v-if="!profileOnly" class="flex min-h-[calc(100vh-19rem)] flex-col bg-white rounded-2xl border border-slate-200/60 shadow-lg backdrop-blur-sm p-5 mb-6 relative">
           <div class="flex flex-col xl:flex-row xl:items-center gap-4">
             <div class="flex items-center gap-3 text-xs font-bold text-slate-700 whitespace-nowrap">
               <span class="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-xl border border-blue-200">{{ stats?.total ?? employeeList.length }} Total</span>
@@ -85,7 +85,7 @@
               <option value="inactive">Inactive</option>
             </select>
           </div>
-          <div class="mt-4 max-h-44 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-xl">
+          <div class="mt-4 min-h-0 flex-1 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-xl">
             <button v-for="rec in employeeList" :key="rec.id" @click="selectEmployee(rec.id)"
               :class="['w-full flex items-center gap-3 px-4 py-2.5 text-left text-xs transition-all', selectedId === rec.id ? 'bg-gradient-to-r from-blue-50 to-blue-100/50' : 'hover:bg-slate-50']">
               <span class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-[10px] font-bold text-blue-700 shrink-0">{{ initials(rec.firstName + ' ' + rec.lastName) }}</span>

@@ -8,6 +8,7 @@ use App\Models\Hrm\ApplicantJobApplication;
 use App\Models\Hrm\ApplicantStatusHistory;
 use App\Models\Hrm\HrmApplicationScreening;
 use App\Models\Hrm\HrmJobPosting;
+use App\Services\Hrm\ApplicantApplicationHoldService;
 use App\Support\NotifiesApplicant;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
@@ -24,16 +25,20 @@ class ApplicationController extends Controller
     {
         // Only applicants who actually applied to a job posting are listed —
         // applicants with no job application rows (never applied) are hidden.
-        $q = Applicant::with(['jobPosting', 'jobApplications.jobPosting'])
+        $q = Applicant::with(['jobPosting', 'jobApplications.jobPosting', 'jobApplications.heldByApplication.jobPosting'])
             ->whereHas('jobApplications');
         if ($s = $request->get('search')) {
             $q->where(fn ($w) => $w->where('first_name', 'like', "%{$s}%")
                 ->orWhere('last_name', 'like', "%{$s}%")->orWhere('email', 'like', "%{$s}%"));
         }
         if ($st = $request->get('status')) {
-            // Match the applicant status OR any of their per-job application statuses.
-            $q->where(fn ($w) => $w->where('status', $st)
-                ->orWhereHas('jobApplications', fn ($j) => $j->where('status', $st)));
+            if (strtolower((string) $st) === 'on hold' && ApplicantApplicationHoldService::columnsReady()) {
+                $q->whereHas('jobApplications', fn ($j) => $j->where('is_on_hold', true));
+            } else {
+                // Match the applicant status OR any of their per-job application statuses.
+                $q->where(fn ($w) => $w->where('status', $st)
+                    ->orWhereHas('jobApplications', fn ($j) => $j->where('status', $st)));
+            }
         }
 
         $paginated = $q->latest()->paginate(15)->withQueryString();
@@ -78,7 +83,7 @@ class ApplicationController extends Controller
      */
     public function hired()
     {
-        $apps = Applicant::with(['jobPosting', 'jobApplications.jobPosting'])
+        $apps = Applicant::with(['jobPosting', 'jobApplications.jobPosting', 'jobApplications.heldByApplication.jobPosting'])
             ->where(fn ($q) => $q->where('status', 'Hired')
                 ->orWhereHas('jobApplications', fn ($j) => $j->where('status', 'Hired')))
             ->latest()->take(100)->get();
@@ -120,6 +125,16 @@ class ApplicationController extends Controller
             $row['created_at'] = optional($ja->created_at)?->toISOString();
             $row['updated_at'] = optional($ja->updated_at)?->toISOString();
             $row['job_posting_id'] = $ja->job_posting_id;
+            $row['is_on_hold'] = (bool) $ja->is_on_hold;
+            $row['hold_reason'] = $ja->hold_reason;
+            $row['previous_status'] = $ja->previous_status;
+            $row['held_by_application_id'] = $ja->held_by_application_id;
+            $row['held_by'] = $ja->heldByApplication ? [
+                'id' => $ja->heldByApplication->id,
+                'status' => $ja->heldByApplication->status,
+                'job_posting_id' => $ja->heldByApplication->job_posting_id,
+                'job_title' => $ja->heldByApplication->jobPosting?->title,
+            ] : null;
             $jp = $ja->jobPosting;
             if ($jp) {
                 $row['job_posting'] = ['id' => $jp->id, 'title' => $jp->title];
@@ -142,6 +157,9 @@ class ApplicationController extends Controller
             if ($ja) {
                 $payload['application']['job_application_id'] = $ja->id;
                 $payload['application']['status'] = $ja->status;
+                $payload['application']['screening'] = $application->screenings()
+                    ->where('job_posting_id', $ja->job_posting_id)
+                    ->latest()->first();
                 // This job's own resume — NOT the applicant's first library
                 // file — so each application card shows the resume uploaded
                 // for that specific job.
@@ -160,6 +178,10 @@ class ApplicationController extends Controller
                 $payload['application']['availability_date'] = optional($ja->availability_date)?->toDateString();
                 $payload['application']['notice_period'] = $ja->notice_period;
                 $payload['application']['application_date'] = optional($ja->created_at)?->toDateString();
+                $payload['application']['is_on_hold'] = (bool) $ja->is_on_hold;
+                $payload['application']['hold_reason'] = $ja->hold_reason;
+                $payload['application']['previous_status'] = $ja->previous_status;
+                $payload['application']['held_by_application_id'] = $ja->held_by_application_id;
                 if ($ja->jobPosting) {
                     $payload['job_posting'] = [
                         'id' => $ja->jobPosting->id,
@@ -184,10 +206,26 @@ class ApplicationController extends Controller
         return response()->json($payload);
     }
 
+    public function screeningPage(Request $request, Applicant $application)
+    {
+        $ja = $this->targetedJobApplication($request, $application);
+        if ($ja?->is_on_hold) {
+            abort(404);
+        }
+
+        return Inertia::render('Dashboard/HRM_NEW/ApplicationScreening', [
+            'applicationId' => $application->id,
+            'jobApplicationId' => $request->integer('job_application_id') ?: null,
+        ]);
+    }
+
     public function startScreening(Request $request, Applicant $application)
     {
         $ja = $this->targetedJobApplication($request, $application);
         if ($ja) {
+            if ($ja->is_on_hold) {
+                return response()->json(['message' => ApplicantApplicationHoldService::HOLD_MESSAGE], 422);
+            }
             if (in_array($ja->status, ['Withdrawn', 'Rejected', 'Hired'])) {
                 return response()->json(['message' => 'This application is already ' . strtolower($ja->status) . ' and cannot be screened.'], 422);
             }
@@ -197,10 +235,55 @@ class ApplicationController extends Controller
             $application->update(['status' => 'Screening']);
             ApplicantJobApplication::where('applicant_id', $application->id)
                 ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+                ->notOnHold()
                 ->update(['status' => 'Screening']);
         }
 
         return response()->json(['ok' => true, 'status' => 'Screening']);
+    }
+
+    public function saveScreeningDraft(Request $request, Applicant $application)
+    {
+        $data = $request->validate([
+            'resume_reviewed' => 'nullable|boolean',
+            'education_verified' => 'nullable|boolean',
+            'work_experience_reviewed' => 'nullable|boolean',
+            'skills_reviewed' => 'nullable|boolean',
+            'qualifications_met' => 'nullable|boolean',
+            'applicant_info_reviewed' => 'nullable|boolean',
+            'notes' => 'nullable|string',
+            'job_application_id' => 'nullable|exists:applicant_job_applications,id',
+        ]);
+
+        $ja = $this->targetedJobApplication($request, $application);
+        if ($ja?->is_on_hold) {
+            return response()->json(['message' => ApplicantApplicationHoldService::HOLD_MESSAGE], 422);
+        }
+
+        $jobPostingId = $ja?->job_posting_id ?: $application->job_posting_id;
+        $screening = HrmApplicationScreening::where('applicant_id', $application->id)
+            ->where('result', 'pending')
+            ->where('screened_by', $request->user()->id)
+            ->when($jobPostingId, fn ($query) => $query->where('job_posting_id', $jobPostingId))
+            ->when(! $jobPostingId, fn ($query) => $query->whereNull('job_posting_id'))
+            ->latest()->first();
+
+        $payload = collect([
+            'resume_reviewed', 'education_verified', 'work_experience_reviewed',
+            'skills_reviewed', 'qualifications_met', 'applicant_info_reviewed', 'notes',
+        ])->mapWithKeys(fn ($field) => [$field => $data[$field] ?? ($field === 'notes' ? null : false)])->all();
+        $payload['applicant_id'] = $application->id;
+        $payload['job_posting_id'] = $jobPostingId;
+        $payload['result'] = 'pending';
+        $payload['screened_by'] = $request->user()->id;
+
+        if ($screening) {
+            $screening->update($payload);
+        } else {
+            $screening = HrmApplicationScreening::create($payload);
+        }
+
+        return response()->json(['ok' => true, 'saved_at' => $screening->updated_at]);
     }
 
     public function screening(Request $request, Applicant $application)
@@ -218,11 +301,33 @@ class ApplicationController extends Controller
             'job_posting_id' => 'nullable|exists:hrm_job_postings,id',
             'job_application_id' => 'nullable|exists:applicant_job_applications,id',
         ]);
-        $screening = HrmApplicationScreening::create($data + [
-            'applicant_id' => $application->id, 'screened_by' => $request->user()->id,
-        ]);
-        $next = $data['result'] === 'passed' ? 'Shortlisted' : 'Rejected';
         $ja = $this->targetedJobApplication($request, $application);
+        if ($ja?->is_on_hold) {
+            return response()->json(['message' => ApplicantApplicationHoldService::HOLD_MESSAGE], 422);
+        }
+        $jobPostingId = $ja?->job_posting_id ?: $application->job_posting_id;
+        $screening = HrmApplicationScreening::where('applicant_id', $application->id)
+            ->where('result', 'pending')
+            ->where('screened_by', $request->user()->id)
+            ->when($jobPostingId, fn ($query) => $query->where('job_posting_id', $jobPostingId))
+            ->when(! $jobPostingId, fn ($query) => $query->whereNull('job_posting_id'))
+            ->latest()->first();
+        $screeningData = collect([
+            'resume_reviewed', 'education_verified', 'work_experience_reviewed',
+            'skills_reviewed', 'qualifications_met', 'applicant_info_reviewed',
+            'result', 'notes', 'rejection_reason',
+        ])->mapWithKeys(fn ($field) => [$field => $data[$field] ?? null])->all();
+        $screeningData += [
+            'applicant_id' => $application->id,
+            'job_posting_id' => $jobPostingId,
+            'screened_by' => $request->user()->id,
+        ];
+        if ($screening) {
+            $screening->update($screeningData);
+        } else {
+            $screening = HrmApplicationScreening::create($screeningData);
+        }
+        $next = $data['result'] === 'passed' ? 'Shortlisted' : 'Rejected';
         if ($ja) {
             if (in_array($ja->status, ['Withdrawn', 'Hired'])) {
                 return response()->json(['message' => 'This application is already ' . strtolower($ja->status) . ' and cannot be screened.'], 422);
@@ -233,7 +338,9 @@ class ApplicationController extends Controller
             $application->update(['status' => $next]);
             ApplicantJobApplication::where('applicant_id', $application->id)
                 ->whereNotIn('status', ['Withdrawn', 'Hired'])
+                ->notOnHold()
                 ->update(['status' => $next]);
+            ApplicantApplicationHoldService::reconcileApplicantHolds((int) $application->id);
         }
 
         if ($data['result'] === 'rejected') {
@@ -260,6 +367,9 @@ class ApplicationController extends Controller
         if ($ja) {
             // Reject ONLY this job application; the applicant's other
             // applications keep their own statuses.
+            if ($ja->is_on_hold) {
+                return response()->json(['message' => ApplicantApplicationHoldService::HOLD_MESSAGE], 422);
+            }
             if ($ja->status === 'Hired') {
                 return response()->json(['message' => 'This application already resulted in a hire and cannot be rejected.'], 422);
             }
@@ -272,7 +382,9 @@ class ApplicationController extends Controller
             $application->update(['status' => 'Rejected', 'rejection_reason' => $data['reason']]);
             ApplicantJobApplication::where('applicant_id', $application->id)
                 ->whereNotIn('status', ['Withdrawn', 'Hired'])
+                ->notOnHold()
                 ->update(['status' => 'Rejected']);
+            ApplicantApplicationHoldService::reconcileApplicantHolds((int) $application->id);
         }
 
         return response()->json(['ok' => true, 'status' => 'Rejected']);
@@ -303,11 +415,13 @@ class ApplicationController extends Controller
     {
         $active = ApplicantJobApplication::where('applicant_id', $application->id)
             ->whereNotIn('status', ['Rejected', 'Withdrawn'])
+            ->notOnHold()
             ->latest()->first();
         if ($active) {
             $application->update(['status' => $active->status]);
         } else {
             $latest = ApplicantJobApplication::where('applicant_id', $application->id)
+                ->notOnHold()
                 ->latest()->first();
             $update = ['status' => $latest?->status ?? $application->status];
             if (($update['status'] ?? null) === 'Rejected' && $rejectionReason) {
@@ -325,6 +439,9 @@ class ApplicationController extends Controller
     {
         $ja = $this->targetedJobApplication($request, $application);
         if ($ja) {
+            if ($ja->is_on_hold) {
+                return response()->json(['message' => ApplicantApplicationHoldService::HOLD_MESSAGE], 422);
+            }
             if (! in_array($ja->status, ['Screening'])) {
                 return response()->json(['message' => 'Only applications in Screening can be shortlisted.'], 422);
             }
@@ -337,6 +454,7 @@ class ApplicationController extends Controller
             $application->update(['status' => 'Shortlisted']);
             ApplicantJobApplication::where('applicant_id', $application->id)
                 ->where('status', 'Screening')
+                ->notOnHold()
                 ->update(['status' => 'Shortlisted']);
         }
 
@@ -349,18 +467,18 @@ class ApplicationController extends Controller
      */
     public function stats()
     {
-        $base = ApplicantJobApplication::query();
+        $base = ApplicantApplicationHoldService::withoutHolds(ApplicantJobApplication::query());
 
         return response()->json([
             'total' => (clone $base)->count(),
+            'on_hold' => ApplicantApplicationHoldService::columnsReady()
+                ? ApplicantJobApplication::where('is_on_hold', true)->count()
+                : 0,
             'submitted' => (clone $base)->where('status', 'Submitted')->count(),
             'screening' => (clone $base)->where('status', 'Screening')->count(),
             'shortlisted' => (clone $base)->where('status', 'Shortlisted')->count(),
             'interview' => (clone $base)->whereIn('status', ['Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed'])->count(),
             'selected' => (clone $base)->where('status', 'Selected')->count(),
-            'job_offer' => (clone $base)->where('status', 'Job Offer')->count(),
-            'offer_accepted' => (clone $base)->where('status', 'Offer Accepted')->count(),
-            'pre_employment' => (clone $base)->where('status', 'Pre-employment')->count(),
             'onboarding' => (clone $base)->whereIn('status', ['Onboard', 'Onboarding'])->count(),
             'hired' => (clone $base)->where('status', 'Hired')->count(),
             'rejected' => (clone $base)->where('status', 'Rejected')->count(),
@@ -383,7 +501,7 @@ class ApplicationController extends Controller
      */
     public function store(Request $request)
     {
-        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Job Offer', 'Offer Accepted', 'Pre-employment', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
         $data = $request->validate([
             'job_posting_id' => 'nullable|exists:hrm_job_postings,id',
             'first_name' => 'required|string|max:255',
@@ -439,7 +557,7 @@ class ApplicationController extends Controller
      */
     public function update(Request $request, Applicant $application)
     {
-        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Job Offer', 'Offer Accepted', 'Pre-employment', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
         $data = $request->validate([
             'first_name' => 'sometimes|string|max:255',
             'last_name' => 'sometimes|string|max:255',
@@ -467,9 +585,25 @@ class ApplicationController extends Controller
         }
         $application->update($update);
         if (! empty($update['status'])) {
-            ApplicantJobApplication::where('applicant_id', $application->id)
-                ->whereNotIn('status', ['Withdrawn', 'Hired'])
-                ->update(['status' => $update['status']]);
+            if (ApplicantApplicationHoldService::isOnboardingStatus($update['status'])) {
+                // A single applicant-wide edit must advance only one job
+                // application into onboarding; all others retain their true
+                // stages and are held by the model's status-change hook.
+                $trigger = ApplicantJobApplication::where('applicant_id', $application->id)
+                    ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+                    ->notOnHold()
+                    ->when($application->job_posting_id, fn ($q) => $q->where('job_posting_id', $application->job_posting_id))
+                    ->latest()->first();
+                if ($trigger) {
+                    $trigger->update(['status' => $update['status']]);
+                }
+            } else {
+                ApplicantJobApplication::where('applicant_id', $application->id)
+                    ->whereNotIn('status', ['Withdrawn', 'Hired'])
+                    ->notOnHold()
+                    ->update(['status' => $update['status']]);
+                ApplicantApplicationHoldService::reconcileApplicantHolds((int) $application->id);
+            }
         }
 
         return back()->with('success', 'Application updated successfully.');
@@ -484,7 +618,17 @@ class ApplicationController extends Controller
         if ($application->status === 'Hired') {
             return back()->with('error', 'Cannot delete a hired applicant record.');
         }
+
+        if (ApplicantApplicationHoldService::columnsReady()
+            && ApplicantJobApplication::where('applicant_id', $application->id)->where('is_on_hold', true)->exists()) {
+            return back()->with('error', 'Cannot delete an applicant record while a job application is on hold.');
+        }
+
+        $applicantId = (int) $application->id;
         $application->delete();
+
+        // Never leave sibling applications stranded when their trigger is deleted.
+        ApplicantApplicationHoldService::reconcileApplicantHolds($applicantId);
 
         return back()->with('success', 'Application deleted successfully.');
     }
@@ -496,7 +640,7 @@ class ApplicationController extends Controller
      */
     public function bulkUpdate(Request $request)
     {
-        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Job Offer', 'Offer Accepted', 'Pre-employment', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
         $data = $request->validate([
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:applicant_job_applications,id',
@@ -506,6 +650,10 @@ class ApplicationController extends Controller
         $updated = 0;
         $applicantIds = [];
         foreach (ApplicantJobApplication::whereIn('id', $data['ids'])->get() as $ja) {
+            $ja->refresh();
+            if ($ja->is_on_hold) {
+                continue;
+            }
             if ($ja->status === $data['status']) {
                 continue;
             }
@@ -517,6 +665,7 @@ class ApplicationController extends Controller
             $updated++;
         }
         foreach (array_keys($applicantIds) as $applicantId) {
+            ApplicantApplicationHoldService::reconcileApplicantHolds((int) $applicantId);
             if ($applicant = Applicant::find($applicantId)) {
                 $this->refreshApplicantSummary($applicant);
             }
@@ -557,9 +706,6 @@ class ApplicationController extends Controller
             'Final Interview' => 'Final Interview',
             'Interviewed' => 'Interview Completed',
             'Selected' => 'Selected',
-            'Job Offer' => 'Job Offer',
-            'Offer Accepted' => 'Offer Accepted',
-            'Pre-employment' => 'Completing Requirements',
             'Onboarding' => 'Onboarding',
             'Onboard' => 'Onboard',
             'Hired' => 'Hired',
@@ -601,7 +747,7 @@ class ApplicationController extends Controller
         return response()->streamDownload(function () {
             $out = fopen('php://output', 'w');
             fputcsv($out, ['name', 'email', 'position', 'status']);
-            Applicant::with(['jobPosting', 'jobApplications.jobPosting'])->whereHas('jobApplications')->chunk(500, function ($rows) use ($out) {
+            Applicant::with(['jobPosting', 'jobApplications.jobPosting', 'jobApplications.heldByApplication.jobPosting'])->whereHas('jobApplications')->chunk(500, function ($rows) use ($out) {
                 foreach ($rows as $a) {
                     $name = trim($a->first_name . ' ' . $a->last_name);
                     $jas = $a->jobApplications ?? collect();

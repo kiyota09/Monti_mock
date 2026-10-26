@@ -197,7 +197,7 @@
                             <label class="block text-xs font-semibold text-slate-600 mb-1.5">Department</label>
                             <select v-model="createForm.department_id" :disabled="saving" @change="onDepartmentChange" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm">
                                 <option value="">Any</option>
-                                <option v-for="d in optionDepartments" :key="d.id" :value="d.id">{{ d.name }} ({{ positionCount(d.id) }})</option>
+                                <option v-for="d in optionDepartments" :key="d.id" :value="d.id">{{ d.name }}</option>
                             </select>
                         </div>
                         <div>
@@ -224,7 +224,7 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Duration (days)</label>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Duration Before Deadline</label>
                         <input v-model.number="createForm.duration_days" type="number" min="1" max="3650" placeholder="e.g. 7" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
                         <p class="text-[10px] text-slate-400 mt-1">Onboarding countdown starts when the applicant opens their onboarding page. They are reminded 3 days before it ends. Leave blank for no deadline.</p>
                     </div>
@@ -287,8 +287,6 @@ const filteredPositions = computed(() => {
     if (!createForm.value.department_id) return optionPositions.value;
     return optionPositions.value.filter(p => p.department_id != null && String(p.department_id) === String(createForm.value.department_id));
 });
-
-const positionCount = (deptId) => optionPositions.value.filter(p => p.department_id != null && String(p.department_id) === String(deptId)).length;
 
 const selectedDepartmentName = computed(() => {
     const found = optionDepartments.value.find(d => String(d.id) === String(createForm.value.department_id));

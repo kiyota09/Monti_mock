@@ -324,17 +324,6 @@
               <div v-if="activeModal === 'create' || activeModal === 'edit'" class="space-y-5">
 
                 <div>
-                  <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Department Code</label>
-                  <input
-                    v-model="form.code"
-                    type="text"
-                    disabled
-                    class="w-full px-3 py-2.5 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-400 cursor-not-allowed opacity-75"
-                  />
-                  <p class="text-[10px] text-slate-400 dark:text-zinc-500 mt-1">Auto-generated</p>
-                </div>
-
-                <div>
                   <div class="flex items-center justify-between mb-1.5">
                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300">Department Name <span class="text-rose-500">*</span></label>
                     <span class="text-[10px] font-medium" :class="(form.name?.length || 0) > 255 ? 'text-rose-500' : 'text-slate-400 dark:text-zinc-500'">{{ form.name?.length || 0 }}/255</span>
@@ -348,6 +337,14 @@
                     :class="{ 'border-rose-500 ring-2 ring-rose-200 dark:ring-rose-900': validationErrors.name }"
                   />
                   <p v-if="validationErrors.name" class="text-[10px] text-rose-500 mt-1">{{ validationErrors.name }}</p>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Module <span class="text-rose-500">*</span></label>
+                  <select v-model="form.category" required class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-200 focus:ring-2 focus:ring-blue-500 dark:focus:ring-indigo-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer">
+                    <option value="">Select module</option>
+                    <option v-for="module in categoryOptions" :key="module" :value="module">{{ module }}</option>
+                  </select>
                 </div>
 
                 <div>
@@ -444,16 +441,10 @@ const statusOptions = [
     { label: 'Inactive', value: 'inactive' },
 ];
 
-// Module/Category options: accept server [{value}] objects or plain strings,
-// and union with categories already present in loaded rows so custom values
-// never vanish from the dropdown.
-const categoryOptions = computed(() => {
-    const fromProps = (props.categories || []).map((c) =>
-        typeof c === 'string' ? c : (c?.value ?? String(c ?? ''))
-    );
-    const fromRows = (allDepartments.value || []).map((d) => d?.category).filter(Boolean);
-    return [...new Set([...fromProps, ...fromRows].map((c) => String(c)).filter(Boolean))];
-});
+// Module options use active role codes, matching users.role.
+const categoryOptions = computed(() => (props.categories || []).map((c) =>
+    typeof c === 'string' ? c : (c?.value ?? String(c ?? ''))
+).map((c) => String(c)).filter(Boolean));
 
 // Confirm Modal State
 const confirmModal = ref({

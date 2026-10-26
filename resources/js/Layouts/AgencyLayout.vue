@@ -53,8 +53,8 @@ const reloadPage = () => {
         <MobileSidebar v-if="!hasError" />
         <div class="md:pl-64 pt-16 md:pt-0 flex flex-col flex-1 min-h-screen transition-all duration-300">
             <TopBar v-if="!hasError" />
-            <main class="py-8 pb-24 md:pb-8 flex-1 bg-gray-50 dark:bg-zinc-900">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <main>
+                <div>
                     <div class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm p-6 min-h-[400px]">
                         <slot />
                     </div>

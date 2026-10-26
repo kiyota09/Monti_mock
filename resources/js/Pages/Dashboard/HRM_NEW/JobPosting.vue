@@ -117,9 +117,9 @@
           
           <!-- Job Postings Table - Scrollable -->
           <div class="flex-1 overflow-auto">
-            <table class="w-full text-left border-collapse">
+            <table class="w-full min-w-[1100px] text-left border-collapse">
               <thead class="sticky top-0 z-10">
-                <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
                   <th class="py-2.5 px-4">Posting</th>
                   <th class="py-2.5 px-4">Position</th>
                   <th class="py-2.5 px-4">Department</th>
@@ -127,7 +127,6 @@
                   <th class="py-2.5 px-4 text-center">Vacancies</th>
                   <th class="py-2.5 px-4 text-center">Applications</th>
                   <th class="py-2.5 px-4 text-center">Status</th>
-                  <th class="py-2.5 px-4">Hiring Manager</th>
                   <th class="py-2.5 px-4">Published</th>
                   <th class="py-2.5 px-4 text-right">Actions</th>
                 </tr>
@@ -146,31 +145,31 @@
                         </svg>
                       </div>
                       <div class="min-w-0">
-                        <div class="text-xs font-bold text-slate-900 truncate">{{ posting.position || posting.title }}</div>
-                        <div class="text-[9px] text-slate-400 font-mono">{{ posting.posting_id }}</div>
+                    <div class="text-sm font-bold text-slate-900 truncate">{{ posting.position || posting.title }}</div>
+                    <div class="text-xs text-slate-500 font-mono">{{ posting.posting_id }}</div>
                       </div>
                     </div>
                   </td>
                   <td class="py-2.5 px-4">
-                    <div class="text-xs text-slate-700 truncate max-w-[120px]">{{ posting.position }}</div>
+                    <div class="text-sm text-slate-700 truncate max-w-[160px]">{{ posting.position }}</div>
                   </td>
                   <td class="py-2.5 px-4">
-                    <div class="text-xs text-slate-700 truncate max-w-[100px]">{{ posting.department }}</div>
+                    <div class="text-sm text-slate-700 truncate max-w-[140px]">{{ posting.department }}</div>
                   </td>
                   <td class="py-2.5 px-4 text-center">
-                    <span :class="getEmploymentBadgeClass(posting.employment_type)" class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-semibold whitespace-nowrap">
+                    <span :class="getEmploymentBadgeClass(posting.employment_type)" class="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap">
                       {{ posting.employment_type || 'Full-time' }}
                     </span>
                   </td>
                   <td class="py-2.5 px-4 text-center">
-                    <div class="text-xs font-bold text-slate-800">{{ posting.filled_vacancies }}/{{ posting.vacancies }}</div>
+                    <div class="text-sm font-bold text-slate-800">{{ posting.filled_vacancies }}/{{ posting.vacancies }}</div>
                   </td>
                   <td class="py-2.5 px-4 text-center">
-                    <div class="text-xs font-bold text-blue-600">{{ posting.total_applications }}</div>
+                    <div class="text-sm font-bold text-blue-600">{{ posting.total_applications }}</div>
                   </td>
                   <td class="py-2.5 px-4 text-center">
                     <span :class="[
-                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold shadow-sm whitespace-nowrap',
+                      'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm whitespace-nowrap',
                       getStatusBadgeClass(posting.status)
                     ]">
                       <svg v-if="posting.status === 'Draft'" class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 8 8">
@@ -186,10 +185,7 @@
                     </span>
                   </td>
                   <td class="py-2.5 px-4">
-                    <div class="text-xs text-slate-700 truncate max-w-[100px]">{{ posting.hiring_manager || '—' }}</div>
-                  </td>
-                  <td class="py-2.5 px-4">
-                    <div class="text-xs text-slate-600">{{ posting.published_date || '—' }}</div>
+                    <div class="text-sm text-slate-600">{{ posting.published_date || '—' }}</div>
                   </td>
                   <td class="py-2.5 px-4">
                     <div class="flex items-center justify-end gap-1">
@@ -269,15 +265,6 @@
                             </svg>
                             Reopen
                           </button>
-                          <button 
-                            @click="duplicatePosting(posting)" 
-                            class="w-full text-left px-4 py-2 text-xs text-purple-600 hover:bg-purple-50 flex items-center gap-2 transition-colors"
-                          >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.75v-1.5a1.125 1.125 0 00-1.125-1.125H18m0 0v-1.5a1.125 1.125 0 00-1.125-1.125H14.25"/>
-                            </svg>
-                            Duplicate
-                          </button>
                           <hr class="my-1 border-slate-100" />
                           <button 
                             v-if="!posting.archived_at" 
@@ -317,7 +304,7 @@
                 </tr>
                 <!-- Empty State -->
                 <tr v-if="filteredPostings.length === 0">
-                  <td colspan="10" class="py-12 text-center">
+                  <td colspan="9" class="py-12 text-center">
                     <div class="flex flex-col items-center justify-center">
                       <svg class="w-16 h-16 text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
@@ -336,7 +323,7 @@
         </div>
 
         <!-- Footer with record count -->
-        <div class="mt-3 text-xs text-slate-400 shrink-0">
+        <div class="mt-3 text-sm text-slate-500 shrink-0">
           Showing {{ filteredPostings.length }} {{ filteredPostings.length === 1 ? 'record' : 'records' }}
         </div>
 
@@ -448,11 +435,18 @@
                   </div>
                   <h4 class="text-sm font-bold text-slate-800">Position Selection</h4>
                 </div>
+                <div class="mb-4">
+                  <label class="block text-xs font-semibold text-slate-600 mb-1.5">Department <span class="text-rose-500">*</span></label>
+                  <select v-model="form.department_id" :disabled="modalType === 'view'" @change="onDepartmentChange" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
+                    <option value="">Select Department</option>
+                    <option v-for="dept in filterOptions.departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
+                  </select>
+                </div>
                 <div>
                   <label class="block text-xs font-semibold text-slate-600 mb-1.5">Position <span class="text-rose-500">*</span></label>
-                  <select v-model="form.position_id" :disabled="modalType === 'view'" @change="onPositionChange" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.position_id }">
-                    <option value="">Select Position</option>
-                    <option v-for="pos in props.positions" :key="pos.id" :value="pos.id">{{ pos.name }}</option>
+                  <select v-model="form.position_id" :disabled="modalType === 'view' || !form.department_id" @change="onPositionChange" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.position_id }">
+                    <option value="">{{ form.department_id ? 'Select Position' : 'Select Department First' }}</option>
+                    <option v-for="pos in filteredPositions" :key="pos.id" :value="pos.id">{{ pos.name }}</option>
                   </select>
                   <p v-if="validationErrors.position_id" class="text-[10px] text-rose-500 mt-1">{{ validationErrors.position_id }}</p>
                 </div>
@@ -497,10 +491,44 @@
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Employment Type <span class="text-rose-500">*</span></label>
                     <select v-model="form.employment_type_id" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
                       <option value="">Select Employment Type</option>
-                      <option v-for="type in props.filterOptions?.employmentTypes || []" :key="type.id" :value="type.id">
+                      <option v-for="type in employmentTypeOptions" :key="type.id" :value="type.id">
                         {{ type.name }}
                       </option>
+                      <option v-if="selectedEmploymentType && !employmentTypeOptions.some(t => String(t.id) === String(selectedEmploymentType.id))" :value="selectedEmploymentType.id">
+                        {{ selectedEmploymentType.name }}
+                      </option>
                     </select>
+                  </div>
+                  <div v-if="isContractType" class="col-span-2 p-4 bg-amber-50/60 border border-amber-200 rounded-xl">
+                    <div class="flex items-center gap-2 mb-3">
+                      <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                      </svg>
+                      <h5 class="text-xs font-bold text-amber-700">Contract Duration</h5>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                      <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Duration</label>
+                        <input
+                          :value="form.contract_duration"
+                          @input="onContractDurationInput"
+                          type="text"
+                          inputmode="numeric"
+                          placeholder="e.g., 6"
+                          :disabled="modalType === 'view'"
+                          class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Period</label>
+                        <select v-model="form.contract_unit" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
+                          <option value="">Select Period</option>
+                          <option value="Month">Month</option>
+                          <option value="Year">Year</option>
+                        </select>
+                      </div>
+                    </div>
+                    <p class="text-[10px] text-amber-600 mt-2">Shown because the selected employment type is contractual.</p>
                   </div>
                 </div>
               </div>
@@ -532,12 +560,12 @@
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Application Deadline</label>
-                    <input v-model="form.closing_date" type="date" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
-                  </div>
-                  <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Expected Start Date</label>
                     <input v-model="form.expected_start_date" type="date" :min="todayDate" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Application Deadline</label>
+                    <input v-model="form.closing_date" type="date" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
                   </div>
                 </div>
               </div>
@@ -583,7 +611,7 @@
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Shift</label>
                     <select v-model="form.shift" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
                       <template v-if="(shifts || []).length">
-                        <option v-for="sh in shifts" :key="sh.id" :value="sh.name">{{ sh.name }}{{ sh.code ? ' (' + sh.code + ')' : '' }}</option>
+                        <option v-for="sh in shifts" :key="sh.id" :value="sh.name">{{ sh.name }}</option>
                       </template>
                       <template v-else>
                         <option>Morning Shift</option>
@@ -602,6 +630,27 @@
                       <option>Hide</option>
                       <option>Show on Application</option>
                     </select>
+                  </div>
+                  <div class="col-span-2">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Training Required?</label>
+                    <label
+                      :class="[
+                        form.training_required ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-slate-200 bg-white text-slate-600',
+                        modalType === 'view' ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:border-amber-300'
+                      ]"
+                      class="w-full flex items-center justify-between rounded-xl border px-3 py-2.5 text-xs font-semibold shadow-sm transition-colors duration-200">
+                      <span>{{ form.training_required ? 'Yes, training is needed' : 'No training needed' }}</span>
+                      <input v-model="form.training_required" type="checkbox" :disabled="modalType === 'view'"
+                        class="peer sr-only" />
+                      <span :class="form.training_required ? 'border-amber-500 bg-amber-500' : 'border-slate-300 bg-white'"
+                        class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all duration-200 ease-out peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400 peer-focus-visible:ring-offset-2">
+                        <svg class="h-3.5 w-3.5 text-white transition-all duration-200 ease-out"
+                          :class="form.training_required ? 'scale-100 opacity-100' : 'scale-50 opacity-0'"
+                          viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                          <path d="m4 10 4 4 8-8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </span>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -787,10 +836,13 @@ const form = reactive({
     hiring_manager: '',
     work_location: props.workLocation || 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite',
     employment_type_id: null,
+    contract_duration: '',
+    contract_unit: '',
     work_mode: 'On-site',
     work_schedule: '',
     shift: 'Morning Shift',
     salary_visibility: 'Show Range',
+    training_required: false,
     recruitment_notes: '',
     internal_notes: '',
     require_initial_interview: true,
@@ -831,6 +883,32 @@ const filteredPostings = computed(() => {
 
 // Display name for a posting — position name wins since title is derived.
 const postingDisplayName = (p) => p?.position || p?.title || 'this posting';
+
+// Contract / contractual employment types reveal contract-specific fields.
+const hiddenEmploymentTypes = ['internship', 'temporary'];
+const employmentTypeOptions = computed(() => {
+    const list = props.filterOptions?.employmentTypes || [];
+    return list.filter(t => !hiddenEmploymentTypes.includes(String(t.name || '').trim().toLowerCase()));
+});
+const selectedEmploymentType = computed(() => {
+    const list = props.filterOptions?.employmentTypes || [];
+    return list.find(t => String(t.id) === String(form.employment_type_id)) || null;
+});
+const isContractType = computed(() => /contract/i.test(selectedEmploymentType.value?.name || ''));
+
+// Contract duration input accepts numbers only (no decimals, signs or text).
+const onContractDurationInput = (e) => {
+    const cleaned = String(e.target.value).replace(/[^0-9]/g, '');
+    form.contract_duration = cleaned;
+    e.target.value = cleaned;
+};
+
+const filteredPositions = computed(() => {
+    if (!form.department_id) return [];
+    return (props.positions || []).filter((position) =>
+        String(position.department_id) === String(form.department_id)
+    );
+});
 
 const selectedPositionName = computed(() => {
     if (form.position_id) {
@@ -1128,6 +1206,20 @@ const confirmDelete = () => {
 // POSITION CHANGE - AUTO-FILL FROM DATABASE
 // ============================================
 
+const onDepartmentChange = () => {
+    const department = (props.filterOptions?.departments || []).find(
+        (item) => String(item.id) === String(form.department_id)
+    );
+    form.department = department?.name || '';
+    form.position_id = '';
+    form.title = '';
+    form.reports_to = '';
+    form.salary_min = null;
+    form.salary_max = null;
+    form.vacancies = 1;
+    form.hiring_manager = '';
+};
+
 const onPositionChange = () => {
     const selectedPosition = props.positions.find(p => String(p.id) === String(form.position_id));
     
@@ -1148,8 +1240,10 @@ const onPositionChange = () => {
         
         form.hiring_manager = '';
     } else {
-        form.department = '';
-        form.department_id = null;
+        const department = (props.filterOptions?.departments || []).find(
+            (item) => String(item.id) === String(form.department_id)
+        );
+        form.department = department?.name || '';
         form.reports_to = '';
         form.salary_min = null;
         form.salary_max = null;
@@ -1238,10 +1332,13 @@ const openModal = (type, data = null) => {
             hiring_manager: data.hiring_manager || '',
             work_location: data.work_location || props.workLocation || 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite',
             employment_type_id: data.employment_type_id || null,
+            contract_duration: data.contract_duration || '',
+            contract_unit: data.contract_unit || '',
             work_mode: 'On-site',
             work_schedule: data.work_schedule || '',
             shift: data.shift || 'Morning Shift',
             salary_visibility: data.salary_visibility || 'Show Range',
+            training_required: Boolean(data.training_required),
             recruitment_notes: data.recruitment_notes || '',
             internal_notes: data.internal_notes || '',
             require_initial_interview: data.require_initial_interview !== undefined ? data.require_initial_interview : true,
@@ -1275,10 +1372,13 @@ const openModal = (type, data = null) => {
             hiring_manager: '',
             work_location: props.workLocation || 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite',
             employment_type_id: null,
+            contract_duration: '',
+            contract_unit: '',
             work_mode: 'On-site',
             work_schedule: '',
             shift: (props.shifts && props.shifts.length) ? props.shifts[0].name : 'Morning Shift',
             salary_visibility: 'Show Range',
+            training_required: false,
             recruitment_notes: '',
             internal_notes: '',
             require_initial_interview: true,

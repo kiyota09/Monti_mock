@@ -149,9 +149,6 @@ const removeHoliday = () => {
                         <p class="text-xs text-slate-500 mt-1">Click any date to add or edit its holiday. Date fills in automatically.</p>
                     </div>
                 </div>
-                <button @click="openForDate(todayDate)" class="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg">
-                    <Plus class="w-4 h-4" /> Add Holiday
-                </button>
             </div>
 
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">

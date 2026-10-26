@@ -14,9 +14,11 @@ class HrmJobPosting extends Model
         'hiring_priority', 'status', 'recruiter', 'hiring_manager', 'work_location', 'work_mode',
         'work_schedule', 'shift', 'recruitment_notes', 'internal_notes', 'require_initial_interview',
         'require_final_interview', 'closing_date', 'expected_start_date', 'published_at', 'archived_at',
+        'training_required',
     ];
     protected $casts = [
         'require_initial_interview' => 'boolean', 'require_final_interview' => 'boolean',
+        'training_required' => 'boolean',
         'closing_date' => 'date', 'expected_start_date' => 'date',
         'published_at' => 'datetime', 'archived_at' => 'datetime',
     ];
