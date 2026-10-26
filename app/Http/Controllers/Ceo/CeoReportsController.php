@@ -3,19 +3,19 @@
 namespace App\Http\Controllers\Ceo;
 
 use App\Http\Controllers\Controller;
-use App\Models\Ceo\ExecutiveActionLog;
+use App\Models\Core\User;
 use App\Models\Crm\Client;
 use App\Models\Crm\CrmLead;
-use App\Models\Inv\Product;
 use App\Models\Hrm\Payroll;
+use App\Models\Inv\Product;
 use App\Models\Man\Fabric;
 use App\Models\Man\Machine;
 use App\Models\Man\Package;
 use App\Models\Ord\PurchaseOrder;
 use App\Models\Ord\SalesOrder;
-use App\Models\Core\User;
 use App\Models\Scm\PurchaseInvoice;
 use App\Models\Scm\ScmPurchaseOrder;
+use App\Services\Ceo\BoardPackService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -39,18 +39,12 @@ class CeoReportsController extends Controller
     }
 
     /**
-     * Board pack: print-ready monthly bundle (KPIs + 12-month trends +
-     * executive decisions). Rendered as a normal page with print CSS.
+     * Board pack: print-ready monthly bundle assembled from live module
+     * data (financial, commercial, plant, supply, people and risk).
      */
-    public function boardPack()
+    public function boardPack(BoardPackService $boardPack)
     {
-        return Inertia::render('Dashboard/CEO/BoardPack', [
-            'generatedAt' => now()->format('F d, Y g:i A'),
-            'kpis' => $this->snapshot(),
-            'trends' => $this->trends(12),
-            'decisions' => ExecutiveActionLog::with('actor:id,name')
-                ->latest()->take(30)->get(),
-        ]);
+        return Inertia::render('Dashboard/CEO/BoardPack', $boardPack->build());
     }
 
     protected function snapshot(): array

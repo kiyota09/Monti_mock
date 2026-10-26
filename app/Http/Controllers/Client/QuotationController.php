@@ -34,12 +34,16 @@ class QuotationController extends Controller
             $poNumber = 'PO-' . date('Y') . '-' . str_pad(PurchaseOrder::count() + 1, 5, '0', STR_PAD_LEFT);
 
             // Create purchase order
+            $subtotal = round((float) $quotation->subtotal + (float) $quotation->shipping_cost, 2);
+            $tax = round($subtotal * 0.12, 2);
             $purchaseOrder = PurchaseOrder::create([
                 'client_id' => $quotation->client_id,
                 'po_number' => $poNumber,
-                'subtotal' => $quotation->subtotal,
+                'subtotal' => $subtotal,
                 'discount_amount' => 0,
-                'total_amount' => $quotation->grand_total,
+                'tax_rate' => 12,
+                'tax_amount' => $tax,
+                'total_amount' => $subtotal + $tax,
                 'delivery_date' => $this->extractDeliveryDate($quotation->custom_notes),
                 'status' => 'approved',
                 'tier_level' => null,

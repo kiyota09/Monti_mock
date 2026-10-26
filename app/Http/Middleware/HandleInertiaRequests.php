@@ -146,6 +146,8 @@ class HandleInertiaRequests extends Middleware
             ],
             'flash' => [
                 'message' => fn () => $request->session()->get('message'),
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
             ],
             // When the signed-in account still holds a system-issued password
             // (temporary / initial / recovered), the frontend shows a
@@ -421,7 +423,7 @@ class HandleInertiaRequests extends Middleware
             // A page missing here is missing from the auto-granted HRM set,
             // so the sidebar link disappears on a freshly migrated database.
             'HRM' => ['dashboard', 'employee', 'workforce', 'recruitment', 'application', 'interview', 'onboarding', 'onboarding_templates', 'organization', 'performance', 'training', 'attendance', 'leave', 'archive', 'trainee', 'payroll', 'compensation', 'analytics', 'agencies', 'workers', 'requests', 'agency_attendance', 'agency_billing'],
-            'CRM' => ['dashboard', 'leads', 'customer_profiles', 'opportunities', 'inquiry', 'messaging', 'approvals', 'quotations', 'activities', 'cases', 'campaigns', 'investigation'],
+            'CRM' => ['dashboard', 'leads', 'customer_profiles', 'opportunities', 'inquiry', 'messaging', 'email', 'approvals', 'quotations', 'activities', 'cases', 'campaigns', 'investigation'],
             'SCM' => ['dashboard', 'sales', 'procurement', 'planning', 'purchase', 'deliveries', 'vendor', 'analytics'],
             'FIN' => ['dashboard', 'receivables', 'payables', 'expenses', 'payroll', 'reports', 'approvals'],
             'MAN' => ManufacturingPages::allPageKeys(),

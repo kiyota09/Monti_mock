@@ -21,6 +21,7 @@ class WarehousePackage extends Model
     ];
 
     protected $casts = [
+        'quantity' => 'decimal:2',
         'pushed_at' => 'datetime',
     ];
 

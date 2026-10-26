@@ -53,6 +53,7 @@ Route::prefix('dashboard/ord')->name('ord.')->middleware(['auth', 'verified', 'm
         ->name('orders.payment');
     Route::get('/orders/receipt/{type}/{id}', [OrdOrdersController::class, 'downloadReceipt'])
         ->middleware('page.permission:orders,view')
+        ->whereIn('type', ['po', 'so', 'PO', 'SO'])
         ->name('orders.download-receipt');
 
     // Production watch + release to plant floor

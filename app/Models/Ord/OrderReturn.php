@@ -15,6 +15,23 @@ class OrderReturn extends Model
 
     public const STATUSES = ['pending', 'inspected', 'credited', 'rejected', 'closed'];
 
+    /**
+     * RMA resolution state machine. Claims can only move forward:
+     * pending -> inspected -> credited|rejected -> closed.
+     */
+    public const TRANSITIONS = [
+        'pending' => ['inspected'],
+        'inspected' => ['credited', 'rejected'],
+        'credited' => ['closed'],
+        'rejected' => ['closed'],
+        'closed' => [],
+    ];
+
+    public static function allowedTransitions(?string $from): array
+    {
+        return self::TRANSITIONS[(string) $from] ?? [];
+    }
+
     protected $fillable = [
         'return_number',
         'sales_order_id',

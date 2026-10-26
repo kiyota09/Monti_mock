@@ -21,6 +21,9 @@ class SalesOrder extends Model
         'color',
         'quantity',
         'unit_price',
+        'subtotal',
+        'tax_rate',
+        'tax_amount',
         'total_amount',
         'yarn_type',
         'design',
@@ -49,6 +52,9 @@ class SalesOrder extends Model
         'quantity' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'unit_price' => 'decimal:2',
+        'subtotal' => 'decimal:2',
+        'tax_rate' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
         'expected_ship_date' => 'date',
         'confirmed_at' => 'datetime',
         'production_started_at' => 'datetime',
@@ -61,7 +67,7 @@ class SalesOrder extends Model
      */
     public function purchaseOrder()
     {
-        return $this->belongsTo(PurchaseOrder::class);
+        return $this->belongsTo(PurchaseOrder::class, 'purchase_order_id', 'po_number');
     }
 
     /**
@@ -81,8 +87,10 @@ class SalesOrder extends Model
     }
     public function manufacturingOrder()
 {
-    return $this->hasOne(ManufacturingOrder::class, 'sales_order_id');
-}
+        // Older/rejected runs may leave multiple manufacturing orders for a
+        // job order. Client and ORD tracking should show the latest run.
+        return $this->hasOne(ManufacturingOrder::class, 'sales_order_id')->latestOfMany();
+    }
   public function bomRecord()
     {
         return $this->belongsTo(BomRecord::class, 'recipe_id');

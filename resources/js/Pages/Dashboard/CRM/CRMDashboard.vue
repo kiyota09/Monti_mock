@@ -83,6 +83,7 @@ const quickLinks = computed(() => {
     }
     if (canViewPage('campaigns')) {
         links.push({ label: 'Campaigns', href: route('crm.campaigns'), icon: Megaphone, permKey: 'campaigns' });
+        links.push({ label: 'Company Posts', href: route('crm.posts'), icon: Megaphone, permKey: 'campaigns' });
     }
     if (canViewPage('investigation')) {
         links.push({ label: 'Due Diligence', href: route('crm.investigation.index'), icon: AlertCircle, permKey: 'investigation' });

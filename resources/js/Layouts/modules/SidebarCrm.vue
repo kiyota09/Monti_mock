@@ -2,7 +2,7 @@
 import {
     LayoutDashboard, FileUser, Eye, Award, ClipboardCheck, Users,
     AlertCircle, UserPen, KanbanSquare, FileText, Activity,
-    Briefcase, Megaphone, ShieldCheck, MessageSquare, MessagesSquare,
+    Briefcase, Megaphone, ShieldCheck, MessageSquare, MessagesSquare, Mail,
 } from 'lucide-vue-next'
 
 export const crmModule = {
@@ -23,11 +23,13 @@ export const crmModule = {
             { label: 'Accounts', href: route('crm.customerprofile.index'), icon: Users, permKey: 'customer_profiles' },
             { label: 'Inquiries', href: route('crm.inquiries'), icon: MessageSquare, permKey: 'inquiry' },
             { label: 'Messaging', href: route('crm.messages'), icon: MessagesSquare, permKey: 'messaging' },
+            { label: 'Email', href: route('crm.email.index'), icon: Mail, permKey: 'email' },
             { label: 'Approvals', href: route('crm.approval.index'), icon: ClipboardCheck, permKey: 'approvals' },
             { label: 'Quotations', href: route('crm.quotations'), icon: FileText, permKey: 'quotations' },
             { label: 'Activities', href: route('crm.activities'), icon: Activity, permKey: 'activities' },
             { label: 'Cases', href: route('crm.cases'), icon: Briefcase, permKey: 'cases' },
             { label: 'Campaigns', href: route('crm.campaigns'), icon: Megaphone, permKey: 'campaigns' },
+            { label: 'Company Posts', href: route('crm.posts'), icon: Megaphone, permKey: 'campaigns' },
             { label: 'Due Diligence', href: route('crm.investigation.index'), icon: AlertCircle, permKey: 'investigation' },
         ]
         if (isCEO) return all

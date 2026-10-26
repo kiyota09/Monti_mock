@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import TemplateWidget from '@/Components/crm/TemplateWidget.vue';
 import {
     Calendar, X, CheckCircle, XCircle, Plus, MessageSquare, AlertCircle,
     Building2, Hash, UserRound, Mail, Phone, MapPin, Clock, Upload,
@@ -698,6 +699,8 @@ const rescheduleFeedback = (fb) => {
             :can-edit="canEdit"
             @close="closeDocuments"
         />
+
+        <TemplateWidget page-key="approvals" />
     </AuthenticatedLayout>
 </template>
 

@@ -7,9 +7,13 @@ use App\Http\Controllers\Crm\CampaignController;
 use App\Http\Controllers\Crm\CaseController;
 use App\Http\Controllers\Crm\ContactController;
 use App\Http\Controllers\Crm\CrmDashboardController;
+use App\Http\Controllers\Crm\CrmEmailController;
 use App\Http\Controllers\Crm\CrmInquiryController;
+use App\Http\Controllers\Crm\CrmLogoPartnerController;
+use App\Http\Controllers\Crm\CrmMessageTemplateController;
+use App\Http\Controllers\Crm\CrmPostController;
+use App\Http\Controllers\Crm\CrmRegistrationController;
 use App\Http\Controllers\Crm\CustomerProfileController;
-
 use App\Http\Controllers\Crm\InvestigationController;
 use App\Http\Controllers\Crm\LeadController;
 use App\Http\Controllers\Crm\LeadInvestigationController;
@@ -20,8 +24,6 @@ use App\Http\Controllers\Crm\OpportunityDocumentController;
 use App\Http\Controllers\Crm\PipelineNoteController;
 use App\Http\Controllers\Crm\QuotationController;
 use App\Http\Controllers\Crm\StageController;
-use App\Http\Controllers\Crm\CrmLogoPartnerController;
-
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,6 +32,19 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'module.access:CRM'])->group(function () {
+    Route::get('/posts', [CrmPostController::class, 'index'])
+        ->middleware('page.permission:campaigns,view')->name('posts');
+    Route::post('/posts', [CrmPostController::class, 'store'])
+        ->middleware('page.permission:campaigns,edit')->name('posts.store');
+    Route::post('/posts/{post}', [CrmPostController::class, 'update'])
+        ->middleware('page.permission:campaigns,edit')->name('posts.update');
+    Route::post('/posts/{post}/archive', [CrmPostController::class, 'archive'])
+        ->middleware('page.permission:campaigns,edit')->name('posts.archive');
+    Route::post('/posts/{post}/restore', [CrmPostController::class, 'restore'])
+        ->middleware('page.permission:campaigns,edit')->name('posts.restore');
+    Route::delete('/posts/{post}', [CrmPostController::class, 'destroy'])
+        ->middleware('page.permission:campaigns,edit')->name('posts.destroy');
+
     // Dashboard
     Route::get('/', [CrmDashboardController::class, 'index'])
         ->middleware('page.permission:dashboard,view')
@@ -80,8 +95,6 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::delete('/lead/investigations/{investigation}', [LeadInvestigationController::class, 'destroy'])
         ->middleware('page.permission:leads,edit')
         ->name('lead.investigations.destroy');
-
-
 
     // Approvals
     Route::get('/approval', [ApprovalController::class, 'index'])
@@ -341,6 +354,34 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
         ->middleware('page.permission:messaging,view')
         ->name('messages.calls.signals');
 
+    // Client email inbox — received client email, replies and registration
+    // form invitations.
+    Route::get('/email', [CrmEmailController::class, 'index'])
+        ->middleware('page.permission:email,view')
+        ->name('email.index');
+    Route::post('/email/compose', [CrmEmailController::class, 'compose'])
+        ->middleware('page.permission:email,edit')
+        ->name('email.compose');
+    Route::post('/email/sync', [CrmEmailController::class, 'sync'])
+        ->middleware('page.permission:email,view')
+        ->name('email.sync');
+    Route::post('/email/{thread}/reply', [CrmEmailController::class, 'reply'])
+        ->middleware('page.permission:email,edit')
+        ->name('email.reply');
+    Route::post('/email/{thread}/registration-form', [CrmEmailController::class, 'sendRegistrationForm'])
+        ->middleware('page.permission:email,edit')
+        ->name('email.registration-form');
+
+    // Floating message-template widget (per-user, per-page storage).
+    Route::get('/templates', [CrmMessageTemplateController::class, 'index'])
+        ->name('templates.index');
+    Route::post('/templates', [CrmMessageTemplateController::class, 'store'])
+        ->name('templates.store');
+    Route::patch('/templates/{template}', [CrmMessageTemplateController::class, 'update'])
+        ->name('templates.update');
+    Route::delete('/templates/{template}', [CrmMessageTemplateController::class, 'destroy'])
+        ->name('templates.destroy');
+
     // Internal CRM user-to-user calls (voice / video).
     Route::get('/calls/contacts', [CallController::class, 'contacts'])
         ->middleware('page.permission:messaging,view')
@@ -397,3 +438,28 @@ Route::prefix('meeting-request')->name('meeting-request.')->middleware('throttle
     Route::get('{token}/reschedule', [MeetingRequestController::class, 'rescheduleForm'])->name('reschedule.form');
     Route::post('{token}/reschedule', [MeetingRequestController::class, 'reschedule'])->name('reschedule');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Public partner registration form (reached from the CRM email button)
+|--------------------------------------------------------------------------
+*/
+Route::middleware('throttle:40,1')->group(function () {
+    Route::get('crm/registration/{token}', [CrmRegistrationController::class, 'show'])
+        ->name('crm.registration.show');
+    Route::post('crm/registration/{token}', [CrmRegistrationController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('crm.registration.store');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Inbound email capture
+|--------------------------------------------------------------------------
+| Point an inbound-mail service (Mailgun, Postmark, Cloudflare Email Routing,
+| …) at this endpoint with CRM_EMAIL_INBOUND_KEY as the path secret. Payload:
+| { from, from_name?, subject?, body }.
+*/
+Route::post('crm/email/inbound/{key}', [CrmEmailController::class, 'inbound'])
+    ->middleware('throttle:60,1')
+    ->name('crm.email.inbound');

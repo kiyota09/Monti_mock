@@ -556,7 +556,9 @@ class CrmInquiryController extends Controller
 
             foreach ($validated['items'] as $item) {
                 $product = \App\Models\Inv\Product::find($item['product_id']);
-                $total = $item['kilos'] * $item['unit_price'];
+                $subtotal = round($item['kilos'] * $item['unit_price'], 2);
+                $tax = round($subtotal * 0.12, 2);
+                $total = $subtotal + $tax;
 
                 $colorCode = strtoupper(substr($item['color'], 0, 3));
                 $controlNumber = 'CTL-' . now()->format('y') . $colorCode . '-' . strtoupper(Str::random(5));
@@ -571,6 +573,9 @@ class CrmInquiryController extends Controller
                     'yarn_type'         => $product->name,
                     'design'            => $item['description'] ?? '',
                     'unit_price'        => $item['unit_price'],
+                    'subtotal'          => $subtotal,
+                    'tax_rate'          => 12,
+                    'tax_amount'        => $tax,
                     'total_amount'      => $total,
                     'status'            => 'pending',
                     'recipe_id'         => $item['recipe_id'] ?? null,

@@ -37,7 +37,7 @@ class DispatchController extends Controller
                     'id'             => $pkg->id,
                     'package_number' => $pkg->package_number,
                     'product_name'   => $pkg->product?->name,
-                    'quantity'       => (int) $pkg->quantity,
+                    'quantity'       => (float) $pkg->quantity,
                     'client_id'      => $client?->id,
                     'client_name'    => $client?->company_name,
                     'client_address' => $this->clientAddress($client),

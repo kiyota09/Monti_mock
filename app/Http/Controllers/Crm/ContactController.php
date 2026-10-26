@@ -8,14 +8,15 @@ use App\Models\Crm\Client;
 use App\Models\Crm\CrmClientAssignment;
 use App\Models\Crm\CrmContact;
 use App\Models\Crm\CrmLead;
+use App\Rules\PortalEmailAvailable;
 use App\Support\ClientPortal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Inertia\Inertia;
 
 class ContactController extends Controller
 {
@@ -97,6 +98,21 @@ class ContactController extends Controller
             $this->prospect($contact->lead);
         }
 
+        if (($contact->has_account || $contact->password) && ! empty($data['email'])) {
+            $newEmail = mb_strtolower(trim($data['email']));
+
+            if ($newEmail !== mb_strtolower(trim((string) $contact->email))) {
+                $validator = Validator::make(
+                    ['email' => $data['email']],
+                    ['email' => ['required', 'email', new PortalEmailAvailable($contact->id)]],
+                );
+
+                if ($validator->fails()) {
+                    return back()->with('error', $validator->errors()->first('email'));
+                }
+            }
+        }
+
         if (! empty($data['is_primary'])) {
             $this->clearPrimary($contact->only('client_id', 'lead_id'));
         }
@@ -138,14 +154,30 @@ class ContactController extends Controller
 
         $this->account($contact->client_id);
 
+        $email = mb_strtolower(trim((string) $contact->email));
+
+        if ($email === '') {
+            return back()->with('error', 'Add an email address to this contact before creating a portal account.');
+        }
+
+        $conflict = Client::withTrashed()->whereRaw('LOWER(email) = ?', [$email])->exists()
+            || CrmContact::whereRaw('LOWER(email) = ?', [$email])
+                ->whereKeyNot($contact->id)
+                ->where(fn ($query) => $query->where('has_account', true)->orWhereNotNull('password'))
+                ->exists();
+
+        if ($conflict) {
+            return back()->with('error', 'That email is already used by another portal account. Update the contact email first.');
+        }
+
         $temporary = Str::password(10, true, true, false, false);
 
         $contact->update([
-            'status'             => 'active',
-            'has_account'        => true,
-            'password'           => Hash::make($temporary),
+            'status' => 'active',
+            'has_account' => true,
+            'password' => Hash::make($temporary),
             'account_created_at' => now(),
-            'access_pages'       => $contact->access_pages ?: ClientPortal::keys(),
+            'access_pages' => $contact->access_pages ?: ClientPortal::keys(),
         ]);
 
         $client = Client::find($contact->client_id);
@@ -179,9 +211,9 @@ class ContactController extends Controller
         }
 
         $contact->update([
-            'status'      => 'rejected',
+            'status' => 'rejected',
             'has_account' => false,
-            'password'    => null,
+            'password' => null,
             'access_pages' => null,
         ]);
 

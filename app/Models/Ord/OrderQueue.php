@@ -31,4 +31,9 @@ class OrderQueue extends Model
     {
         return $this->belongsTo(PurchaseOrder::class);
     }
+
+    public function salesOrder()
+    {
+        return $this->belongsTo(SalesOrder::class);
+    }
 }

@@ -6,7 +6,7 @@ import { Shirt, AlertCircle, X, Sparkles, ClipboardList, ChevronRight } from 'lu
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'dyeing_ironing'));
 
 const props = defineProps({
     squeezerJobs: Array,

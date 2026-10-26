@@ -6,7 +6,7 @@ import { Flame, Sparkles, PlusCircle, Gauge } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'boiler_operator'));
 
 const props = defineProps({ machines: Array, todayLogs: Array });
 

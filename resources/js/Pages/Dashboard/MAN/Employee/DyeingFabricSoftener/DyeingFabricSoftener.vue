@@ -6,7 +6,7 @@ import { Shirt, AlertCircle, X, CheckSquare, Square, Sparkles, ClipboardList, Ch
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'dyeing_fabric_softener'));
 
 const props = defineProps({
     fabrics: Array,

@@ -6,7 +6,7 @@ import { ArrowRightLeft, Sparkles, Calculator, PenLine, CheckCircle2 } from 'luc
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'lab_transfer'));
 
 const props = defineProps({ dips: Array });
 

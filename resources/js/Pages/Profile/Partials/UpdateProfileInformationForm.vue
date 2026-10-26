@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InputError from '@/Components/InputError.vue';
+import ModalShell from '@/Components/crm/pipeline/ModalShell.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { Camera, X, User as UserIcon } from 'lucide-vue-next';
@@ -20,6 +21,10 @@ const form = useForm({
 const photoInput = ref<HTMLInputElement | null>(null);
 const photoPreview = ref<string | null>(null);
 const autoUploading = ref(false);
+
+const showPhotoConfirm = ref(false);
+const pendingPhoto = ref<File | null>(null);
+const pendingPreview = ref<string | null>(null);
 
 const currentPhotoUrl = computed(() =>
     user.profile_photo_path ? `/storage/${user.profile_photo_path}` : null
@@ -53,13 +58,36 @@ const onPhoto = (e: Event) => {
         return;
     }
     form.clearErrors('photo');
-    form.photo = file;
-    photoPreview.value = URL.createObjectURL(file);
+    // Stage the selection first — nothing uploads until the user confirms.
+    if (pendingPreview.value) URL.revokeObjectURL(pendingPreview.value);
+    pendingPhoto.value = file;
+    pendingPreview.value = URL.createObjectURL(file);
+    showPhotoConfirm.value = true;
+};
+
+const cancelPhotoUpload = () => {
+    if (pendingPreview.value) URL.revokeObjectURL(pendingPreview.value);
+    pendingPhoto.value = null;
+    pendingPreview.value = null;
+    showPhotoConfirm.value = false;
+    if (photoInput.value) photoInput.value.value = '';
+};
+
+const confirmPhotoUpload = () => {
+    if (!pendingPhoto.value) return;
+    form.photo = pendingPhoto.value;
+    if (photoPreview.value) URL.revokeObjectURL(photoPreview.value);
+    photoPreview.value = pendingPreview.value;
+    pendingPhoto.value = null;
+    pendingPreview.value = null;
+    showPhotoConfirm.value = false;
     // Real-time: upload immediately, no Save click / page refresh needed.
     uploadPhotoNow();
 };
+
 const clearPhoto = () => {
     form.photo = null;
+    if (photoPreview.value) URL.revokeObjectURL(photoPreview.value);
     photoPreview.value = null;
     form.clearErrors('photo');
     if (photoInput.value) photoInput.value.value = '';
@@ -86,7 +114,7 @@ const submit = () => {
             </h2>
 
             <p class="mt-1 text-[11px] text-slate-400">
-                Your photo updates instantly — no page refresh needed. Name and email are managed by HR/IT and cannot be changed here.
+                Your photo updates instantly after you confirm — no page refresh needed. Name and email are managed by HR/IT and cannot be changed here.
             </p>
         </header>
 
@@ -107,7 +135,7 @@ const submit = () => {
                             <X class="h-3.5 w-3.5" /> Reset
                         </button>
                     </div>
-                    <p class="mt-1.5 text-[11px] text-gray-400">JPG, PNG, GIF or WEBP · max 10MB. Uploads instantly.</p>
+                    <p class="mt-1.5 text-[11px] text-gray-400">JPG, PNG, GIF or WEBP · max 10MB. You'll be asked to confirm before it uploads.</p>
                 </div>
                 <input ref="photoInput" type="file" accept="image/*" @change="onPhoto" class="hidden" />
             </div>
@@ -171,7 +199,7 @@ const submit = () => {
                 <p v-else-if="form.recentlySuccessful" class="flex-1 text-xs font-black uppercase text-emerald-600 dark:text-emerald-400">
                     Photo updated.
                 </p>
-                <p v-else class="flex-1 text-[11px] text-gray-400">Photo saves automatically on select.</p>
+                <p v-else class="flex-1 text-[11px] text-gray-400">Photo saves automatically after you confirm.</p>
 
                 <Transition
                     enter-active-class="transition ease-in-out"
@@ -188,5 +216,40 @@ const submit = () => {
                 </Transition>
             </div>
         </form>
+
+        <ModalShell v-if="showPhotoConfirm" size="sm" @close="cancelPhotoUpload">
+            <div class="p-6">
+                <div class="flex items-start gap-3">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
+                        <Camera class="h-5 w-5" />
+                    </span>
+                    <div class="min-w-0">
+                        <h3 class="text-base font-black text-slate-900 dark:text-white">
+                            {{ currentPhotoUrl ? 'Change your profile photo?' : 'Upload your profile photo?' }}
+                        </h3>
+                        <p class="mt-1 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">
+                            {{ currentPhotoUrl
+                                ? 'Your current photo will be replaced immediately. Are you sure you want to continue?'
+                                : 'This photo will be saved to your profile immediately. Are you sure you want to upload it?' }}
+                        </p>
+                    </div>
+                </div>
+
+                <div v-if="pendingPreview" class="mt-4 flex justify-center rounded-2xl border border-slate-100 bg-slate-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+                    <img :src="pendingPreview" alt="New profile photo preview" class="h-32 w-32 rounded-2xl object-cover ring-1 ring-slate-200 dark:ring-zinc-700" />
+                </div>
+
+                <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" @click="cancelPhotoUpload"
+                        class="rounded-xl bg-slate-100 px-4 py-2.5 text-[11px] font-black uppercase tracking-wide text-slate-600 hover:bg-slate-200 active:scale-95 dark:bg-zinc-800 dark:text-slate-300 dark:hover:bg-zinc-700">
+                        Cancel
+                    </button>
+                    <button type="button" @click="confirmPhotoUpload"
+                        class="rounded-xl bg-indigo-600 px-4 py-2.5 text-[11px] font-black uppercase tracking-wide text-white shadow hover:bg-indigo-700 active:scale-95">
+                        {{ currentPhotoUrl ? 'Yes, change photo' : 'Yes, upload photo' }}
+                    </button>
+                </div>
+            </div>
+        </ModalShell>
     </section>
 </template>

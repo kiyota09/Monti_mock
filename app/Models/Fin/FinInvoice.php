@@ -22,6 +22,11 @@ class FinInvoice extends Model
         return $this->hasMany(FinInvoicePayment::class);
     }
 
+    public function salesOrder()
+    {
+        return $this->belongsTo(\App\Models\Ord\SalesOrder::class, 'sales_order_id');
+    }
+
     public function paidTotal(): float
     {
         return (float) $this->payments()->sum('amount');

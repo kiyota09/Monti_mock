@@ -8,7 +8,7 @@ import {
     Wallet, Receipt, PieChart, BarChart3, Stamp, ShoppingCart, CalendarClock,
     PackageCheck, ClipboardCheck as ClipboardCheckIcon, Warehouse, XCircle as XCircleIcon,
     Undo2, Spool, AlertCircle as AlertIcon, LifeBuoy, MonitorSmartphone, BookOpen,
-    GitPullRequest, ScrollText, UserX, HardHat,
+    GitPullRequest, ScrollText, UserX, HardHat, Mail,
 } from 'lucide-vue-next'
 
 export const MODULES = [
@@ -55,11 +55,13 @@ export const MODULES = [
             { id: 'crm_opportunities', label: 'Opportunities', icon: KanbanSquare, route: 'crm.opportunities', permission: 'crm.opportunities', priority: 80 },
             { id: 'crm_inquiries', label: 'Inquiries', icon: MessageSquare, route: 'crm.inquiries', permission: 'crm.inquiry', priority: 75 },
             { id: 'crm_messaging', label: 'Messaging', icon: MessageSquare, route: 'crm.messages', permission: 'crm.messaging', priority: 74 },
+            { id: 'crm_email', label: 'Email', icon: Mail, route: 'crm.email.index', permission: 'crm.email', priority: 73 },
             { id: 'crm_approvals', label: 'Approvals', icon: ClipboardCheck, route: 'crm.approval.index', permission: 'crm.approvals', priority: 70 },
             { id: 'crm_quotations', label: 'Quotations', icon: FileText, route: 'crm.quotations', permission: 'crm.quotations', priority: 65 },
             { id: 'crm_activities', label: 'Activities', icon: Activity, route: 'crm.activities', permission: 'crm.activities', priority: 60 },
             { id: 'crm_cases', label: 'Cases', icon: BriefcaseIcon, route: 'crm.cases', permission: 'crm.cases', priority: 55 },
             { id: 'crm_campaigns', label: 'Campaigns', icon: Megaphone, route: 'crm.campaigns', permission: 'crm.campaigns', priority: 50 },
+            { id: 'crm_posts', label: 'Company Posts', icon: Megaphone, route: 'crm.posts', permission: 'crm.campaigns', priority: 49 },
             { id: 'crm_due_diligence', label: 'Due Diligence', icon: AlertCircle, route: 'crm.investigation.index', permission: 'crm.investigation', priority: 40 },
         ],
     },

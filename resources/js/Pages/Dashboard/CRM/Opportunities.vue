@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import TemplateWidget from '@/Components/crm/TemplateWidget.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { KanbanSquare, Plus, X, Search, Sparkles, RotateCcw, Archive, StickyNote, Send, Trash2, Inbox, MessageSquare } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
@@ -670,6 +671,7 @@ const LEGEND = [
             </div>
         </ModalShell>
 
+        <TemplateWidget page-key="opportunities" />
     </AuthenticatedLayout>
 </template>
 

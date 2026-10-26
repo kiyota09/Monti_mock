@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { useForm, router, Link } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import TemplateWidget from '@/Components/crm/TemplateWidget.vue';
 import { Head } from '@inertiajs/vue3';
 import {
     Plus, X, Search, Inbox, ArrowRight,
@@ -503,5 +504,7 @@ const whenLabel = (v) =>
                 <img :src="imagePreview" alt="Image preview" class="max-h-[88vh] max-w-[92vw] rounded-2xl object-contain shadow-2xl" />
             </div>
         </Teleport>
+
+        <TemplateWidget page-key="leads" />
     </AuthenticatedLayout>
 </template>

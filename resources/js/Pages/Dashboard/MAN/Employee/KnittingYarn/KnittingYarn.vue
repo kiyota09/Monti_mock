@@ -5,7 +5,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'knitting_yarn'));
 import {
     Scissors, Plus, Trash2, ClipboardList, AlertTriangle,
     CheckCircle2, X, Package, Layers, Palette, Blend,

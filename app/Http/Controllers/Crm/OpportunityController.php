@@ -11,6 +11,7 @@ use App\Models\Crm\CrmOpportunity;
 use App\Models\Crm\CrmOpportunityHistory;
 use App\Models\Crm\CrmStage;
 use App\Models\Eco\CreditAccount;
+use App\Rules\PortalEmailAvailable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -195,7 +196,7 @@ class OpportunityController extends Controller
             'business_type' => 'required|string',
             'tin_number' => 'required|string|unique:clients,tin_number',
             'contact_person' => 'required|string|max:255',
-            'email' => 'required|email|unique:clients,email',
+            'email' => ['required', 'email', 'unique:clients,email', new PortalEmailAvailable],
             'phone' => 'required|string',
             'company_address' => 'required|string',
             'password' => 'required|string|min:8',
@@ -266,7 +267,7 @@ class OpportunityController extends Controller
                 ));
             } catch (\Throwable $e) {
                 $emailSent = false;
-                Log::warning('Client welcome email failed for client #' . $client->id . ': ' . $e->getMessage());
+                Log::warning('Client welcome email failed for client #'.$client->id.': '.$e->getMessage());
             }
 
             return back()->with('message', $emailSent
@@ -275,7 +276,7 @@ class OpportunityController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return back()->withErrors(['error' => 'Account creation failed: ' . $e->getMessage()]);
+            return back()->withErrors(['error' => 'Account creation failed: '.$e->getMessage()]);
         }
     }
 
@@ -462,6 +463,7 @@ class OpportunityController extends Controller
         $next = $index === false ? null : $stages->get($index + 1);
         if (! $next || (int) $next->id !== (int) $target->id) {
             $nextName = $next?->name ?? 'the next stage';
+
             return "Deals must move step by step - move this deal to \"{$nextName}\" before \"{$target->name}\".";
         }
 

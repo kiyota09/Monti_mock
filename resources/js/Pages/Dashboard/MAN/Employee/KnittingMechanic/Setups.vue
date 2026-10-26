@@ -6,7 +6,7 @@ import { Cog, Sparkles, PlusCircle, ClipboardList, ArrowRight } from 'lucide-vue
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'knitting_mechanic'));
 
 const props = defineProps({
     machines: Array,

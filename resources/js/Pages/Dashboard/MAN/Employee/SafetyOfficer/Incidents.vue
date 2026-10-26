@@ -6,7 +6,7 @@ import { ShieldCheck, Sparkles, PlusCircle, Siren } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'safety_officer'));
 
 const props = defineProps({ incidents: Array });
 

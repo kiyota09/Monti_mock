@@ -1,12 +1,13 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
 import {
     ClipboardList, UserCheck, ArrowRight, Trash2,
     RefreshCw, PackageSearch, PlayCircle, CheckCircle2,
-    Sparkles,
+    Sparkles, ChevronDown, Check, ArrowUpDown, CalendarDays,
+    Palette, Layers, Info,
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -48,9 +49,135 @@ const availableStages = computed(() => {
 });
 
 const requiredRole = computed(() => props.stages[form.stage] ?? null);
-const eligibleStaff = computed(() =>
-    requiredRole.value ? props.staff.filter((s) => s.manufacturing_role === requiredRole.value) : props.staff,
+
+const eligibleStaff = computed(() => {
+    if (!requiredRole.value) return [];
+
+    return props.staff
+        .filter((member) => member.manufacturing_role === requiredRole.value)
+        .sort((a, b) => (a.active_load - b.active_load) || a.name.localeCompare(b.name));
+});
+
+const selectedMember = computed(() =>
+    props.staff.find((member) => member.id === form.assigned_to) ?? null,
 );
+
+const orderPicker = ref(null);
+const staffPicker = ref(null);
+const orderOpen = ref(false);
+const staffOpen = ref(false);
+
+const closePickers = () => {
+    orderOpen.value = false;
+    staffOpen.value = false;
+};
+
+const toggleOrderPicker = () => {
+    orderOpen.value = !orderOpen.value;
+    staffOpen.value = false;
+};
+
+const toggleStaffPicker = () => {
+    staffOpen.value = !staffOpen.value;
+    orderOpen.value = false;
+};
+
+const chooseOrder = (order) => {
+    form.manufacturing_order_id = order.id;
+    form.stage = '';
+    form.assigned_to = '';
+    form.clearErrors();
+    orderOpen.value = false;
+    staffOpen.value = false;
+};
+
+const chooseStaff = (member) => {
+    form.assigned_to = member.id;
+    form.clearErrors('assigned_to');
+    staffOpen.value = false;
+};
+
+const handlePointerDown = (event) => {
+    if (orderPicker.value && !orderPicker.value.contains(event.target)) orderOpen.value = false;
+    if (staffPicker.value && !staffPicker.value.contains(event.target)) staffOpen.value = false;
+};
+
+const handleKeydown = (event) => {
+    if (event.key === 'Escape') closePickers();
+};
+
+onMounted(() => {
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeydown);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('mousedown', handlePointerDown);
+    document.removeEventListener('keydown', handleKeydown);
+});
+
+const brokenPhotos = ref(new Set());
+
+const markPhotoBroken = (id) => {
+    const next = new Set(brokenPhotos.value);
+    next.add(id);
+    brokenPhotos.value = next;
+};
+
+const avatarUrl = (member) =>
+    member?.photo && !brokenPhotos.value.has(member.id) ? member.photo : null;
+
+const initials = (name) =>
+    (name ?? '')
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0))
+        .join('')
+        .toUpperCase() || '?';
+
+const avatarTones = [
+    'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200',
+    'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200',
+    'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200',
+    'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-200',
+    'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200',
+    'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200',
+];
+
+const avatarTone = (id) => avatarTones[Math.abs(Number(id) || 0) % avatarTones.length];
+
+const loadTone = (load) => {
+    if (load === 0) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300';
+    if (load <= 2) return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300';
+
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300';
+};
+
+const loadLabel = (load) => `${load} active JO${load === 1 ? '' : 's'}`;
+
+const num = (value) => Number(value ?? 0).toLocaleString();
+
+const formatDate = (value) => {
+    if (!value) return '—';
+    const date = new Date(String(value).length === 10 ? `${value}T00:00:00` : value);
+
+    return Number.isNaN(date.getTime())
+        ? '—'
+        : date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const priorityTone = (priority) => {
+    const level = String(priority ?? '').toLowerCase();
+    if (level === 'urgent' || level === 'high') {
+        return 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300';
+    }
+    if (level === 'low') {
+        return 'bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-300';
+    }
+
+    return 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300';
+};
 
 const switchDepartment = (dept) => {
     router.get(route('man.assignments.index', { department: dept }), {}, { preserveState: false });
@@ -58,6 +185,7 @@ const switchDepartment = (dept) => {
 
 const submit = () => {
     form.department = props.department;
+    closePickers();
     form.post(route('man.assignments.store'), {
         preserveScroll: true,
         onSuccess: () => form.reset('manufacturing_order_id', 'stage', 'assigned_to', 'notes'),
@@ -135,26 +263,192 @@ const statusStyle = {
                             </h2>
 
                             <div class="space-y-3">
-                                <label class="block">
+                                <div ref="orderPicker" class="relative">
                                     <span class="text-xs font-bold text-gray-500 dark:text-gray-400">Job Order</span>
-                                    <select
-                                        v-model="form.manufacturing_order_id"
-                                        @change="form.stage = ''; form.assigned_to = ''"
-                                        class="mt-1 w-full rounded-2xl border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 text-sm font-semibold"
+                                    <button
+                                        type="button"
+                                        @click="toggleOrderPicker"
+                                        :aria-expanded="orderOpen"
+                                        aria-haspopup="listbox"
+                                        class="mt-1 flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-left transition hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-zinc-700 dark:bg-zinc-800"
                                     >
-                                        <option value="" disabled>Select a Job Order…</option>
-                                        <option v-for="order in orders" :key="order.id" :value="order.id">
-                                            {{ order.reference }} · {{ order.client }} ({{ order.remaining_quantity ?? order.total_quantity }})
-                                        </option>
-                                    </select>
+                                        <span v-if="selectedOrder" class="min-w-0 flex-1">
+                                            <span class="block truncate font-mono text-sm font-black text-gray-900 dark:text-white">{{ selectedOrder.reference }}</span>
+                                            <span class="block truncate text-[11px] text-gray-500 dark:text-gray-400">
+                                                {{ selectedOrder.client }} · {{ num(selectedOrder.remaining_quantity) }} of {{ num(selectedOrder.total_quantity) }} units
+                                            </span>
+                                        </span>
+                                        <span v-else class="flex-1 text-sm font-semibold text-gray-400">Select a Job Order…</span>
+                                        <ChevronDown
+                                            class="h-4 w-4 shrink-0 text-gray-400 transition-transform"
+                                            :class="orderOpen ? 'rotate-180' : ''"
+                                        />
+                                    </button>
                                     <span v-if="form.errors.manufacturing_order_id" class="text-xs text-rose-500">{{ form.errors.manufacturing_order_id }}</span>
-                                </label>
+
+                                    <div
+                                        v-if="orderOpen"
+                                        class="absolute left-0 right-0 z-40 mt-2 max-h-[28rem] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-1.5 shadow-2xl shadow-indigo-500/10 dark:border-zinc-700 dark:bg-zinc-900"
+                                    >
+                                        <p v-if="!orders.length" class="px-3 py-8 text-center text-xs font-semibold text-gray-400">
+                                            No open Job Orders available.
+                                        </p>
+                                        <button
+                                            v-for="order in orders"
+                                            :key="order.id"
+                                            type="button"
+                                            @click="chooseOrder(order)"
+                                            class="w-full rounded-xl border px-3 py-3 text-left transition"
+                                            :class="form.manufacturing_order_id === order.id
+                                                ? 'border-indigo-300 bg-indigo-50/80 dark:border-indigo-500/40 dark:bg-indigo-500/10'
+                                                : 'border-transparent hover:border-gray-200 hover:bg-gray-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/60'"
+                                        >
+                                            <div class="flex items-start gap-2">
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex flex-wrap items-center gap-1.5">
+                                                        <span class="font-mono text-xs font-black text-gray-900 dark:text-white">{{ order.reference }}</span>
+                                                        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase text-slate-600 dark:bg-slate-500/15 dark:text-slate-300">{{ humanize(order.status) }}</span>
+                                                        <span v-if="order.priority" class="rounded-full px-2 py-0.5 text-[9px] font-black uppercase" :class="priorityTone(order.priority)">{{ humanize(order.priority) }}</span>
+                                                    </div>
+                                                    <p class="mt-1 truncate text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                                                        {{ order.client }} · {{ num(order.remaining_quantity) }} of {{ num(order.total_quantity) }} units remaining
+                                                    </p>
+                                                </div>
+                                                <Check v-if="form.manufacturing_order_id === order.id" class="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
+                                            </div>
+
+                                            <div class="mt-2 flex flex-wrap gap-1.5 text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+                                                <span v-if="order.color" class="inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 ring-1 ring-gray-200 dark:bg-zinc-800 dark:ring-zinc-700">
+                                                    <Palette class="h-3 w-3" />{{ order.color }}
+                                                </span>
+                                                <span v-if="order.yarn_type" class="inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 ring-1 ring-gray-200 dark:bg-zinc-800 dark:ring-zinc-700">
+                                                    <Layers class="h-3 w-3" />{{ order.yarn_type }}
+                                                </span>
+                                                <span v-if="order.design" class="rounded-md bg-white px-1.5 py-0.5 ring-1 ring-gray-200 dark:bg-zinc-800 dark:ring-zinc-700">
+                                                    Design: {{ order.design }}
+                                                </span>
+                                                <span v-if="order.expected_ship_date" class="inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 ring-1 ring-gray-200 dark:bg-zinc-800 dark:ring-zinc-700">
+                                                    <CalendarDays class="h-3 w-3" />Due {{ formatDate(order.expected_ship_date) }}
+                                                </span>
+                                            </div>
+
+                                            <p v-if="order.control_number || order.po_number" class="mt-1.5 truncate text-[10px] text-gray-400">
+                                                <span v-if="order.control_number">CTL {{ order.control_number }}</span>
+                                                <span v-if="order.control_number && order.po_number"> · </span>
+                                                <span v-if="order.po_number">PO {{ order.po_number }}</span>
+                                            </p>
+
+                                            <div v-if="order.items?.length" class="mt-1.5 space-y-0.5">
+                                                <p v-for="(item, index) in order.items" :key="index" class="truncate text-[10px] text-gray-500 dark:text-gray-400">
+                                                    {{ item.fabric || 'Item' }}
+                                                    <span v-if="item.color"> · {{ item.color }}</span>
+                                                    <span v-if="item.design"> · {{ item.design }}</span>
+                                                    <span v-if="item.quantity"> · {{ num(item.quantity) }} pcs</span>
+                                                </p>
+                                            </div>
+
+                                            <p v-if="order.notes" class="mt-1.5 whitespace-pre-wrap text-[10px] italic leading-snug text-gray-400">{{ order.notes }}</p>
+                                            <p v-if="order.order_notes" class="mt-1 whitespace-pre-wrap text-[10px] leading-snug text-gray-400">
+                                                Order notes: {{ order.order_notes }}
+                                            </p>
+
+                                            <div v-if="order.remaining_stages?.length" class="mt-2 flex flex-wrap gap-1">
+                                                <span
+                                                    v-for="stage in order.remaining_stages"
+                                                    :key="stage"
+                                                    class="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
+                                                >
+                                                    {{ humanize(stage) }}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div v-if="selectedOrder" class="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <p class="text-[10px] font-black uppercase tracking-[0.15em] text-indigo-500 dark:text-indigo-300">Selected {{ selectedOrder.source_label }}</p>
+                                            <p class="truncate font-mono text-sm font-black text-gray-900 dark:text-white">{{ selectedOrder.reference }}</p>
+                                        </div>
+                                        <span class="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-[9px] font-black uppercase text-indigo-700 ring-1 ring-indigo-200 dark:bg-zinc-900/60 dark:text-indigo-200 dark:ring-indigo-500/30">
+                                            {{ humanize(selectedOrder.status) }}
+                                        </span>
+                                    </div>
+
+                                    <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+                                        <div class="min-w-0">
+                                            <dt class="font-bold uppercase tracking-wide text-indigo-400">Client</dt>
+                                            <dd class="truncate font-semibold text-gray-700 dark:text-gray-200">{{ selectedOrder.client }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="font-bold uppercase tracking-wide text-indigo-400">Quantity</dt>
+                                            <dd class="font-semibold text-gray-700 dark:text-gray-200">{{ num(selectedOrder.remaining_quantity) }} / {{ num(selectedOrder.total_quantity) }}</dd>
+                                        </div>
+                                        <div v-if="selectedOrder.color">
+                                            <dt class="font-bold uppercase tracking-wide text-indigo-400">Color</dt>
+                                            <dd class="font-semibold text-gray-700 dark:text-gray-200">{{ selectedOrder.color }}</dd>
+                                        </div>
+                                        <div v-if="selectedOrder.yarn_type">
+                                            <dt class="font-bold uppercase tracking-wide text-indigo-400">Yarn</dt>
+                                            <dd class="font-semibold text-gray-700 dark:text-gray-200">{{ selectedOrder.yarn_type }}</dd>
+                                        </div>
+                                        <div v-if="selectedOrder.design" class="col-span-2">
+                                            <dt class="font-bold uppercase tracking-wide text-indigo-400">Design</dt>
+                                            <dd class="truncate font-semibold text-gray-700 dark:text-gray-200">{{ selectedOrder.design }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="font-bold uppercase tracking-wide text-indigo-400">Due Date</dt>
+                                            <dd class="font-semibold text-gray-700 dark:text-gray-200">{{ formatDate(selectedOrder.expected_ship_date) }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="font-bold uppercase tracking-wide text-indigo-400">Order Date</dt>
+                                            <dd class="font-semibold text-gray-700 dark:text-gray-200">{{ formatDate(selectedOrder.ordered_at) }}</dd>
+                                        </div>
+                                        <div v-if="selectedOrder.control_number" class="min-w-0">
+                                            <dt class="font-bold uppercase tracking-wide text-indigo-400">Control #</dt>
+                                            <dd class="truncate font-mono font-semibold text-gray-700 dark:text-gray-200">{{ selectedOrder.control_number }}</dd>
+                                        </div>
+                                        <div v-if="selectedOrder.po_number" class="col-span-2 min-w-0">
+                                            <dt class="font-bold uppercase tracking-wide text-indigo-400">{{ selectedOrder.source === 'purchase_order' ? 'PO Number' : 'Customer PO' }}</dt>
+                                            <dd class="truncate font-semibold text-gray-700 dark:text-gray-200">{{ selectedOrder.po_number }}</dd>
+                                        </div>
+                                    </dl>
+
+                                    <p v-if="selectedOrder.notes" class="mt-2 flex items-start gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                                        <Info class="mt-0.5 h-3 w-3 shrink-0" />
+                                        <span class="whitespace-pre-wrap leading-snug">{{ selectedOrder.notes }}</span>
+                                    </p>
+                                    <p v-if="selectedOrder.order_notes" class="mt-1 flex items-start gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                                        <Info class="mt-0.5 h-3 w-3 shrink-0" />
+                                        <span class="whitespace-pre-wrap leading-snug">Order notes: {{ selectedOrder.order_notes }}</span>
+                                    </p>
+
+                                    <div v-if="selectedOrder.items?.length" class="mt-2 space-y-0.5">
+                                        <p v-for="(item, index) in selectedOrder.items" :key="index" class="truncate text-[11px] text-gray-600 dark:text-gray-300">
+                                            {{ item.fabric || 'Item' }}
+                                            <span v-if="item.color"> · {{ item.color }}</span>
+                                            <span v-if="item.design"> · {{ item.design }}</span>
+                                            <span v-if="item.quantity"> · {{ num(item.quantity) }} pcs</span>
+                                        </p>
+                                    </div>
+
+                                    <div v-if="selectedOrder.remaining_stages?.length" class="mt-2 flex flex-wrap gap-1">
+                                        <span
+                                            v-for="stage in selectedOrder.remaining_stages"
+                                            :key="stage"
+                                            class="rounded-full bg-white/80 px-2 py-0.5 text-[9px] font-black uppercase text-amber-700 ring-1 ring-amber-200 dark:bg-zinc-900/60 dark:text-amber-300 dark:ring-amber-500/30"
+                                        >
+                                            {{ humanize(stage) }}
+                                        </span>
+                                    </div>
+                                </div>
 
                                 <label class="block">
                                     <span class="text-xs font-bold text-gray-500 dark:text-gray-400">Stage</span>
                                     <select
                                         v-model="form.stage"
-                                        @change="form.assigned_to = ''"
+                                        @change="form.assigned_to = ''; staffOpen = false"
                                         :disabled="!form.manufacturing_order_id"
                                         class="mt-1 w-full rounded-2xl border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 text-sm font-semibold disabled:opacity-50"
                                     >
@@ -165,21 +459,110 @@ const statusStyle = {
                                     <span v-if="form.errors.stage" class="text-xs text-rose-500">{{ form.errors.stage }}</span>
                                 </label>
 
-                                <label class="block">
-                                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400">Assign To</span>
-                                    <select
-                                        v-model="form.assigned_to"
+                                <div ref="staffPicker" class="relative">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="text-xs font-bold text-gray-500 dark:text-gray-400">Assign To</span>
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                                            <ArrowUpDown class="h-3 w-3" /> Least loaded first
+                                        </span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        @click="toggleStaffPicker"
                                         :disabled="!form.stage"
-                                        class="mt-1 w-full rounded-2xl border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 text-sm font-semibold disabled:opacity-50"
+                                        :aria-expanded="staffOpen"
+                                        aria-haspopup="listbox"
+                                        class="mt-1 flex w-full items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-left transition hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800"
                                     >
-                                        <option value="" disabled>{{ form.stage ? 'Select staff…' : 'Choose a stage first' }}</option>
-                                        <option v-for="member in eligibleStaff" :key="member.id" :value="member.id">
-                                            {{ member.name }} — {{ humanize(member.manufacturing_role) }}
-                                        </option>
-                                    </select>
-                                    <span v-if="form.stage && !eligibleStaff.length" class="text-xs text-amber-600">No staff with the required role in this department.</span>
+                                        <template v-if="selectedMember">
+                                            <img
+                                                v-if="avatarUrl(selectedMember)"
+                                                :src="avatarUrl(selectedMember)"
+                                                :alt="selectedMember.name"
+                                                class="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-zinc-800"
+                                                @error="markPhotoBroken(selectedMember.id)"
+                                            />
+                                            <span
+                                                v-else
+                                                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-black ring-2 ring-white dark:ring-zinc-800"
+                                                :class="avatarTone(selectedMember.id)"
+                                            >
+                                                {{ initials(selectedMember.name) }}
+                                            </span>
+                                            <span class="min-w-0 flex-1">
+                                                <span class="block truncate text-sm font-bold text-gray-900 dark:text-white">{{ selectedMember.name }}</span>
+                                                <span class="block truncate text-[11px] text-gray-500 dark:text-gray-400">{{ selectedMember.role_label }}</span>
+                                            </span>
+                                            <span class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black" :class="loadTone(selectedMember.active_load)">
+                                                {{ loadLabel(selectedMember.active_load) }}
+                                            </span>
+                                        </template>
+                                        <span v-else class="flex-1 text-sm font-semibold text-gray-400">
+                                            {{ form.stage ? 'Choose a staff member…' : 'Choose a stage first' }}
+                                        </span>
+                                        <ChevronDown
+                                            class="h-4 w-4 shrink-0 text-gray-400 transition-transform"
+                                            :class="staffOpen ? 'rotate-180' : ''"
+                                        />
+                                    </button>
                                     <span v-if="form.errors.assigned_to" class="text-xs text-rose-500">{{ form.errors.assigned_to }}</span>
-                                </label>
+
+                                    <div
+                                        v-if="staffOpen"
+                                        class="absolute left-0 right-0 z-40 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-1.5 shadow-2xl shadow-indigo-500/10 dark:border-zinc-700 dark:bg-zinc-900"
+                                    >
+                                        <div v-if="!eligibleStaff.length" class="px-3 py-8 text-center">
+                                            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400">No staff with the required role in this department.</p>
+                                        </div>
+                                        <template v-else>
+                                            <button
+                                                v-for="(member, index) in eligibleStaff"
+                                                :key="member.id"
+                                                type="button"
+                                                @click="chooseStaff(member)"
+                                                class="flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition"
+                                                :class="form.assigned_to === member.id
+                                                    ? 'border-indigo-300 bg-indigo-50/80 dark:border-indigo-500/40 dark:bg-indigo-500/10'
+                                                    : 'border-transparent hover:border-gray-200 hover:bg-gray-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/60'"
+                                            >
+                                                <span class="w-4 shrink-0 text-center text-[10px] font-black text-gray-300 dark:text-zinc-600">{{ index + 1 }}</span>
+                                                <img
+                                                    v-if="avatarUrl(member)"
+                                                    :src="avatarUrl(member)"
+                                                    :alt="member.name"
+                                                    class="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-zinc-800"
+                                                    @error="markPhotoBroken(member.id)"
+                                                />
+                                                <span
+                                                    v-else
+                                                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-black ring-2 ring-white dark:ring-zinc-800"
+                                                    :class="avatarTone(member.id)"
+                                                >
+                                                    {{ initials(member.name) }}
+                                                </span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="flex items-center gap-1.5">
+                                                        <span class="truncate text-sm font-bold text-gray-900 dark:text-white">{{ member.name }}</span>
+                                                        <span
+                                                            v-if="member.active_load === 0"
+                                                            class="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black uppercase text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                                                        >
+                                                            Available
+                                                        </span>
+                                                    </span>
+                                                    <span class="block truncate text-[11px] text-gray-500 dark:text-gray-400">{{ member.role_label }}</span>
+                                                </span>
+                                                <span class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black" :class="loadTone(member.active_load)">
+                                                    {{ member.active_load }} JO{{ member.active_load === 1 ? '' : 's' }}
+                                                </span>
+                                                <Check v-if="form.assigned_to === member.id" class="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
+                                            </button>
+                                        </template>
+                                        <p class="px-3 py-2 text-[10px] leading-snug text-gray-400">
+                                            Sorted by active workload (least first). Loads include pending and in-progress Job Orders.
+                                        </p>
+                                    </div>
+                                </div>
 
                                 <label class="block">
                                     <span class="text-xs font-bold text-gray-500 dark:text-gray-400">Notes <span class="font-normal">(optional)</span></span>

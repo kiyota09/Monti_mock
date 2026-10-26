@@ -61,19 +61,24 @@ class OrderLifecycleService
         'inv_checked' => 'in_planning',
     ];
 
+    /**
+     * ORD must not self-approve a purchase order: approval belongs to ECO
+     * credit review and the client / executive approval gates.
+     */
     public const PO_TRANSITIONS = [
-        'credit_review' => ['tier_assignment', 'pending_client_approval', 'approved', 'on_hold', 'cancelled'],
-        'tier_assignment' => ['pending_client_approval', 'approved', 'on_hold', 'cancelled'],
+        'credit_review' => ['tier_assignment', 'pending_client_approval', 'on_hold', 'cancelled'],
+        'tier_assignment' => ['pending_client_approval', 'on_hold', 'cancelled'],
         'pending_client_approval' => ['approved', 'on_hold', 'cancelled'],
         'approved' => ['released_to_production', 'on_hold', 'cancelled'],
         'production' => ['released_to_production', 'completed'],
         'released_to_production' => ['completed'],
-        'on_hold' => ['credit_review', 'pending_client_approval', 'approved', 'cancelled'],
+        'on_hold' => ['credit_review', 'pending_client_approval', 'cancelled'],
+        'rejected' => [],
         'completed' => [],
         'cancelled' => [],
     ];
 
-    public const TERMINAL = ['completed', 'cancelled'];
+    public const TERMINAL = ['completed', 'cancelled', 'rejected'];
 
     /**
      * Normalise any stored status to its canonical form for grouping.
@@ -111,7 +116,7 @@ class OrderLifecycleService
             'production', 'released_to_production' => 'production',
             'completed' => 'done',
             'on_hold' => 'attention',
-            'cancelled' => 'cancelled',
+            'cancelled', 'rejected' => 'cancelled',
             default => 'intake',
         };
     }
@@ -135,26 +140,26 @@ class OrderLifecycleService
     public function transitionSalesOrder(SalesOrder $order, string $to, ?User $actor, ?string $notes = null): SalesOrder
     {
         $to = strtolower(trim($to));
-        $allowed = self::allowedSoTransitions($order->status);
-
-        if (! in_array($to, $allowed, true)) {
-            throw new InvalidArgumentException(
-                "Cannot move sales order {$order->jo_number} from '{$order->status}' to '{$to}'. Allowed: ".implode(', ', $allowed)
-            );
-        }
-
         return DB::transaction(function () use ($order, $to, $actor, $notes) {
-            $from = $order->status;
+            $lockedOrder = SalesOrder::whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+            $allowed = self::allowedSoTransitions($lockedOrder->status);
+            if (! in_array($to, $allowed, true)) {
+                throw new InvalidArgumentException(
+                    "Cannot move sales order {$lockedOrder->jo_number} from '{$lockedOrder->status}' to '{$to}'. Allowed: ".implode(', ', $allowed)
+                );
+            }
+
+            $from = $lockedOrder->status;
             $now = now();
             $extra = ['status' => $to];
 
             match ($to) {
-                'confirmed' => [$extra['confirmed_at'] = $order->confirmed_at ?? $now, $extra['confirmed_by'] = $order->confirmed_by ?? $actor?->id],
+                'confirmed' => [$extra['confirmed_at'] = $lockedOrder->confirmed_at ?? $now, $extra['confirmed_by'] = $lockedOrder->confirmed_by ?? $actor?->id],
                 'in_production' => $extra['production_started_at'] = $now,
                 'production_done' => $extra['production_done_at'] = $now,
                 'delivered' => $extra['delivered_at'] = $now,
-                'on_hold' => $extra['on_hold_reason'] = $notes ?? $order->on_hold_reason ?? 'Put on hold by '.$actor?->name,
-                'cancelled' => $extra['cancel_reason'] = $notes ?? $order->cancel_reason ?? 'Cancelled by '.$actor?->name,
+                'on_hold' => $extra['on_hold_reason'] = $notes ?? $lockedOrder->on_hold_reason ?? 'Put on hold by '.$actor?->name,
+                'cancelled' => $extra['cancel_reason'] = $notes ?? $lockedOrder->cancel_reason ?? 'Cancelled by '.$actor?->name,
                 default => null,
             };
 
@@ -162,12 +167,12 @@ class OrderLifecycleService
                 $extra['on_hold_reason'] = null;
             }
 
-            $order->update($extra);
+            $lockedOrder->update($extra);
 
-            $this->recordHistory($order, 'SO', $from, $to, $actor?->id, $notes);
+            $this->recordHistory($lockedOrder, 'SO', $from, $to, $actor?->id, $notes);
 
-            return $order->fresh();
-        });
+            return $lockedOrder->fresh();
+        }, 3);
     }
 
     /**
@@ -178,37 +183,37 @@ class OrderLifecycleService
     public function transitionPurchaseOrder(PurchaseOrder $order, string $to, ?User $actor, ?string $notes = null): PurchaseOrder
     {
         $to = strtolower(trim($to));
-        $allowed = self::allowedPoTransitions($order->status);
-
-        if (! in_array($to, $allowed, true)) {
-            throw new InvalidArgumentException(
-                "Cannot move purchase order {$order->po_number} from '{$order->status}' to '{$to}'. Allowed: ".implode(', ', $allowed)
-            );
-        }
-
         return DB::transaction(function () use ($order, $to, $actor, $notes) {
-            $from = $order->status;
+            $lockedOrder = PurchaseOrder::whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+            $allowed = self::allowedPoTransitions($lockedOrder->status);
+            if (! in_array($to, $allowed, true)) {
+                throw new InvalidArgumentException(
+                    "Cannot move purchase order {$lockedOrder->po_number} from '{$lockedOrder->status}' to '{$to}'. Allowed: ".implode(', ', $allowed)
+                );
+            }
+
+            $from = $lockedOrder->status;
             $extra = ['status' => $to];
 
             if (in_array($to, ['approved', 'released_to_production'], true)) {
-                $extra['confirmed_at'] = $order->confirmed_at ?? now();
-                $extra['confirmed_by'] = $order->confirmed_by ?? $actor?->id;
+                $extra['confirmed_at'] = $lockedOrder->confirmed_at ?? now();
+                $extra['confirmed_by'] = $lockedOrder->confirmed_by ?? $actor?->id;
             }
             if ($to === 'on_hold') {
-                $extra['on_hold_reason'] = $notes ?? $order->on_hold_reason ?? 'Put on hold by '.$actor?->name;
+                $extra['on_hold_reason'] = $notes ?? $lockedOrder->on_hold_reason ?? 'Put on hold by '.$actor?->name;
             } else {
                 $extra['on_hold_reason'] = null;
             }
             if ($to === 'cancelled') {
-                $extra['cancel_reason'] = $notes ?? $order->cancel_reason ?? 'Cancelled by '.$actor?->name;
+                $extra['cancel_reason'] = $notes ?? $lockedOrder->cancel_reason ?? 'Cancelled by '.$actor?->name;
             }
 
-            $order->update($extra);
+            $lockedOrder->update($extra);
 
-            $this->recordHistory($order, 'PO', $from, $to, $actor?->id, $notes);
+            $this->recordHistory($lockedOrder, 'PO', $from, $to, $actor?->id, $notes);
 
-            return $order->fresh();
-        });
+            return $lockedOrder->fresh();
+        }, 3);
     }
 
     /**
@@ -261,20 +266,35 @@ class OrderLifecycleService
         });
     }
 
+    /**
+     * A control number is derived from the (unique) job-order number, so it
+     * is deterministic and does not depend on the new row existing yet.
+     */
     public function nextControlNumber(string $joNumber): string
     {
-        $count = SalesOrder::where('jo_number', $joNumber)->count() + 1;
+        $base = 'CTL-'.preg_replace('/[^A-Z0-9]/', '', strtoupper($joNumber));
+        $candidate = $base.'-1';
+        $suffix = 1;
 
-        return 'CTL-'.preg_replace('/[^A-Z0-9]/', '', strtoupper($joNumber)).'-'.$count;
+        while (SalesOrder::where('control_number', $candidate)->exists()) {
+            $suffix++;
+            $candidate = $base.'-'.$suffix;
+        }
+
+        return $candidate;
     }
 
     public function nextReturnNumber(): string
     {
-        $year = now()->year;
-        $prefix = "RMA-{$year}-";
-        $max = \App\Models\Ord\OrderReturn::where('return_number', 'like', $prefix.'%')->max('return_number');
-        $seq = $max ? ((int) substr($max, -4)) + 1 : 1;
+        return DB::transaction(function () {
+            $year = now()->year;
+            $prefix = "RMA-{$year}-";
+            $max = \App\Models\Ord\OrderReturn::where('return_number', 'like', $prefix.'%')
+                ->lockForUpdate()
+                ->max('return_number');
+            $seq = $max ? ((int) substr($max, -4)) + 1 : 1;
 
-        return $prefix.str_pad($seq, 4, '0', STR_PAD_LEFT);
+            return $prefix.str_pad($seq, 4, '0', STR_PAD_LEFT);
+        });
     }
 }

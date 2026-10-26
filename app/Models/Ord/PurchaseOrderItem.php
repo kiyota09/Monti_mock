@@ -11,6 +11,11 @@ class PurchaseOrderItem extends Model
 {
     use HasFactory;
 
+    protected $casts = [
+        'quantity' => 'decimal:2',
+        'unit_price' => 'decimal:2',
+    ];
+
     /**
      * The attributes that are mass assignable.
      *

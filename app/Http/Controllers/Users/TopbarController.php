@@ -164,6 +164,7 @@ class TopbarController extends Controller
             ['Customer Profiles', 'crm.customerprofile.index', 'CRM', 'customer_profiles'],
             ['Inquiries', 'crm.inquiries', 'CRM', 'inquiry'],
             ['Messaging', 'crm.messages', 'CRM', 'messaging'],
+            ['Email', 'crm.email.index', 'CRM', 'email'],
             ['Investigations', 'crm.investigation.index', 'CRM', 'investigation'],
             ['SCM Dashboard', 'scm.dashboard', 'SCM', 'dashboard'],
             ['Sales Orders', 'scm.sales-orders', 'SCM', 'sales'],
