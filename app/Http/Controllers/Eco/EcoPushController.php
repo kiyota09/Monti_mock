@@ -358,13 +358,19 @@ class EcoPushController extends Controller
 
         $joNumber = 'JO-' . strtoupper(Str::random(8));
 
+        $subtotal = round((float) $request->total_amount, 2);
+        $tax = round($subtotal * 0.12, 2);
+
         SalesOrder::create([
             'client_id'    => $request->client_id,
             'jo_number'    => $joNumber,
             'color'        => $request->color,
             'yarn_type'    => $request->yarn_type,
             'quantity'     => $request->quantity,
-            'total_amount' => $request->total_amount,
+            'subtotal' => $subtotal,
+            'tax_rate' => 12,
+            'tax_amount' => $tax,
+            'total_amount' => $subtotal + $tax,
             'status'       => 'pending',
             'notes'        => $request->notes ?? 'Manually created via ECO Push Center',
         ]);

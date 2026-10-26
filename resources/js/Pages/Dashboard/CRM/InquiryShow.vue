@@ -1087,11 +1087,13 @@
                 </div>
             </Transition>
         </Teleport>
+        <TemplateWidget page-key="inquiries" />
     </AuthenticatedLayout>
 </template>
 
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import TemplateWidget from '@/Components/crm/TemplateWidget.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import { usePageAccess } from '@/composables/usePageAccess';

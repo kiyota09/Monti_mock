@@ -86,6 +86,11 @@ const receiptPaidTotal = computed(() =>
                                 <span class="h-1.5 w-1.5 rounded-full bg-current" /> {{ row.status }}
                             </span>
                         </div>
+                        <div v-if="row.invoice_no && Number(row.tax_amount) > 0" class="mt-3 border-t border-gray-200 dark:border-zinc-800 pt-3 text-xs space-y-1">
+                            <div class="flex justify-between text-gray-500"><span>Subtotal</span><span>{{ peso(row.subtotal) }}</span></div>
+                            <div class="flex justify-between text-gray-500"><span>VAT ({{ row.tax_rate }}%)</span><span>{{ peso(row.tax_amount) }}</span></div>
+                            <div class="flex justify-between font-black text-gray-800 dark:text-zinc-100"><span>Invoice total</span><span>{{ peso(row.amount) }}</span></div>
+                        </div>
                         <div class="mt-3 grid grid-cols-3 gap-2 text-center">
                             <div class="rounded-2xl bg-white px-2 py-2 ring-1 ring-gray-100 dark:bg-zinc-900 dark:ring-zinc-800">
                                 <p class="text-[9px] font-black uppercase tracking-widest text-gray-400">Billed</p>

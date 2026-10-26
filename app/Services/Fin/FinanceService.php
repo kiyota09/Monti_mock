@@ -83,7 +83,7 @@ class FinanceService
     {
         $this->syncInvoices();
 
-        $invoices = FinInvoice::withSum('payments as paid_sum', 'amount')
+        $invoices = FinInvoice::with(['salesOrder'])->withSum('payments as paid_sum', 'amount')
             ->when($clientId, fn ($q) => $q->where('client_id', $clientId))
             ->latest()
             ->get();
@@ -119,6 +119,9 @@ class FinanceService
                 'invoice_no' => $inv->invoice_no,
                 'client' => $inv->client_name,
                 'amount' => round((float) $inv->amount, 2),
+                'subtotal' => round((float) ($inv->salesOrder?->subtotal ?? 0), 2),
+                'tax_rate' => (float) ($inv->salesOrder?->tax_rate ?? 12),
+                'tax_amount' => round((float) ($inv->salesOrder?->tax_amount ?? 0), 2),
                 'paid' => round((float) ($inv->paid_sum ?? 0), 2),
                 'due_date' => $inv->due_date?->format('Y-m-d'),
                 'status' => $inv->displayStatus(),

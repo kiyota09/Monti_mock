@@ -6,7 +6,7 @@ import { CheckCircle, AlertTriangle, Wrench, Sparkles, ClipboardList, Cog } from
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'maintenance_checker'));
 
 const props = defineProps({
     reports: Array,

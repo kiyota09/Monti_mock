@@ -32,7 +32,7 @@
                 </div>
 
                 <!-- Amount summary -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div class="bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-gray-100 dark:border-zinc-800 p-5 shadow-sm">
                         <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal</p>
                         <p class="text-xl font-black mt-1">₱{{ fmt(order.subtotal) }}</p>
@@ -40,6 +40,10 @@
                     <div class="bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-gray-100 dark:border-zinc-800 p-5 shadow-sm">
                         <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Discount</p>
                         <p class="text-xl font-black mt-1">₱{{ fmt(order.discount_amount) }}</p>
+                    </div>
+                    <div class="bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-gray-100 dark:border-zinc-800 p-5 shadow-sm">
+                        <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">VAT ({{ Number(order.tax_rate || 12) }}%)</p>
+                        <p class="text-xl font-black mt-1">{{ fmt(order.tax_amount) }}</p>
                     </div>
                     <div class="bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-indigo-200 dark:border-indigo-800 p-5 shadow-sm ring-1 ring-indigo-100 dark:ring-indigo-900">
                         <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Grand total</p>

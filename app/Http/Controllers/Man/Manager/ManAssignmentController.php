@@ -44,11 +44,35 @@ class ManAssignmentController extends Controller
     {
         $roles = ManufacturingRoles::rolesForDepartment($department);
 
-        return User::where('role', 'MAN')
+        $staff = User::where('role', 'MAN')
             ->whereIn('manufacturing_role', $roles)
             ->where('is_active', 1)
             ->orderBy('name')
-            ->get(['id', 'name', 'manufacturing_role']);
+            ->get(['id', 'name', 'manufacturing_role', 'profile_photo_path']);
+
+        $loads = ManTaskAssignment::query()
+            ->whereIn('assigned_to', $staff->pluck('id'))
+            ->active()
+            ->selectRaw('assigned_to, COUNT(*) as total')
+            ->groupBy('assigned_to')
+            ->pluck('total', 'assigned_to');
+
+        return $staff
+            ->map(fn (User $member) => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'manufacturing_role' => $member->manufacturing_role,
+                'role_label' => ManufacturingRoles::label($member->manufacturing_role),
+                'photo' => $member->profile_photo_path
+                    ? '/storage/'.ltrim($member->profile_photo_path, '/')
+                    : null,
+                'active_load' => (int) ($loads[$member->id] ?? 0),
+            ])
+            ->sortBy([
+                ['active_load', 'asc'],
+                ['name', 'asc'],
+            ])
+            ->values();
     }
 
     /**
@@ -153,9 +177,9 @@ class ManAssignmentController extends Controller
                 ->exists(),
 
             'finishing' => ($fabricQuery())
-                    ->where('status', 'packed')
-                    ->whereDoesntHave('packages')
-                    ->exists()
+                ->where('status', 'packed')
+                ->whereDoesntHave('packages')
+                ->exists()
                 || $this->packagesForOrder($order)
                     ->whereIn('status', ['pending', 'checked'])
                     ->exists(),
@@ -193,7 +217,7 @@ class ManAssignmentController extends Controller
             ->get(['manufacturing_order_id', 'stage'])
             ->groupBy('manufacturing_order_id');
 
-        $orders = ManufacturingOrder::with(['purchaseOrder.client', 'salesOrder.client'])
+        $orders = ManufacturingOrder::with(['purchaseOrder.client', 'purchaseOrder.items', 'salesOrder.client'])
             ->whereIn('status', ['pending', 'in_progress'])
             ->get()
             // A department only sees a JO once work has actually reached it —
@@ -211,19 +235,49 @@ class ManAssignmentController extends Controller
                     $assignable
                 ));
 
+                $salesOrder = $order->salesOrder;
+                $purchaseOrder = $order->purchaseOrder;
+                $items = $purchaseOrder?->items->map(fn ($item) => [
+                    'fabric' => $item->fabric,
+                    'design' => $item->design,
+                    'color' => $item->color,
+                    'quantity' => (float) $item->quantity,
+                    'kilos' => $item->kilos !== null ? (float) $item->kilos : null,
+                ])->values()->all() ?? [];
+
+                $expectedShipDate = $salesOrder?->expected_ship_date
+                    ?? $purchaseOrder?->expected_ship_date;
+
                 return [
                     'id' => $order->id,
-                    'reference' => $order->salesOrder->jo_number
-                        ?? $order->purchaseOrder->po_number
-                        ?? ('MO-' . $order->id),
-                    'client' => $order->salesOrder->client->company_name
-                        ?? $order->purchaseOrder->client->company_name
+                    'reference' => $salesOrder?->jo_number
+                        ?? $purchaseOrder?->po_number
+                        ?? ('MO-'.$order->id),
+                    'client' => $salesOrder?->client?->company_name
+                        ?? $purchaseOrder?->client?->company_name
                         ?? 'N/A',
                     'total_quantity' => $order->total_quantity,
                     'remaining_quantity' => $order->remaining_quantity,
                     'status' => $order->status,
                     'assigned_stages' => $assignedStages,
                     'remaining_stages' => $remaining,
+                    'source' => $salesOrder ? 'sales_order' : ($purchaseOrder ? 'purchase_order' : 'manufacturing_order'),
+                    'source_label' => $salesOrder ? 'Sales Order' : ($purchaseOrder ? 'Purchase Order' : 'Manufacturing Order'),
+                    'jo_number' => $salesOrder?->jo_number,
+                    'po_number' => $salesOrder?->purchase_order_id ?? $purchaseOrder?->po_number,
+                    'control_number' => $salesOrder?->control_number ?? $purchaseOrder?->control_number,
+                    'color' => $salesOrder?->color,
+                    'yarn_type' => $salesOrder?->yarn_type ?? $purchaseOrder?->yarn,
+                    'design' => $salesOrder?->design,
+                    'priority' => $salesOrder?->priority ?? $purchaseOrder?->priority,
+                    'order_status' => $salesOrder?->status ?? $purchaseOrder?->status,
+                    'expected_ship_date' => $expectedShipDate?->toDateString(),
+                    'ordered_at' => $order->created_at?->toDateString(),
+                    'notes' => $order->notes,
+                    'order_notes' => $purchaseOrder?->notes,
+                    'items' => $items,
+                    'unit_price' => $salesOrder?->unit_price,
+                    'total_amount' => $salesOrder?->total_amount ?? $purchaseOrder?->total_amount,
                 ];
             })
             // Drop JOs whose whole department flow is already assigned.
@@ -307,7 +361,7 @@ class ManAssignmentController extends Controller
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        return back()->with('message', 'Job Order assigned to ' . $assignee->name . '.');
+        return back()->with('message', 'Job Order assigned to '.$assignee->name.'.');
     }
 
     public function update(Request $request, ManTaskAssignment $assignment)

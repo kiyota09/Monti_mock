@@ -11,14 +11,47 @@ use App\Http\Controllers\Users\ClockController;
 use App\Http\Controllers\Users\LeaveController as UserLeaveController;
 use App\Http\Controllers\Users\MessengerController;
 use App\Http\Controllers\Users\TopbarController;
+use App\Models\Crm\CrmPost;
+use App\Models\Inv\Product;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
+    $publicMedia = fn (array $media) => collect($media)->map(function ($item) {
+        $path = parse_url((string) ($item['url'] ?? ''), PHP_URL_PATH);
+        if (is_string($path) && str_starts_with($path, '/storage/')) {
+            $item['url'] = url(ltrim($path, '/'));
+        }
+
+        return $item;
+    })->values();
+
+    $posts = CrmPost::whereNull('archived_at')->with('creator:id,name')->latest()->get()->map(fn ($post) => [
+        'id' => $post->id,
+        'caption' => $post->caption,
+        'media' => $publicMedia($post->media ?? []),
+        'created_at' => $post->created_at?->toIso8601String(),
+        'creator' => $post->creator?->name ?? 'Monti Textile',
+    ]);
+
+    $products = Product::with('images')->where('status', 'Active')->latest()->get()->map(fn ($product) => [
+        'id' => $product->id,
+        'name' => $product->name,
+        'category' => $product->category,
+        'images' => $product->images->map(function ($image) {
+            $url = (string) $image->url;
+            $path = parse_url($url, PHP_URL_PATH);
+
+            return ['url' => is_string($path) && str_starts_with($path, '/storage/') ? url(ltrim($path, '/')) : $url];
+        })->values(),
+    ]);
+
     return inertia('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
         'laravelVersion' => app()->version(),
         'phpVersion' => PHP_VERSION,
+        'companyPosts' => $posts,
+        'products' => $products,
     ]);
 });
 

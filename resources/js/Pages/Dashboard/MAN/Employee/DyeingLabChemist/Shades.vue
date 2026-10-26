@@ -6,7 +6,7 @@ import { FlaskConical, Sparkles, PlusCircle, ClipboardList, Beaker, ArrowRight, 
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'dyeing_lab_chemist'));
 
 const props = defineProps({ dips: Array, jobOrders: Array, sampleRequests: { type: Array, default: () => [] }, materials: { type: Array, default: () => [] } });
 

@@ -6,7 +6,7 @@ import { ClipboardCheck, Sparkles, PlusCircle, FlaskConical, Printer, X } from '
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'lab_tests'));
 
 const props = defineProps({ dips: Array });
 

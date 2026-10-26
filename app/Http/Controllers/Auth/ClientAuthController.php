@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Controller;
 use App\Http\Controllers\Auth\Concerns\LogsOutEveryGuard;
+use App\Http\Controllers\Controller;
 use App\Models\Crm\Client;
 use App\Models\Crm\CrmContact;
 use App\Models\Crm\CrmLogoPartner;
+use App\Rules\PortalEmailAvailable;
 use App\Support\ClientPortal;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +22,7 @@ use Inertia\Inertia;
 class ClientAuthController extends Controller
 {
     use LogsOutEveryGuard;
+
     public function create()
     {
         return Inertia::render('Auth/ClientRegister');
@@ -33,7 +34,10 @@ class ClientAuthController extends Controller
             'company_name' => 'required|string|max:255',
             'business_type' => 'required|string|max:100',
             'contact_person' => 'required|string|max:255',
-            'email' => 'required|string|lowercase|email|max:255|unique:clients',
+            'email' => [
+                'required', 'string', 'lowercase', 'email', 'max:255', 'unique:clients',
+                new PortalEmailAvailable,
+            ],
             'phone' => 'required|string|max:20',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'company_address' => 'required|string|max:1000',
@@ -79,13 +83,16 @@ class ClientAuthController extends Controller
 
         $this->ensureIsNotRateLimited($request);
 
-        $client = Client::where('email', $credentials['email'])->first();
+        $email = mb_strtolower(trim($credentials['email']));
+        $client = Client::whereRaw('LOWER(email) = ?', [$email])->first();
 
-        if ($client && Hash::check($credentials['password'], $client->password)) {
-            // Allow both 'approved' and 'active' as valid statuses.
-            // NOTE: a single generic message is used for every failure so
-            // attackers cannot enumerate registered emails or approval state.
-            if (! in_array($client->status, ['approved', 'active'])) {
+        // An email owned by a business client always authenticates as that
+        // client. It must never fall through to a representative login with the
+        // same address, otherwise a duplicate email could open another
+        // company's portal.
+        if ($client) {
+            if (! Hash::check($credentials['password'], $client->password)
+                || ! in_array($client->status, ['approved', 'active'], true)) {
                 RateLimiter::hit($this->throttleKey($request));
 
                 return back()->withErrors([
@@ -107,12 +114,25 @@ class ClientAuthController extends Controller
         // Representatives authenticate against the owner account so all the
         // data-scoped portal controllers keep working unchanged; the session
         // flag + access middleware restrict what they can reach.
-        $representative = CrmContact::where('email', $credentials['email'])
+        $representatives = CrmContact::whereRaw('LOWER(email) = ?', [$email])
             ->where('has_account', true)
             ->where('status', 'active')
             ->whereNotNull('password')
             ->whereNotNull('client_id')
-            ->first();
+            ->limit(2)
+            ->get();
+
+        // A duplicate representative login is ambiguous, so refuse it instead
+        // of picking an arbitrary company account.
+        if ($representatives->count() > 1) {
+            RateLimiter::hit($this->throttleKey($request));
+
+            return back()->withErrors([
+                'email' => 'Invalid credentials.',
+            ]);
+        }
+
+        $representative = $representatives->first();
 
         if ($representative && Hash::check($credentials['password'], $representative->password)) {
             $owner = Client::find($representative->client_id);

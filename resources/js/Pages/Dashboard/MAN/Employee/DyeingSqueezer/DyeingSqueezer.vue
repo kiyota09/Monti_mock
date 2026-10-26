@@ -6,7 +6,7 @@ import { Droplets, AlertCircle, X, Sparkles, ClipboardList, ChevronRight } from 
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'dyeing_squeezer'));
 
 const props = defineProps({
     softenerJobs: Array,

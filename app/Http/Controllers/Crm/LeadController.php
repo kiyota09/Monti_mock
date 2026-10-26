@@ -4,22 +4,19 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Models\Crm\Client;
-use App\Models\Eco\CreditAccount;
 use App\Models\Crm\CrmApproval;
 use App\Models\Crm\CrmLead;
 use App\Models\Crm\CrmLogoPartner;
 use App\Models\Crm\CrmOpportunity;
 use App\Models\Crm\CrmOpportunityHistory;
 use App\Models\Crm\CrmStage;
-use App\Models\Crm\LeadNote;
-use App\Models\Crm\LeadInterview;
-use App\Models\Crm\LeadApprovalFile;
+use App\Models\Eco\CreditAccount;
+use App\Rules\PortalEmailAvailable;
+use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
-use App\Traits\HasPagePermissions;
 
 class LeadController extends Controller
 {
@@ -186,7 +183,7 @@ class LeadController extends Controller
         $primary = $lead->contacts->where('is_primary', true)->first() ?? $lead->contacts->first();
 
         $opp = CrmOpportunity::create([
-            'title' => ($data['title'] ?? null) ?: trim(($lead->company_name ?? 'Untitled') . ($lead->interest_fabric ? " — {$lead->interest_fabric}" : '')),
+            'title' => ($data['title'] ?? null) ?: trim(($lead->company_name ?? 'Untitled').($lead->interest_fabric ? " — {$lead->interest_fabric}" : '')),
             'stage_id' => $stage->id,
             'stage' => 'qualification',
             'lead_id' => $lead->id,
@@ -232,7 +229,7 @@ class LeadController extends Controller
             'business_type' => 'required|string',
             'tin_number' => 'required|string|unique:clients,tin_number',
             'contact_person' => 'required|string|max:255',
-            'email' => 'required|email|unique:clients,email',
+            'email' => ['required', 'email', 'unique:clients,email', new PortalEmailAvailable],
             'phone' => 'required|string',
             'company_address' => 'required|string',
             'password' => 'required|string|min:8',
@@ -292,10 +289,12 @@ class LeadController extends Controller
             ]);
 
             DB::commit();
+
             return back()->with('message', 'Lead converted to client successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withErrors(['error' => 'Conversion failed: ' . $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Conversion failed: '.$e->getMessage()]);
         }
     }
 
@@ -316,6 +315,7 @@ class LeadController extends Controller
                 'user_id' => $user->id,
                 'note' => $validated['note'],
             ]);
+
             return back()->with('message', 'Note added.');
         }
 
@@ -354,6 +354,7 @@ class LeadController extends Controller
                 'location' => $validated['location'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]);
+
             return back()->with('message', 'Interview scheduled.');
         }
 
@@ -386,6 +387,7 @@ class LeadController extends Controller
                 'original_name' => $request->file('file')->getClientOriginalName(),
                 'uploaded_by' => $user->id,
             ]);
+
             return back()->with('message', 'File uploaded.');
         }
 
@@ -415,6 +417,7 @@ class LeadController extends Controller
 
         if (in_array($user->position, ['manager', 'vice_president'], true) || in_array($user->role, ['CEO', 'COO'], true)) {
             $lead->update(['status' => 'Closed-Won']);
+
             return back()->with('message', 'Lead accepted and moved to Closed-Won.');
         }
 
@@ -442,6 +445,7 @@ class LeadController extends Controller
 
         if (in_array($user->position, ['manager', 'vice_president'], true) || in_array($user->role, ['CEO', 'COO'], true)) {
             $lead->update(['status' => 'Lost', 'lost_reason' => $validated['reject_reason']]);
+
             return back()->with('message', 'Lead rejected and marked as Lost.');
         }
 

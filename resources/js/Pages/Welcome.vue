@@ -9,6 +9,8 @@ const props = defineProps<{
     canRegister?: boolean;
     laravelVersion: string;
     phpVersion: string;
+    companyPosts?: Array<{ id: number; caption: string; media: Array<{ url: string; type: string }>; created_at: string | null; creator: string }>;
+    products?: Array<{ id: number; name: string; category: string; images: Array<{ url: string }> }>;
     careerJobs?: Array<{
         id: number;
         posting_id: string;
@@ -75,6 +77,35 @@ const showJobDetail = ref(false);
 // Store jobs with real-time time updates
 const jobs = ref(props.careerJobs || []);
 const currentTime = ref(new Date());
+const productImageIndexes = ref<Record<number, number>>({});
+const postMediaIndexes = ref<Record<number, number>>({});
+let productCarouselInterval: number | null = null;
+
+const currentProductImage = (product: any) => {
+    if (!product.images?.length) return null;
+    const index = productImageIndexes.value[product.id] || 0;
+    return product.images[index % product.images.length];
+};
+
+const changeProductImage = (product: any, step: number) => {
+    const count = product.images?.length || 0;
+    if (count < 2) return;
+    const current = productImageIndexes.value[product.id] || 0;
+    productImageIndexes.value[product.id] = (current + step + count) % count;
+};
+
+const currentPostMedia = (post: any) => {
+    if (!post.media?.length) return null;
+    const index = postMediaIndexes.value[post.id] || 0;
+    return post.media[index % post.media.length];
+};
+
+const changePostMedia = (post: any, step: number) => {
+    const count = post.media?.length || 0;
+    if (count < 2) return;
+    const current = postMediaIndexes.value[post.id] || 0;
+    postMediaIndexes.value[post.id] = (current + step + count) % count;
+};
 
 // Update time every minute
 let timeInterval: number | null = null;
@@ -91,12 +122,22 @@ onMounted(() => {
     timeInterval = window.setInterval(() => {
         currentTime.value = new Date();
     }, 60000); // Update every minute
+
+    productCarouselInterval = window.setInterval(() => {
+        (props.products || []).forEach(product => {
+            if (product.images?.length > 1) changeProductImage(product, 1);
+        });
+        (props.companyPosts || []).forEach(post => {
+            if (post.media?.length > 1) changePostMedia(post, 1);
+        });
+    }, 4000);
 });
 
 onUnmounted(() => {
     if (timeInterval) {
         clearInterval(timeInterval);
     }
+    if (productCarouselInterval) clearInterval(productCarouselInterval);
 });
 
 // Watch for prop changes
@@ -432,6 +473,68 @@ const coreValues = [
                         <div class="text-[8px] text-slate-400 uppercase tracking-wider mt-0.5">Years</div>
                     </div>
                 </div>
+
+                <section id="company-posts" class="max-w-4xl mx-auto w-full mb-10 shrink-0 scroll-mt-6">
+                    <div class="text-center mb-6">
+                        <span class="text-[10px] font-bold uppercase tracking-widest text-blue-400">From Monti Textile</span>
+                        <h2 class="text-2xl font-bold text-white mt-1">Company Updates</h2>
+                        <p class="text-xs text-slate-400 mt-2">News, celebrations, promotions, and events from our team.</p>
+                    </div>
+                    <div v-if="companyPosts?.length" class="mx-auto grid w-full max-w-3xl gap-5">
+                        <article v-for="post in companyPosts" :key="post.id" class="company-post-card overflow-hidden rounded-2xl border backdrop-blur-md">
+                            <div class="p-5">
+                                <div class="flex items-center justify-between gap-3 mb-3">
+                                    <span class="company-post-author text-xs font-bold">{{ post.creator || 'Monti Textile' }}</span>
+                                    <time v-if="post.created_at" class="company-post-meta text-[10px]">{{ new Date(post.created_at).toLocaleDateString() }}</time>
+                                </div>
+                                <p class="company-post-caption whitespace-pre-wrap text-sm leading-relaxed">{{ post.caption }}</p>
+                            </div>
+                            <div v-if="post.media?.length" class="company-post-gallery px-3 pb-3">
+                                <div class="relative overflow-hidden rounded-xl">
+                                    <video v-if="currentPostMedia(post)?.type === 'video'" :key="currentPostMedia(post).url" :src="currentPostMedia(post).url" controls class="company-post-media" />
+                                    <img v-else :key="currentPostMedia(post)?.url" :src="currentPostMedia(post)?.url" :alt="`Monti Textile post image ${(postMediaIndexes[post.id] || 0) + 1}`" class="company-post-media" />
+                                    <template v-if="post.media.length > 1">
+                                        <button type="button" class="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/70 px-3 py-1.5 text-lg font-bold text-white shadow" :aria-label="`Previous image for post ${post.id}`" @click="changePostMedia(post, -1)">&#8249;</button>
+                                        <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/70 px-3 py-1.5 text-lg font-bold text-white shadow" :aria-label="`Next image for post ${post.id}`" @click="changePostMedia(post, 1)">&#8250;</button>
+                                        <div class="absolute bottom-3 left-0 right-0 flex justify-center gap-2">
+                                            <button v-for="(_, index) in post.media" :key="index" type="button" class="h-2 rounded-full shadow transition-all" :class="(postMediaIndexes[post.id] || 0) === index ? 'w-5 bg-white' : 'w-2 bg-white/65'" :aria-label="`Show item ${index + 1} of post ${post.id}`" @click="postMediaIndexes[post.id] = index" />
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                    <div v-else class="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-sm text-slate-400">Company news and updates will appear here.</div>
+                </section>
+
+                <section id="products" class="max-w-4xl mx-auto w-full mb-10 shrink-0 scroll-mt-6">
+                    <div class="text-center mb-6">
+                        <span class="text-[10px] font-bold uppercase tracking-widest text-blue-400">Monti Textile Catalog</span>
+                        <h2 class="text-2xl font-bold text-white mt-1">Products We Offer</h2>
+                        <p class="text-xs text-slate-400 mt-2">Catalog for browsing. Orders are available to approved business clients.</p>
+                    </div>
+                    <div v-if="products?.length" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <article v-for="product in products" :key="product.id" class="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
+                            <div class="relative">
+                                <img v-if="currentProductImage(product)?.url" :src="currentProductImage(product).url" :alt="product.name" class="h-36 sm:h-48 w-full object-cover" />
+                                <div v-else class="flex h-36 sm:h-48 items-center justify-center bg-white/5 text-xs text-slate-500">Product image coming soon</div>
+                                <template v-if="product.images?.length > 1">
+                                    <button type="button" class="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 px-2.5 py-1.5 text-white hover:bg-black/75" :aria-label="`Previous ${product.name} image`" @click="changeProductImage(product, -1)">‹</button>
+                                    <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 px-2.5 py-1.5 text-white hover:bg-black/75" :aria-label="`Next ${product.name} image`" @click="changeProductImage(product, 1)">›</button>
+                                    <div class="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+                                        <button v-for="(_, index) in product.images" :key="index" type="button" class="h-1.5 rounded-full transition-all" :class="(productImageIndexes[product.id] || 0) === index ? 'w-4 bg-white' : 'w-1.5 bg-white/60'" :aria-label="`Show image ${index + 1} of ${product.name}`" @click="productImageIndexes[product.id] = index" />
+                                    </div>
+                                </template>
+                            </div>
+                            <div class="p-4">
+                                <p class="text-sm font-bold text-white">{{ product.name }}</p>
+                                <p v-if="product.category && product.category.toLowerCase() !== 'uncategorized'" class="mt-1 text-[10px] font-semibold uppercase tracking-wider text-blue-300">{{ product.category }}</p>
+                            </div>
+                        </article>
+                    </div>
+                    <div v-else class="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-sm text-slate-400">Our product catalog will be available here soon.</div>
+                    <p class="mt-4 text-center text-[11px] text-slate-400">Purchasing is handled through Monti Textile's official business client accounts.</p>
+                </section>
 
                 <section class="max-w-4xl mx-auto w-full mb-10 shrink-0">
                     <div class="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 md:p-8">

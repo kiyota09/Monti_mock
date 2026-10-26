@@ -6,7 +6,7 @@ import { AlertTriangle, CheckCircle, Wrench, Sparkles, PlusCircle, ClipboardList
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'dyeing_ironing'));
 
 const props = defineProps({
     machines: Array,
@@ -20,7 +20,7 @@ const form = useForm({
 });
 
 const submitReport = () => {
-    form.post(route('man.staff.dyeing-color.report-machine'), {
+    form.post(route('man.staff.dyeing-ironing.report-machine'), {
         preserveScroll: true,
         onSuccess: () => {
             showReportForm.value = false;

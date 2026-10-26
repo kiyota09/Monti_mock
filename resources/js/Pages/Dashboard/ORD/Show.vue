@@ -77,21 +77,21 @@
                         </div>
 
                         <!-- Generate SO (PO only) -->
-                        <div v-if="orderType === 'PO' && canEditOrders" class="bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-gray-100 dark:border-zinc-800 p-5">
+                        <div v-if="orderType === 'PO' && canEditOrders && order.can_generate_so" class="bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-gray-100 dark:border-zinc-800 p-5">
                             <h2 class="font-black mb-1">Generate job orders</h2>
                             <p class="text-xs text-gray-500 mb-3">Explode PO lines into mill job orders (yarn / color / qty per line).</p>
                             <form @submit.prevent="submitGenerate" class="space-y-2">
-                                <div v-for="(g, i) in genForm.lines" :key="i" class="grid grid-cols-2 sm:grid-cols-6 gap-2 rounded-2xl border border-gray-100 dark:border-zinc-800 p-2.5">
+                                <div v-for="(g, i) in genForm.lines" :key="g.purchase_order_item_id" class="grid grid-cols-2 sm:grid-cols-6 gap-2 rounded-2xl border border-gray-100 dark:border-zinc-800 p-2.5">
+                                    <input type="hidden" v-model="g.purchase_order_item_id" />
+                                    <p class="col-span-2 text-xs font-bold text-gray-500 sm:col-span-6">{{ g.product }} · {{ g.quantity }} kg from the approved PO</p>
                                     <input v-model="g.yarn_type" required placeholder="Yarn type" class="rounded-xl border px-2 py-1.5 text-xs sm:col-span-2" />
                                     <input v-model="g.color" required placeholder="Color" class="rounded-xl border px-2 py-1.5 text-xs sm:col-span-2" />
-                                    <input v-model.number="g.quantity" type="number" min="0.01" step="0.01" required placeholder="Qty kg" class="rounded-xl border px-2 py-1.5 text-xs" />
-                                    <input v-model.number="g.unit_price" type="number" min="0" step="0.01" required placeholder="Unit ₱" class="rounded-xl border px-2 py-1.5 text-xs" />
+                                    <input :value="g.quantity" type="number" readonly class="rounded-xl border px-2 py-1.5 text-xs bg-gray-50" aria-label="Approved quantity in kilograms" />
+                                    <input :value="g.unit_price" type="number" readonly class="rounded-xl border px-2 py-1.5 text-xs bg-gray-50" aria-label="Approved unit price" />
                                     <input v-model="g.design" placeholder="Design (opt)" class="rounded-xl border px-2 py-1.5 text-xs sm:col-span-3" />
                                     <input v-model="g.expected_ship_date" type="date" class="rounded-xl border px-2 py-1.5 text-xs sm:col-span-2" />
-                                    <button type="button" @click="genForm.lines.splice(i, 1)" class="text-red-500 font-black text-sm">×</button>
                                 </div>
                                 <div class="flex gap-2">
-                                    <button type="button" @click="genForm.lines.push({ yarn_type: '', color: '', quantity: 1, unit_price: 0, design: '', expected_ship_date: '' })" class="text-xs font-black text-indigo-600 hover:underline">+ Add line</button>
                                     <button type="submit" :disabled="genForm.processing || !genForm.lines.length" class="ml-auto rounded-xl bg-violet-600 px-4 py-2 text-xs font-black text-white hover:bg-violet-500 disabled:opacity-50">Generate job orders</button>
                                 </div>
                             </form>
@@ -100,7 +100,7 @@
                         <!-- Payment -->
                         <div class="bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-gray-100 dark:border-zinc-800 p-5">
                             <h2 class="font-black mb-3">Billing & payment</h2>
-                            <form v-if="canEditOrders" @submit.prevent="submitPayment" class="flex flex-wrap items-end gap-2">
+                            <form v-if="canPostPayment" @submit.prevent="submitPayment" class="flex flex-wrap items-end gap-2">
                                 <label class="text-xs font-bold">Status
                                     <select v-model="payForm.payment_status" class="ml-1 rounded-xl border px-2 py-1.5 text-sm">
                                         <option value="unpaid">Unpaid</option><option value="partially_paid">Partially paid</option><option value="paid">Paid</option>
@@ -173,6 +173,7 @@ const props = defineProps({
     transitions: Array,
     history: Array,
     returns: Array,
+    canPostPayment: Boolean,
 });
 
 const { canEdit } = usePageAccess();
@@ -200,7 +201,20 @@ const submitTransition = () => {
     });
 };
 
-const genForm = useForm({ lines: [{ yarn_type: '', color: '', quantity: 1, unit_price: 0, design: '', expected_ship_date: '' }] });
+const genForm = useForm({
+    lines: props.orderType === 'PO'
+        ? props.lines.map((line) => ({
+            purchase_order_item_id: line.purchase_order_item_id,
+            product: line.product,
+            yarn_type: '',
+            color: '',
+            quantity: Number(line.quantity),
+            unit_price: Number(line.unit_price),
+            design: '',
+            expected_ship_date: props.order.expected_ship_date || '',
+        }))
+        : [],
+});
 const submitGenerate = () => genForm.post(route('ord.orders.generate-so', { id: props.order.id }), { onSuccess: () => genForm.reset() });
 
 const payForm = useForm({ order_id: props.order.id, type: props.orderType, payment_status: props.order.payment_status || 'unpaid', receipt: null });

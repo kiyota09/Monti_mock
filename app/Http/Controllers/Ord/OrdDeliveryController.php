@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Logistics\Delivery;
 use App\Models\Ord\SalesOrder;
 use App\Services\Ord\OrderLifecycleService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -13,29 +14,60 @@ class OrdDeliveryController extends Controller
 {
     public function __construct(private OrderLifecycleService $lifecycle) {}
 
-    public function index()
+    /**
+     * Outbound shipment worklist with status tabs and search.
+     */
+    public function index(Request $request)
     {
-        $deliveries = Delivery::with([
-                'driver.user',
-                'truck',
-                'route.client',
-                'packages.product',
-                'conductor1.user',
-                'conductor2.user',
-            ])
-            ->whereIn('status', ['dispatched', 'in_transit', 'delivered'])
+        $filters = [
+            'status' => (string) $request->get('status', ''),
+            'search' => trim((string) $request->get('search', '')),
+        ];
+
+        $statuses = ['dispatched', 'in_transit', 'delivered'];
+
+        $all = Delivery::with([
+            'driver.user',
+            'truck',
+            'route.client',
+            'packages.product',
+            'packages.manufacturingOrder.salesOrder',
+            'conductor1.user',
+            'conductor2.user',
+            'proofOfDelivery',
+        ])
+            ->whereIn('status', $statuses)
             ->latest('scheduled_departure')
-            ->get()
+            ->get();
+
+        $counts = ['all' => $all->count()];
+        foreach ($all->groupBy('status') as $status => $group) {
+            $counts[$status] = $group->count();
+        }
+
+        $rows = $all
+            ->when($filters['status'] !== '', fn ($c) => $c->where('status', $filters['status']))
+            ->when($filters['search'] !== '', function ($c) use ($filters) {
+                $needle = strtolower($filters['search']);
+
+                return $c->filter(function ($delivery) use ($needle) {
+                    return str_contains(strtolower((string) $delivery->delivery_number), $needle)
+                        || str_contains(strtolower((string) $delivery->route?->client?->company_name), $needle)
+                        || str_contains(strtolower((string) $delivery->driver?->user?->name), $needle);
+                });
+            })
+            ->values()
             ->map(fn ($delivery) => $this->deliveryRow($delivery));
 
         return Inertia::render('Dashboard/ORD/Delivery', [
-            'deliveries' => $deliveries,
+            'deliveries' => $rows,
+            'counts' => $counts,
+            'filters' => $filters,
         ]);
     }
 
     /**
-     * Shipment 360° view: milestones, crew, packages and the linked
-     * job orders resolved through package -> manufacturing order.
+     * Shipment 360° view: milestones, crew, packages, linked job orders.
      */
     public function track(int $id)
     {
@@ -59,7 +91,8 @@ class OrdDeliveryController extends Controller
             ]);
 
         return Inertia::render('Dashboard/ORD/Track', [
-            'delivery' => [...$this->deliveryRow($delivery), 'notes' => $delivery->notes,
+            'delivery' => [...$this->deliveryRow($delivery),
+                'notes' => $delivery->notes,
                 'proof' => $delivery->proofOfDelivery ? [
                     'received_at' => $delivery->proofOfDelivery->delivered_at?->format('Y-m-d H:i'),
                     'notes' => $delivery->proofOfDelivery->notes,
@@ -72,16 +105,20 @@ class OrdDeliveryController extends Controller
     }
 
     /**
-     * Pull POD/completion back into the linked job orders: delivered
-     * shipments stamp SOs delivered (once), keeping ORD in sync with
-     * logistics without ORD editing logistics data.
+     * Pull a delivered + POD-confirmed shipment back into linked job orders.
+     * Only forward-moving canonical steps are applied; no status is skipped.
      */
     public function syncStatus(int $id)
     {
-        $delivery = Delivery::with('packages.manufacturingOrder.salesOrder')->findOrFail($id);
+        $delivery = Delivery::with([
+            'packages.manufacturingOrder.salesOrder', 'proofOfDelivery',
+        ])->findOrFail($id);
 
         if ($delivery->status !== 'delivered') {
             return back()->withErrors(['error' => 'Only delivered shipments can be synced to orders.']);
+        }
+        if (! $delivery->proofOfDelivery) {
+            return back()->withErrors(['error' => 'Record a proof of delivery before syncing orders.']);
         }
 
         $updated = DB::transaction(function () use ($delivery) {
@@ -98,7 +135,7 @@ class OrdDeliveryController extends Controller
                 if (in_array($so->status, ['delivered', 'completed', 'cancelled'], true)) {
                     continue;
                 }
-                // Only forward-moving sync: walk the canonical path step by step.
+
                 foreach (['production_done', 'ready_for_dispatch', 'in_transit', 'delivered'] as $step) {
                     if (in_array($step, OrderLifecycleService::allowedSoTransitions($so->status), true)) {
                         $so = $this->lifecycle->transitionSalesOrder(
@@ -119,6 +156,17 @@ class OrdDeliveryController extends Controller
 
     private function deliveryRow($delivery): array
     {
+        $linkedOrders = $delivery->packages
+            ->map(fn ($pkg) => $pkg->manufacturingOrder?->salesOrder)
+            ->filter()
+            ->unique('id');
+
+        $canSync = $delivery->status === 'delivered'
+            && $delivery->proofOfDelivery
+            && $linkedOrders->contains(
+                fn ($so) => ! in_array($so->status, ['delivered', 'completed', 'cancelled'], true)
+            );
+
         return [
             'id' => $delivery->id,
             'delivery_number' => $delivery->delivery_number,
@@ -133,6 +181,10 @@ class OrdDeliveryController extends Controller
             'destination' => $delivery->route?->destination,
             'client_name' => $delivery->route?->client?->company_name,
             'package_count' => $delivery->packages->count(),
+            'linked_order_count' => $linkedOrders->count(),
+            'has_pod' => (bool) $delivery->proofOfDelivery,
+            'pod_received_at' => $delivery->proofOfDelivery?->delivered_at?->format('Y-m-d H:i'),
+            'can_sync' => $canSync,
             'packages' => $delivery->packages->map(fn ($pkg) => [
                 'package_number' => $pkg->package_number,
                 'product_name' => $pkg->product?->name,

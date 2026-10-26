@@ -6,7 +6,7 @@ import { Flag, Sparkles, PlusCircle, ClipboardList } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'flag_reports'));
 
 const props = defineProps({
     machines: Array,

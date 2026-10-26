@@ -5,7 +5,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'dyeing_color'));
 import {
     Droplet, X, Plus, Trash2, AlertTriangle, CheckCircle2,
     FlaskConical, Palette, Layers, Package, Blend, Sparkles, ChevronRight,

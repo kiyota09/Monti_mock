@@ -195,5 +195,10 @@ class DatabaseSeeder extends Seeder
         // reproducible from an empty database — the data migrations that
         // originally granted these pages are no-ops on a fresh migrate.
         $this->call(AddHrmManagerPermissionsSeeder::class);
+
+        // ==========================================
+        // 10. SEED CRM EMAIL INBOX (demo received client emails)
+        // ==========================================
+        $this->call(CrmEmailDemoSeeder::class);
     }
 }

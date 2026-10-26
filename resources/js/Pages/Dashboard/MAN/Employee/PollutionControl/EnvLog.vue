@@ -6,7 +6,7 @@ import { Leaf, Sparkles, PlusCircle, FlaskConical, Trash2 } from 'lucide-vue-nex
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'pollution_control'));
 
 const props = defineProps({ records: Array });
 

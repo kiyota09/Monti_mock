@@ -1934,3 +1934,145 @@ html[data-theme='green'] main div[class*='from-blue-700'].rounded-3xl {
 .auth-scope .auth-btn-ghost:active:not(:disabled) {
   transform: scale(0.95);
 }
+
+/* Welcome page company posts use a larger, uncropped media frame and theme-aware text. */
+.welcome-scope {
+  --w-post-bg: rgba(15, 23, 42, 0.72);
+  --w-post-ink: #f8fafc;
+  --w-post-muted: #cbd5e1;
+  --w-post-line: rgba(255, 255, 255, 0.16);
+  --w-post-media-bg: rgba(2, 6, 23, 0.72);
+}
+.welcome-scope .company-post-card {
+  background: var(--w-post-bg);
+  border-color: var(--w-post-line);
+}
+.welcome-scope .company-post-caption { color: var(--w-post-ink); }
+.welcome-scope .company-post-meta { color: var(--w-post-muted); }
+.welcome-scope .company-post-author { color: var(--w-link, #93c5fd); }
+.welcome-scope .company-post-media {
+  display: block;
+  width: 100%;
+  max-height: min(72vh, 680px);
+  min-height: 180px;
+  object-fit: contain;
+  background: var(--w-post-media-bg);
+  border-radius: 0.75rem;
+}
+html[data-theme='light'] .welcome-scope,
+html[data-theme='blue'] .welcome-scope,
+html[data-theme='red'] .welcome-scope,
+html[data-theme='green'] .welcome-scope {
+  --w-post-bg: var(--w-card);
+  --w-post-ink: var(--w-ink);
+  --w-post-muted: var(--w-muted);
+  --w-post-line: var(--w-line);
+  --w-post-media-bg: rgba(15, 23, 42, 0.08);
+}
+
+/* CRM company posts: explicit theme tokens keep controls and copy readable. */
+.crm-posts-page {
+  --cp-page: #f8fafc;
+  --cp-panel: #ffffff;
+  --cp-ink: #111827;
+  --cp-muted: #64748b;
+  --cp-line: #e2e8f0;
+  --cp-input: #f8fafc;
+  --cp-accent: #4f46e5;
+  --cp-accent-hover: #4338ca;
+  --cp-accent-soft: rgba(79, 70, 229, 0.1);
+  --cp-media: #f1f5f9;
+  color: var(--cp-ink);
+  background: var(--cp-page);
+}
+.crm-posts-page .posts-surface,
+.crm-posts-page .posts-tabs { background: var(--cp-panel); border-color: var(--cp-line); }
+.crm-posts-page .posts-heading,
+.crm-posts-page .posts-body { color: var(--cp-ink); }
+.crm-posts-page .posts-muted { color: var(--cp-muted); }
+.crm-posts-page .posts-input { color: var(--cp-ink); background: var(--cp-input); border-color: var(--cp-line); }
+.crm-posts-page .posts-input::placeholder { color: var(--cp-muted); opacity: 0.8; }
+.crm-posts-page .posts-input:focus { border-color: var(--cp-accent); --tw-ring-color: var(--cp-accent); }
+.crm-posts-page .posts-secondary-button { color: var(--cp-ink); background: var(--cp-panel); border-color: var(--cp-line); }
+.crm-posts-page .posts-secondary-button:hover,
+.crm-posts-page .posts-tab:hover { background: var(--cp-accent-soft); }
+.crm-posts-page .posts-tab { color: var(--cp-muted); }
+.crm-posts-page .posts-tab.is-active { color: var(--cp-accent); background: var(--cp-accent-soft); }
+.crm-posts-page .posts-primary-button { color: #fff; background: var(--cp-accent); }
+.crm-posts-page .posts-primary-button:hover { background: var(--cp-accent-hover); }
+.crm-posts-page .posts-danger-button { color: #be123c; }
+.crm-posts-page .posts-danger-button:hover { background: rgba(225, 29, 72, 0.1); }
+.crm-posts-page .posts-empty { color: var(--cp-muted); border-color: var(--cp-line); }
+.crm-posts-page .posts-media { background: var(--cp-media); }
+.crm-posts-page .posts-header { color: #fff; background: linear-gradient(125deg, var(--cp-accent), var(--cp-accent-hover)); }
+
+html[data-theme='dark'] .crm-posts-page {
+  --cp-page: #09090b;
+  --cp-panel: #18181b;
+  --cp-ink: #f4f4f5;
+  --cp-muted: #a1a1aa;
+  --cp-line: #3f3f46;
+  --cp-input: #27272a;
+  --cp-accent: #818cf8;
+  --cp-accent-hover: #6366f1;
+  --cp-accent-soft: rgba(129, 140, 248, 0.16);
+  --cp-media: #09090b;
+}
+html[data-theme='blue'] .crm-posts-page {
+  --cp-page: #eff6ff;
+  --cp-panel: #ffffff;
+  --cp-ink: #0b1b4f;
+  --cp-muted: #4a5b8c;
+  --cp-line: #cbdcf5;
+  --cp-input: #f5f9ff;
+  --cp-accent: #1a73e8;
+  --cp-accent-hover: #155fc0;
+  --cp-accent-soft: rgba(26, 115, 232, 0.1);
+  --cp-media: #eaf2fc;
+}
+html[data-theme='red'] .crm-posts-page {
+  --cp-page: #fff1f2;
+  --cp-panel: #ffffff;
+  --cp-ink: #4c0519;
+  --cp-muted: #8a5f6b;
+  --cp-line: #f3c9d2;
+  --cp-input: #fff7f8;
+  --cp-accent: #e11d48;
+  --cp-accent-hover: #be123c;
+  --cp-accent-soft: rgba(225, 29, 72, 0.1);
+  --cp-media: #fff0f2;
+}
+html[data-theme='green'] .crm-posts-page {
+  --cp-page: #f1f8f3;
+  --cp-panel: #ffffff;
+  --cp-ink: #1b4332;
+  --cp-muted: #4f6f5c;
+  --cp-line: #c9ddce;
+  --cp-input: #f7fbf8;
+  --cp-accent: #2d6a4f;
+  --cp-accent-hover: #1b4332;
+  --cp-accent-soft: rgba(45, 106, 79, 0.1);
+  --cp-media: #edf5ef;
+}
+
+/* Keep the CRM Posts banner readable despite global theme header overrides. */
+html[data-theme='blue'] .crm-posts-page .posts-header,
+html[data-theme='red'] .crm-posts-page .posts-header,
+html[data-theme='green'] .crm-posts-page .posts-header {
+  color: #fff !important;
+  background-image: none !important;
+}
+html[data-theme='blue'] .crm-posts-page .posts-header {
+  background-color: #1d4ed8 !important;
+}
+html[data-theme='red'] .crm-posts-page .posts-header {
+  background-color: #b91c1c !important;
+}
+html[data-theme='green'] .crm-posts-page .posts-header {
+  background-color: #166534 !important;
+}
+html[data-theme='blue'] .crm-posts-page .posts-header *,
+html[data-theme='red'] .crm-posts-page .posts-header *,
+html[data-theme='green'] .crm-posts-page .posts-header * {
+  color: #fff !important;
+}

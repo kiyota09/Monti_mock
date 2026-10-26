@@ -19,8 +19,8 @@ class ManufacturingOrder extends Model
     ];
 
     protected $casts = [
-        'total_quantity' => 'integer',
-        'remaining_quantity' => 'integer',
+        'total_quantity' => 'decimal:2',
+        'remaining_quantity' => 'decimal:2',
         'status' => 'string',
     ];
 

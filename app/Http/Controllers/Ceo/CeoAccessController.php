@@ -82,6 +82,7 @@ class CeoAccessController extends Controller
             'customer_profiles' => 'Customers',
             'inquiry' => 'Inquiries',
             'messaging' => 'Messaging',
+            'email' => 'Email',
             'interviews' => 'Interviews',
             'trainees' => 'Trainees',
             'approvals' => 'Approvals',

@@ -8,7 +8,9 @@ use App\Models\Ord\OrderQueue;
 use App\Models\Ord\PurchaseOrder;
 use App\Models\Ord\SalesOrder;
 use App\Services\Eco\StockSustainabilityService;
+use App\Services\Ord\OrderLifecycleService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class ScmSalesOrderController extends Controller
@@ -116,7 +118,11 @@ class ScmSalesOrderController extends Controller
      * LIVE here with the same DSS engine before anything moves, so SCM can
      * never push an order the warehouse cannot sustain.
      */
-    public function pushToProductionSalesOrder(SalesOrder $salesOrder, StockSustainabilityService $dss)
+    public function pushToProductionSalesOrder(
+        SalesOrder $salesOrder,
+        StockSustainabilityService $dss,
+        OrderLifecycleService $lifecycle
+    )
     {
         if (!in_array($salesOrder->status, ['pushed_to_scm', 'inv_check', 'inv_checked'])) {
             return redirect()->back()->withErrors(['error' => 'Sales order cannot be pushed to production from its current stage.']);
@@ -133,35 +139,54 @@ class ScmSalesOrderController extends Controller
             return redirect()->back()->withErrors(['error' => "Push blocked: live stock cannot sustain {$result['jo_number']}. {$lines}. File procurement from the ECO Push Center DSS check."]);
         }
 
-        DB::transaction(function () use ($salesOrder) {
-            $salesOrder->update([
-                'status' => 'in_production',
-                'inv_check_sufficient' => true,
-            ]);
+        DB::transaction(function () use ($salesOrder, $lifecycle) {
+            $lockedOrder = SalesOrder::whereKey($salesOrder->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($lockedOrder->status, ['pushed_to_scm', 'inv_check', 'inv_checked'], true)) {
+                throw ValidationException::withMessages(['error' => 'Sales order has already moved from the inventory-checked stage.']);
+            }
+
+            $lockedOrder->update(['inv_check_sufficient' => true]);
 
             // Hand the Job Order to Manufacturing. The knitting supervisor's
             // "JO Assignments" board (and the knitting intake gates) read
             // ManufacturingOrders, so pushing without creating one left the JO
             // invisible to the plant floor.
-            $hasActive = ManufacturingOrder::where('sales_order_id', $salesOrder->id)
+            $hasActive = ManufacturingOrder::where('sales_order_id', $lockedOrder->id)
                 ->whereIn('status', ['pending', 'in_progress'])
                 ->exists();
 
             if (! $hasActive) {
                 ManufacturingOrder::create([
-                    'sales_order_id' => $salesOrder->id,
-                    'total_quantity' => (int) $salesOrder->quantity,
-                    'remaining_quantity' => (int) $salesOrder->quantity,
+                    'sales_order_id' => $lockedOrder->id,
+                    'total_quantity' => $lockedOrder->quantity,
+                    'remaining_quantity' => $lockedOrder->quantity,
                     'status' => 'pending',
                     'notes' => 'Pushed to manufacturing by SCM (stock re-verified live)',
                 ]);
             }
 
+            // SCM's legacy statuses canonicalize to confirmed. Record both
+            // lifecycle milestones instead of writing in_production directly.
+            if (in_array('in_planning', OrderLifecycleService::allowedSoTransitions($lockedOrder->status), true)) {
+                $lockedOrder = $lifecycle->transitionSalesOrder(
+                    $lockedOrder,
+                    'in_planning',
+                    auth()->user(),
+                    'Planned after live inventory re-check (SCM)'
+                );
+            }
+            $lifecycle->transitionSalesOrder(
+                $lockedOrder,
+                'in_production',
+                auth()->user(),
+                'Released to production after live inventory re-check (SCM)'
+            );
+
             OrderQueue::updateOrCreate(
-                ['sales_order_id' => $salesOrder->id],
+                ['sales_order_id' => $lockedOrder->id],
                 ['stage' => 'man_production', 'man_started_at' => now()]
             );
-        });
+        }, 3);
 
         return redirect()->back()->with('success', 'Stock re-verified live — sales order pushed to Manufacturing.');
     }

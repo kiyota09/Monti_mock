@@ -6,7 +6,8 @@ import { AlertTriangle, CheckCircle, Wrench, Sparkles, PlusCircle, ClipboardList
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'knitting_mechanic'));
+const canEditFlags = computed(() => canEdit('MAN', 'flag_reports'));
 
 const props = defineProps({
     machines: Array,
@@ -135,11 +136,11 @@ const flagBadge = (s) => s === 'resolved'
                                         <span :class="flagBadge(flag.status)" class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1">{{ flag.status }}</span>
                                     </td>
                                     <td class="px-6 py-4 text-right whitespace-nowrap">
-                                        <button v-if="flag.status === 'open' && canEditProduction" @click="acknowledge(flag)"
+                                        <button v-if="flag.status === 'open' && canEditFlags" @click="acknowledge(flag)"
                                             class="inline-flex items-center gap-1 text-[11px] font-black text-indigo-700 hover:underline mr-3">
                                             <CheckCheck class="h-3.5 w-3.5" /> Acknowledge
                                         </button>
-                                        <button v-if="flag.status !== 'resolved' && canEditProduction" @click="resolve(flag)"
+                                        <button v-if="flag.status !== 'resolved' && canEditFlags" @click="resolve(flag)"
                                             class="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 hover:underline">
                                             <CheckCircle class="h-3.5 w-3.5" /> Resolve
                                         </button>

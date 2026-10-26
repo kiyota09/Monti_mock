@@ -31,6 +31,8 @@ class PurchaseOrder extends Model
         'po_number',
         'subtotal',
         'discount_amount',
+        'tax_rate',
+        'tax_amount',
         'total_amount',
         'status',
         'tier_level',
@@ -54,6 +56,8 @@ class PurchaseOrder extends Model
     protected $casts = [
         'subtotal' => 'decimal:2',
         'discount_amount' => 'decimal:2',
+        'tax_rate' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'delivery_date' => 'date',
         'expected_ship_date' => 'date',

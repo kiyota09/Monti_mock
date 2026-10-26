@@ -6,7 +6,7 @@ import { Boxes, Sparkles, PlusCircle, FlaskConical, Trash2, ExternalLink } from 
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'lab_inventory'));
 
 const props = defineProps({ dyes: Array, solutions: Array });
 

@@ -745,8 +745,9 @@
                                     </div>
                                 </div>
                                 <div style="font-size:8px;font-family:Arial,sans-serif;color:#444;margin-top:5px;line-height:1.5;">
-                                    All prices listed are <strong>{{ quotationPreviewModal.quotation.vat_type === 'inclusive' ? 'VAT-inclusive' : 'VAT-exclusive' }}</strong>
-                                    and quoted <strong>per kilogram (kg)</strong>.
+                                    All prices are quoted <strong>per kilogram (kg)</strong>.
+                                    <span v-if="quotationPreviewModal.quotation.vat_type === 'inclusive'">The table shows the original base price and the price after adding 12% VAT.</span>
+                                    <span v-else>Prices shown are VAT-exclusive.</span>
                                     Please note that prices are subject to change in accordance with fluctuations in yarn market costs.
                                 </div>
                             </div>
@@ -758,10 +759,11 @@
                             <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:9px;margin-bottom:16px;">
                                 <thead>
                                     <tr style="background:#f5f5f5;">
-                                        <th style="border:1px solid #ccc;padding:6px 10px;text-align:left;font-weight:700;width:45%;">Product Name</th>
-                                        <th style="border:1px solid #ccc;padding:6px 10px;text-align:center;font-weight:700;width:25%;">Color</th>
-                                        <th style="border:1px solid #ccc;padding:6px 10px;text-align:center;font-weight:700;width:15%;">MOQ (kg)</th>
-                                        <th style="border:1px solid #ccc;padding:6px 10px;text-align:right;font-weight:700;width:15%;">Price/kg</th>
+                                        <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;font-weight:700;width:32%;">Product Name</th>
+                                        <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;font-weight:700;width:18%;">Color</th>
+                                        <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;font-weight:700;width:12%;">MOQ (kg)</th>
+                                        <th style="border:1px solid #ccc;padding:6px 8px;text-align:right;font-weight:700;width:19%;">Original Price/kg</th>
+                                        <th v-if="quotationPreviewModal.quotation.vat_type === 'inclusive'" style="border:1px solid #ccc;padding:6px 8px;text-align:right;font-weight:700;width:19%;">Price + 12% VAT/kg</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -771,7 +773,8 @@
                                             <td style="border:1px solid #ddd;padding:5px 10px;">{{ idx === 0 ? fabric : '' }}</td>
                                             <td style="border:1px solid #ddd;padding:5px 10px;text-align:center;">{{ item.color }}</td>
                                             <td style="border:1px solid #ddd;padding:5px 10px;text-align:center;">{{ item.kilos }}</td>
-                                            <td style="border:1px solid #ddd;padding:5px 10px;text-align:right;">&#8369;{{ formatPrice(item.unit_price) }}</td>
+                                            <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;">&#8369;{{ formatPrice(item.unit_price) }}</td>
+                                            <td v-if="quotationPreviewModal.quotation.vat_type === 'inclusive'" style="border:1px solid #ddd;padding:5px 8px;text-align:right;">&#8369;{{ formatPrice(Number(item.unit_price) * 1.12) }}</td>
                                         </tr>
                                     </template>
                                 </tbody>
@@ -780,7 +783,7 @@
                             <!-- VAT note -->
                             <div v-if="quotationPreviewModal.quotation.vat_type === 'inclusive'"
                                 style="font-size:7.5px;font-family:Arial,sans-serif;color:#888;margin-bottom:40px;font-style:italic;">
-                                * All prices include 12% Value Added Tax (VAT).
+                                * Price + 12% VAT is calculated from the original base price. The order total includes VAT.
                             </div>
                             <div v-else style="margin-bottom:40px;"></div>
 
@@ -1228,8 +1231,8 @@ const downloadQuotationPDF = async (quotation) => {
         y += 5;
 
         const vatText = quotation.vat_type === 'inclusive'
-            ? 'All prices listed are VAT-inclusive and quoted per kilogram (kg).'
-            : 'All prices listed are VAT-exclusive and quoted per kilogram (kg).';
+            ? 'Prices are quoted per kilogram (kg). The original base price and the price after adding 12% VAT are shown below.'
+            : 'Prices are quoted per kilogram (kg) and shown VAT-exclusive. The order computation includes 12% VAT.';
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
         doc.setTextColor(68, 68, 68);
@@ -1258,13 +1261,16 @@ const downloadQuotationPDF = async (quotation) => {
                     item.color,
                     `${parseFloat(item.kilos).toFixed(2)}`,
                     `PHP ${formatPrice(item.unit_price)}`,
+                    ...(quotation.vat_type === 'inclusive' ? [`PHP ${formatPrice(Number(item.unit_price) * 1.12)}`] : []),
                 ]);
             });
         });
 
         doc.autoTable({
             startY: y,
-            head: [['Product Name', 'Color', 'MOQ (kg)', 'Price/kg']],
+            head: [quotation.vat_type === 'inclusive'
+                ? ['Product Name', 'Color', 'MOQ (kg)', 'Original Price/kg', 'Price + 12% VAT/kg']
+                : ['Product Name', 'Color', 'MOQ (kg)', 'Price/kg']],
             body: tableBody,
             theme: 'grid',
             headStyles: {
@@ -1281,22 +1287,21 @@ const downloadQuotationPDF = async (quotation) => {
             alternateRowStyles: { fillColor: [250, 250, 250] },
             margin: { left: marginL, right: marginR },
             columnStyles: {
-                0: { cellWidth: 78, halign: 'left' },
-                1: { cellWidth: 46, halign: 'center' },
-                2: { cellWidth: 22, halign: 'center' },
-                3: { cellWidth: 24, halign: 'right' },
+                0: { cellWidth: quotation.vat_type === 'inclusive' ? 58 : 78, halign: 'left' },
+                1: { cellWidth: quotation.vat_type === 'inclusive' ? 35 : 46, halign: 'center' },
+                2: { cellWidth: quotation.vat_type === 'inclusive' ? 18 : 22, halign: 'center' },
+                3: { cellWidth: quotation.vat_type === 'inclusive' ? 34 : 24, halign: 'right' },
+                ...(quotation.vat_type === 'inclusive' ? { 4: { cellWidth: 34, halign: 'right' } } : {}),
             },
         });
 
         y = doc.lastAutoTable.finalY + 6;
 
-        if (quotation.vat_type === 'inclusive') {
-            doc.setFont('helvetica', 'italic');
-            doc.setFontSize(7);
-            doc.setTextColor(150, 150, 150);
-            doc.text('* All prices include 12% Value Added Tax (VAT).', marginL, y);
-            y += 5;
-        }
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('* Order computations include 12% Value Added Tax (VAT), even when the quotation is viewed with VAT excluded.', marginL, y);
+        y += 5;
 
         const sigY = Math.max(y + 30, Math.min(265, pageH - 25));
 

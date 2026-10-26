@@ -5,7 +5,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'checker_quality'));
 import {
     Package, CheckCircle, XCircle, AlertTriangle, Sparkles, BadgeCheck,
 } from 'lucide-vue-next';
