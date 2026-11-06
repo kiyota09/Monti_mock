@@ -19,6 +19,7 @@ const form = useForm({
 const isLoaded = ref(false);
 const showPassword = ref(false);
 const showForgot = ref(false);
+const showInactiveAgency = ref(false);
 
 onMounted(() => {
     isLoaded.value = true;
@@ -35,7 +36,13 @@ const submit = () => {
         },
         onError: (errors) => {
             const errorMsg = Object.values(errors)[0] || 'Login failed. Please check your credentials.';
-            toast.error(errorMsg);
+            if (String(errorMsg).toLowerCase().includes('no longer active')) {
+                form.clearErrors('email');
+                form.clearErrors('password');
+                showInactiveAgency.value = true;
+            } else {
+                toast.error(errorMsg);
+            }
         },
         onFinish: () => form.reset('password'),
     });
@@ -145,5 +152,30 @@ const submit = () => {
 
         <ForgotPasswordModal v-model="showForgot" route-name="agency.password.recover"
             portal-label="Agency Portal" accent="blue" />
+
+        <div v-if="showInactiveAgency"
+            class="fixed inset-0 z-[100] grid min-h-screen place-items-center overflow-y-auto bg-slate-950/40 p-4 text-slate-900 backdrop-blur-md"
+            role="alertdialog" aria-modal="true" aria-labelledby="inactive-agency-title"
+            aria-describedby="inactive-agency-message">
+            <section class="-translate-y-20 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
+                <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v4m0 4h.01M10.3 3.86 1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.7 3.86a2 2 0 00-3.4 0z" />
+                    </svg>
+                </div>
+                <h2 id="inactive-agency-title" class="text-2xl font-semibold">Agency login is no longer active</h2>
+                <p id="inactive-agency-message" class="mt-3 leading-6 text-slate-600">
+                    Please contact Monti Corp HR for help restoring access to your agency account.
+                </p>
+                <div class="mt-7 flex justify-end">
+                    <PrimaryButton type="button" class="auth-btn px-5 py-2.5 text-sm font-semibold text-white"
+                        @click="showInactiveAgency = false">
+                        Back to login
+                    </PrimaryButton>
+                </div>
+            </section>
+        </div>
+
     </AuthLayout>
 </template>

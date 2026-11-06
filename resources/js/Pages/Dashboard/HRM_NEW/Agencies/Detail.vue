@@ -47,6 +47,8 @@ const confirmAction = ref<'suspend' | 'terminate' | null>(null);
 const reason = ref('');
 const reasonError = ref('');
 const confirmUserCreate = ref(false);
+const confirmUserAction = ref<{ type: 'reset' | 'toggle'; user: { id: number; name: string; is_active: boolean } } | null>(null);
+const userActionProcessing = ref(false);
 
 function statusBadge(s: string): string {
     const map: Record<string, string> = {
@@ -54,6 +56,23 @@ function statusBadge(s: string): string {
         Pending: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
         Suspended: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
         Terminated: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+        Available: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+        Deployed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+        Inactive: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600',
+        Blacklisted: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+        'For Correction': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800',
+    };
+    return map[s] || 'bg-slate-100 text-slate-600 border-slate-200';
+}
+
+function workerStatusBadge(s: string): string {
+    const map: Record<string, string> = {
+        Available: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+        Deployed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+        Pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+        Inactive: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600',
+        Blacklisted: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+        'For Correction': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800',
     };
     return map[s] || 'bg-slate-100 text-slate-600 border-slate-200';
 }
@@ -108,14 +127,25 @@ function submitUserCreate() {
 }
 
 function resetPassword(u: any) {
-    if (!window.confirm(`Reset the password for ${u.name}? A new temporary password will be shown once.`)) return;
-    router.post(route('hrm.agencies.users.reset-password', { agency: props.agency.id, user: u.id }), {}, { preserveScroll: true });
+    confirmUserAction.value = { type: 'reset', user: u };
 }
 
 function toggleUser(u: any) {
-    const verb = u.is_active ? 'deactivate' : 'reactivate';
-    if (!window.confirm(`${verb === 'deactivate' ? 'Deactivate' : 'Reactivate'} the login for ${u.name}?`)) return;
-    router.post(route('hrm.agencies.users.toggle-status', { agency: props.agency.id, user: u.id }), {}, { preserveScroll: true });
+    confirmUserAction.value = { type: 'toggle', user: u };
+}
+
+function submitUserAction() {
+    if (!confirmUserAction.value) return;
+    const action = confirmUserAction.value;
+    userActionProcessing.value = true;
+    const url = action.type === 'reset'
+        ? route('hrm.agencies.users.reset-password', { agency: props.agency.id, user: action.user.id })
+        : route('hrm.agencies.users.toggle-status', { agency: props.agency.id, user: action.user.id });
+    router.post(url, {}, {
+        preserveScroll: true,
+        onSuccess: () => { confirmUserAction.value = null; },
+        onFinish: () => { userActionProcessing.value = false; },
+    });
 }
 
 function actionLabel(a: string): string {
@@ -397,7 +427,7 @@ function actionLabel(a: string): string {
                             <td class="py-3 px-4 text-sm font-bold text-blue-600 hover:text-blue-700">{{ w.name }}</td>
                             <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ w.position_skill || '—' }}</td>
                             <td class="py-3 px-4 text-center">
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase border bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600">{{ w.status }}</span>
+                                <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', workerStatusBadge(w.status)]">{{ w.status }}</span>
                             </td>
                         </tr>
                     </tbody>
@@ -503,6 +533,24 @@ function actionLabel(a: string): string {
                     <p class="text-sm font-bold text-slate-900 dark:text-white">No billing statements for this agency yet.</p>
                 </div>
             </div>
+        </div>
+        <div v-if="confirmUserAction" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="presentation" @click.self="!userActionProcessing && (confirmUserAction = null)">
+            <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="alertdialog" aria-modal="true" aria-labelledby="agency-user-action-title">
+                <h2 id="agency-user-action-title" class="text-lg font-black text-slate-900 dark:text-white">
+                    {{ confirmUserAction.type === 'reset' ? 'Reset password?' : confirmUserAction.user.is_active ? 'Deactivate agency login?' : 'Reactivate agency login?' }}
+                </h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                    <template v-if="confirmUserAction.type === 'reset'">Reset the password for <strong>{{ confirmUserAction.user.name }}</strong>? A new temporary password will be shown once.</template>
+                    <template v-else-if="confirmUserAction.user.is_active">Deactivate <strong>{{ confirmUserAction.user.name }}</strong>? They will no longer be able to sign in to the agency portal.</template>
+                    <template v-else>Reactivate <strong>{{ confirmUserAction.user.name }}</strong> so they can sign in to the agency portal again.</template>
+                </p>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" @click="confirmUserAction = null" :disabled="userActionProcessing" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</button>
+                    <button type="button" @click="submitUserAction" :disabled="userActionProcessing" class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50">
+                        {{ userActionProcessing ? 'Please wait…' : confirmUserAction.type === 'reset' ? 'Reset password' : confirmUserAction.user.is_active ? 'Deactivate' : 'Reactivate' }}
+                    </button>
+                </div>
+            </section>
         </div>
     </AuthenticatedLayout>
 </template>

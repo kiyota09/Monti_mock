@@ -1,12 +1,13 @@
 <script setup>
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
-import { computed, ref, onMounted, watch } from 'vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed, ref, onMounted, watch, nextTick } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { CheckCircle2, Search, X } from 'lucide-vue-next';
 
 const props = defineProps({
     employees: { type: Array, default: () => [] },
     period_meta: { type: Array, default: () => [] },
+    current_date: { type: String, default: '' },
     current_period: { type: String, default: 'Oct 1–15, 2026' },
     calendar_year: { type: Number, default: 2026 },
     frequency: { type: String, default: 'semi_monthly' },
@@ -20,7 +21,7 @@ const periodList = computed(() => (props.period_meta || []).length ? props.perio
 
 const form = useForm({
     cutoff_start: '',
-    cutoff_end: '',
+    cutoff_end: props.current_date || '',
     period: props.current_period || 'Oct 1–15, 2026',
     frequency: props.frequency || 'semi_monthly',
     employee_ids: [],
@@ -31,7 +32,7 @@ const activeMeta = computed(() => periodList.value.find((p) => p.label === form.
 // Cutoff follows the pay period: Oct 1–15 → start Oct 1, end Oct 15, automatically.
 const applyPeriodDates = () => {
     if (activeMeta.value?.start) form.cutoff_start = activeMeta.value.start;
-    if (activeMeta.value?.end) form.cutoff_end = activeMeta.value.end;
+    form.cutoff_end = props.current_date || form.cutoff_end;
 };
 watch(() => form.period, applyPeriodDates);
 onMounted(applyPeriodDates);
@@ -55,6 +56,7 @@ const toggleAll = (e) => {
 
 const showConfirm = ref(false);
 const confirmSubmitting = ref(false);
+const missingEmployees = ref(false);
 
 const selectedEmployees = computed(() => {
     if (!form.employee_ids.length) return [];
@@ -64,17 +66,28 @@ const selectedEmployees = computed(() => {
 
 const openConfirm = () => {
     if (!form.employee_ids.length) {
-        alert('Please select at least one employee.');
+        missingEmployees.value = true;
+        showConfirm.value = true;
         return;
     }
-    if (activeMeta.value?.is_current) {
-        alert('Cannot generate payroll for the current period. Please select a past period.');
+    if (activeMeta.value?.locked) {
+        alert('This pay period is locked because all payroll records are Paid.');
         return;
     }
+    missingEmployees.value = false;
     showConfirm.value = true;
 };
 
-const closeConfirm = () => { showConfirm.value = false; };
+const closeConfirm = () => {
+    if (confirmSubmitting.value) return;
+    showConfirm.value = false;
+    missingEmployees.value = false;
+};
+const goToEmployees = async () => {
+    closeConfirm();
+    await nextTick();
+    document.getElementById('employee-selection')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
 
 const confirmSubmit = () => {
     confirmSubmitting.value = true;
@@ -82,9 +95,6 @@ const confirmSubmit = () => {
         onSuccess: () => { showConfirm.value = false; },
         onFinish: () => { confirmSubmitting.value = false; },
     });
-};
-const switchFrequency = (e) => {
-    router.get(route('hrm.payroll.generate'), { frequency: e.target.value, year: props.calendar_year || undefined }, { preserveState: false });
 };
 </script>
 
@@ -101,7 +111,7 @@ const switchFrequency = (e) => {
                         <span class="text-slate-800 font-semibold">Generate Payroll</span>
                     </nav>
                     <h1 class="text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Generate Payroll</h1>
-                    <p class="text-sm text-slate-500 mt-1.5">Select a cutoff period and employees to run payroll. Each period starts as Draft.</p>
+                    <p class="text-sm text-slate-500 mt-1.5">Set the cutoff dates and select employees to run payroll. Payroll starts as Draft.</p>
                 </header>
 
                 <div class="bg-white rounded-2xl border border-slate-200/60 shadow-lg backdrop-blur-sm overflow-hidden relative">
@@ -110,43 +120,20 @@ const switchFrequency = (e) => {
                     <div class="p-5 space-y-5">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="text-xs font-bold text-slate-700 block mb-1.5">Frequency</label>
-                                <select :value="frequency" @change="switchFrequency" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="weekly">Weekly</option>
-                                    <option value="semi_monthly">Semi-monthly</option>
-                                    <option value="monthly">Monthly</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-slate-700 block mb-1.5">Pay period</label>
-                                <select v-model="form.period" @change="applyPeriodDates" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option v-for="p in periodList" :key="p.label" :value="p.label" :disabled="p.is_current">{{ p.label }}{{ p.pay_date ? ` · pay ${p.pay_date}` : '' }}{{ p.locked ? ' · Locked' : '' }}{{ p.is_current ? ' · Current (cannot generate)' : '' }}</option>
-                                </select>
-                            </div>
-                        </div>
-                        <p class="text-xs text-slate-500 mt-1">
-                            <span v-if="activeMeta">Cutoff {{ activeMeta.start }} – {{ activeMeta.end }} · pay {{ activeMeta.pay_date }}.</span>
-                            Statuses and inputs are stored per pay period. Locked periods refuse new drafts. Paid is final.
-                        </p>
-                        <p v-if="activeMeta?.is_current" class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                            ⚠️ This is the current period. Payroll cannot be generated in advance — please select a completed period.
-                        </p>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="text-xs font-bold text-slate-700 block mb-1.5">Cutoff start (from pay period)</label>
-                                <input type="date" v-model="form.cutoff_start" readonly aria-readonly="true"
-                                    class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-600 focus:outline-none cursor-not-allowed" />
+                                <label class="text-xs font-bold text-slate-700 block mb-1.5">Cutoff start</label>
+                                <input type="date" v-model="form.cutoff_start" :max="props.current_date || undefined" required
+                                    class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 <div v-if="form.errors.cutoff_start" class="text-xs text-rose-600 mt-1">{{ form.errors.cutoff_start }}</div>
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-slate-700 block mb-1.5">Cutoff end (from pay period)</label>
-                                <input type="date" v-model="form.cutoff_end" readonly aria-readonly="true"
-                                    class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-600 focus:outline-none cursor-not-allowed" />
+                                <label class="text-xs font-bold text-slate-700 block mb-1.5">Cutoff end</label>
+                                <input type="date" v-model="form.cutoff_end" :min="form.cutoff_start || undefined" :max="props.current_date || undefined" required
+                                    class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 <div v-if="form.errors.cutoff_end" class="text-xs text-rose-600 mt-1">{{ form.errors.cutoff_end }}</div>
                             </div>
                         </div>
-                        <p class="text-xs text-slate-500">Cutoff follows the pay period automatically — e.g. Oct 1–15 sets start Oct 1 and end Oct 15. Change the pay period to change the cutoff.</p>
-                        <div>
+                        <p class="text-xs text-slate-500">Choose the dates to include in this payroll run.</p>
+                        <div id="employee-selection">
                             <div class="flex items-center justify-between mb-2">
                                 <label class="text-xs font-bold text-slate-700">Select employees ({{ form.employee_ids.length }} selected)</label>
                                 <div class="relative">
@@ -174,7 +161,7 @@ const switchFrequency = (e) => {
                     </div>
                     <div class="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
                         <Link :href="route('hrm.payroll')" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">Cancel</Link>
-                        <button type="button" :disabled="form.processing || confirmSubmitting" @click="openConfirm"
+                        <button type="button" :disabled="form.processing || confirmSubmitting || activeMeta?.locked" @click="openConfirm"
                             class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition disabled:opacity-50">
                             <CheckCircle2 class="w-4 h-4" />{{ (form.processing || confirmSubmitting) ? 'Generating…' : 'Generate Payroll' }}
                         </button>
@@ -187,16 +174,24 @@ const switchFrequency = (e) => {
     <!-- Confirmation Modal -->
     <div v-if="showConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-slate-900/50" @click="closeConfirm"></div>
-        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-h-[80vh] overflow-hidden flex flex-col" :class="missingEmployees ? 'max-w-md' : 'max-w-3xl'">
             <div class="p-5 border-b border-slate-100 flex items-start justify-between">
                 <div>
-                    <h3 class="font-black text-slate-900">Confirm Payroll Generation</h3>
-                    <p class="text-xs text-slate-500 mt-0.5">{{ selectedEmployees.length }} employee(s) will be added to payroll for {{ form.period }}.</p>
+                    <h3 class="font-black text-slate-900">{{ missingEmployees ? 'No employees selected' : 'Confirm Payroll Generation' }}</h3>
+                    <p v-if="!missingEmployees" class="text-xs text-slate-500 mt-0.5">{{ selectedEmployees.length }} employee(s) will be added to payroll for {{ form.period }}.</p>
                 </div>
                 <button @click="closeConfirm" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400"><X class="w-4 h-4" /></button>
             </div>
 
-            <div class="p-5 overflow-y-auto flex-1">
+            <div v-if="missingEmployees" class="p-5">
+                <div class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 font-black">!</span>
+                    <div>
+                        <p class="text-sm font-semibold">Select at least one employee to generate payroll.</p>
+                    </div>
+                </div>
+            </div>
+            <div v-else class="p-5 overflow-y-auto flex-1">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-xs">
                         <thead>
@@ -220,12 +215,20 @@ const switchFrequency = (e) => {
             </div>
 
             <div class="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
-                <button @click="closeConfirm" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">Cancel</button>
-                <button @click="confirmSubmit" :disabled="confirmSubmitting"
+                <button @click="missingEmployees ? goToEmployees() : closeConfirm()" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">{{ missingEmployees ? 'Go to employee list' : 'Cancel' }}</button>
+                <button v-if="!missingEmployees" @click="confirmSubmit" :disabled="confirmSubmitting"
                     class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition disabled:opacity-50">
                     <CheckCircle2 class="w-4 h-4" />{{ confirmSubmitting ? 'Generating…' : 'Confirm Generate' }}
                 </button>
             </div>
+        </div>
+    </div>
+
+    <div v-if="confirmSubmitting" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="status" aria-live="polite" aria-label="Generating payroll">
+        <div class="flex min-w-64 flex-col items-center rounded-2xl border border-white/20 bg-white px-8 py-7 text-center shadow-2xl">
+            <div class="h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600"></div>
+            <p class="mt-4 text-sm font-black text-slate-900">Generating payroll</p>
+            <p class="mt-1 text-xs text-slate-500">Please wait while the selected employee records are processed.</p>
         </div>
     </div>
 </template>

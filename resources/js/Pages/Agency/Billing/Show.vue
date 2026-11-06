@@ -39,14 +39,15 @@ function money(v: any): string {
 <template>
     <Head :title="statement.code + ' - Monti ERP'" />
     <AgencyLayout>
-        <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-            <Link :href="route('agency.billing.index')" class="hover:text-blue-600">Billing</Link>
+        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
+        <nav class="mt-2 flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
+            <Link :href="route('agency.billing.index')" class="hover:text-amber-700">Billing</Link>
             <span>/</span>
             <span class="font-semibold">{{ statement.code }}</span>
         </nav>
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
-                <h1 class="text-xl font-black text-slate-900 dark:text-white">{{ statement.code }}</h1>
+                <h1 class="text-2xl font-black text-slate-900 dark:text-white">{{ statement.code }}</h1>
                 <p class="text-sm text-slate-500 mt-0.5">{{ statement.period }} · <strong>{{ statement.status }}</strong></p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -64,7 +65,7 @@ function money(v: any): string {
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[560px]">
                     <thead>
-                        <tr class="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        <tr class="bg-slate-800 text-[10px] font-bold uppercase tracking-wider text-white/90">
                             <th class="py-2 px-3">Worker</th>
                             <th class="py-2 px-3">Request</th>
                             <th class="py-2 px-3 text-center">Days</th>

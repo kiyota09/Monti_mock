@@ -8,6 +8,7 @@ use App\Models\Core\User;
 use App\Models\Hrm\Agency;
 use App\Models\Hrm\AgencyActivity;
 use App\Models\Hrm\HrmDepartment;
+use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\HrmShift;
 use App\Models\Hrm\ManpowerAssignment;
 use App\Models\Hrm\ManpowerProposal;
@@ -104,7 +105,7 @@ class ManpowerRequestController extends Controller
             'suggested_code' => self::nextCode(),
             'agencies' => Agency::where('status', Agency::STATUS_ACTIVE)->orderBy('name')->get(['id', 'code', 'name']),
             'departments' => \App\Models\Hrm\HrmDepartment::whereNull('archived_at')->orderBy('name')->get(['id', 'code', 'name']),
-            'positions' => \App\Models\Hrm\HrmPosition::whereNull('archived_at')->orderBy('name')->get(['id', 'name', 'department_id']),
+            'positions' => $this->requestFormPositions(),
             'shifts' => \App\Models\Hrm\HrmShift::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'start_time', 'end_time']),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
@@ -145,7 +146,7 @@ class ManpowerRequestController extends Controller
             'suggested_code' => $manpowerRequest->code,
             'agencies' => Agency::where('status', Agency::STATUS_ACTIVE)->orderBy('name')->get(['id', 'code', 'name']),
             'departments' => \App\Models\Hrm\HrmDepartment::whereNull('archived_at')->orderBy('name')->get(['id', 'code', 'name']),
-            'positions' => \App\Models\Hrm\HrmPosition::whereNull('archived_at')->orderBy('name')->get(['id', 'name', 'department_id']),
+            'positions' => $this->requestFormPositions(),
             'shifts' => \App\Models\Hrm\HrmShift::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'start_time', 'end_time']),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
@@ -181,7 +182,14 @@ class ManpowerRequestController extends Controller
         }
 
         $manpowerRequest->update($data);
-        $this->log($manpowerRequest->fresh(), 'request_updated', "Request {$manpowerRequest->code} updated.", null);
+        $this->log(
+            $manpowerRequest->fresh(),
+            $submit ? 'request_submitted' : 'request_updated',
+            $submit
+                ? "Manpower request {$manpowerRequest->code} submitted: {$manpowerRequest->headcount} {$manpowerRequest->position_skill} position(s) for {$manpowerRequest->department}."
+                : "Request {$manpowerRequest->code} updated.",
+            null
+        );
 
         return redirect()->route('hrm.manpower-requests.show', $manpowerRequest)
             ->with('success', "Request {$manpowerRequest->code} updated.");
@@ -208,9 +216,12 @@ class ManpowerRequestController extends Controller
     public function show(ManpowerRequest $manpowerRequest)
     {
         $manpowerRequest->loadMissing(['agency:id,code,name,status', 'activeAssignments.worker:id,code,name,position_skill,agency_id,status,daily_rate,phone,gender,clearance_expiry,resume_path,resume_original_name']);
+        $hiringManagers = $this->hiringManagerOptions($manpowerRequest);
 
         return Inertia::render('Dashboard/HRM_NEW/Requests/Detail', [
             'request' => $this->detail($manpowerRequest),
+            'hiring_managers' => $hiringManagers['options'],
+            'default_hiring_manager_id' => $hiringManagers['default_id'],
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
     }
@@ -246,9 +257,24 @@ class ManpowerRequestController extends Controller
         $data = $request->validate([
             'worker_id' => 'required|exists:workers,id',
             'company_email' => 'nullable|email|max:255',
-            'start_date' => 'nullable|date',
+            'start_date' => 'nullable|date|after_or_equal:today',
+            'manager_id' => 'nullable|integer|exists:users,id',
+            'training_required' => 'nullable|boolean',
+            'training_end_date' => 'nullable|date',
         ]);
+        if (($data['training_required'] ?? false) && empty($data['manager_id'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['manager_id' => 'Choose a reporting manager to supervise this training.']);
+        }
+        if (! $this->validHiringManager($manpowerRequest, $data['manager_id'] ?? null)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['manager_id' => 'Choose an active manager from this department.']);
+        }
         $worker = Worker::findOrFail($data['worker_id']);
+        [$trainingRequired, $trainingEndDate] = $this->trainingSchedule($data, $manpowerRequest, $worker);
+
+        $proposal = ManpowerProposal::where('request_id', $manpowerRequest->id)
+            ->where('worker_id', $worker->id)
+            ->where('status', ManpowerProposal::STATUS_PROPOSED)
+            ->first();
 
         if ($refusal = $this->assignmentRefusal($manpowerRequest, $worker)) {
             return back()->withErrors(['worker_id' => $refusal]);
@@ -259,9 +285,13 @@ class ManpowerRequestController extends Controller
 
         // Same worker-account flow as proposal acceptance (confirm -> preview -> finish).
         [$companyEmail, $tempPassword, $trainingLabel, $mailSent, $recipient, $mailError, $employeeId] =
-            $this->finalizeWorkerAccount($manpowerRequest, $worker, $data['company_email'] ?? null, $data['start_date'] ?? null);
+            $this->finalizeWorkerAccount($manpowerRequest, $worker, $data['company_email'] ?? null, $data['start_date'] ?? null, isset($data['manager_id']) ? (int) $data['manager_id'] : null, $trainingRequired, $trainingEndDate);
 
         $this->createAssignment($manpowerRequest, $worker->fresh());
+        $proposal?->update([
+            'status' => ManpowerProposal::STATUS_ACCEPTED,
+            'reviewed_by_name' => auth()->user()?->name,
+        ]);
 
         return back()->with('success', $this->assignmentMessage($manpowerRequest, $worker, $mailSent, $recipient, $mailError))
             ->with('worker_credentials', [
@@ -295,6 +325,9 @@ class ManpowerRequestController extends Controller
         if ((int) $worker->agency_id !== (int) $manpowerRequest->agency_id) {
             return 'Only this agency’s own workers can be assigned.';
         }
+        if (! $this->workerMatchesRequest($manpowerRequest, $worker)) {
+            return 'The worker department and position must match this request.';
+        }
         if ($worker->status !== Worker::STATUS_AVAILABLE) {
             return 'Only Available workers can be assigned.';
         }
@@ -306,6 +339,25 @@ class ManpowerRequestController extends Controller
         }
 
         return null;
+    }
+
+    protected function workerMatchesRequest(ManpowerRequest $manpowerRequest, Worker $worker): bool
+    {
+        if (strcasecmp(trim((string) $worker->position_skill), trim((string) $manpowerRequest->position_skill)) !== 0) {
+            return false;
+        }
+
+        $department = $this->workerDepartment($worker);
+
+        return $department !== null
+            && strcasecmp(trim($department), trim((string) $manpowerRequest->department)) === 0;
+    }
+
+    protected function workerDepartment(Worker $worker): ?string
+    {
+        return $worker->proposed_department ?: HrmPosition::with('department:id,name')
+            ->where('name', $worker->position_skill)
+            ->first()?->department?->name;
     }
 
     protected function createAssignment(ManpowerRequest $manpowerRequest, Worker $worker): ManpowerAssignment
@@ -339,7 +391,7 @@ class ManpowerRequestController extends Controller
             'worker_id' => $worker->id,
             'request_id' => $manpowerRequest->id,
             'action' => 'worker_assigned',
-            'details' => "Worker {$worker->code} assigned to request {$manpowerRequest->code}.",
+            'details' => "{$worker->name} ({$worker->code}) is now deployed in Monti for request {$manpowerRequest->code}. Their worker account is ready.",
             'actor_id' => auth()->id(),
             'actor_name' => auth()->user()?->name,
         ]);
@@ -401,10 +453,20 @@ class ManpowerRequestController extends Controller
         // Real data from the WORKER ASSIGNMENT preview (company email + deployment start).
         $data = $request->validate([
             'company_email' => 'nullable|email|max:255',
-            'start_date' => 'nullable|date',
+            'start_date' => 'nullable|date|after_or_equal:today',
+            'manager_id' => 'nullable|integer|exists:users,id',
+            'training_required' => 'nullable|boolean',
+            'training_end_date' => 'nullable|date',
         ]);
+        if (($data['training_required'] ?? false) && empty($data['manager_id'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['manager_id' => 'Choose a reporting manager to supervise this training.']);
+        }
+        if (! $this->validHiringManager($manpowerRequest, $data['manager_id'] ?? null)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['manager_id' => 'Choose an active manager from this department.']);
+        }
 
         $worker = $proposal->worker;
+        [$trainingRequired, $trainingEndDate] = $this->trainingSchedule($data, $manpowerRequest, $worker);
         $refusal = $this->assignmentRefusal($manpowerRequest, $worker);
         if ($refusal) {
             return back()->withErrors(['worker_id' => $refusal]);
@@ -412,7 +474,7 @@ class ManpowerRequestController extends Controller
 
         // Same worker-account flow as direct assign (confirm -> preview -> finish).
         [$companyEmail, $tempPassword, $trainingLabel, $mailSent, $recipient, $mailError, $employeeId] =
-            $this->finalizeWorkerAccount($manpowerRequest, $worker, $data['company_email'] ?? null, $data['start_date'] ?? null);
+            $this->finalizeWorkerAccount($manpowerRequest, $worker, $data['company_email'] ?? null, $data['start_date'] ?? null, isset($data['manager_id']) ? (int) $data['manager_id'] : null, $trainingRequired, $trainingEndDate);
 
         $this->createAssignment($manpowerRequest, $worker->fresh());
         $proposal->update(['status' => ManpowerProposal::STATUS_ACCEPTED, 'reviewed_by_name' => auth()->user()?->name]);
@@ -449,11 +511,87 @@ class ManpowerRequestController extends Controller
      *   [companyEmail, tempPassword|null, trainingLabel, mailed, mailedTo, mailError, employeeId]
      *   tempPassword is null when the login already existed (password unchanged).
      */
-    protected function finalizeWorkerAccount(ManpowerRequest $manpowerRequest, Worker $worker, ?string $companyEmail, ?string $startDate): array
+    protected function hiringManagerOptions(ManpowerRequest $manpowerRequest): array
+    {
+        $department = HrmDepartment::with('head:id,name,position,is_active,hrm_department_id,department')
+            ->where('name', $manpowerRequest->department)
+            ->first();
+
+        $options = User::where('is_active', true)
+            ->whereIn('position', ['manager', 'supervisor'])
+            ->where(function ($query) use ($department, $manpowerRequest) {
+                if ($department) {
+                    $query->where('hrm_department_id', $department->id);
+                }
+                $query->orWhere('department', $manpowerRequest->department);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'position']);
+
+        $head = $department?->head;
+        if ($head && $head->is_active && ! $options->contains('id', $head->id)) {
+            $options->push($head);
+        }
+
+        $options = $options->sortBy('name')->values()->map(fn ($manager) => [
+            'id' => (int) $manager->id,
+            'name' => $manager->name,
+            'position' => ucfirst((string) $manager->position),
+        ]);
+
+        $headId = $department?->head_id ? (int) $department->head_id : null;
+        $defaultId = $headId && $options->contains('id', $headId)
+            ? $headId
+            : ($options->first()['id'] ?? null);
+
+        return ['options' => $options->all(), 'default_id' => $defaultId];
+    }
+
+    protected function validHiringManager(ManpowerRequest $manpowerRequest, mixed $managerId): bool
+    {
+        if ($managerId === null || $managerId === '') {
+            return true;
+        }
+
+        return collect($this->hiringManagerOptions($manpowerRequest)['options'])
+            ->contains(fn ($manager) => (int) $manager['id'] === (int) $managerId);
+    }
+
+    protected function trainingSchedule(array $data, ManpowerRequest $manpowerRequest, Worker $worker): array
+    {
+        $required = (bool) ($data['training_required'] ?? false);
+        if (! $required) {
+            return [false, null];
+        }
+
+        $start = $data['start_date'] ?? $manpowerRequest->start_date?->toDateString() ?? $worker->availability ?? now()->toDateString();
+        if ($start < now()->toDateString()) {
+            $start = now()->toDateString();
+        }
+        $end = $data['training_end_date'] ?? null;
+        if (! $end) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['training_end_date' => 'Choose an end date for the training period.']);
+        }
+
+        $maximum = \Carbon\Carbon::parse($start)->addWeeks(4)->toDateString();
+        if ($end < $start || $end > $maximum) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['training_end_date' => 'Training cannot exceed four weeks from the deployment date.']);
+        }
+
+        return [true, $end];
+    }
+
+    protected function finalizeWorkerAccount(ManpowerRequest $manpowerRequest, Worker $worker, ?string $companyEmail, ?string $startDate, ?int $managerId, bool $trainingRequired, ?string $trainingEndDate): array
     {
         $companyEmail = $companyEmail ?: self::suggestCompanyEmail($worker->name);
         $companyEmail = $this->uniqueCompanyEmail($companyEmail, $worker->name);
         $deploymentDate = $startDate ?: $manpowerRequest->start_date?->toDateString() ?? $worker->availability ?? now()->toDateString();
+        if ($deploymentDate < now()->toDateString()) {
+            $deploymentDate = now()->toDateString();
+        }
+        $trainingDurationWeeks = $trainingRequired && $trainingEndDate
+            ? max(1, min(4, (int) ceil(\Carbon\Carbon::parse($deploymentDate)->diffInDays(\Carbon\Carbon::parse($trainingEndDate)) / 7)))
+            : null;
         $worker->update(array_filter([
             'employment_arrangement' => 'Agency Contract',
             'availability' => $deploymentDate,
@@ -479,6 +617,10 @@ class ManpowerRequestController extends Controller
                 'is_active' => true,
                 'worker_id' => $worker->id,
                 'employee_id' => $worker->code,
+                'manager_id' => $managerId,
+                'training_start_date' => $trainingRequired ? $deploymentDate : null,
+                'training_end_date' => $trainingRequired ? $trainingEndDate : null,
+                'training_duration_weeks' => $trainingDurationWeeks,
             ])->save();
         } else {
             $tempPassword = 'Monti-' . Str::upper(Str::random(6));
@@ -498,6 +640,10 @@ class ManpowerRequestController extends Controller
                 // Agency workers keep the WRK-xxx identity (never EMP-xxx).
                 'employee_id' => $worker->code,
                 'worker_id' => $worker->id,
+                'manager_id' => $managerId,
+                'training_start_date' => $trainingRequired ? $deploymentDate : null,
+                'training_end_date' => $trainingRequired ? $trainingEndDate : null,
+                'training_duration_weeks' => $trainingDurationWeeks,
                 'department' => $manpowerRequest->department,
                 'join_date' => $deploymentDate,
                 'personal_email' => $worker->email,
@@ -615,6 +761,8 @@ class ManpowerRequestController extends Controller
             'agency' => $request->agency?->name,
             'agency_id' => $request->agency_id,
             'start_date' => optional($request->start_date)->toDateString(),
+            'end_date' => optional($request->end_date)->toDateString(),
+            'shift' => $request->shift,
             'status' => $request->effective_status,
             'stored_status' => $request->status,
         ];
@@ -640,15 +788,14 @@ class ManpowerRequestController extends Controller
             'assigned_by' => $a->assigned_by_name,
         ])->values()->all();
 
-        // Assign picker: only this agency's Available workers with a live
-        // clearance and no other active request. Released workers ARE
-        // re-assignable to the same request (only active assignments hide them).
+        // Show matching Available workers and Pending workers (disabled in the
+        // picker until HR approves them). Released workers can be re-assigned.
         $available = Worker::where('agency_id', $request->agency_id)
-            ->where('status', Worker::STATUS_AVAILABLE)
+            ->whereIn('status', [Worker::STATUS_AVAILABLE, Worker::STATUS_PENDING])
             ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('manpower_assignments as ma')
                 ->whereColumn('ma.worker_id', 'workers.id')->whereNull('ma.released_at'))
             ->orderBy('name')->get(['id', 'code', 'name', 'position_skill', 'status', 'daily_rate', 'phone', 'gender', 'clearance_expiry', 'resume_path', 'resume_original_name', 'emergency_name', 'emergency_relationship', 'emergency_phone', 'availability', 'employment_arrangement', 'proposed_department', 'years_experience'])
-            ->filter(fn ($w) => ! $w->clearance_expired)
+            ->filter(fn ($w) => ! $w->clearance_expired && $this->workerMatchesRequest($request, $w))
             ->map(fn ($w) => [
                 'id' => $w->id, 'code' => $w->code, 'name' => $w->name,
                 'position_skill' => $w->position_skill,
@@ -664,7 +811,7 @@ class ManpowerRequestController extends Controller
                 'emergency_phone' => $w->emergency_phone,
                 'availability' => $w->availability,
                 'employment_arrangement' => $w->employment_arrangement,
-                'proposed_department' => $w->proposed_department,
+                'proposed_department' => $this->workerDepartment($w),
                 'years_experience' => $w->years_experience,
             ])->values()->all();
 
@@ -765,8 +912,8 @@ class ManpowerRequestController extends Controller
             'department' => 'required|string|max:255',
             'position_skill' => 'required|string|max:255',
             'headcount' => 'required|integer|min:1|max:10000',
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date',
+            'start_date' => 'nullable|date|after_or_equal:today',
+            'end_date' => 'nullable|date|after_or_equal:today',
             'shift' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:2000',
             'agency_id' => 'required|exists:agencies,id',
@@ -789,7 +936,52 @@ class ManpowerRequestController extends Controller
             ]);
         }
 
+        $departmentId = HrmDepartment::whereNull('archived_at')
+            ->where('name', $data['department'])
+            ->value('id');
+        $position = $departmentId
+            ? HrmPosition::whereNull('archived_at')
+                ->where('department_id', $departmentId)
+                ->where('name', $data['position_skill'])
+                ->first()
+            : null;
+
+        if ($position) {
+            $available = max(0, (int) $position->approved_headcount - $position->holders()->count());
+            $limit = $available;
+            if ($ignoreId) {
+                $existing = ManpowerRequest::find($ignoreId);
+                if ($existing && $existing->department === $data['department']
+                    && $existing->position_skill === $data['position_skill']) {
+                    $limit = max($limit, (int) $existing->headcount);
+                }
+            }
+
+            if ((int) $data['headcount'] > $limit) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'headcount' => "Headcount cannot exceed the available position capacity ({$limit}).",
+                ]);
+            }
+        }
+
         return $data;
+    }
+
+    protected function requestFormPositions()
+    {
+        return HrmPosition::whereNull('archived_at')
+            ->withCount(['holders as filled_positions'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'department_id', 'approved_headcount'])
+            ->map(fn (HrmPosition $position) => [
+                'id' => $position->id,
+                'name' => $position->name,
+                'department_id' => $position->department_id,
+                'approved_headcount' => (int) $position->approved_headcount,
+                'filled_positions' => (int) $position->filled_positions,
+                'available_headcount' => max(0, (int) $position->approved_headcount - (int) $position->filled_positions),
+            ])
+            ->values();
     }
 
     protected static function nextCode(): string

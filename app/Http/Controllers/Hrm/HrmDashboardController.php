@@ -152,8 +152,11 @@ class HrmDashboardController extends Controller
                 ])->values()->all(),
             ],
             'interviews' => [
-                'pendingCount' => HrmInterview::where('status', 'Scheduled')->count(),
-                'upcoming' => HrmInterview::where('status', 'Scheduled')->latest()->take(5)->get()->map(fn ($i) => [
+                'pendingCount' => HrmInterview::where('status', 'Scheduled')
+                    ->whereRaw("LOWER(COALESCE(type, 'initial')) NOT LIKE ?", ['%final%'])->count(),
+                'upcoming' => HrmInterview::where('status', 'Scheduled')
+                    ->whereRaw("LOWER(COALESCE(type, 'initial')) NOT LIKE ?", ['%final%'])
+                    ->latest()->take(5)->get()->map(fn ($i) => [
                     'name' => $i->candidate_name ?? 'Candidate',
                     'position' => $i->position,
                     'details' => trim(($i->date?->format('M d, Y') ?? '') . ' ' . ($i->start_time ?? '')),

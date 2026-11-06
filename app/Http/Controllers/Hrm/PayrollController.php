@@ -359,11 +359,23 @@ class PayrollController extends Controller
         $calYear = (int) ($request->query('year', now()->year));
         $calendar = \App\Support\PayPeriods::year($calYear, $frequency);
         $currentLabel = \App\Support\PayPeriods::currentLabel($frequency);
+        $today = now()->toDateString();
+        $calendarLabels = array_column($calendar, 'label');
+        $rowsByPeriod = Payroll::whereIn('period', $calendarLabels)->get(['period', 'status'])->groupBy('period');
+        $calendar = array_map(function ($period) use ($rowsByPeriod, $currentLabel) {
+            $rows = $rowsByPeriod->get($period['label'], collect());
+            return array_merge($period, [
+                'is_current' => $period['label'] === $currentLabel,
+                'locked' => $rows->isNotEmpty() && $rows->every(fn ($row) => strtolower((string) $row->status) === 'paid'),
+            ]);
+        }, $calendar);
+        $defaultPeriod = collect($calendar)->firstWhere('label', $currentLabel);
 
         return Inertia::render('Dashboard/HRM_NEW/GeneratePayroll', [
             'employees' => $employees,
             'period_meta' => $calendar,
-            'current_period' => $currentLabel,
+            'current_period' => $defaultPeriod['label'] ?? $currentLabel,
+            'current_date' => $today,
             'calendar_year' => $calYear,
             'frequency' => $frequency,
         ]);
@@ -378,7 +390,7 @@ class PayrollController extends Controller
     {
         $request->validate([
             'cutoff_start' => 'required|date',
-            'cutoff_end'   => 'required|date|after_or_equal:cutoff_start',
+            'cutoff_end'   => 'required|date|after_or_equal:cutoff_start|before_or_equal:today',
             'employee_ids' => 'required|array',
             'employee_ids.*' => 'exists:users,id',
             'period' => 'required|string|max:60',
@@ -398,16 +410,12 @@ class PayrollController extends Controller
             return back()->withErrors(['error' => 'Unknown pay period. Pick a period from the calendar.']);
         }
 
-        // Prevent generating payroll for the current period (advance payroll not allowed).
-        if (!empty($meta['is_current'])) {
-            return back()->withErrors(['error' => "Cannot generate payroll for the current period ({$periodLabel}). Select a completed period."]);
-        }
-
         $start = Carbon::parse($request->cutoff_start);
         $end   = Carbon::parse($request->cutoff_end);
-        // Cutoff must live inside the selected pay period.
-        if ($start->toDateString() < $meta['start'] || $end->toDateString() > $meta['end']) {
-            return back()->withErrors(['error' => "Cutoff must be inside {$meta['label']} ({$meta['start']} to {$meta['end']})."]);
+        // The selected cutoff may start in the past, but cannot extend beyond
+        // the current date or the end of its payroll period.
+        if ($end->toDateString() > $meta['end']) {
+            return back()->withErrors(['error' => "Cutoff end must be on or before {$meta['end']}."]);
         }
         // Locked period: all rows Paid => no new drafts.
         $existing = Payroll::where('period', $periodLabel)->get();
@@ -422,7 +430,7 @@ class PayrollController extends Controller
         $payrollRecords = [];
         $skipped = [];
 
-        DB::transaction(function () use ($employees, $carbonPeriod, $periodLabel, $frequency, $existingEmpIds, &$payrollRecords, &$skipped) {
+        DB::transaction(function () use ($employees, $carbonPeriod, $periodLabel, $frequency, $existingEmpIds, $start, $end, &$payrollRecords, &$skipped) {
             foreach ($employees as $employee) {
                 if (empty($employee->employee_id)) {
                     $skipped[] = $employee->name.' (missing employee ID)';
@@ -464,7 +472,9 @@ class PayrollController extends Controller
                     'sun_hours' => $summary['sunday_restday_hours'],
                     'holiday_amt' => $summary['holiday_amt'],
                     'late_minutes' => $summary['late_minutes'],
-                    'sss' => 0, 'philhealth' => 0, 'pagibig' => 0,
+                    'sss' => (float) ($employee->sss_contribution ?? 0),
+                    'philhealth' => (float) ($employee->philhealth_contribution ?? 0),
+                    'pagibig' => (float) ($employee->pagibig_contribution ?? 0),
                     'sss_loan' => 0, 'pf_loan' => 0,
                 ], $frequency);
 
@@ -473,6 +483,8 @@ class PayrollController extends Controller
                     'employee_name'          => $employee->name,
                     'role'                   => $employee->position === 'manager' ? 'Manager' : ($employee->position === 'trainee' ? 'Trainee' : 'Staff'),
                     'period'                 => $periodLabel,
+                    'cutoff_start'           => $start->toDateString(),
+                    'cutoff_end'             => $end->toDateString(),
                     'department'             => $employee->department ?: ($employee->hrmDepartment?->name ?? null),
                     'job_title'              => $employee->hrmOrgPosition?->name,
                     'base_salary'            => $monthly,
@@ -496,9 +508,9 @@ class PayrollController extends Controller
                     'late_minutes'           => $summary['late_minutes'],
                     'late_rate_min'          => $calc['late_rate_min'],
                     'late_total_deduction'   => $calc['late_total'],
-                    'sss_deduction'          => 0,
-                    'philhealth_deduction'   => 0,
-                    'pagibig_deduction'      => 0,
+                    'sss_deduction'          => (float) ($employee->sss_contribution ?? 0),
+                    'philhealth_deduction'   => (float) ($employee->philhealth_contribution ?? 0),
+                    'pagibig_deduction'      => (float) ($employee->pagibig_contribution ?? 0),
                     'tax_withheld'           => 0,
                     'sss_loan'               => 0,
                     'pf_loan'                => 0,
@@ -569,8 +581,19 @@ class PayrollController extends Controller
                 ->first()?->hrmOrgPosition?->name;
         }
 
+        // Pull the employee's configured contribution amounts into Draft
+        // payroll rows that were generated before these amounts were linked.
+        $employeeContributions = User::where('employee_id', $payroll->employee_id)
+            ->first(['sss_contribution', 'pagibig_contribution', 'philhealth_contribution']);
+        $payrollData = $payroll->toArray();
+        if ($this->normalizeStatus($payroll->status) === 'Draft' && $employeeContributions) {
+            $payrollData['sss_deduction'] = (float) $payroll->sss_deduction ?: (float) $employeeContributions->sss_contribution;
+            $payrollData['philhealth_deduction'] = (float) $payroll->philhealth_deduction ?: (float) $employeeContributions->philhealth_contribution;
+            $payrollData['pagibig_deduction'] = (float) $payroll->pagibig_deduction ?: (float) $employeeContributions->pagibig_contribution;
+        }
+
         return Inertia::render('Dashboard/HRM_NEW/PayrollDetail', [
-            'payroll' => array_merge($payroll->toArray(), [
+            'payroll' => array_merge($payrollData, [
                 'status' => $this->normalizeStatus($payroll->status),
                 'job_title' => $jobTitle ?? $payroll->role,
             ]),
@@ -629,13 +652,15 @@ class PayrollController extends Controller
         try {
             $meta = \App\Support\PayPeriods::find((string) ($payroll->period ?? ''), \App\Support\PayPeriods::frequencyForLabel((string) ($payroll->period ?? '')));
             if (!$meta || empty($meta['start']) || empty($meta['end'])) return null;
+            $cutoffStart = $payroll->cutoff_start ?: $meta['start'];
+            $cutoffEnd = $payroll->cutoff_end ?: $meta['end'];
             $user = User::where('employee_id', $payroll->employee_id)->first();
             if (!$user) return null;
             $monthly = (float) ($payroll->monthly_salary ?? $payroll->base_salary ?? $user->basic_salary ?? 0);
             $set = PayrollSet::forType($user->position)->first()
                 ?? new PayrollSet(['base_salary' => $monthly]);
             $set->base_salary = $monthly;
-            $summary = $this->computeAttendanceSummary($user, CarbonPeriod::create(Carbon::parse($meta['start']), Carbon::parse($meta['end'])), $set);
+            $summary = $this->computeAttendanceSummary($user, CarbonPeriod::create(Carbon::parse($cutoffStart), Carbon::parse($cutoffEnd)), $set);
             return [
                 'scheduled' => $summary['scheduled_shifts'],
                 'present' => $summary['days_worked'],
@@ -647,9 +672,9 @@ class PayrollController extends Controller
                 'holiday_amt' => round($summary['holiday_amt'], 2),
                 'late_minutes' => $summary['late_minutes'],
                 'holiday_days' => $summary['holiday_days'],
-                'cutoff' => $meta['start'].' to '.$meta['end'],
-                'cutoff_start' => $meta['start'],
-                'cutoff_end' => $meta['end'],
+                'cutoff' => $cutoffStart.' to '.$cutoffEnd,
+                'cutoff_start' => $cutoffStart,
+                'cutoff_end' => $cutoffEnd,
                 // Days they were present (Y-m-d list) + absent/leave for the payslip.
                 'present_dates' => $summary['present_dates'] ?? [],
                 'absent_dates' => $summary['absent_dates'] ?? [],

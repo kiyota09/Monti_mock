@@ -13,7 +13,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payroll_settings', function (Blueprint $table) {
+        if (! Schema::hasTable('payroll_settings')) {
+            Schema::create('payroll_settings', function (Blueprint $table) {
             $table->id();
             $table->string('key', 80)->unique();
             $table->string('group', 40)->default('general');
@@ -23,16 +24,19 @@ return new class extends Migration
             $table->string('description', 255)->nullable();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-        });
+            });
+        }
 
-        Schema::create('payroll_setting_histories', function (Blueprint $table) {
+        if (! Schema::hasTable('payroll_setting_histories')) {
+            Schema::create('payroll_setting_histories', function (Blueprint $table) {
             $table->id();
             $table->string('setting_key', 80)->index();
             $table->text('old_value')->nullable();
             $table->text('new_value')->nullable();
             $table->foreignId('changed_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-        });
+            });
+        }
     }
 
     public function down(): void

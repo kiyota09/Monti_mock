@@ -11,6 +11,7 @@ const props = withDefaults(
         badge?: string;
         accent?: 'blue' | 'sky' | 'emerald' | 'red';
         wide?: boolean;
+        compact?: boolean;
     }>(),
     {
         highlight: '',
@@ -18,6 +19,7 @@ const props = withDefaults(
         badge: '',
         accent: 'blue',
         wide: false,
+        compact: false,
     },
 );
 
@@ -93,11 +95,11 @@ const titleParts = computed(() => {
 
         <!-- Card -->
         <div class="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8">
-            <div class="flex flex-1 items-center justify-center px-0 pb-8 pt-4">
+            <div class="flex flex-1 items-center justify-center px-0 pb-8 pt-4" :class="compact ? 'py-2 sm:py-3' : ''">
                 <div :class="wide ? 'w-full max-w-3xl' : 'w-full max-w-md'">
                     <div class="auth-card overflow-hidden">
-                        <div class="p-6 sm:p-8">
-                            <div class="mb-8 text-center">
+                        <div :class="compact ? 'p-5 sm:p-6' : 'p-6 sm:p-8'">
+                            <div class="text-center" :class="compact ? 'mb-5' : 'mb-8'">
                                 <p v-if="badge" class="auth-badge mb-4">
                                     <span class="relative flex h-1.5 w-1.5">
                                         <span class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" :style="{ background: 'var(--auth-pill-dot)' }"></span>

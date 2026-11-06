@@ -154,6 +154,7 @@ const portalItems = computed(() => {
     if (isAgency.value) {
         return [
             { id: 'agency_dashboard', label: 'Dashboard', icon: LayoutDashboard, href: safeRoute('agency.dashboard', '/agency/dashboard') },
+            { id: 'agency_referred_applicants', label: 'Referred Applicants', icon: FileText, href: safeRoute('agency.referrals.index', '/agency/referrals') },
             { id: 'agency_workers', label: 'My Workers', icon: User, href: safeRoute('agency.workers.index', '/agency/workers') },
             { id: 'agency_requests', label: 'Requests', icon: FileText, href: safeRoute('agency.requests.index', '/agency/requests') },
             { id: 'agency_attendance', label: 'Attendance', icon: CalendarDays, href: safeRoute('agency.attendance.index', '/agency/attendance') },

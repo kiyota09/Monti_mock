@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\EmployeeWelcomeMail;
 use App\Models\Hrm\Applicant;
 use App\Models\Hrm\ApplicantStatusHistory;
+use App\Models\Hrm\AgencyReferral;
 use App\Models\Hrm\HrmDepartment;
 use App\Models\Hrm\HrmJobPosting;
 use App\Models\Hrm\HrmOnboarding;
@@ -58,6 +59,27 @@ class StatusController extends Controller
         $onboardings = collect($paginated->items())->filter(fn ($o) => $o !== null)->map(function ($o) {
             $o->initials = collect(explode(' ', (string) ($o->name ?? '')))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->join('');
             $o->progress ??= 0;
+            $person = $o->applicant ?: ($o->email ? Applicant::where('email', $o->email)->first() : null);
+            $photoPath = $person?->profile_photo_path ?: $person?->image;
+            $o->profile_photo_url = $photoPath ? Storage::url($photoPath) : null;
+            $hasEmployeeAccount = self::employeeForOnboarding($o, $person) !== null;
+            $applicationQuery = $person?->jobApplications();
+            if ($applicationQuery && $o->job_posting_id) {
+                $applicationQuery->where('job_posting_id', $o->job_posting_id);
+            }
+            $application = $applicationQuery ? $applicationQuery->latest()->first() : null;
+            $referralQuery = AgencyReferral::query()->where('applicant_id', $person?->id);
+            if ($application) {
+                $referralQuery->where('applicant_job_application_id', $application->id);
+            } elseif ($o->job_posting_id) {
+                $referralQuery->where('job_posting_id', $o->job_posting_id);
+            }
+            $hasAgencyReferral = $person && $referralQuery->where('status', '!=', 'Cancelled')->exists();
+            $o->lifecycle_status = $hasEmployeeAccount
+                ? 'Account Created'
+                : ($hasAgencyReferral
+                    ? 'Referred to Agency'
+                    : ($o->status === 'Completed' ? 'Onboarding Complete' : $o->status));
             return $o;
         })->values()->all();
 
@@ -97,11 +119,14 @@ class StatusController extends Controller
             abort(404);
         }
         $onboarding->load(['items.templateItem', 'activities', 'notes', 'template', 'applicant', 'jobPosting.employmentType']);
-        // Readiness + progress scope: Applicant Requirements only. HR
-        // Processing / Company Preparation never block completion.
+        // Only required Applicant Requirements control completion. HR
+        // Processing / Company Preparation items and activities never block it.
         $applicantItems = $onboarding->items->filter(fn ($i) =>
-            ! $i->templateItem || ($i->templateItem->category ?? null) === 'Applicant Requirements');
-        $required = $applicantItems->where('status', '!=', 'Completed')->count();
+            $i->templateItem
+            && $i->templateItem->category === 'Applicant Requirements'
+            && $i->templateItem->is_required);
+        $required = $applicantItems->whereNotIn('status', ['Completed', 'Verified'])->count();
+        $requiredActivities = $onboarding->activities->where('is_required', true);
 
         // The person behind this onboarding: linked applicant first,
         // matched by email as fallback (walk-ins / manual records).
@@ -164,7 +189,9 @@ class StatusController extends Controller
             $onboarding->setAttribute('salary', $salary);
         }
 
-        $latestJa = $person?->jobApplications()->latest()->first();
+        $latestJa = $person?->jobApplications()
+            ->when($onboarding->job_posting_id, fn ($query) => $query->where('job_posting_id', $onboarding->job_posting_id))
+            ->latest()->first();
         // Applicant-side direct posting link (applicants.job_posting_id).
         $directPosting = $person?->jobPosting;
         $jaPosting = $latestJa?->jobPosting ?? $posting ?? $directPosting;
@@ -277,7 +304,7 @@ class StatusController extends Controller
                 'title' => $onboarding->position ?: $person?->position_applied,
                 'department' => $onboarding->department,
                 'work_location' => $onboarding->work_location,
-                'work_mode' => $onboarding->work_mode,
+                'work_mode' => $employeeUser->work_mode ?: $onboarding->work_mode,
                 'work_schedule' => $onboarding->work_schedule,
                 'employment_type' => $onboarding->employment_type,
                 'salary_min' => null,
@@ -378,6 +405,8 @@ class StatusController extends Controller
             $u->unsetRelation('hrmOrgPosition');
         });
 
+        $employeeUser = self::employeeForOnboarding($onboarding, $person);
+
         return Inertia::render('Dashboard/HRM_NEW/OnboardingDetail', [
             'onboarding' => $onboarding,
             'templateName' => $onboarding->template?->name,
@@ -386,12 +415,13 @@ class StatusController extends Controller
             'notes' => $onboarding->notes,
             'profile' => $person ? $this->profilePayload($person, $onboarding) : null,
             'canComplete' => $required === 0 && $onboarding->status !== 'Completed',
+            'agencyReferralApplicationId' => $latestJa?->id,
             'missing' => [],
             'readiness' => [
-                'required_items_done' => $applicantItems->where('status', 'Completed')->count(),
+                'required_items_done' => $applicantItems->whereIn('status', ['Completed', 'Verified'])->count(),
                 'required_items_total' => $applicantItems->count(),
-                'required_activities_done' => $onboarding->activities->where('status', 'Completed')->count(),
-                'required_activities_total' => $onboarding->activities->count(),
+                'required_activities_done' => $requiredActivities->where('status', 'Completed')->count(),
+                'required_activities_total' => $requiredActivities->count(),
                 'ready' => $required === 0,
                 'completed' => $onboarding->status === 'Completed',
             ],
@@ -401,7 +431,39 @@ class StatusController extends Controller
             // already hired — i.e. a user with this personal email whose org
             // position/department matches this onboarding. A hire for a
             // different position keeps the button visible.
-            'alreadyHired' => self::alreadyHiredForOnboarding($onboarding, $person),
+            'alreadyHired' => $employeeUser !== null,
+            'employeeAccount' => $employeeUser ? [
+                'employee_id' => $employeeUser->employee_id,
+                'name' => $employeeUser->name,
+                'email' => $employeeUser->email,
+                'account_status' => $employeeUser->is_active ? 'Active' : 'Inactive',
+                'role' => $employeeUser->role,
+                'system_position' => $employeeUser->position,
+                'position' => $employeeUser->hrmOrgPosition?->name ?: $onboarding->position,
+                'department' => $employeeUser->hrmDepartment?->name ?: $employeeUser->department,
+                'employment_type' => $employeeUser->hrmEmploymentType?->name,
+                'employment_status' => $employeeUser->employment_status,
+                'start_date' => $employeeUser->join_date ? substr((string) $employeeUser->join_date, 0, 10) : null,
+                'reporting_manager' => $employeeUser->immediate_supervisor ?: $employeeUser->department_head,
+                'work_location' => $employeeUser->work_location,
+                'work_mode' => $onboarding->work_mode,
+                'shift' => $employeeUser->shift,
+                'work_schedule' => $employeeUser->work_schedule,
+                'salary_type' => $employeeUser->salary_type,
+                'basic_salary' => $employeeUser->basic_salary,
+                'pay_frequency' => $employeeUser->pay_frequency,
+                'payroll_group' => $employeeUser->payroll_group,
+                'training_duration_weeks' => $employeeUser->training_duration_weeks,
+                'training_start_date' => $employeeUser->training_start_date ? substr((string) $employeeUser->training_start_date, 0, 10) : null,
+                'training_end_date' => $employeeUser->training_end_date ? substr((string) $employeeUser->training_end_date, 0, 10) : null,
+                'probation_duration_months' => $employeeUser->probation_duration_months,
+                'probation_evaluation_interval_months' => $employeeUser->probation_evaluation_interval_months,
+                'probation_end_date' => $employeeUser->probation_end_date ? substr((string) $employeeUser->probation_end_date, 0, 10) : null,
+                'personal_email' => $employeeUser->personal_email,
+                'mobile_number' => $employeeUser->mobile_number,
+                'emergency_contact_name' => $employeeUser->emergency_contact_name,
+                'emergency_contact_number' => $employeeUser->emergency_contact_number,
+            ] : null,
             'templates' => HrmOnboardingTemplate::select('id', 'name', 'code')->get(),
             'conversion' => $conversion,
             'managers' => $managerChoices,
@@ -455,7 +517,7 @@ class StatusController extends Controller
         self::authorizeOnboardingAccess($request->user(), $onboarding);
         $data = $request->validate(['decision' => 'required|in:approve,reject', 'reason' => 'nullable|string']);
         $item->update([
-            'status' => $data['decision'] === 'approve' ? 'Completed' : 'Blocked',
+            'status' => $data['decision'] === 'approve' ? 'Completed' : 'Rejected',
             'rejection_reason' => $data['reason'] ?? null,
         ]);
         $this->recalc($onboarding);
@@ -513,6 +575,16 @@ class StatusController extends Controller
 
     public function complete(HrmOnboarding $onboarding)
     {
+        $onboarding->loadMissing(['items.templateItem', 'activities']);
+        $applicantItems = $onboarding->items->filter(fn ($item) =>
+            $item->templateItem
+            && $item->templateItem->category === 'Applicant Requirements'
+            && $item->templateItem->is_required);
+        $incompleteItems = $applicantItems->whereNotIn('status', ['Completed', 'Verified'])->isNotEmpty();
+        if ($incompleteItems) {
+            return back()->withErrors(['onboarding' => 'Complete all required applicant documents first.']);
+        }
+
         $onboarding->update(['status' => 'Completed', 'progress' => 100]);
 
         return back()->with('success', 'Onboarding completed.');
@@ -520,6 +592,7 @@ class StatusController extends Controller
 
     public function createEmployee(Request $request, HrmOnboarding $onboarding)
     {
+        abort_unless($onboarding->status === 'Completed', 422, 'Complete onboarding before creating the employee record.');
         if ($onboarding->applicant_id
             && ApplicantApplicationHoldService::isHeldFor((int) $onboarding->applicant_id, $onboarding->job_posting_id)) {
             abort(422, ApplicantApplicationHoldService::HOLD_MESSAGE);
@@ -559,8 +632,8 @@ class StatusController extends Controller
             'create_account' => 'nullable|boolean',
             'training_duration_weeks' => ($trainingRequired ? 'required' : 'nullable') . '|integer|min:1|max:4',
             'training_end_date' => ($trainingRequired ? 'required' : 'nullable') . '|date',
-            'probation_duration_months' => ($probationaryHire ? 'required' : 'nullable') . '|integer|min:1|max:6',
-            'probation_evaluation_interval_months' => ($probationaryHire ? 'required' : 'nullable') . '|integer|min:1|max:6',
+            'probation_duration_months' => ($probationaryHire ? 'required|in:1' : 'nullable') . '|integer',
+            'probation_evaluation_interval_months' => ($probationaryHire ? 'required|in:1' : 'nullable') . '|integer',
             'emergency_contact_name' => 'nullable|string|max:255',
             'emergency_contact_relationship' => 'nullable|string|max:100',
             'emergency_contact_number' => 'nullable|string|max:40',
@@ -586,8 +659,8 @@ class StatusController extends Controller
                 $trainingEnd = \Carbon\Carbon::parse($deploymentStart)->addWeeks($durationWeeks)->toDateString();
             }
         }
-        $probationDurationMonths = $probationaryHire ? (int) $data['probation_duration_months'] : null;
-        $probationEvaluationIntervalMonths = $probationaryHire ? (int) $data['probation_evaluation_interval_months'] : null;
+        $probationDurationMonths = $probationaryHire ? 1 : null;
+        $probationEvaluationIntervalMonths = $probationaryHire ? 1 : null;
         $probationEndDate = $probationaryHire
             ? \Carbon\Carbon::parse($deploymentStart)->addMonthsNoOverflow($probationDurationMonths)->toDateString()
             : null;
@@ -694,6 +767,7 @@ class StatusController extends Controller
             'password' => Hash::make($tempPassword),
             'must_change_password' => true,
             'role' => $role, 'position' => $systemPosition, 'is_active' => true,
+            'employment_status' => $data['employee_status'] ?? 'Pending Training',
             'employee_id' => 'EMP-' . str_pad((string) (User::max('id') + 1), 4, '0', STR_PAD_LEFT),
             'department' => $departmentName,
             'hrm_department_id' => $deptId,
@@ -715,9 +789,12 @@ class StatusController extends Controller
             ]))) ?: null : null,
             'company' => 'MontiTextile',
             'work_location' => $data['work_location'] ?? $onboarding->work_location,
+            'work_mode' => $data['work_mode'] ?? $onboarding->work_mode,
             'work_schedule' => $schedule ?: $onboarding->work_schedule,
             'shift' => $data['shift'] ?? $onboarding->shift ?? null,
+            'salary_type' => $data['salary_type'] ?? null,
             'basic_salary' => $data['basic_salary'] ?? null,
+            'pay_frequency' => $data['pay_frequency'] ?? null,
             'payroll_group' => $data['payroll_group'] ?? null,
             'immediate_supervisor' => $managerName ?? $onboarding->assigned_manager,
             'department_head' => $managerName ?? $onboarding->assigned_manager,
@@ -737,7 +814,7 @@ class StatusController extends Controller
         $user->forceFill([
             'role' => $role,
             'is_active' => true,
-            'employment_status' => $user->employment_status === 'Terminated' ? null : $user->employment_status,
+            'employment_status' => $data['employee_status'] ?? ($user->employment_status === 'Terminated' ? null : $user->employment_status),
             'position' => $systemPosition,
             'department' => $departmentName,
             'hrm_department_id' => $deptId,
@@ -751,9 +828,12 @@ class StatusController extends Controller
             'probation_evaluation_interval_months' => $probationEvaluationIntervalMonths,
             'probation_end_date' => $probationEndDate,
             'work_location' => $data['work_location'] ?? $user->work_location,
+            'work_mode' => $data['work_mode'] ?? $onboarding->work_mode ?? $user->work_mode,
             'work_schedule' => $schedule ?: $user->work_schedule,
             'shift' => $data['shift'] ?? $user->shift,
+            'salary_type' => $data['salary_type'] ?? $user->salary_type,
             'basic_salary' => $data['basic_salary'] ?? $user->basic_salary,
+            'pay_frequency' => $data['pay_frequency'] ?? $user->pay_frequency,
             'payroll_group' => $data['payroll_group'] ?? $user->payroll_group,
             'immediate_supervisor' => $managerName ?? $user->immediate_supervisor,
             'department_head' => $managerName ?? $user->department_head,
@@ -965,22 +1045,29 @@ class StatusController extends Controller
      */
     protected static function alreadyHiredForOnboarding(HrmOnboarding $onboarding, $person): bool
     {
+        return self::employeeForOnboarding($onboarding, $person) !== null;
+    }
+
+    protected static function employeeForOnboarding(HrmOnboarding $onboarding, $person): ?User
+    {
         if (! $onboarding->email) {
-            return (bool) ($person?->hired_user_id && User::whereKey($person->hired_user_id)->exists());
+            return $person?->hired_user_id
+                ? User::with(['hrmOrgPosition:id,name', 'hrmDepartment:id,name', 'hrmEmploymentType:id,name'])->find($person->hired_user_id)
+                : null;
         }
 
-        $candidates = User::with(['hrmOrgPosition:id,name', 'hrmDepartment:id,name'])
+        $candidates = User::with(['hrmOrgPosition:id,name', 'hrmDepartment:id,name', 'hrmEmploymentType:id,name'])
             ->where('personal_email', $onboarding->email)
             ->orderByDesc('id')
             ->get();
         if ($person?->hired_user_id) {
-            $linked = User::with(['hrmOrgPosition:id,name', 'hrmDepartment:id,name'])->find($person->hired_user_id);
+            $linked = User::with(['hrmOrgPosition:id,name', 'hrmDepartment:id,name', 'hrmEmploymentType:id,name'])->find($person->hired_user_id);
             if ($linked && ! $candidates->contains(fn ($u) => (int) $u->id === (int) $linked->id)) {
                 $candidates->push($linked);
             }
         }
         if ($candidates->isEmpty()) {
-            return false;
+            return null;
         }
 
         $norm = fn ($v) => strtolower(trim((string) $v));
@@ -996,16 +1083,16 @@ class StatusController extends Controller
             // when both are known). Different position => different job.
             if ($userPos !== '' && $targetPos !== '') {
                 if ($userPos === $targetPos && ($targetDept === '' || $userDept === '' || $deptMatch)) {
-                    return true;
+                    return $u;
                 }
                 continue;
             }
             if ($posMatch && $deptMatch) {
-                return true;
+                return $u;
             }
         }
 
-        return false;
+        return null;
     }
 
     /**

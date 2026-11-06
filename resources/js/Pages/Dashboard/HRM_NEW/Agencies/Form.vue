@@ -11,6 +11,20 @@ const props = defineProps<{
 
 const isEdit = !!props.agency;
 
+const dateKey = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+const today = dateKey(new Date());
+const oneYearAfter = (dateValue: string) => {
+    const date = new Date(`${dateValue}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return '';
+    date.setFullYear(date.getFullYear() + 1);
+    return dateKey(date);
+};
+
 const form = useForm({
     name: props.agency?.name || '',
     code: props.agency?.code || '',
@@ -18,8 +32,8 @@ const form = useForm({
     address: props.agency?.address || '',
     dole_number: props.agency?.dole_number || '',
     dole_expiry: props.agency?.dole_expiry || '',
-    contract_start: props.agency?.contract_start || '',
-    contract_end: props.agency?.contract_end || '',
+    contract_start: props.agency?.contract_start || (isEdit ? '' : today),
+    contract_end: props.agency?.contract_end || (isEdit ? '' : oneYearAfter(today)),
     billing_cycle: props.agency?.billing_cycle || 'Monthly',
     payment_terms: props.agency?.payment_terms || '15 days after invoice receipt',
     payment_custom_terms: props.agency?.payment_custom_terms || '',
@@ -29,6 +43,12 @@ const form = useForm({
     contact_name: props.agency?.contact_name || '',
     contact_email: props.agency?.contact_email || '',
     contact_phone: props.agency?.contact_phone || '',
+});
+
+watch(() => form.contract_start, (startDate, previousStartDate) => {
+    if (!isEdit && startDate && startDate !== previousStartDate) {
+        form.contract_end = oneYearAfter(startDate);
+    }
 });
 
 function submit() {
@@ -121,8 +141,6 @@ watch(() => form.service_fee_type, (t) => {
     }
 });
 
-const today = new Date().toISOString().split('T')[0];
-
 const inputCls = 'w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200';
 const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase';
 </script>
@@ -193,7 +211,7 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                     </div>
                     <div>
                         <label :class="labelCls">End date</label>
-                        <input v-model="form.contract_end" type="date" :min="today" :class="inputCls" />
+                        <input v-model="form.contract_end" type="date" :min="form.contract_start || today" :class="inputCls" />
                         <p v-if="form.errors.contract_end" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_end }}</p>
                     </div>
                 </div>

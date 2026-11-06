@@ -75,7 +75,8 @@ function lateOf(timeIn: string | null, shift: string | null): string {
         <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
             <span class="text-slate-800 dark:text-slate-200 font-semibold">Worker Attendance</span>
         </nav>
-        <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-4">
+        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
+        <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white mb-4">
             Worker Attendance
         </h1>
 
@@ -112,7 +113,7 @@ function lateOf(timeIn: string | null, shift: string | null): string {
             <div v-else class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[1100px]">
                     <thead>
-                        <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <tr class="bg-slate-800 text-[10px] font-bold uppercase tracking-wider text-white/90">
                             <th class="py-3 px-4">Worker</th>
                             <th class="py-3 px-4">Department</th>
                             <th class="py-3 px-4">Job Position</th>

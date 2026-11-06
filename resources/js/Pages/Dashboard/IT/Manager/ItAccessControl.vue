@@ -26,6 +26,7 @@ const suspendUntil = ref('');
 const showNotifications = ref(false);
 const selectedRequestId = ref(null);
 const confirmPosition = ref(null);
+const showModuleConfirm = ref(false);
 
 const statusForm = useForm({ user_id: '', action: '', suspended_until: '' });
 const positionForm = useForm({ user_id: '', position: '', role: '', supervisor_department: '', request_id: null });
@@ -167,6 +168,7 @@ const pagesForModule = (module, user = managing.value) => {
 const openManage = (user) => {
     managing.value = user;
     activeTab.value = 'account';
+    showModuleConfirm.value = false;
     suspendUntil.value = '';
     selectedRequestId.value = null;
     confirmPosition.value = null;
@@ -313,9 +315,13 @@ const rejectSelected = () => {
 };
 
 const saveModules = () => {
+    showModuleConfirm.value = true;
+};
+
+const confirmSaveModules = () => {
+    showModuleConfirm.value = false;
     modulesForm.post(route('it.access-control.modules'), {
         preserveScroll: true,
-        onSuccess: () => { managing.value = null; },
     });
 };
 
@@ -848,6 +854,22 @@ onUnmounted(() => {
                     <button @click="savePosition" :disabled="positionForm.processing" class="inline-flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-50">
                         <Ban v-if="false" /> Confirm &amp; Apply
                     </button>
+                </div>
+            </div>
+        </div>
+        </Teleport>
+
+        <Teleport to="body">
+        <div v-if="showModuleConfirm && managing" class="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="module-grants-confirm-title" @click.self="showModuleConfirm = false">
+            <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30"><CheckCircle2 class="h-5 w-5 text-blue-600" /></div>
+                    <div><h3 id="module-grants-confirm-title" class="text-sm font-black uppercase text-slate-900 dark:text-white">Confirm module grants</h3><p class="text-xs text-slate-500">{{ managing.name }}</p></div>
+                </div>
+                <p class="mt-4 text-sm text-slate-600 dark:text-slate-300">Save the selected modules for this account? Newly granted modules start with every page disabled. Removing a module revokes its page access.</p>
+                <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button @click="showModuleConfirm = false" class="rounded-xl bg-slate-100 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">Cancel</button>
+                    <button @click="confirmSaveModules" :disabled="modulesForm.processing" class="rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">{{ modulesForm.processing ? 'Saving…' : 'Confirm & Save' }}</button>
                 </div>
             </div>
         </div>

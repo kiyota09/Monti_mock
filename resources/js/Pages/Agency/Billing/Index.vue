@@ -46,12 +46,13 @@ function money(v: any): string {
     <AgencyLayout>
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
-                <h1 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Billing</h1>
+                <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
+                <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Billing</h1>
                 <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Issued and paid statements for your agency.</p>
             </div>
             <Link
                 :href="route('agency.billing.create')"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition shadow-lg shadow-blue-500/30 active:scale-95"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-xl transition shadow-md active:scale-95"
             >
                 <Plus class="w-4 h-4" /> Create Invoice
             </Link>
@@ -81,7 +82,7 @@ function money(v: any): string {
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[680px]">
                     <thead>
-                        <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <tr class="bg-slate-800 text-[10px] font-bold uppercase tracking-wider text-white/90">
                             <th class="py-3 px-4">Code</th>
                             <th class="py-3 px-4">Period</th>
                             <th class="py-3 px-4 text-right">Labor</th>
@@ -103,7 +104,7 @@ function money(v: any): string {
                             </td>
                             <td class="py-3 px-4">
                                 <div class="flex items-center justify-end gap-1">
-                                    <Link :href="route('agency.billing.show', s.id)" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="View">
+                                    <Link :href="route('agency.billing.show', s.id)" class="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg" title="View">
                                         <Eye class="w-4 h-4" />
                                     </Link>
                                     <a :href="route('agency.billing.export-pdf', s.id)" class="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg" title="PDF">

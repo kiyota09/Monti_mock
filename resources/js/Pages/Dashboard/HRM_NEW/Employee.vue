@@ -11,15 +11,8 @@
         <header class="mb-8 relative">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div>
-              <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
-                <span class="hover:text-slate-700 cursor-pointer transition-colors">Dashboard</span>
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                </svg>
-                <span class="text-slate-800 font-semibold">Central Registry</span>
-              </nav>
               <h1 class="text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Employee Master Records</h1>
-              <p class="text-sm text-slate-500 mt-1.5">Manage directory profiles, organization context, payroll variables, and documents.</p>
+              <p class="text-sm text-slate-500 mt-1.5">Manage directory profiles, organization context, and payroll variables.</p>
             </div>
 
             <!-- Quick Directory Actions -->
@@ -78,6 +71,10 @@
             <select v-model="directoryDepartment" @change="applyDirectoryFilter" class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs cursor-pointer">
               <option value="">All Departments</option>
               <option v-for="d in departmentOptions" :key="d.id" :value="d.id">{{ d.name }}</option>
+            </select>
+            <select v-model="directoryPosition" @change="applyDirectoryFilter" class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs cursor-pointer">
+              <option value="">All Positions</option>
+              <option v-for="position in positionOptions" :key="position.id" :value="String(position.id)">{{ position.name }}</option>
             </select>
             <select v-model="directoryStatus" @change="applyDirectoryFilter" class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs cursor-pointer">
               <option value="">Any Status</option>
@@ -341,14 +338,6 @@
                   <input type="text" v-model="employee.company" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Branch Location</label>
-                  <input type="text" v-model="employee.branch" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Business Unit</label>
-                  <input type="text" v-model="employee.businessUnit" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                </div>
-                <div>
                   <label class="block text-xs font-semibold text-slate-500 mb-1.5">Department</label>
                   <input type="text" v-model="employee.department" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                 </div>
@@ -364,40 +353,14 @@
 
               <div class="border-t border-slate-100 pt-6">
                 <h3 class="text-lg font-bold text-slate-900 mb-4">Milestone Dates</h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-2 gap-4">
                   <div>
                     <label class="block text-xs font-semibold text-slate-500 mb-1.5">Date Hired</label>
                     <input type="date" v-model="employee.dateHired" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">Probation End</label>
-                    <input type="date" v-model="employee.probationEndDate" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                  </div>
-                  <div>
                     <label class="block text-xs font-semibold text-slate-500 mb-1.5">Regularization</label>
                     <input type="date" v-model="employee.regularizationDate" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">Resignation Date</label>
-                    <input type="date" v-model="employee.resignationDate" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                  </div>
-                </div>
-              </div>
-
-              <div class="border-t border-slate-100 pt-6">
-                <h3 class="text-lg font-bold text-slate-900 mb-4">Organizational Hierarchy</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">Reports To (Direct)</label>
-                    <input type="text" v-model="employee.reportsTo" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">Immediate Supervisor</label>
-                    <input type="text" v-model="employee.immediateSupervisor" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">Cost Center Code</label>
-                    <input type="text" v-model="employee.costCenter" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                   </div>
                 </div>
               </div>
@@ -437,47 +400,36 @@
                 <h3 class="text-xl font-bold text-slate-900">Payroll & Attendance Architecture</h3>
                 <p class="text-sm text-slate-500 mt-0.5">Compensation frameworks, financial mappings, tax codes, and schedule matrices.</p>
               </div>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Salary Grade</label>
-                  <input type="text" v-model="employee.salaryGrade" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-semibold text-slate-500 mb-1.5">Basic Base Salary</label>
                   <input type="text" v-model="employee.basicSalary" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Bank Account / Swift</label>
-                  <input type="text" v-model="employee.bankAccount" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Pag-IBIG Contribution</label>
+                  <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-slate-400">₱</span><input type="number" min="0" step="0.01" v-model.number="employee.pagibigContribution" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" /></div>
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Tax Identification (TIN)</label>
-                  <input type="text" v-model="employee.taxID" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">SSS Contribution</label>
+                  <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-slate-400">₱</span><input type="number" min="0" step="0.01" v-model.number="employee.sssContribution" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" /></div>
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">SSN / Social Security</label>
-                  <input type="text" v-model="employee.ssn" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">PhilHealth Contribution</label>
+                  <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-slate-400">₱</span><input type="number" min="0" step="0.01" v-model.number="employee.philhealthContribution" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" /></div>
                 </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Payroll Grouping</label>
-                  <input type="text" v-model="employee.payrollGroup" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                </div>
+                <p class="text-[10px] text-slate-400 md:col-span-2">Enter each employee contribution amount per payroll period.</p>
               </div>
 
               <div class="border-t border-slate-100 pt-6">
                 <h3 class="text-lg font-bold text-slate-900 mb-4">Attendance Reference</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label class="block text-xs font-semibold text-slate-500 mb-1.5">Work Schedule Profile</label>
                     <input type="text" v-model="employee.workSchedule" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                   </div>
                   <div>
                     <label class="block text-xs font-semibold text-slate-500 mb-1.5">Standard Shift</label>
-                    <input type="text" v-model="employee.shift" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">Biometrics Device ID</label>
-                    <input type="text" v-model="employee.biometricsID" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
+                    <input type="text" :value="standardShift" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 shadow-sm" />
                   </div>
                 </div>
               </div>
@@ -843,7 +795,7 @@ import { router, usePage } from "@inertiajs/vue3";
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import {
     Upload, Printer, TrendingUp, TrendingDown, RefreshCw, ClipboardList, Archive, Ban,
-    Monitor, Clock, FileText, Shield, User, MapPin, Building2, CreditCard, Folder, GraduationCap,
+    Monitor, Clock, FileText, Shield, User, MapPin, Building2, CreditCard,
     KeyRound, Copy, X
 } from 'lucide-vue-next';
 import { toast } from 'vue3-toastify';
@@ -857,9 +809,6 @@ const tabs = [
   { id: "address", icon: MapPin, label: "Registered Addresses" },
   { id: "employment", icon: Building2, label: "Employment & Structure" },
   { id: "payroll", icon: CreditCard, label: "Payroll & Attendance Reference" },
-  { id: "documents", icon: Folder, label: "Digital Document Locker" },
-  { id: "qualifications", icon: GraduationCap, label: "Qualifications & Skills" },
-  { id: "performance", icon: TrendingUp, label: "Performance Reviews" },
   { id: "history", icon: Clock, label: "System Change Log" }
 ];
 
@@ -880,9 +829,11 @@ const page = usePage();
 const asArray = (v) => (Array.isArray(v) ? v : (v?.data ?? [])) ?? [];
 const employeeList = computed(() => asArray(props.employees).filter((e) => e && typeof e === 'object' && e.id != null));
 const departmentOptions = computed(() => asArray(props.departments));
+const positionOptions = computed(() => asArray(props.positions));
 
 const directorySearch = ref(props.filters?.search || '');
 const directoryDepartment = ref(props.filters?.department || '');
+const directoryPosition = ref(props.filters?.position || '');
 const directoryStatus = ref(props.filters?.status || '');
 
 // Blank master record so every v-model binding stays defined.
@@ -898,7 +849,7 @@ const blankRecord = () => ({
   role: '', positionRank: '', dateHired: '', probationEndDate: '', regularizationDate: '',
   resignationDate: '', lastWorkingDay: '', reportsTo: '', immediateSupervisor: '',
   departmentHead: '', costCenter: '', workLocation: '', payrollGroup: '', salaryGrade: '',
-  basicSalary: '', basicSalaryRaw: null, bankAccount: '', taxID: '', ssn: '',
+  basicSalary: '', basicSalaryRaw: null, bankAccount: '', taxID: '', sssContribution: null, pagibigContribution: null, philhealthContribution: null,
   workSchedule: '', shift: '', timeZone: 'GMT+8', biometricsID: '',
   vacationLeaveBalance: '12', sickLeaveBalance: '15', otherLeaveBalance: '5',
   attendanceMonth: { present: 0, late: 0, absent: 0 },
@@ -914,6 +865,13 @@ const initialRec = props.focusId != null
   ? employeeList.value.find((e) => String(e.id) === String(props.focusId))
   : null;
 const employee = ref(initialRec ? JSON.parse(JSON.stringify(initialRec)) : blankRecord());
+const standardShift = computed(() => {
+  const assignedShift = (employee.value.shifts ?? []).find((shift) =>
+    ['active', 'approved'].includes(String(shift.status || '').toLowerCase())
+  );
+  if (!assignedShift) return '—';
+  return [assignedShift.shift_type, assignedShift.schedule].filter(Boolean).join(' · ') || '—';
+});
 let pristine = JSON.stringify(employee.value);
 
 const selectEmployee = (id) => {
@@ -957,7 +915,7 @@ watch(directorySearch, () => { clearTimeout(searchTimer); searchTimer = setTimeo
 
 const applyDirectoryFilter = () => {
   router.get(route('hrm.workforce.employees.index'), {
-    search: directorySearch.value.trim(), department: directoryDepartment.value, status: directoryStatus.value,
+    search: directorySearch.value.trim(), department: directoryDepartment.value, position: directoryPosition.value, status: directoryStatus.value,
   }, { preserveState: true, preserveScroll: true, replace: true });
 };
 
@@ -974,7 +932,7 @@ const pageInfo = computed(() => {
 const goDirectoryPage = (pageNum) => {
   const target = Math.max(1, Math.min(Number(props.pagination?.last_page || 1), Number(pageNum) || 1));
   router.get(route('hrm.workforce.employees.index'), {
-    search: directorySearch.value.trim(), department: directoryDepartment.value, status: directoryStatus.value, page: target,
+    search: directorySearch.value.trim(), department: directoryDepartment.value, position: directoryPosition.value, status: directoryStatus.value, page: target,
   }, { preserveState: true, preserveScroll: true, replace: true });
 };
 
@@ -1006,10 +964,12 @@ const toPayload = () => {
   business_unit: employee.value.businessUnit, department: employee.value.department,
   cost_center: employee.value.costCenter, work_location: employee.value.workLocation,
   department_head: employee.value.departmentHead, immediate_supervisor: employee.value.immediateSupervisor,
-  payroll_group: employee.value.payrollGroup, salary_grade: employee.value.salaryGrade,
-  basic_salary: basic, bank_account: employee.value.bankAccount,
-  tax_id: employee.value.taxID, sss_id: employee.value.ssn, work_schedule: employee.value.workSchedule,
-  shift: employee.value.shift, timezone: employee.value.timeZone, biometrics_id: employee.value.biometricsID,
+  basic_salary: basic,
+  sss_contribution: employee.value.sssContribution,
+  pagibig_contribution: employee.value.pagibigContribution,
+  philhealth_contribution: employee.value.philhealthContribution,
+  work_schedule: employee.value.workSchedule,
+  timezone: employee.value.timeZone,
   join_date: employee.value.dateHired || null, probation_end_date: employee.value.probationEndDate || null,
   regularization_date: employee.value.regularizationDate || null,
   resignation_date: employee.value.resignationDate || null,

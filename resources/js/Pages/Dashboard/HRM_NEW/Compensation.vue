@@ -483,7 +483,7 @@ const histories = computed(() => props.histories || {});
 const componentsByUser = computed(() => props.components || {});
 const adjustmentTypes = computed(() => props.adjustmentTypes?.length
     ? props.adjustmentTypes
-    : ['Merit Increase', 'Annual Review', 'Promotion', 'Probation Pass', 'Allowance Change', 'Market Adjustment']);
+    : ['Merit Increase', 'Annual Review', 'Promotion', 'Allowance Change']);
 
 /* ------------------------------ state ------------------------------ */
 

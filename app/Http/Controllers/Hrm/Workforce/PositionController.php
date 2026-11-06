@@ -18,7 +18,11 @@ class PositionController extends Controller
 
     public function index(Request $request)
     {
-        $q = HrmPosition::with(['department', 'reportsTo']);
+        $q = HrmPosition::with([
+            'department',
+            'reportsTo',
+            'holders:id,name,profile_photo_path,hrm_position_id',
+        ]);
         if ($s = $request->get('search')) {
             $q->where(fn ($w) => $w->where('name', 'like', "%{$s}%")->orWhere('code', 'like', "%{$s}%"));
         }
@@ -31,17 +35,24 @@ class PositionController extends Controller
             $q->whereNull('archived_at');
         }
 
-        $positions = $q->latest()->paginate(12)->withQueryString();
+        $positions = $q->latest()->get();
         // Attach filled counts (employees holding each org position)
-        $positions->getCollection()->transform(function ($p) {
-            $p->filled_positions = User::where('hrm_position_id', $p->id)->count();
+        $positions->transform(function ($p) {
+            $holders = $p->holders;
+            $p->filled_positions = $holders->count();
+            $p->users = $holders->map(fn ($employee) => [
+                'id' => $employee->id,
+                'name' => $employee->name,
+                'photo_url' => $employee->profile_photo_path ? asset('storage/' . $employee->profile_photo_path) : null,
+            ])->values();
+            $p->unsetRelation('holders');
             $p->department_name = $p->department?->name;
             $p->reports_to_name = $p->reportsTo?->name;
             return $p;
         });
 
         return Inertia::render('Dashboard/HRM_NEW/Position', [
-            'positionsData' => $positions,
+            'positionsData' => ['data' => $positions],
             'filters' => $request->only(['search', 'department', 'status']),
             'filterOptions' => [
                 'departments' => HrmDepartment::select('id', 'name', 'category')->get(),
@@ -180,7 +191,9 @@ class PositionController extends Controller
     {
         // Blocked while employees hold the position (ported from super_monti).
         if ($position->holders()->count() > 0) {
-            return back()->with('error', 'Cannot delete position with active employees.');
+            return back()->withErrors([
+                'delete' => 'Cannot delete this position while employees are assigned to it. Reassign those employees first.',
+            ]);
         }
         $position->delete();
 

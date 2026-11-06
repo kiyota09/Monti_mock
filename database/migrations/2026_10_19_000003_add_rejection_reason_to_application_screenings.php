@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasColumn('hrm_application_screenings', 'rejection_reason')) {
+            return;
+        }
+
         Schema::table('hrm_application_screenings', function (Blueprint $table) {
             $table->text('rejection_reason')->nullable()->after('notes');
         });

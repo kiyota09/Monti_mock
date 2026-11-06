@@ -174,7 +174,6 @@
                                 >
                                     <th class="py-2 px-3">Date</th>
                                     <th class="py-2 px-3">Employee</th>
-                                    <th class="py-2 px-3">Employee ID</th>
                                     <th class="py-2 px-3">Department</th>
                                     <th class="py-2 px-3">Shift</th>
                                     <th class="py-2 px-3">Time In</th>
@@ -206,9 +205,6 @@
                                                 >{{ a.employee }}</span
                                             >
                                         </div>
-                                    </td>
-                                    <td class="py-2 px-3 font-mono text-slate-600">
-                                        {{ a.employee_id || '—' }}
                                     </td>
                                     <td class="py-2 px-3 text-slate-600">
                                         {{ a.department || '—' }}

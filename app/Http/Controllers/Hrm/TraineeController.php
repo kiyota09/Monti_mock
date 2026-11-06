@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Hrm;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hrm\Applicant;
+use App\Models\Hrm\AgencyActivity;
 use App\Models\Hrm\HrmDepartment;
 use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\HrmTraining;
@@ -14,6 +15,7 @@ use App\Models\Hrm\TraineeDailyObservation;
 use App\Models\Hrm\TraineeGrade;
 use App\Models\Hrm\TraineeTransfer;
 use App\Models\Hrm\TraineeWeeklyEvaluation;
+use App\Models\Hrm\Worker;
 use App\Models\Core\User;
 use App\Support\ReapplyCooldown;
 use Illuminate\Http\Request;
@@ -51,7 +53,13 @@ class TraineeController extends Controller
         // vice_president created from Onboarding -> Create Employee.)
         $newStaff = User::whereIn('position', ['staff', 'supervisor', 'manager', 'secretary', 'special_officer', 'vice_president'])
             ->where('is_active', true)
-            ->where('created_at', '>=', now()->subDays(30))
+            ->where(function ($query) {
+                $query->where('created_at', '>=', now()->subDays(30))
+                    ->orWhere(function ($workers) {
+                        $workers->whereNotNull('worker_id')
+                            ->whereNotNull('training_duration_weeks');
+                    });
+            })
             ->with($with)
             ->orderByDesc('created_at')
             ->take(50)
@@ -194,7 +202,7 @@ class TraineeController extends Controller
 
     /**
      * Shape one trainee row for the Training page table.
-     * Columns: Trainee | Employee ID | Position | Department | Start Date |
+     * Columns: Trainee | Type | Position | Department | Start Date |
      *          Training Status | Grade | Evaluation | Action
      */
     public static function traineeRow(User $t, ?string $appliedPosition = null): array
@@ -321,6 +329,7 @@ class TraineeController extends Controller
             'name' => $t->name,
             'email' => $t->email,
             'employee_id' => $t->employee_id ?? ('TRN-' . str_pad((string) $t->id, 4, '0', STR_PAD_LEFT)),
+            'person_type' => $t->worker_id ? 'Worker' : 'Employee',
             'position' => $latestTransfer['to_position'] ?? $appliedPosition ?? $t->hrmOrgPosition?->name ?? ucfirst((string) $t->position),
             'is_trainee' => $t->position === 'trainee',
             'department' => $latestTransfer['to_department'] ?? $t->hrmDepartment?->name ?? $t->department ?? $t->role,
@@ -350,11 +359,11 @@ class TraineeController extends Controller
             'reporting_manager' => $t->manager?->name ?? $t->immediate_supervisor ?? $t->department_head,
             // Training schedule connected to Create Employee data
             // (users.training_start_date / training_end_date /
-            // training_duration_weeks). Falls back to join_date + 8 weeks
+            // training_duration_weeks). Falls back to join_date + 4 weeks
             // for hires created before the schedule fields existed.
             'training_start_date' => $t->training_start_date ?? $t->join_date ?? optional($t->created_at)->toDateString(),
             'training_end_date' => self::resolveTrainingEndDate($t),
-            'training_duration_weeks' => (int) ($t->training_duration_weeks ?? 8),
+            'training_duration_weeks' => max(1, min(4, (int) ($t->training_duration_weeks ?? 4) ?: 4)),
             'evaluation' => $grade ? [
                 'attendance' => $grade->attendance !== null ? (float) $grade->attendance : null,
                 'knowledge' => $grade->knowledge !== null ? (float) $grade->knowledge : null,
@@ -398,13 +407,21 @@ class TraineeController extends Controller
     {
         if (! empty($t->training_end_date)) {
             try {
-                return \Carbon\Carbon::parse($t->training_end_date)->toDateString();
+                $storedEnd = \Carbon\Carbon::parse($t->training_end_date);
+                $anchor = $t->training_start_date ?? $t->join_date ?? optional($t->created_at)->toDateString();
+                if ($anchor) {
+                    $maximumEnd = \Carbon\Carbon::parse($anchor)->addWeeks(4);
+                    if ($storedEnd->gt($maximumEnd)) {
+                        $storedEnd = $maximumEnd;
+                    }
+                }
+                return $storedEnd->toDateString();
             } catch (\Throwable $e) {
                 // fall through to derived date
             }
         }
-        $weeks = (int) ($t->training_duration_weeks ?? 8);
-        $weeks = max(1, min(52, $weeks ?: 8));
+        $weeks = (int) ($t->training_duration_weeks ?? 4);
+        $weeks = max(1, min(4, $weeks ?: 4));
         $anchor = $t->training_start_date ?? $t->join_date ?? optional($t->created_at)->toDateString();
         if (empty($anchor)) {
             return null;
@@ -554,18 +571,23 @@ class TraineeController extends Controller
      */
     public function hrReview(Request $request, $id)
     {
+        $trainee = User::whereIn('position', ['trainee', 'staff', 'supervisor', 'manager', 'secretary', 'special_officer', 'vice_president'])->findOrFail($id);
+        self::authorizeTraineeAccess($request->user(), $trainee);
+        $isWorker = ! empty($trainee->worker_id);
+        $isReassignment = ($trainee->traineeGrade?->manager_recommendation ?? null) === 'reassigned';
+        $allowedDecisions = $isReassignment
+            ? ['approve_reassignment', 'reject_reassignment']
+            : ($isWorker ? ['worker_training_passed', 'worker_do_not_pass'] : ['approve_regularization', 'do_not_regularize']);
+
         $validated = $request->validate([
-            'decision' => 'required|in:approve_regularization,do_not_regularize,approve_reassignment,reject_reassignment',
-            'notes' => 'nullable|string|max:2000|required_if:decision,do_not_regularize,approve_reassignment,reject_reassignment',
+            'decision' => 'required|in:' . implode(',', $allowedDecisions),
+            'notes' => 'nullable|string|max:2000|required_if:decision,do_not_regularize,worker_do_not_pass,approve_reassignment,reject_reassignment',
             'effective_date' => 'nullable|date|required_if:decision,approve_regularization,approve_reassignment',
             'to_department_id' => 'nullable|exists:hrm_departments,id|required_if:decision,approve_reassignment',
             'to_position' => 'nullable|string|max:255|required_if:decision,approve_reassignment',
             'manager_id' => 'nullable|exists:users,id|required_if:decision,approve_reassignment',
             'role' => 'nullable|string|in:HRM,SCM,FIN,MAN,INV,ORD,WAR,CRM,ECO,PRO,PROJ,IT,LOG',
         ]);
-
-        $trainee = User::whereIn('position', ['trainee', 'staff', 'supervisor', 'manager', 'secretary', 'special_officer', 'vice_president'])->findOrFail($id);
-        self::authorizeTraineeAccess($request->user(), $trainee);
 
         $grade = $trainee->traineeGrade;
         if (! $grade || $grade->final_grade === null) {
@@ -610,7 +632,48 @@ class TraineeController extends Controller
             'hr_reviewed_at' => now(),
         ];
 
-        if ($validated['decision'] === 'approve_regularization') {
+        if ($validated['decision'] === 'worker_training_passed') {
+            if (! $isWorker) {
+                abort(422, 'Worker training decisions are only available for agency workers.');
+            }
+            if ((float) $grade->final_grade < TraineeGrade::PASSING_GRADE) {
+                $msg = $trainee->name . ' is below the passing grade (' . TraineeGrade::PASSING_GRADE . '%) and cannot be marked as passed.';
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => $msg], 422);
+                }
+
+                return back()->withErrors(['hr_review' => $msg]);
+            }
+            $grade->update(array_merge($review, [
+                'hr_review_status' => 'Approved',
+                'evaluation_status' => 'Passed',
+                'passed_to_hr' => true,
+            ]));
+            $trainee->update(['is_active' => true]);
+            $worker = Worker::find($trainee->worker_id);
+            if ($worker) {
+                AgencyActivity::create([
+                    'agency_id' => $worker->agency_id,
+                    'worker_id' => $worker->id,
+                    'action' => 'worker_training_passed',
+                    'details' => "{$worker->name} passed HR training review and is cleared for the agency to issue a contract.",
+                    'actor_id' => $request->user()?->id,
+                    'actor_name' => $request->user()?->name,
+                ]);
+            }
+            $msg = 'Worker training passed for ' . $trainee->name . '.';
+        } elseif ($validated['decision'] === 'worker_do_not_pass') {
+            if (! $isWorker) {
+                abort(422, 'Worker training decisions are only available for agency workers.');
+            }
+            $grade->update(array_merge($review, [
+                'hr_review_status' => 'Rejected',
+                'evaluation_status' => 'Failed',
+                'passed_to_hr' => false,
+            ]));
+            ReapplyCooldown::recordTrainingFailure($trainee, $validated['notes'] ?? 'Worker did not pass training');
+            $msg = 'Worker training was not passed for ' . $trainee->name . '.';
+        } elseif ($validated['decision'] === 'approve_regularization') {
             if ((float) $grade->final_grade < TraineeGrade::PASSING_GRADE) {
                 $msg = $trainee->name . ' is below the passing grade (' . TraineeGrade::PASSING_GRADE . '%) and cannot be regularized.';
                 if ($request->wantsJson()) {

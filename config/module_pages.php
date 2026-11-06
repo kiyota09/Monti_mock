@@ -23,6 +23,7 @@ return [
         'onboarding_templates' => 'Onboarding Templates',
         'organization' => 'Organization',
         'performance'  => 'Performance',
+        'kpi_templates' => 'KPI Templates',
         'training'     => 'Training',
         'attendance'   => 'Attendance',
         'leave'        => 'Leave',

@@ -96,19 +96,25 @@
                             </span>
                         </button>
                         <button
-                            @click="activeTab = 'completed'"
+                            @click="activeTab = 'passed'"
                             class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2"
-                            :class="activeTab === 'completed'
-                                ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-700'
-                                : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'"
+                            :class="activeTab === 'passed' ? 'bg-teal-600 text-white shadow-md hover:bg-teal-700' : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'"
                         >
-                            <CheckCircle2 class="w-3.5 h-3.5" /> Interview History
+                            <CheckCircle2 class="w-3.5 h-3.5" /> Passed Interview
                             <span
                                 class="text-[10px] px-1.5 py-0.5 rounded-full"
-                                :class="activeTab === 'completed' ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-slate-500'"
+                                :class="activeTab === 'passed' ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-slate-500'"
                             >
-                                {{ completedInterviews.length }}
+                                {{ passedInterviews.length }}
                             </span>
+                        </button>
+                        <button
+                            @click="activeTab = 'completed'"
+                            class="ml-auto px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2"
+                            :class="activeTab === 'completed' ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-700' : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'"
+                        >
+                            <CheckCircle2 class="w-3.5 h-3.5" /> Interview History
+                            <span class="text-[10px] px-1.5 py-0.5 rounded-full" :class="activeTab === 'completed' ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-slate-500'">{{ completedInterviews.length }}</span>
                         </button>
                     </div>
                 </div>
@@ -146,14 +152,14 @@
                                         :key="app.id"
                                         class="hover:bg-blue-50/40 transition-colors group"
                                     >
-                                        <td class="px-4 py-3">
+                                        <td class="px-4 py-3 cursor-pointer" @click.stop="viewApplicantProfile(app.id)" title="View applicant profile">
                                             <div class="flex items-center gap-3">
-                                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">
+                                                <div class="relative w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">
                                                     {{ getInitials(app.first_name, app.last_name) }}
+                                                    <img v-if="getApplicantPhoto(app)" :src="getApplicantPhoto(app)" :alt="`${app.first_name} ${app.last_name}`" class="absolute inset-0 h-9 w-9 rounded-full border border-slate-200 object-cover" @error="$event.target.remove()" />
                                                 </div>
                                                 <div>
                                                     <div class="text-xs font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{{ app.first_name }} {{ app.last_name }}</div>
-                                                    <div class="text-[10px] text-slate-400">#{{ app.id }}</div>
                                                 </div>
                                             </div>
                                         </td>
@@ -232,6 +238,7 @@
                                     <tr>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Candidate</th>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Position</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Employment Type</th>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date &amp; Time</th>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Interviewer</th>
                                         <th class="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
@@ -244,10 +251,11 @@
                                         :key="interview.id"
                                         class="hover:bg-purple-50/40 transition-colors group"
                                     >
-                                        <td class="px-4 py-3">
+                                        <td class="px-4 py-3 cursor-pointer" @click.stop="viewApplicantProfile(interview.applicant_id || interview.applicant?.id)" title="View applicant profile">
                                             <div class="flex items-center gap-3">
-                                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">
+                                                <div class="relative w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">
                                                     {{ getInitials(interview.candidate_name) }}
+                                                    <img v-if="getInterviewApplicantPhoto(interview)" :src="getInterviewApplicantPhoto(interview)" :alt="interview.candidate_name" class="absolute inset-0 h-9 w-9 rounded-full border border-slate-200 object-cover" @error="$event.target.remove()" />
                                                 </div>
                                                 <div>
                                                     <div class="text-xs font-bold text-slate-800 group-hover:text-purple-700 transition-colors">{{ interview.candidate_name }}</div>
@@ -258,6 +266,7 @@
                                         <td class="px-4 py-3">
                                             <span class="text-xs text-slate-700">{{ interview.position || 'N/A' }}</span>
                                         </td>
+                                        <td class="px-4 py-3 text-xs text-slate-700">{{ getEmploymentTypeLabel(interview) }}</td>
                                         <td class="px-4 py-3">
                                             <div class="text-xs font-medium text-slate-900">{{ formatDate(interview.date) }}</div>
                                             <div class="text-[10px] text-slate-500">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</div>
@@ -329,6 +338,7 @@
                                     <tr>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Candidate</th>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Position</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Employment Type</th>
                                         <th class="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Type</th>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date</th>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Interviewer</th>
@@ -338,8 +348,9 @@
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
                                     <tr v-for="interview in filteredHistoryInterviews" :key="'history-'+interview.id" class="hover:bg-emerald-50/40 transition-colors">
-                                        <td class="px-4 py-3 text-xs font-bold text-slate-800">{{ interview.candidate_name }}</td>
+                                        <td class="cursor-pointer px-4 py-3 hover:text-blue-700" @click.stop="viewApplicantProfile(interview.applicant_id || interview.applicant?.id)" title="View applicant profile"><div class="flex items-center gap-3"><div class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-xs font-bold text-white shadow-sm">{{ getInitials(interview.candidate_name) }}<img v-if="getInterviewApplicantPhoto(interview)" :src="getInterviewApplicantPhoto(interview)" :alt="interview.candidate_name" class="absolute inset-0 h-9 w-9 rounded-full border border-slate-200 object-cover" @error="$event.target.remove()" /></div><span class="text-xs font-bold text-slate-800">{{ interview.candidate_name }}</span></div></td>
                                         <td class="px-4 py-3 text-xs text-slate-700">{{ interview.position || 'N/A' }}</td>
+                                        <td class="px-4 py-3 text-xs text-slate-700">{{ getEmploymentTypeLabel(interview) }}</td>
                                         <td class="px-4 py-3 text-center"><span :class="['inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold border shadow-sm', getInterviewTypeBadge(interview)]">{{ getInterviewTypeLabel(interview) }}</span></td>
                                         <td class="px-4 py-3"><div class="text-xs font-medium text-slate-700">{{ formatDate(interview.date) }}</div><div class="text-[10px] text-slate-500">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</div></td>
                                         <td class="px-4 py-3 text-xs text-slate-700">{{ interview.interviewer?.name || getInterviewerName(interview.interviewer_id) }}</td>
@@ -385,18 +396,18 @@
                                     <tr>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Candidate</th>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Position</th>
+                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Employment Type</th>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date &amp; Time</th>
                                         <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Interviewer</th>
                                         <th class="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Recommendation</th>
                                         <th class="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
                                     <tr v-for="interview in filteredFinalInterviews" :key="interview.key" class="hover:bg-indigo-50/40 transition-colors group">
-                                        <td class="px-4 py-3">
+                                        <td class="px-4 py-3 cursor-pointer" @click.stop="viewApplicantProfile(interview.applicant_id || interview.applicant?.id || interview.application_id)" title="View applicant profile">
                                             <div class="flex items-center gap-3">
-                                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">{{ getInitials(interview.candidate_name) }}</div>
+                                                <div class="relative w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">{{ getInitials(interview.candidate_name) }}<img v-if="getInterviewApplicantPhoto(interview)" :src="getInterviewApplicantPhoto(interview)" :alt="interview.candidate_name" class="absolute inset-0 h-9 w-9 rounded-full border border-slate-200 object-cover" @error="$event.target.remove()" /></div>
                                                 <div>
                                                     <div class="text-xs font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">{{ interview.candidate_name }}</div>
                                                     <div class="text-[10px] text-slate-400">#{{ interview.application_id }}</div>
@@ -404,6 +415,7 @@
                                             </div>
                                         </td>
                                         <td class="px-4 py-3"><span class="text-xs text-slate-700">{{ interview.position || 'N/A' }}</span></td>
+                                        <td class="px-4 py-3 text-xs text-slate-700">{{ getEmploymentTypeLabel(interview) }}</td>
                                         <td class="px-4 py-3">
                                             <template v-if="interview._queue">
                                                 <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Not yet scheduled</span>
@@ -424,13 +436,12 @@
                                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 text-orange-700 border border-orange-200"><RefreshCw class="w-2.5 h-2.5" />Reschedule requested</span>
                                             </div>
                                         </td>
-                                        <td class="px-4 py-3">
-                                            <span v-if="interview.evaluation?.recommendation" :class="['inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold border', getEvaluationRecommendationBadge(interview.evaluation.recommendation)]">{{ getEvaluationRecommendationLabel(interview.evaluation.recommendation) }}</span>
-                                            <span v-else class="text-[10px] text-slate-400">Not evaluated</span>
-                                        </td>
                                         <td class="px-4 py-3 text-right">
                                             <button v-if="interview._queue" @click="scheduleFinalInterview(interview._sourceInterview)" class="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-lg text-[10px] font-bold transition-all duration-200 shadow-md hover:shadow-lg"><Calendar class="w-3.5 h-3.5" />Schedule Final Interview</button>
-                                            <button v-else @click="viewInterviewDetails(interview)" class="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 text-slate-600 hover:text-indigo-600 rounded-lg text-[10px] font-semibold transition-all duration-200"><Eye class="w-3.5 h-3.5" />View</button>
+                                            <template v-else>
+                                                <button v-if="interview.meeting_link && interview.status === 'Scheduled'" @click="openMeeting(interview.meeting_link)" class="mr-1 inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-md transition-all duration-200 hover:from-emerald-400 hover:to-emerald-500">Join</button>
+                                                <button @click="viewInterviewDetails(interview)" class="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 text-slate-600 hover:text-indigo-600 rounded-lg text-[10px] font-semibold transition-all duration-200"><Eye class="w-3.5 h-3.5" />View</button>
+                                            </template>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -442,6 +453,46 @@
                             </div>
                             <h3 class="text-base font-bold text-slate-900 mb-1">No final interviews found</h3>
                             <p class="text-xs text-slate-500">Final-stage candidates will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-show="activeTab === 'passed'">
+                    <div class="overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-md">
+                        <div class="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4">
+                            <div class="relative min-w-[200px] flex-1">
+                                <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <input v-model="interviewSearchQuery" type="text" placeholder="Search passed interviews..." class="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-xs focus:border-transparent focus:ring-2 focus:ring-teal-500" />
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-200">
+                                <thead class="border-b border-slate-200 bg-slate-50/80"><tr>
+                                    <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Candidate</th>
+                                    <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Position</th>
+                                    <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Employment Type</th>
+                                    <th class="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Type</th>
+                                    <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Date</th>
+                                    <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Interviewer</th>
+                                    <th class="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">Action</th>
+                                </tr></thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <tr v-for="interview in filteredPassedInterviews" :key="'passed-'+interview.id" class="transition-colors hover:bg-teal-50/40">
+                                        <td class="cursor-pointer px-4 py-3 hover:text-blue-700" @click.stop="viewApplicantProfile(interview.applicant_id || interview.applicant?.id)" title="View applicant profile"><div class="flex items-center gap-3"><div class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-teal-600 text-xs font-bold text-white shadow-sm">{{ getInitials(interview.candidate_name) }}<img v-if="getInterviewApplicantPhoto(interview)" :src="getInterviewApplicantPhoto(interview)" :alt="interview.candidate_name" class="absolute inset-0 h-9 w-9 rounded-full border border-slate-200 object-cover" @error="$event.target.remove()" /></div><span class="text-xs font-bold text-slate-800">{{ interview.candidate_name }}</span></div></td>
+                                        <td class="px-4 py-3 text-xs text-slate-700">{{ interview.position || 'N/A' }}</td>
+                                        <td class="px-4 py-3 text-xs text-slate-700">{{ getEmploymentTypeLabel(interview) }}</td>
+                                        <td class="px-4 py-3 text-center"><span :class="['inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold', getInterviewTypeBadge(interview)]">{{ getInterviewTypeLabel(interview) }}</span></td>
+                                        <td class="px-4 py-3"><div class="text-xs font-medium text-slate-700">{{ formatDate(interview.date) }}</div><div class="text-[10px] text-slate-500">{{ formatTime(interview.start_time) }} - {{ formatTime(interview.end_time) }}</div></td>
+                                        <td class="px-4 py-3 text-xs text-slate-700">{{ interview.interviewer?.name || getInterviewerName(interview.interviewer_id) }}</td>
+                                        <td class="px-4 py-3 text-right"><button @click="viewInterviewDetails(interview)" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-semibold text-slate-600 transition-all hover:border-teal-300 hover:bg-teal-50 hover:text-teal-600"><Eye class="h-3.5 w-3.5" />View</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div v-if="!filteredPassedInterviews.length" class="py-16 text-center">
+                            <CheckCircle2 class="mx-auto mb-4 h-8 w-8 text-slate-400" />
+                            <h3 class="mb-1 text-base font-bold text-slate-900">No passed interviews found</h3>
+                            <p class="text-xs text-slate-500">Candidates with a passed interview evaluation will appear here.</p>
                         </div>
                     </div>
                 </div>
@@ -572,156 +623,46 @@
                     <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-modalIn"><div class="p-6 border-b border-slate-100 bg-emerald-50"><h3 class="text-lg font-bold text-slate-900">Select Candidate</h3><p class="text-xs text-slate-500 mt-1">Move this applicant to the Selected stage.</p></div><div class="p-6 space-y-3"><div class="p-4 bg-slate-50 rounded-xl"><div class="text-sm font-bold text-slate-900">{{ selectedInterview.candidate_name }}</div><div class="text-xs text-slate-500">{{ selectedInterview.position }}</div></div><p class="text-sm text-slate-600">The interview result is <strong class="text-emerald-600">Passed</strong>. Are you sure you want to select this candidate?</p></div><div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3"><button @click="closeSelectModal" class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold">Cancel</button><button @click="selectCandidate" :disabled="isSubmitting" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50"><span class="inline-flex items-center gap-1.5"><Star class="w-4 h-4" />Confirm Selection</span></button></div></div>
                 </div>
 
-                <!-- ============================================ -->
-                <!-- ✅ VIEW PROFILE MODAL - SCROLLABLE            -->
-                <!-- ============================================ -->
-                <div
-                    v-if="showProfileModal"
-                    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-                    @click.self="closeProfileModal"
-                >
-                    <div class="bg-white rounded-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-                        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-900">Applicant Profile</h3>
-                                <p class="text-xs text-slate-500 mt-0.5">Full details of the candidate</p>
+                <div v-if="showProfileModal" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="closeProfileModal">
+                    <div class="flex max-h-[95vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-2xl animate-modalIn">
+                        <header class="flex shrink-0 items-start justify-between border-b border-slate-200 px-6 py-5">
+                            <div class="flex items-center gap-4">
+                                <div class="relative">
+                                    <img v-if="profileData?.personal?.profile_photo_path" :src="profileData.personal.profile_photo_path" :alt="profileData.personal.first_name" class="h-16 w-16 rounded-xl border border-slate-200 object-cover ring-4 ring-slate-100" />
+                                    <div v-else class="flex h-16 w-16 items-center justify-center rounded-xl bg-slate-800 text-2xl font-bold text-white">{{ getInitials(`${profileData?.personal?.first_name || ''} ${profileData?.personal?.last_name || ''}`) }}</div>
+                                    <span class="absolute -bottom-1 -right-1 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-slate-900 shadow">#{{ profileData?.application?.id }}</span>
+                                </div>
+                                <div>
+                                    <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Applicant Profile</p>
+                                    <h2 class="text-2xl font-bold tracking-tight text-slate-900">{{ profileData?.personal?.first_name }} {{ profileData?.personal?.last_name }}</h2>
+                                    <p class="mt-0.5 text-sm text-slate-500">{{ profileData?.personal?.email || 'No email' }}<span v-if="profileData?.job_posting?.title"> · {{ profileData.job_posting.title }}</span></p>
+                                    <span v-if="profileData?.application?.status" class="mt-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{{ profileData.application.status }}</span>
+                                </div>
                             </div>
-                            <button @click="closeProfileModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-all duration-200 hover:rotate-90 transform">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                </svg>
-                            </button>
-                        </div>
+                            <button @click="closeProfileModal" class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Close profile"><X class="h-5 w-5" /></button>
+                        </header>
                         <div class="flex-1 overflow-y-auto p-6">
-                            <div v-if="isLoadingProfile" class="flex items-center justify-center py-12">
-                                <svg class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span class="ml-3 text-sm text-slate-500">Loading profile...</span>
-                            </div>
-                            <div v-else-if="profileData" class="space-y-6">
-                                <!-- Personal Info -->
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
-                                        Personal Information
-                                    </h4>
-                                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-50 rounded-xl p-4">
-                                        <div><span class="text-[10px] text-slate-400 block">Full Name</span><span class="text-sm font-semibold text-slate-900">{{ profileData.personal?.first_name }} {{ profileData.personal?.last_name }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Email</span><span class="text-sm font-semibold text-slate-900">{{ profileData.personal?.email || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Phone</span><span class="text-sm font-semibold text-slate-900">{{ profileData.personal?.phone || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Gender</span><span class="text-sm font-semibold text-slate-900">{{ profileData.personal?.gender || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Civil Status</span><span class="text-sm font-semibold text-slate-900">{{ profileData.personal?.civil_status || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Date of Birth</span><span class="text-sm font-semibold text-slate-900">{{ formatDate(profileData.personal?.birth_date) }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Place of Birth</span><span class="text-sm font-semibold text-slate-900">{{ profileData.personal?.place_of_birth || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Citizenship</span><span class="text-sm font-semibold text-slate-900">{{ profileData.personal?.citizenship || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Religion</span><span class="text-sm font-semibold text-slate-900">{{ profileData.personal?.religion || 'N/A' }}</span></div>
-                                    </div>
+                            <div v-if="isLoadingProfile" class="flex items-center justify-center py-16 text-sm text-slate-500"><RefreshCw class="mr-2 h-5 w-5 animate-spin" />Loading applicant profile...</div>
+                            <div v-else-if="profileData" class="space-y-5">
+                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div class="rounded-xl border border-slate-100 bg-slate-50/80 p-4"><span class="text-[10px] uppercase tracking-wider text-slate-400">Position</span><p class="mt-1 text-sm font-semibold text-slate-800">{{ profileData.job_posting?.title || profileData.position?.applied || 'N/A' }}</p></div>
+                                    <div class="rounded-xl border border-slate-100 bg-slate-50/80 p-4"><span class="text-[10px] uppercase tracking-wider text-slate-400">Department</span><p class="mt-1 text-sm font-semibold text-slate-800">{{ profileData.job_posting?.department || 'N/A' }}</p></div>
+                                    <div class="rounded-xl border border-slate-100 bg-slate-50/80 p-4"><span class="text-[10px] uppercase tracking-wider text-slate-400">Phone</span><p class="mt-1 text-sm font-semibold text-slate-800">{{ profileData.personal?.phone || 'N/A' }}</p></div>
+                                    <div class="rounded-xl border border-slate-100 bg-slate-50/80 p-4"><span class="text-[10px] uppercase tracking-wider text-slate-400">Applied</span><p class="mt-1 text-sm font-semibold text-slate-800">{{ formatDate(profileData.application?.application_date) }}</p></div>
                                 </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
-                                        Address
-                                    </h4>
-                                    <div class="bg-slate-50 rounded-xl p-4">
-                                        <span class="text-sm text-slate-900">
-                                            {{ profileData.address?.street || '' }}
-                                            {{ profileData.address?.barangay ? ', ' + profileData.address.barangay : '' }}
-                                            {{ profileData.address?.city ? ', ' + profileData.address.city : '' }}
-                                            {{ profileData.address?.province ? ', ' + profileData.address.province : '' }}
-                                            {{ profileData.address?.zip_code ? ' ' + profileData.address.zip_code : '' }}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
-                                        Education
-                                    </h4>
-                                    <div class="bg-slate-50 rounded-xl p-4 space-y-2">
-                                        <div><span class="text-[10px] text-slate-400">Highest Education:</span> <span class="text-sm font-semibold text-slate-900">{{ profileData.education?.highest_education || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400">School/University:</span> <span class="text-sm font-semibold text-slate-900">{{ profileData.education?.school || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400">Course/Program:</span> <span class="text-sm font-semibold text-slate-900">{{ profileData.education?.course || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400">Graduation Year:</span> <span class="text-sm font-semibold text-slate-900">{{ profileData.education?.graduation_year || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400">Special Skills:</span> <span class="text-sm font-semibold text-slate-900">{{ profileData.education?.special_skills || 'N/A' }}</span></div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
-                                        Work Experience
-                                    </h4>
-                                    <div v-if="profileData.employment?.work_experience?.length > 0" class="space-y-3">
-                                        <div v-for="(exp, idx) in profileData.employment.work_experience" :key="idx" class="bg-slate-50 rounded-xl p-4">
-                                            <div class="font-semibold text-slate-900">{{ exp.position }} at {{ exp.company }}</div>
-                                            <div class="text-xs text-slate-500">{{ formatDate(exp.start_date) }} - {{ exp.end_date ? formatDate(exp.end_date) : 'Present' }}</div>
-                                            <div v-if="exp.responsibilities" class="text-sm text-slate-600 mt-1">{{ exp.responsibilities }}</div>
-                                        </div>
-                                    </div>
-                                    <div v-else class="bg-slate-50 rounded-xl p-4 text-sm text-slate-500">No work experience recorded.</div>
-                                </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
-                                        Emergency Contact
-                                    </h4>
-                                    <div class="bg-slate-50 rounded-xl p-4 grid grid-cols-2 gap-4">
-                                        <div><span class="text-[10px] text-slate-400 block">Name</span><span class="text-sm font-semibold text-slate-900">{{ profileData.emergency?.name || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Relationship</span><span class="text-sm font-semibold text-slate-900">{{ profileData.emergency?.relationship || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Phone</span><span class="text-sm font-semibold text-slate-900">{{ profileData.emergency?.phone || 'N/A' }}</span></div>
-                                        <div><span class="text-[10px] text-slate-400 block">Address</span><span class="text-sm font-semibold text-slate-900">{{ profileData.emergency?.address || 'N/A' }}</span></div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
-                                        Notes
-                                    </h4>
-                                    <div class="bg-slate-50 rounded-xl p-4">
-                                        <p class="text-sm text-slate-700">{{ profileData.application?.notes || 'No notes available.' }}</p>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
-                                        Screening Result
-                                    </h4>
-                                    <div class="bg-slate-50 rounded-xl p-4">
-                                        <div class="flex items-center gap-2">
-                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200"><CheckCircle2 class="w-3.5 h-3.5" />Passed</span>
-                                            <span class="text-sm text-slate-600">- Shortlisted for interview</span>
-                                        </div>
-                                        <div v-if="profileData.screening?.notes" class="mt-2 text-sm text-slate-600">
-                                            <span class="text-[10px] text-slate-400">Screening Notes:</span>
-                                            <p class="mt-1">{{ profileData.screening.notes }}</p>
-                                        </div>
-                                    </div>
+                                <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                                    <section class="rounded-xl border border-slate-200/60 bg-white p-4"><h3 class="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Personal Information</h3><dl class="grid grid-cols-2 gap-3"><div><dt class="text-[10px] text-slate-400">Gender</dt><dd class="text-sm font-semibold text-slate-800">{{ profileData.personal?.gender || 'N/A' }}</dd></div><div><dt class="text-[10px] text-slate-400">Civil Status</dt><dd class="text-sm font-semibold text-slate-800">{{ profileData.personal?.civil_status || 'N/A' }}</dd></div><div><dt class="text-[10px] text-slate-400">Date of Birth</dt><dd class="text-sm font-semibold text-slate-800">{{ formatDate(profileData.personal?.birth_date) }}</dd></div><div><dt class="text-[10px] text-slate-400">Citizenship</dt><dd class="text-sm font-semibold text-slate-800">{{ profileData.personal?.citizenship || 'N/A' }}</dd></div></dl><p class="mt-3 text-sm text-slate-700">{{ [profileData.address?.street, profileData.address?.barangay, profileData.address?.city, profileData.address?.province, profileData.address?.zip_code].filter(Boolean).join(', ') || 'No address recorded.' }}</p></section>
+                                    <section class="rounded-xl border border-slate-200/60 bg-white p-4"><h3 class="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Education</h3><dl class="grid grid-cols-2 gap-3"><div><dt class="text-[10px] text-slate-400">Highest Education</dt><dd class="text-sm font-semibold text-slate-800">{{ profileData.education?.highest_education || 'N/A' }}</dd></div><div><dt class="text-[10px] text-slate-400">School</dt><dd class="text-sm font-semibold text-slate-800">{{ profileData.education?.school || profileData.education?.college || 'N/A' }}</dd></div><div><dt class="text-[10px] text-slate-400">Graduation Year</dt><dd class="text-sm font-semibold text-slate-800">{{ profileData.education?.graduation_year || profileData.education?.college_year || 'N/A' }}</dd></div><div><dt class="text-[10px] text-slate-400">Special Skills</dt><dd class="text-sm font-semibold text-slate-800">{{ profileData.education?.special_skills || 'N/A' }}</dd></div></dl></section>
+                                    <section class="rounded-xl border border-slate-200/60 bg-white p-4"><h3 class="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Work Experience</h3><div v-if="profileData.employment?.work_experience?.length" class="space-y-3"><div v-for="(exp, idx) in profileData.employment.work_experience" :key="idx" class="rounded-lg bg-slate-50 p-3"><p class="text-sm font-semibold text-slate-800">{{ exp.position || 'Position not specified' }}<span v-if="exp.company"> · {{ exp.company }}</span></p><p v-if="exp.years" class="text-xs text-slate-500">{{ exp.years }} years</p><p v-if="exp.reason" class="mt-1 text-xs text-slate-600">{{ exp.reason }}</p></div></div><p v-else class="text-sm text-slate-500">No work experience recorded.</p></section>
+                                    <section class="rounded-xl border border-slate-200/60 bg-white p-4"><h3 class="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Additional Information</h3><p class="text-sm text-slate-700">{{ profileData.application?.notes || 'No notes available.' }}</p><div v-if="profileData.emergency?.name" class="mt-3 border-t border-slate-100 pt-3"><p class="text-xs font-semibold text-slate-500">Emergency Contact</p><p class="mt-1 text-sm text-slate-700">{{ profileData.emergency.name }} · {{ profileData.emergency.relationship || 'Relationship not specified' }} · {{ profileData.emergency.phone || 'No phone' }}</p></div></section>
                                 </div>
                             </div>
+                            <div v-else class="py-16 text-center text-sm text-slate-500">Applicant profile is unavailable.</div>
                         </div>
-                        <div class="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 shrink-0">
-                            <button
-                                v-if="profileData?.application?.id && profileData?.application?.status === 'Shortlisted'"
-                                @click="openScheduleModal(profileData.application)"
-                                class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-md hover:shadow-md"
-                            >
-                                <span class="inline-flex items-center gap-1.5"><Calendar class="w-4 h-4" />Schedule Interview</span>
-                            </button>
-                            <span
-                                v-else-if="profileData?.application?.status === 'Interview Scheduled'"
-                                class="px-5 py-2.5 bg-slate-200 text-slate-600 rounded-xl text-sm font-semibold"
-                            >
-                                Interview Scheduled
-                            </span>
-                            <button @click="closeProfileModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">Close</button>
-                        </div>
+                        <footer class="flex shrink-0 justify-end border-t border-slate-100 bg-slate-50 p-4"><button @click="closeProfileModal" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100">Close</button></footer>
                     </div>
                 </div>
 
-                <!-- ============================================ -->
-                <!-- ✅ SCHEDULE INTERVIEW MODAL                   -->
-                <!-- ============================================ -->
                 <div
                     v-if="showScheduleModal"
                     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
@@ -1050,8 +991,9 @@
                     <div class="bg-white rounded-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-modalIn">
                         <div class="p-6 border-b border-slate-100 bg-purple-50 flex items-start justify-between shrink-0">
                             <div class="flex items-center gap-3">
-                                <div class="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center text-white font-display font-bold text-lg shadow-sm">
+                                <div class="relative w-12 h-12 shrink-0 rounded-full bg-purple-600 flex items-center justify-center text-white font-display font-bold text-lg shadow-sm">
                                     {{ getInitials(selectedInterview.candidate_name) }}
+                                    <img v-if="getInterviewApplicantPhoto(selectedInterview)" :src="getInterviewApplicantPhoto(selectedInterview)" :alt="selectedInterview.candidate_name" class="absolute inset-0 h-12 w-12 rounded-full border border-white object-cover" @error="$event.target.remove()" />
                                 </div>
                                 <div>
                                     <h3 class="font-display text-lg font-bold text-slate-900">Interview Details</h3>
@@ -1098,6 +1040,7 @@
                             </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-200"><span class="text-[10px] text-slate-400 block">Type</span><span class="text-sm font-semibold text-slate-900">{{ selectedInterview.type || 'N/A' }}</span></div>
+                                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200"><span class="text-[10px] text-slate-400 block">Employment Type</span><span class="text-sm font-semibold text-slate-900">{{ getEmploymentTypeLabel(selectedInterview) }}</span></div>
                                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-200"><span class="text-[10px] text-slate-400 block">Method</span><span class="text-sm font-semibold text-slate-900">{{ selectedInterview.method || 'N/A' }}</span></div>
                                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-200"><span class="text-[10px] text-slate-400 block">Date</span><span class="text-sm font-semibold text-slate-900">{{ formatDate(selectedInterview.date) }}</span></div>
                                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-200"><span class="text-[10px] text-slate-400 block">Time</span><span class="text-sm font-semibold text-slate-900">{{ formatTime(selectedInterview.start_time) }} - {{ formatTime(selectedInterview.end_time) }}</span></div>
@@ -1162,12 +1105,12 @@
                         <div class="p-4 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-end gap-2 shrink-0">
                             <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openRescheduleModal(selectedInterview)" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md">↻ Reschedule</button>
                             <button v-if="false" @click="openCancelModal(selectedInterview)" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><X class="w-3.5 h-3.5" />Cancel</button>
-                            <button v-if="['Scheduled','No Show'].includes(selectedInterview.status) && !isCancelledInterview(selectedInterview)" @click="markNoShow(selectedInterview)" class="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><AlertTriangle class="w-3.5 h-3.5" />No Show</button>
+                            <button v-if="['Scheduled','No Show'].includes(selectedInterview.status) && !isCancelledInterview(selectedInterview)" @click="openNoShowConfirm(selectedInterview)" class="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><AlertTriangle class="w-3.5 h-3.5" />No Show</button>
                             <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openEvaluationModal(selectedInterview)" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Check class="w-3.5 h-3.5" />Start Evaluation</button>
                             <button v-if="isCancelledInterview(selectedInterview) && selectedInterview.applicant_id && !hasScheduledInterviewFor(selectedInterview)" @click="scheduleNewInterview(selectedInterview)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule New Interview</button>
                             <button v-if="selectedInterview.status === 'Completed' && selectedInterview.result === 'Passed' && selectedInterview.applicant?.status === 'Interviewed'" @click="openSelectModal(selectedInterview)" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Star class="w-3.5 h-3.5" />Select Candidate</button>
                             <button v-if="selectedInterview.status === 'Completed' && !isFinalInterview(selectedInterview) && selectedInterview.evaluation?.recommendation === 'proceed_to_final_interview' && ['Shortlisted','Interview Scheduled','Initial Interview','Final Interview','Interviewed'].includes(selectedInterview.applicant?.status)" @click="scheduleFinalInterview(selectedInterview)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule Final Interview</button>
-                            <button v-if="selectedInterview.status === 'Completed' && isFinalInterview(selectedInterview) && ['proceed_to_onboarding_training', 'proceed_to_onboarding', 'recommend_onboarding_training'].includes(selectedInterview.evaluation?.recommendation) && !['Onboard','Onboarding','Hired','Rejected','Withdrawn'].includes(selectedInterview.applicant?.status)" @click="advanceToOnboarding(selectedInterview)" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><ArrowRight class="w-3.5 h-3.5" />Advance to Onboarding</button>
+                            <button v-if="selectedInterview.status === 'Completed' && isFinalInterview(selectedInterview) && ['proceed_to_onboarding_training', 'recommend_onboarding_training'].includes(selectedInterview.evaluation?.recommendation) && !['Onboard','Onboarding','Hired','Rejected','Withdrawn'].includes(selectedInterview.applicant?.status)" @click="advanceToOnboarding(selectedInterview)" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><ArrowRight class="w-3.5 h-3.5" />Advance to Onboarding</button>
                             <button @click="closeDetailModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">Close</button>
                             <button v-if="selectedInterview.meeting_link && selectedInterview.status === 'Scheduled'" @click="openMeeting(selectedInterview.meeting_link)" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-md hover:shadow-md">
                                 <svg class="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
@@ -1179,6 +1122,31 @@
                     </div>
                 </div>
             </div>
+        </div>
+        <div v-if="showNoShowConfirm && selectedInterview" class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" @click.self="closeNoShowConfirm">
+            <section role="dialog" aria-modal="true" aria-labelledby="no-show-confirm-title" class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl animate-modalIn">
+                <header class="border-b border-amber-100 bg-amber-50 p-5">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700"><AlertTriangle class="h-5 w-5" /></div>
+                        <div>
+                            <h2 id="no-show-confirm-title" class="text-base font-black text-slate-900">Confirm No Show</h2>
+                            <p class="mt-0.5 text-xs text-slate-600">Confirm the candidate did not attend this interview.</p>
+                        </div>
+                    </div>
+                </header>
+                <div class="space-y-2 p-5 text-sm">
+                    <p class="font-bold text-slate-900">{{ selectedInterview.candidate_name }}</p>
+                    <p class="text-xs text-slate-500">{{ selectedInterview.position }} · {{ selectedInterview.date ? formatDate(selectedInterview.date) : 'Date unavailable' }}</p>
+                    <p class="pt-2 text-xs leading-relaxed text-slate-600">The interview status will change to <b>No Show</b>. You can reschedule the interview afterward.</p>
+                </div>
+                <footer class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 p-4">
+                    <button @click="closeNoShowConfirm" :disabled="isSubmitting" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-50">Cancel</button>
+                    <button @click="confirmNoShow" :disabled="isSubmitting" class="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50">
+                        <span v-if="isSubmitting" class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+                        <AlertTriangle v-else class="h-3.5 w-3.5" />{{ isSubmitting ? 'Updating…' : 'Confirm No Show' }}
+                    </button>
+                </footer>
+            </section>
         </div>
     </AuthenticatedLayout>
 </template>
@@ -1211,16 +1179,19 @@ const props = defineProps({
 // ============================================
 // STATE
 // ============================================
-const activeTab = ref('schedule');
+const activeTab = ref('completed');
 const searchQuery = ref('');
 const interviewSearchQuery = ref('');
 const filterStatus = ref('');
 const historyFilterStatus = ref('All');
 const finalFilterStatus = ref('Scheduled');
 const showProfileModal = ref(false);
+const isLoadingProfile = ref(false);
+const profileData = ref(null);
 const showScheduleModal = ref(false);
 const showConfirmationModal = ref(false);
 const showDetailModal = ref(false);
+const showNoShowConfirm = ref(false);
 const showRescheduleModal = ref(false);
 const showCancelModal = ref(false);
 const showEvaluationModal = ref(false);
@@ -1229,9 +1200,7 @@ const showToast = ref(false);
 const toastTitle = ref('');
 const toastMessage = ref('');
 const toastType = ref('success');
-const isLoadingProfile = ref(false);
 const isSubmitting = ref(false);
-const profileData = ref(null);
 const selectedInterview = ref(null);
 const applicants = ref(props.applicants || []);
 const interviews = ref([]);
@@ -1342,12 +1311,12 @@ const evaluationResultOptions = [
 
 const doNotProceedOption = { value: 'do_not_proceed', label: 'Do Not Proceed', description: 'Do not recommend this candidate for the next steps.' };
 const rejectOption = { value: 'reject', label: 'Reject', description: 'Reject the candidate for this position.' };
-const proceedToOnboardingOption = { value: 'proceed_to_onboarding', label: 'Proceed to Onboarding', description: 'The candidate moves directly to HR onboarding on submit.' };
+const proceedToOnboardingOption = { value: 'proceed_to_onboarding', label: 'Proceed to Onboarding', description: 'Move the candidate directly to HR onboarding after a passing interview.' };
 
 // Passed → only forward/reject options. Failed → only Do Not Proceed.
 // Pending review → neutral options only.
 const evaluationRecommendationOptionsPassedInitial = [
-    { value: 'proceed_to_final_interview', label: 'Proceed to Final Interview', description: 'Recommend moving this candidate to the next interview stage.' },
+    { value: 'proceed_to_final_interview', label: 'Proceed to Final Interview', description: 'Advance the candidate to a final interview before making an onboarding decision.' },
     proceedToOnboardingOption,
     rejectOption,
 ];
@@ -1475,11 +1444,28 @@ const filteredShortlistedCandidates = computed(() => {
 });
 
 const upcomingInterviews = computed(() => {
-    return interviewRows.value.filter(interview => interview.status === 'Scheduled');
+    return interviewRows.value.filter(interview =>
+        interview.status === 'Scheduled' && !isFinalInterview(interview)
+    );
 });
 
 const completedInterviews = computed(() => {
     return interviewRows.value.filter(interview => ['Completed', 'Cancelled', 'No Show'].includes(interview.status));
+});
+
+const passedInterviews = computed(() => interviewRows.value.filter(interview =>
+    interview.status === 'Completed' &&
+    String(interview.evaluation?.result ?? interview.result ?? '').toLowerCase() === 'passed'
+));
+
+const filteredPassedInterviews = computed(() => {
+    const query = (interviewSearchQuery.value || '').toLowerCase();
+    if (!query) return passedInterviews.value;
+    return passedInterviews.value.filter(interview =>
+        interview.candidate_name?.toLowerCase().includes(query) ||
+        interview.position?.toLowerCase().includes(query) ||
+        (interview.interviewer?.name || getInterviewerName(interview.interviewer_id))?.toLowerCase().includes(query)
+    );
 });
 
 const filteredHistoryInterviews = computed(() => {
@@ -1592,6 +1578,38 @@ const getInitials = (name) => {
         .join('')
         .toUpperCase()
         .substring(0, 2);
+};
+
+const getApplicantPhoto = (applicant) => {
+    const path = applicant?.profile_photo_url
+        || applicant?.image_url
+        || applicant?.profile_photo_path
+        || applicant?.image;
+    if (!path) return null;
+    if (/^(https?:)?\/\//i.test(path) || path.startsWith('data:')) return path;
+    if (path.startsWith('/')) return path;
+    return `/storage/${path.replace(/^storage\//, '')}`;
+};
+
+const getInterviewApplicantPhoto = (interview) => {
+    const applicant = interview?._sourceInterview?.applicant || interview?.applicant;
+    const path = applicant?.profile_photo_url
+        || applicant?.image_url
+        || applicant?.profile_photo_path
+        || applicant?.image;
+    if (!path) return null;
+    if (/^(https?:)?\/\//i.test(path) || path.startsWith('data:')) return path;
+    if (path.startsWith('/')) return path;
+    return `/storage/${path.replace(/^storage\//, '')}`;
+};
+
+const getEmploymentTypeLabel = (interview) => {
+    const source = interview?._sourceInterview || interview;
+    return source?.job_posting?.employment_type?.name
+        || source?.jobPosting?.employmentType?.name
+        || source?.applicant?.job_posting?.employment_type?.name
+        || source?.applicant?.jobPosting?.employmentType?.name
+        || 'N/A';
 };
 
 const formatDate = (date) => {
@@ -1782,16 +1800,17 @@ const validateScheduleForm = () => {
     return errors.length === 0;
 };
 
-const viewApplicantProfile = async (applicationId) => {
-    isLoadingProfile.value = true;
+const viewApplicantProfile = async (applicantId) => {
+    if (!applicantId || isLoadingProfile.value) return;
     showProfileModal.value = true;
-    
+    profileData.value = null;
+    isLoadingProfile.value = true;
     try {
-        const response = await axios.get(`/hrm/recruitment/applications/${applicationId}/profile`);
+        const response = await axios.get(`/hrm/recruitment/applications/${applicantId}/profile`);
         profileData.value = response.data;
     } catch (error) {
-        console.error('Failed to load profile:', error);
-        showToastMessage('Error', 'Failed to load applicant profile.', 'error');
+        showToastMessage('Profile Error', error.response?.data?.message || 'Unable to load applicant profile.', 'error');
+        closeProfileModal();
     } finally {
         isLoadingProfile.value = false;
     }
@@ -1946,7 +1965,7 @@ const openRescheduleModal = (interview) => {
         date: interview.date || todayDate.value,
         start_time: interview.start_time || '09:00',
         end_time: interview.end_time || '10:00',
-        interviewer_id: interview.interviewer_id || interview.interviewer?.id || 2,
+        interviewer_id: interview.interviewer_id || interview.interviewer?.id || null,
         method: interview.method || 'Online',
         location: interview.location || '',
         meeting_link: interview.meeting_link || '',
@@ -1954,17 +1973,19 @@ const openRescheduleModal = (interview) => {
     };
     showRescheduleModal.value = true;
     showDetailModal.value = false;
-    // Fetch all interviewers for reschedule (no department filter)
-    fetchInterviewers();
+    const department = interview.job_posting?.department
+        || interview.jobPosting?.department
+        || interview.applicant?.job_posting?.department
+        || interview.applicant?.jobPosting?.department
+        || interview.department
+        || '';
+    fetchInterviewers(department);
 };
 
 const closeRescheduleModal = () => { showRescheduleModal.value = false; rescheduleMenuOpen.value = false; };
 
 const rescheduleInterview = async () => {
     if (isSubmitting.value) return;
-    // Temporary interviewer until the HR interviewer selector is enabled.
-    rescheduleForm.value.interviewer_id = rescheduleForm.value.interviewer_id || 2;
-
     if (!rescheduleForm.value.date || !rescheduleForm.value.start_time || !rescheduleForm.value.end_time || !rescheduleForm.value.interviewer_id || !rescheduleForm.value.reason) {
         showToastMessage('Validation Error', 'Please complete the new schedule, interviewer, and reason.', 'error'); return;
     }
@@ -2043,11 +2064,27 @@ const cancelInterview = async () => {
     finally { isSubmitting.value = false; }
 };
 
+const openNoShowConfirm = (interview) => {
+    selectedInterview.value = interview;
+    showNoShowConfirm.value = true;
+};
+
+const closeNoShowConfirm = () => {
+    if (isSubmitting.value) return;
+    showNoShowConfirm.value = false;
+};
+
+const confirmNoShow = () => {
+    if (!selectedInterview.value || isSubmitting.value) return;
+    markNoShow(selectedInterview.value);
+};
+
 const markNoShow = async (interview) => {
-    if (!confirm(`Mark ${interview.candidate_name} as No Show?`)) return;
+    if (!interview) return;
     isSubmitting.value = true;
     try {
         await axios.post(`/hrm/recruitment/interviews/${interview.id}/no-show`);
+        showNoShowConfirm.value = false;
         showDetailModal.value = false;
         showToastMessage('Marked as No Show', 'The interview was marked as No Show. You can reschedule it later.', 'success');
         await refreshList();
@@ -2058,7 +2095,7 @@ const markNoShow = async (interview) => {
 const openEvaluationModal = (interview) => {
     selectedInterview.value = interview;
     const existing = interview.evaluation;
-    const defaultRecommendation = isFinalInterview(interview) ? 'proceed_to_onboarding' : 'proceed_to_final_interview';
+    const defaultRecommendation = 'proceed_to_onboarding';
 
     if (existing && existing.overall_score !== undefined) {
         evaluationForm.value = {
@@ -2245,6 +2282,9 @@ const fetchInterviewers = async (department = '') => {
             seen.add(key);
             return true;
         });
+        if (showRescheduleModal.value && !interviewers.value.some((u) => String(u.id) === String(rescheduleForm.value.interviewer_id))) {
+            rescheduleForm.value.interviewer_id = null;
+        }
     } catch (error) {
         console.error('Failed to fetch interviewers:', error);
     }

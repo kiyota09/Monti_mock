@@ -37,6 +37,7 @@ class InterviewController extends Controller
                 'shortlisted' => Applicant::where('status', 'Shortlisted')->count(),
                 'interview_scheduled' => ApplicantApplicationHoldService::excludeHeldInterviews(
                     HrmInterview::where('status', 'Scheduled')
+                        ->whereRaw("LOWER(COALESCE(type, 'initial')) NOT LIKE ?", ['%final%'])
                 )->count(),
                 'interviewed' => ApplicantApplicationHoldService::excludeHeldInterviews(
                     HrmInterview::where('status', 'Completed')
@@ -53,7 +54,7 @@ class InterviewController extends Controller
     {
         return response()->json(
             ApplicantApplicationHoldService::excludeHeldInterviews(
-                HrmInterview::with(['evaluation', 'applicant', 'interviewer:id,name,email'])
+                HrmInterview::with(['evaluation', 'applicant.jobPosting.employmentType', 'jobPosting.employmentType', 'interviewer:id,name,email'])
             )->latest()->paginate(20)
         );
     }
@@ -192,8 +193,9 @@ class InterviewController extends Controller
     {
         return response()->json(
             ApplicantApplicationHoldService::excludeHeldInterviews(
-                HrmInterview::with(['applicant', 'evaluation', 'interviewer:id,name,email'])
+                HrmInterview::with(['applicant.jobPosting.employmentType', 'jobPosting.employmentType', 'evaluation', 'interviewer:id,name,email'])
                     ->where('status', 'Scheduled')
+                    ->whereRaw("LOWER(COALESCE(type, 'initial')) NOT LIKE ?", ['%final%'])
                     ->whereDate('date', '>=', today())
                     ->orderBy('date')->orderBy('start_time')
             )->get()
@@ -669,19 +671,16 @@ class InterviewController extends Controller
             'strengths', 'concerns', 'interview_notes', 'result', 'recommendation',
         ]) + ['evaluated_by' => $request->user()->id]);
 
-        // Act on the recommendation immediately on submit:
-        // - onboarding recommendations move the applicant straight to HR onboarding;
-        // - reject marks the applicant Rejected (other applications untouched).
+        // Initial interviews can pass the candidate to a final interview.
+        // Onboarding happens only when that is the selected recommendation.
+        // Rejections remain scoped to this posting.
         // A failed Initial/Final interview starts the 6-month same-job
         // re-application cooldown on that job only (ReapplyCooldown).
         $recommendation = $evaluation->recommendation;
         $result = $evaluation->result;
         $advanced = false;
         $rejected = false;
-        if (in_array($recommendation, ['proceed_to_onboarding', 'proceed_to_onboarding_training', 'recommend_onboarding_training'], true)) {
-            $this->moveInterviewToOnboarding($interview, $request->user()->id);
-            $advanced = true;
-        } elseif ($result === 'failed' || in_array($recommendation, ['reject', 'do_not_proceed'], true)) {
+        if ($result === 'failed' || in_array($recommendation, ['reject', 'do_not_proceed'], true)) {
             if ($app = $interview->applicant) {
                 $postingId = $interview->job_posting_id
                     ?? ($interview->applicant_id ? $this->resolvePostingId((int) $interview->applicant_id) : null);
@@ -697,6 +696,12 @@ class InterviewController extends Controller
                 \App\Support\NotifiesApplicant::push($app, 'rejection', 'Application Update', 'Thank you for your interest. A decision has been made on your application — you may re-apply to this position after 6 months.', ['position' => $app->position_applied, 'status' => 'Rejected']);
                 $rejected = true;
             }
+        } elseif ($recommendation === 'proceed_to_final_interview') {
+            // Keep the applicant in the interview pipeline; the completed initial
+            // evaluation creates the final-interview queue entry in the UI.
+        } elseif ($result === 'passed' || in_array($recommendation, ['proceed_to_onboarding', 'proceed_to_onboarding_training', 'recommend_onboarding_training'], true)) {
+            $this->moveInterviewToOnboarding($interview, $request->user()->id);
+            $advanced = true;
         }
 
         return response()->json(['ok' => true, 'advanced_to_onboarding' => $advanced, 'rejected' => $rejected]);

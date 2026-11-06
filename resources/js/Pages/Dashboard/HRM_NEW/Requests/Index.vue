@@ -18,6 +18,8 @@ const props = defineProps<{
         agency: string | null;
         agency_id: number;
         start_date: string | null;
+        end_date: string | null;
+        shift: string | null;
         status: string;
         stored_status: string;
     }>;
@@ -147,16 +149,15 @@ function statusBadge(s: string): string {
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse min-w-[900px]">
+                <table class="w-full text-left border-collapse min-w-[1120px]">
                     <thead>
                         <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                            <th class="py-3 px-4">Code</th>
                             <th class="py-3 px-4">Department</th>
                             <th class="py-3 px-4">Position</th>
-                            <th class="py-3 px-4 text-center">Needed</th>
-                            <th class="py-3 px-4 text-center">Filled</th>
+                            <th class="py-3 px-4 text-center">Headcount</th>
                             <th class="py-3 px-4">Agency</th>
-                            <th class="py-3 px-4">Start date</th>
+                            <th class="py-3 px-4">Dates</th>
+                            <th class="py-3 px-4">Shift</th>
                             <th class="py-3 px-4 text-center">Status</th>
                             <th class="py-3 px-4 text-right">Actions</th>
                         </tr>
@@ -168,13 +169,15 @@ function statusBadge(s: string): string {
                             @click="openRequest(r.id)"
                             class="transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60"
                         >
-                            <td class="py-3 px-4 text-xs font-mono font-bold text-slate-700 dark:text-slate-200">{{ r.code }}</td>
                             <td class="py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">{{ r.department }}</td>
                             <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ r.position_skill }}</td>
-                            <td class="py-3 px-4 text-center text-sm font-bold text-slate-700 dark:text-slate-200">{{ r.needed }}</td>
-                            <td class="py-3 px-4 text-center text-sm font-bold text-slate-700 dark:text-slate-200">{{ r.filled }}</td>
+                            <td class="py-3 px-4 text-center text-sm font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">{{ r.filled }} / {{ r.needed }}</td>
                             <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{{ r.agency || '—' }}</td>
-                            <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ r.start_date ? new Date(r.start_date + 'T00:00:00').toLocaleDateString() : '—' }}</td>
+                            <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                                <template v-if="r.start_date">{{ new Date(r.start_date + 'T00:00:00').toLocaleDateString() }}<span v-if="r.end_date"> – {{ new Date(r.end_date + 'T00:00:00').toLocaleDateString() }}</span></template>
+                                <span v-else>—</span>
+                            </td>
+                            <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ r.shift || '—' }}</td>
                             <td class="py-3 px-4 text-center">
                                 <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border whitespace-nowrap', statusBadge(r.status)]">{{ r.status }}</span>
                             </td>

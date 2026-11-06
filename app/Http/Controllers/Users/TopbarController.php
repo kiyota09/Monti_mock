@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Users;
 use App\Http\Controllers\Controller;
 use App\Models\Core\Notification;
 use App\Models\Core\User;
+use App\Models\Hrm\HrmInterview;
 use App\Models\Sec\SecretaryMemo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,7 @@ class TopbarController extends Controller
     public function summary(Request $request)
     {
         $user = $request->user();
+        $this->syncInterviewDayNotifications($user);
 
         // Exact unread count across the viewer's threads (usually a handful).
         $msgUnread = 0;
@@ -44,6 +46,8 @@ class TopbarController extends Controller
 
     public function notifications(Request $request)
     {
+        $this->syncInterviewDayNotifications($request->user());
+
         // Bell feed excludes chat + memo notifications — those surfaces
         // have their own icons/panels (messenger + memos).
         $items = Notification::with('creator:id,name')
@@ -59,6 +63,37 @@ class TopbarController extends Controller
                 ->count(),
             'items' => $items,
         ]);
+    }
+
+    /** Create one bell reminder for each scheduled interview assigned to this user today. */
+    private function syncInterviewDayNotifications(User $user): void
+    {
+        $interviews = HrmInterview::query()
+            ->where('interviewer_id', $user->id)
+            ->where('status', 'Scheduled')
+            ->whereDate('date', today())
+            ->get(['id', 'candidate_name', 'position', 'start_time']);
+
+        foreach ($interviews as $interview) {
+            $title = 'Interview today · #' . $interview->id;
+            $body = trim(($interview->candidate_name ?: 'Candidate') . ' · ' . ($interview->position ?: 'Interview'))
+                . ($interview->start_time ? ' · ' . $interview->start_time : '');
+
+            $alreadyNotified = Notification::where('user_id', $user->id)
+                ->where('type', 'recruitment_interview_today')
+                ->where('title', $title)
+                ->exists();
+
+            if (! $alreadyNotified) {
+                Notification::notify(
+                    $user->id,
+                    'recruitment_interview_today',
+                    $title,
+                    $body,
+                    'hrm.recruitment.interviews.index'
+                );
+            }
+        }
     }
 
     public function readNotification(Request $request, Notification $notification)

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Agency;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hrm\AgencyActivity;
+use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\ManpowerProposal;
 use App\Models\Hrm\ManpowerRequest;
 use App\Models\Hrm\Worker;
@@ -83,17 +84,40 @@ class RequestPortalController extends Controller
         $pickable = [];
         if ($manpowerRequest->status === ManpowerRequest::STATUS_OPEN
             && $manpowerRequest->filled_count < max(1, (int) $manpowerRequest->headcount)) {
-            $pickable = Worker::where('agency_id', $this->agencyId($request))
-                ->where('status', Worker::STATUS_AVAILABLE)
+            $workers = Worker::where('agency_id', $this->agencyId($request))
+                ->whereIn('status', [Worker::STATUS_AVAILABLE, Worker::STATUS_PENDING])
                 ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('manpower_assignments as ma')
                     ->whereColumn('ma.worker_id', 'workers.id')->whereNull('ma.released_at'))
                 ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('manpower_proposals as mp')
                     ->whereColumn('mp.worker_id', 'workers.id')
                     ->where('mp.request_id', $manpowerRequest->id)
                     ->where('mp.status', ManpowerProposal::STATUS_PROPOSED))
-                ->orderBy('name')->get(['id', 'code', 'name', 'position_skill', 'clearance_expiry'])
-                ->filter(fn ($w) => ! $w->clearance_expired)
-                ->map(fn ($w) => ['id' => $w->id, 'code' => $w->code, 'name' => $w->name, 'position_skill' => $w->position_skill])
+                ->orderBy('name')->get(['id', 'code', 'name', 'status', 'position_skill', 'proposed_department', 'clearance_expiry'])
+                ->filter(fn ($w) => ! $w->clearance_expired);
+
+            $departmentByPosition = HrmPosition::with('department:id,name')
+                ->whereIn('name', $workers->pluck('position_skill')->filter()->unique())
+                ->get()
+                ->groupBy('name')
+                ->map(fn ($positions) => $positions->first()?->department?->name);
+
+            $pickable = $workers
+                ->filter(function ($worker) use ($manpowerRequest, $departmentByPosition) {
+                    $workerDepartment = $worker->proposed_department ?: $departmentByPosition->get($worker->position_skill);
+
+                    return $worker->position_skill
+                        && strcasecmp(trim($worker->position_skill), trim($manpowerRequest->position_skill)) === 0
+                        && $workerDepartment
+                        && strcasecmp(trim($workerDepartment), trim($manpowerRequest->department)) === 0;
+                })
+                ->map(fn ($w) => [
+                    'id' => $w->id,
+                    'code' => $w->code,
+                    'name' => $w->name,
+                    'position_skill' => $w->position_skill,
+                    'department' => $w->proposed_department ?: $departmentByPosition->get($w->position_skill),
+                    'worker_status' => $w->status,
+                ])
                 ->values()->all();
         }
 
@@ -136,8 +160,11 @@ class RequestPortalController extends Controller
         if ((int) $worker->agency_id !== (int) $manpowerRequest->agency_id) {
             abort(404);
         }
-        if ($worker->status !== Worker::STATUS_AVAILABLE) {
-            throw ValidationException::withMessages(['worker_id' => 'Only Available workers can be proposed.']);
+        if (! in_array($worker->status, [Worker::STATUS_AVAILABLE, Worker::STATUS_PENDING], true)) {
+            throw ValidationException::withMessages(['worker_id' => 'Only Available or Pending workers can be proposed.']);
+        }
+        if (! $this->workerMatchesRequest($manpowerRequest, $worker)) {
+            throw ValidationException::withMessages(['worker_id' => 'The worker department and position must match this request.']);
         }
         if ($worker->activeAssignment()->exists()) {
             throw ValidationException::withMessages(['worker_id' => 'This worker is already on another active request.']);
@@ -182,5 +209,19 @@ class RequestPortalController extends Controller
         );
 
         return back()->with('success', "Worker {$worker->name} proposed. HR will approve or reject it.");
+    }
+
+    private function workerMatchesRequest(ManpowerRequest $request, Worker $worker): bool
+    {
+        if (strcasecmp(trim((string) $worker->position_skill), trim((string) $request->position_skill)) !== 0) {
+            return false;
+        }
+
+        $department = $worker->proposed_department ?: HrmPosition::with('department:id,name')
+            ->where('name', $worker->position_skill)
+            ->first()?->department?->name;
+
+        return $department !== null
+            && strcasecmp(trim($department), trim((string) $request->department)) === 0;
     }
 }

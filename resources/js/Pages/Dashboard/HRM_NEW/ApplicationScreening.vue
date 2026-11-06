@@ -166,7 +166,7 @@
                   <textarea v-model="rejectionReason" rows="2" class="mt-1 w-full rounded-lg border border-slate-200 p-2.5 text-xs focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100" placeholder="Explain the reason for rejection"></textarea>
                 </div>
                 <p v-if="formError" class="mt-3 rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700">{{ formError }}</p>
-                <button @click="submitScreening" :disabled="submitting" class="mt-3 w-full rounded-lg bg-blue-700 px-3 py-2.5 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50">{{ submitting ? 'Submitting…' : 'Submit Screening' }}</button>
+                <button @click="requestSubmitConfirmation" :disabled="submitting" class="mt-3 w-full rounded-lg bg-blue-700 px-3 py-2.5 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50">Submit Screening</button>
               </section>
             </div>
           </div>
@@ -199,6 +199,28 @@
               </div>
             </section>
           </div>
+
+          <div v-if="showSubmitConfirm" class="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="submit-confirm-title" @click.self="showSubmitConfirm = false">
+            <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+              <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+              </div>
+              <h2 id="submit-confirm-title" class="text-lg font-bold text-slate-900">Submit screening decision?</h2>
+              <p class="mt-2 text-sm leading-5 text-slate-600">Confirm the screening result for {{ fullName }}. This will save your checklist, notes, and decision.</p>
+              <div class="mt-6 flex justify-end gap-3">
+                <button type="button" @click="showSubmitConfirm = false" class="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Review</button>
+                <button type="button" @click="submitScreening" class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-800">Confirm &amp; Submit</button>
+              </div>
+            </section>
+          </div>
+
+          <div v-if="submitting" class="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="status" aria-live="polite">
+            <div class="flex min-w-56 flex-col items-center rounded-2xl border border-white/20 bg-white px-8 py-7 text-center shadow-2xl">
+              <span class="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-700"></span>
+              <p class="mt-4 text-sm font-bold text-slate-900">Submitting screening…</p>
+              <p class="mt-1 text-xs text-slate-500">Please wait while your decision is saved.</p>
+            </div>
+          </div>
         </template>
       </div>
     </main>
@@ -215,6 +237,7 @@ const props = defineProps({ applicationId: { type: Number, required: true }, job
 const profile = ref({});
 const loading = ref(true);
 const submitting = ref(false);
+const showSubmitConfirm = ref(false);
 const showScreeningReview = ref(false);
 const showResumeModal = ref(false);
 const showNotesModal = ref(false);
@@ -285,7 +308,16 @@ onMounted(async () => {
   }
 });
 
+const requestSubmitConfirmation = () => {
+  formError.value = '';
+  if (!decision.value) return formError.value = 'Select Pass or Reject before submitting.';
+  if (!Object.values(checks).some(Boolean)) return formError.value = 'Complete at least one screening checklist item.';
+  if (decision.value === 'rejected' && !rejectionReason.value.trim()) return formError.value = 'Provide a rejection reason.';
+  showSubmitConfirm.value = true;
+};
+
 const submitScreening = async () => {
+  showSubmitConfirm.value = false;
   formError.value = '';
   if (!decision.value) return formError.value = 'Select Pass or Reject before submitting.';
   if (!Object.values(checks).some(Boolean)) return formError.value = 'Complete at least one screening checklist item.';

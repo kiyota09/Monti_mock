@@ -136,7 +136,7 @@ function statusBadge(s: string): string {
                 <div class="flex flex-wrap items-center gap-2">
                     <select v-model="agencyId" class="px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200">
                         <option value="All">All agencies</option>
-                        <option v-for="a in agencies" :key="a.id" :value="a.id">{{ a.name }} ({{ a.code }})</option>
+                        <option v-for="a in agencies" :key="a.id" :value="a.id">{{ a.name }}</option>
                     </select>
                     <select v-model="status" class="px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200">
                         <option value="All">All statuses</option>

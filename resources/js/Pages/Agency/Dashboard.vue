@@ -31,7 +31,7 @@ watch(() => (page.props as any).flash, (flash: any) => {
 }, { immediate: true, deep: true });
 
 const cards = computed(() => [
-    { label: 'Open requests', value: props.cards?.open_requests ?? 0, href: 'agency.requests.index', tone: 'text-blue-600' },
+    { label: 'Open requests', value: props.cards?.open_requests ?? 0, href: 'agency.requests.index', tone: 'text-amber-700' },
     { label: 'Workers deployed', value: props.cards?.workers_deployed ?? 0, href: 'agency.workers.index', tone: 'text-emerald-600' },
     { label: 'Workers available', value: props.cards?.workers_available ?? 0, href: 'agency.workers.index', tone: 'text-slate-900 dark:text-white' },
     { label: 'Attendance to confirm', value: props.cards?.pending_confirmation ?? 0, href: 'agency.attendance.index', tone: 'text-amber-600' },
@@ -42,7 +42,8 @@ const cards = computed(() => [
 <template>
     <Head title="Agency Dashboard - Monti ERP" />
     <AgencyLayout>
-        <h1 class="text-2xl font-black text-slate-900 dark:text-white">{{ agency?.name || 'Agency workspace' }}</h1>
+        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
+        <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">{{ agency?.name || 'Agency workspace' }}</h1>
         <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Contract ends {{ agency?.contract_end || '—' }}.
         </p>

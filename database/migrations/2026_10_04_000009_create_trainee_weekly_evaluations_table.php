@@ -8,7 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('trainee_weekly_evaluations', function (Blueprint $table) {
+        if (! Schema::hasTable('trainee_weekly_evaluations')) {
+            Schema::create('trainee_weekly_evaluations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->unsignedInteger('week_number')->default(1);
@@ -25,7 +26,8 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['user_id', 'week_number']);
-        });
+            });
+        }
 
         if (Schema::hasTable('trainee_grades')) {
             Schema::table('trainee_grades', function (Blueprint $table) {

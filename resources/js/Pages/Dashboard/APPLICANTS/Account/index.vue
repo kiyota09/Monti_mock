@@ -30,6 +30,18 @@ const props = defineProps<{
 const showPasswordModal = ref(false);
 const showVerificationModal = ref(false);
 const isSubmitting = ref(false);
+const showNoticeModal = ref(false);
+const showDeactivateModal = ref(false);
+const noticeTitle = ref('');
+const noticeMessage = ref('');
+const noticeIsError = ref(false);
+
+function showNotice(title: string, message: unknown, isError = false) {
+    noticeTitle.value = title;
+    noticeMessage.value = String(message || 'Please try again.');
+    noticeIsError.value = isError;
+    showNoticeModal.value = true;
+}
 
 // ============================================
 // PASSWORD FORM
@@ -63,12 +75,12 @@ function changePassword() {
             isSubmitting.value = false;
             showPasswordModal.value = false;
             passwordForm.reset();
-            alert('Password updated successfully!');
+            showNotice('Password Updated', 'Your password was changed successfully.');
         },
         onError: (errors) => {
             isSubmitting.value = false;
             const errorMsg = Object.values(errors)[0] || 'Failed to update password. Please try again.';
-            alert(errorMsg);
+            showNotice('Unable to Update Password', errorMsg, true);
         }
     });
 }
@@ -78,28 +90,31 @@ function sendVerification() {
         preserveScroll: true,
         onSuccess: () => {
             showVerificationModal.value = false;
-            alert('Verification email sent! Please check your inbox.');
+            showNotice('Verification Email Sent', 'Please check your inbox for the verification link.');
         },
         onError: (errors) => {
             const errorMsg = Object.values(errors)[0] || 'Failed to send verification email.';
-            alert(errorMsg);
+            showNotice('Unable to Send Email', errorMsg, true);
         }
     });
 }
 
 function deactivateAccount() {
-    if (confirm('Are you sure you want to deactivate your account? This action can be reversed later.')) {
-        router.post(route('applicant.account.deactivate'), {}, {
+    showDeactivateModal.value = true;
+}
+
+function confirmDeactivateAccount() {
+    showDeactivateModal.value = false;
+    router.post(route('applicant.account.deactivate'), {}, {
             preserveScroll: true,
             onSuccess: () => {
-                alert('Account deactivated successfully.');
+                showNotice('Account Deactivated', 'Your account has been deactivated.');
             },
             onError: (errors) => {
                 const errorMsg = Object.values(errors)[0] || 'Failed to deactivate account.';
-                alert(errorMsg);
+                showNotice('Unable to Deactivate Account', errorMsg, true);
             }
         });
-    }
 }
 
 function closePasswordModal() {
@@ -451,6 +466,32 @@ function closeVerificationModal() {
                     >
                         <Mail class="w-4 h-4" /> Send Verification
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showDeactivateModal" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="deactivate-title" @click.self="showDeactivateModal = false">
+            <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+                <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"><Ban class="h-5 w-5" /></div>
+                <h3 id="deactivate-title" class="text-lg font-black text-slate-900 dark:text-white">Deactivate your account?</h3>
+                <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">You can reactivate your account anytime. Are you sure you want to continue?</p>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" @click="showDeactivateModal = false" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200">Keep Account</button>
+                    <button type="button" @click="confirmDeactivateAccount" class="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-700">Deactivate</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showNoticeModal" class="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="notice-title" @click.self="showNoticeModal = false">
+            <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+                <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-xl" :class="noticeIsError ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'">
+                    <AlertTriangle v-if="noticeIsError" class="h-5 w-5" />
+                    <CheckCircle2 v-else class="h-5 w-5" />
+                </div>
+                <h3 id="notice-title" class="text-lg font-black text-slate-900 dark:text-white">{{ noticeTitle }}</h3>
+                <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{{ noticeMessage }}</p>
+                <div class="mt-6 flex justify-end">
+                    <button type="button" @click="showNoticeModal = false" class="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">OK</button>
                 </div>
             </div>
         </div>

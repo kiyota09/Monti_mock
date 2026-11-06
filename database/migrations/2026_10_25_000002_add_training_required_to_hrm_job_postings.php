@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasColumn('hrm_job_postings', 'training_required')) {
+            return;
+        }
+
         Schema::table('hrm_job_postings', function (Blueprint $table) {
             $table->boolean('training_required')->default(false)->after('require_final_interview');
         });

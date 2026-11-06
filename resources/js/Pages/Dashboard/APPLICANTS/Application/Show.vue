@@ -13,9 +13,10 @@ const props = defineProps<{
 }>();
 
 const withdrawing = ref(false);
+const showWithdrawConfirm = ref(false);
 
 const withdraw = () => {
-    if (!confirm(`Cancel your application for "${props.application?.job_title}"?`)) return;
+    showWithdrawConfirm.value = false;
     withdrawing.value = true;
     router.post(route('applicant.applications.withdraw', props.application.id), {}, {
         onSuccess: () => toast.success('Application cancelled.'),
@@ -65,7 +66,7 @@ const value = 'text-sm text-slate-800 dark:text-slate-200';
                     </Link>
                     <button
                         v-if="application?.status && canWithdraw"
-                        @click="withdraw"
+                        @click="showWithdrawConfirm = true"
                         :disabled="withdrawing"
                         class="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 text-sm font-bold rounded-xl border border-rose-200 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition active:scale-95 disabled:opacity-50"
                     >
@@ -132,6 +133,17 @@ const value = 'text-sm text-slate-800 dark:text-slate-200';
                 </div>
             </div>
 
+        </div>
+
+        <div v-if="showWithdrawConfirm" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="withdraw-title" @click.self="showWithdrawConfirm = false">
+            <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+                <h3 id="withdraw-title" class="text-lg font-black text-slate-900 dark:text-white">Cancel this application?</h3>
+                <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Are you sure you want to cancel your application for <strong>{{ application?.job_title }}</strong>?</p>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" @click="showWithdrawConfirm = false" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200">Keep Application</button>
+                    <button type="button" @click="withdraw" class="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-700">Yes, Cancel</button>
+                </div>
+            </div>
         </div>
     </AuthenticatedLayout>
 </template>

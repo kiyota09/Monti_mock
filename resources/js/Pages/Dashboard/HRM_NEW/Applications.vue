@@ -14,13 +14,13 @@
             </div>
         </Transition>
 
-        <div class="flex min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
-            <div class="flex-1 p-8 text-slate-900 font-sans min-w-0 relative flex flex-col">
+        <div class="flex min-h-screen bg-white">
+            <div class="flex-1 p-4 sm:p-6 lg:p-8 text-slate-900 font-sans min-w-0 relative flex flex-col gap-4">
                 <!-- Subtle Background Pattern -->
-                <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
+                <div class="absolute inset-0 bg-grid-slate-100 opacity-10 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
 
                 <!-- Professional Header -->
-                <header class="mb-6 relative shrink-0">
+                <header class="mb-0 relative shrink-0">
                     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         <div>
                             <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
@@ -34,15 +34,15 @@
                                 </svg>
                                 <span class="text-blue-600 font-semibold">Applications</span>
                             </nav>
-                            <h1 class="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Applications</h1>
-                            <p class="text-sm text-slate-500 mt-0.5">Manage all candidates who apply for open job vacancies. Track progress and build your talent database.</p>
+                            <h1 class="text-3xl font-bold tracking-tight text-[#263c43]">Applications</h1>
+                            <p class="text-sm text-[#455a60] mt-0.5">Review candidates and track every application through your hiring pipeline.</p>
                         </div>
 
                         <!-- Quick Actions -->
                         <div class="flex flex-wrap items-center justify-end gap-2">
                             <button 
                                 @click="openModal('create')"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
+                                class="flex items-center gap-2 px-4 py-2.5 bg-[#263c43] hover:bg-[#1e3036] text-white rounded-lg text-sm font-bold transition-all duration-200 shadow-md"
                             >
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
@@ -51,7 +51,7 @@
                             </button>
                             <button 
                                 @click="exportCSV"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                                class="flex items-center gap-2 px-4 py-2.5 bg-white/90 border border-white hover:bg-white text-[#33484f] rounded-lg text-sm font-medium transition-all duration-200 shadow-sm"
                             >
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
@@ -63,7 +63,7 @@
                 </header>
 
                 <!-- KPI METRICS ROW -->
-                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4 shrink-0">
+                <div class="hidden">
                     <div 
                         v-for="metric in metricsData" 
                         :key="metric.label"
@@ -89,7 +89,7 @@
                 </div>
 
                 <!-- HIRING FUNNEL -->
-                <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm p-4 mb-4 shrink-0">
+                <div class="hidden">
                     <div class="flex items-center justify-between mb-3">
                         <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
                             <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -121,43 +121,26 @@
                 </div>
 
                 <!-- SEARCH & FILTERS -->
-                <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm p-3 mb-4 shrink-0">
-                    <div class="flex flex-col md:flex-row md:items-center gap-3">
-                        <div class="flex-1 relative">
-                            <span class="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
-                                </svg>
+                <div class="relative shrink-0 rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-[0_12px_32px_rgba(15,23,42,0.12)]">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2 text-[#344a50]">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-[#f6eadc] text-[#bd8450]">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4.5h18l-7.2 8.1v5.1l-3.6 1.8v-6.9L3 4.5z"/></svg>
                             </span>
-                            <input 
-                                v-model="searchQuery"
-                                type="text" 
-                                placeholder="Search applicants..." 
-                                @input="debouncedSearch"
-                                class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
-                            />
+                            <div><h2 class="text-sm font-bold">Application filters</h2><p class="text-[11px] text-slate-400">{{ filteredApplications.length }} results</p></div>
                         </div>
-                        
                         <div class="flex flex-wrap items-center gap-2">
-                            <select v-model="filterStatus" @change="applyFilters" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 cursor-pointer">
-                                <option value="">All Statuses</option>
-                                <option v-for="status in statusOptions" :key="status" :value="status">{{ status }}</option>
-                            </select>
-                            <select v-model="filterPosition" @change="applyFilters" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 cursor-pointer">
-                                <option value="">All Positions</option>
-                                <option v-for="pos in positionOptions" :key="pos" :value="pos">{{ pos }}</option>
-                            </select>
                             <button @click="openHistory" class="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 cursor-pointer">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
                                 History
                             </button>
-                            <div class="inline-flex items-center bg-slate-100 rounded-xl p-0.5">
+                            <div class="inline-flex items-center bg-slate-100 rounded-lg p-0.5">
                                 <button
                                     @click="viewMode = 'table'"
                                     :class="viewMode === 'table' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'"
-                                    class="p-1.5 rounded-lg transition-all duration-200"
+                                    class="p-1.5 rounded-md transition-all duration-200"
                                     title="Table view"
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -167,7 +150,7 @@
                                 <button
                                     @click="viewMode = 'card'"
                                     :class="viewMode === 'card' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'"
-                                    class="p-1.5 rounded-lg transition-all duration-200"
+                                    class="p-1.5 rounded-md transition-all duration-200"
                                     title="Card view"
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -177,24 +160,45 @@
                             </div>
                         </div>
                     </div>
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <label class="block text-[10px] font-semibold tracking-wide text-slate-500">CANDIDATE
+                            <div class="relative mt-1">
+                                <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                                <input v-model="searchQuery" type="text" placeholder="Search name, email or role" @input="debouncedSearch" class="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-xs font-normal text-slate-700 shadow-sm focus:border-[#bb8754] focus:ring-2 focus:ring-[#bb8754]/20" />
+                            </div>
+                        </label>
+                        <label class="block text-[10px] font-semibold tracking-wide text-slate-500">ROLE STATUS
+                            <select v-model="filterStatus" @change="applyFilters" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-normal text-slate-700 shadow-sm focus:border-[#bb8754] focus:ring-2 focus:ring-[#bb8754]/20">
+                                <option value="">All statuses</option><option v-for="status in statusOptions" :key="status" :value="status">{{ status }}</option>
+                            </select>
+                        </label>
+                        <label class="block text-[10px] font-semibold tracking-wide text-slate-500">ROLE
+                            <select v-model="filterPosition" @change="applyFilters" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-normal text-slate-700 shadow-sm focus:border-[#bb8754] focus:ring-2 focus:ring-[#bb8754]/20">
+                                <option value="">All positions</option><option v-for="pos in positionOptions" :key="pos" :value="pos">{{ pos }}</option>
+                            </select>
+                        </label>
+                        <div class="flex items-end">
+                            <button @click="searchQuery = ''; filterStatus = ''; filterPosition = ''; applyFilters()" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">Clear filters</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- APPLICATIONS VIEW (TABLE / CARD) -->
-                <div class="bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden flex-1 flex flex-col min-h-0">
-                    <div class="flex-1 overflow-auto p-4">
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-[0_14px_36px_rgba(15,23,42,0.14)] overflow-hidden flex-1 flex flex-col min-h-0">
+                    <div class="flex-1 overflow-auto p-2 sm:p-4">
                         <div v-if="applications && applications.length > 0">
 
                         <!-- TABLE VIEW (default) -->
                         <div v-if="viewMode === 'table'" class="overflow-auto">
                             <table class="w-full text-left border-collapse">
                                 <thead class="sticky top-0 z-10">
-                                    <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                    <tr class="bg-[#2d4148] text-[10px] font-bold uppercase tracking-wider text-white/90">
                                         <th class="py-3 px-4">Applicant</th>
                                         <th class="py-3 px-4">Position</th>
-                                        <th class="py-3 px-4 text-center">Status</th>
                                         <th class="py-3 px-4">Email</th>
                                         <th class="py-3 px-4">Phone</th>
                                         <th class="py-3 px-4">Applied</th>
+                                        <th class="py-3 px-4 text-center">Status</th>
                                         <th class="py-3 px-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -203,10 +207,10 @@
                                         v-for="app in filteredApplications"
                                         :key="cardKey(app)"
                                         :class="[
-                                            'transition-all duration-200',
+                                            'transition-colors duration-150',
                                             app.is_on_hold
-                                                ? 'bg-orange-50/40 hover:bg-orange-50/70'
-                                                : 'hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent'
+                                                ? 'bg-orange-50/50 hover:bg-orange-50'
+                                                : 'hover:bg-[#f7f8f8]'
                                         ]"
                                     >
                                         <td class="py-3 px-4">
@@ -239,6 +243,15 @@
                                                 {{ holdSource(app) }}
                                             </div>
                                         </td>
+                                        <td class="py-3 px-4">
+                                            <div class="text-xs text-slate-600 truncate max-w-[180px]">{{ app.email || 'N/A' }}</div>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <div class="text-xs text-slate-600">{{ app.phone || 'N/A' }}</div>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <div class="text-xs text-slate-500 whitespace-nowrap">{{ getRelativeTime(app.application_date || app.created_at) }}</div>
+                                        </td>
                                         <td class="py-3 px-4 text-center">
                                             <span
                                                 :class="[
@@ -252,15 +265,6 @@
                                             <div v-if="app.is_on_hold" class="text-[9px] text-slate-500 mt-0.5">
                                                 Stage: {{ holdStage(app) }}
                                             </div>
-                                        </td>
-                                        <td class="py-3 px-4">
-                                            <div class="text-xs text-slate-600 truncate max-w-[180px]">{{ app.email || 'N/A' }}</div>
-                                        </td>
-                                        <td class="py-3 px-4">
-                                            <div class="text-xs text-slate-600">{{ app.phone || 'N/A' }}</div>
-                                        </td>
-                                        <td class="py-3 px-4">
-                                            <div class="text-xs text-slate-500 whitespace-nowrap">{{ getRelativeTime(app.application_date || app.created_at) }}</div>
                                         </td>
                                         <td class="py-3 px-4">
                                             <div class="flex items-center justify-end gap-1">
@@ -284,12 +288,6 @@
                                                     :title="app.hold_reason || ''"
                                                 >
                                                     On Hold
-                                                </span>
-                                                <span
-                                                    v-else-if="app.status === 'Shortlisted'"
-                                                    class="px-2.5 py-1.5 text-[10px] font-semibold text-amber-600"
-                                                >
-                                                    Shortlisted
                                                 </span>
                                                 <span
                                                     v-else-if="app.status === 'Hired'"
@@ -433,14 +431,6 @@
                                                 {{ app.status === 'Screening' ? 'Continue' : 'Screen' }}
                                             </span>
                                         </button>
-                                    </div>
-                                    <div v-else-if="app.status === 'Shortlisted'" class="flex-1 text-center">
-                                        <span class="text-xs text-amber-600 font-medium inline-flex items-center gap-1">
-                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                                                <path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/>
-                                            </svg>
-                                            Shortlisted
-                                        </span>
                                     </div>
                                     <div v-else-if="app.status === 'Hired'" class="flex-1 text-center">
                                         <span class="text-xs text-emerald-600 font-medium inline-flex items-center gap-1">
@@ -797,7 +787,7 @@
                                             <div>
                                                 <span class="text-[10px] text-slate-400 uppercase tracking-wider">Resume</span>
                                                 <div v-if="viewData?.application?.resume_path" class="mt-1">
-                                                    <a :href="getResumeUrl(viewData.application.resume_path)" target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg text-sm font-semibold text-blue-700 transition-colors">
+                                                    <button type="button" @click="openDocumentPreview(viewData.application.resume_path, viewData.application.resume_name || getResumeFileName(viewData.application.resume_path))" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg text-sm font-semibold text-blue-700 transition-colors">
                                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
                                                         </svg>
@@ -805,7 +795,7 @@
                                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                                                         </svg>
-                                                    </a>
+                                                    </button>
                                                 </div>
                                                 <p v-else class="text-sm text-slate-400 mt-1">No resume uploaded</p>
                                             </div>
@@ -854,12 +844,6 @@
                                         {{ viewData?.application?.status === 'Screening' ? 'Continue Screening' : 'Start Screening' }}
                                     </span>
                                 </button>
-                                <span v-if="viewData?.application?.status === 'Shortlisted'" class="px-4 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold inline-flex items-center gap-1.5">
-                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/>
-                                    </svg>
-                                    Shortlisted
-                                </span>
                                 <span v-if="viewData?.application?.status === 'Rejected'" class="px-4 py-2.5 bg-rose-600 text-white rounded-xl text-sm font-bold inline-flex items-center gap-1.5">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -945,7 +929,7 @@
                                         </h3>
                                         <div class="bg-slate-50/80 rounded-xl border border-slate-100 p-3">
                                             <div v-if="screeningData?.application?.resume_path">
-                                                <a :href="getResumeUrl(screeningData.application.resume_path)" target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg text-sm font-semibold text-blue-700 transition-colors">
+                                                <button type="button" @click="openDocumentPreview(screeningData.application.resume_path, screeningData.application.resume_name || getResumeFileName(screeningData.application.resume_path))" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg text-sm font-semibold text-blue-700 transition-colors">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
                                                     </svg>
@@ -953,7 +937,7 @@
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
                                                     </svg>
-                                                </a>
+                                                </button>
                                             </div>
                                             <p v-else class="text-sm text-slate-400 text-center py-2">No resume uploaded</p>
                                         </div>
@@ -1361,6 +1345,7 @@
                                         <option value="Initial Interview">Initial Interview</option>
                                         <option value="Final Interview">Final Interview</option>
                                         <option value="Interviewed">Interviewed</option>
+                                        <option value="Interview Passed">Interview Passed</option>
                                         <option value="Selected">Selected</option>
                                         <option value="Onboard">Onboard</option>
                                         <option value="Onboarding">Onboarding</option>
@@ -1426,6 +1411,22 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div v-if="documentPreview" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label="Document preview" @click.self="documentPreview = null">
+            <div class="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div class="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-6">
+                    <div class="min-w-0">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Applicant Document</p>
+                        <h2 class="truncate text-sm font-bold text-slate-900 sm:text-base">{{ documentPreview.name }}</h2>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-2">
+                        <a :href="documentPreview.url" target="_blank" rel="noopener" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Open separately</a>
+                        <button type="button" @click="documentPreview = null" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700">Close</button>
+                    </div>
+                </div>
+                <iframe :src="documentPreview.url" :title="documentPreview.name" class="min-h-0 flex-1 bg-slate-100"></iframe>
             </div>
         </div>
     </AuthenticatedLayout>
@@ -1630,6 +1631,7 @@ const viewData = ref<ProfilePayload>({
     job_posting: {},
     emergency: {},
 });
+const documentPreview = ref<{ url: string; name: string } | null>(null);
 
 // Form
 const form = ref<{
@@ -1665,10 +1667,10 @@ const viewTabs = [
 // ============================================
 // DATA
 // ============================================
-const statusOptions = ['On Hold', 'Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+const statusOptions = ['On Hold', 'Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Interview Passed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
 // Applications already at the interview stage show only the View button
 // (the "More" actions menu is hidden).
-const interviewStatuses = ['Interview', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed'];
+const interviewStatuses = ['Interview', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Interview Passed'];
 const isInterviewStatus = (s: string) => interviewStatuses.includes(s);
 // Position options for the Add/Edit modal, fed by the backend's
 // published job postings (kept in sync if the prop updates).
@@ -1796,6 +1798,7 @@ const getAvatarColor = (s?: string) => {
         'Initial Interview': 'bg-gradient-to-br from-blue-500 to-blue-600',
         'Final Interview': 'bg-gradient-to-br from-blue-500 to-blue-600',
         'Interviewed': 'bg-gradient-to-br from-blue-500 to-blue-600',
+        'Interview Passed': 'bg-gradient-to-br from-emerald-500 to-emerald-600',
         'Selected': 'bg-gradient-to-br from-emerald-500 to-emerald-600',
         'Hired': 'bg-gradient-to-br from-emerald-600 to-emerald-700',
         'Onboard': 'bg-gradient-to-br from-emerald-500 to-emerald-600',
@@ -1816,6 +1819,7 @@ const getStatusDotClass = (s?: string) => {
         'Initial Interview': 'bg-blue-500',
         'Final Interview': 'bg-blue-500',
         'Interviewed': 'bg-blue-500',
+        'Interview Passed': 'bg-emerald-500',
         'Selected': 'bg-emerald-500',
         'Hired': 'bg-emerald-600',
         'Onboard': 'bg-emerald-500',
@@ -1836,6 +1840,7 @@ const getStatusBadgeClass = (s?: string) => {
         'Initial Interview': 'bg-blue-50 text-blue-700 border-blue-200',
         'Final Interview': 'bg-blue-50 text-blue-700 border-blue-200',
         'Interviewed': 'bg-blue-50 text-blue-700 border-blue-200',
+        'Interview Passed': 'bg-emerald-50 text-emerald-700 border-emerald-200',
         'Selected': 'bg-emerald-50 text-emerald-700 border-emerald-200',
         'Hired': 'bg-emerald-100 text-emerald-800 border-emerald-300',
         'Onboard': 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -1890,6 +1895,10 @@ const getResumeUrl = (path?: string) => {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     if (path.startsWith('/storage/')) return path;
     return `/storage/${path}`;
+};
+
+const openDocumentPreview = (path: string, name: string) => {
+    documentPreview.value = { url: getResumeUrl(path), name };
 };
 
 const handleImageError = (event: Event) => {

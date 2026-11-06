@@ -33,6 +33,7 @@ class PayrollSettingsController extends Controller
         'hours_per_day' => [1, 24],
         'pay_date_offset_days' => [0, 31],
         'weekly_periods' => [1, 100],
+        'weekly_period_days' => [1, 31],
         'semimonthly_periods' => [1, 48],
         'monthly_periods' => [1, 24],
         'accrual_months' => [1, 60],
@@ -55,6 +56,7 @@ class PayrollSettingsController extends Controller
             $rows = collect(PayrollSetting::defaults())->map(fn ($def, $key) => (object) array_merge(['key' => $key], $def));
         }
         $grouped = [];
+        $definitions = PayrollSetting::defaults();
         foreach ($rows as $r) {
             $grouped[$r->group ?? 'general'][] = [
                 'key' => $r->key,
@@ -64,7 +66,7 @@ class PayrollSettingsController extends Controller
                     : PayrollSetting::castValue($r->value ?? '', $r->value_type ?? 'text'),
                 'raw' => $r instanceof PayrollSetting ? (string) ($r->value ?? '') : (string) ($r->value ?? ''),
                 'value_type' => $r->value_type,
-                'description' => $r->description,
+                'description' => $definitions[$r->key]['description'] ?? $r->description,
             ];
         }
         $history = PayrollSettingHistory::with('changer:id,name')
@@ -154,6 +156,7 @@ class PayrollSettingsController extends Controller
             'boolean' => in_array($incoming, [true, 1, '1', 'true', 'on', 'yes'], true) ? '1'
                 : (in_array($incoming, [false, 0, '0', 'false', 'off', 'no'], true) ? '0' : null),
             'time' => $this->normalizeTime($incoming),
+            'date' => $this->normalizeDate($incoming),
             default => is_scalar($incoming) && mb_strlen((string) $incoming) <= 40 ? (string) $incoming : null,
         };
     }
@@ -175,5 +178,12 @@ class PayrollSettingsController extends Controller
             return sprintf('%02d:%02d:00', $h, $i);
         }
         return null;
+    }
+
+    private function normalizeDate($incoming): ?string
+    {
+        if (!is_string($incoming) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $incoming)) return null;
+        $date = \DateTime::createFromFormat('!Y-m-d', $incoming);
+        return $date && $date->format('Y-m-d') === $incoming ? $incoming : null;
     }
 }

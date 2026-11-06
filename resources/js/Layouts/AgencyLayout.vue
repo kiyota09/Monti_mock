@@ -55,7 +55,7 @@ const reloadPage = () => {
             <TopBar v-if="!hasError" />
             <main>
                 <div>
-                    <div class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm p-6 min-h-[400px]">
+                    <div class="agency-motion bg-slate-50 dark:bg-zinc-900 rounded-2xl p-4 sm:p-6 min-h-[400px]">
                         <slot />
                     </div>
                 </div>
@@ -66,3 +66,51 @@ const reloadPage = () => {
         <ForcePasswordChangeModal />
     </div>
 </template>
+
+<style scoped>
+.agency-motion :deep(button),
+.agency-motion :deep(a),
+.agency-motion :deep(input),
+.agency-motion :deep(select),
+.agency-motion :deep(textarea),
+.agency-motion :deep(tr) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: 280ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.agency-motion :deep(button:not(:disabled):hover) {
+    transform: translateY(-1px);
+}
+
+.agency-motion :deep(button:not(:disabled):active) {
+    transform: translateY(0) scale(0.985);
+}
+
+.agency-motion :deep(.fixed.inset-0) {
+    animation: agency-overlay-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.agency-motion :deep(.fixed.inset-0 > section),
+.agency-motion :deep(.fixed.inset-0 > div) {
+    animation: agency-panel-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes agency-overlay-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes agency-panel-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.99); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agency-motion :deep(*) {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+</style>

@@ -3,7 +3,7 @@ import {
     LayoutDashboard, Users, FileText, Eye, Award, UserPlus,
     HandCoins, ChartNoAxesCombined, Building2, Building, Briefcase, ClipboardList,
     UserCog, Layers, GraduationCap, CalendarCheck, CalendarDays, HardHat, Receipt,
-    CalendarClock, Wallet,
+    CalendarClock, Wallet, Send,
 } from 'lucide-vue-next'
 
 /**
@@ -34,6 +34,7 @@ export const hrmModule = {
             { label: 'Manpower Requests', href: safe('hrm.manpower-requests.index'), icon: ClipboardList, permKey: 'requests' },
             { label: 'Agency Attendance', href: safe('hrm.attendance.bulk'), icon: CalendarCheck, permKey: 'agency_attendance' },
             { label: 'Agency Billing', href: safe('hrm.billing.index'), icon: Receipt, permKey: 'agency_billing' },
+            { label: 'Agency Referral', href: safe('hrm.recruitment.agency-referrals.index'), icon: Send, public: true },
         ]
         const agencyDropdown = {
             label: 'Agency',
@@ -50,7 +51,9 @@ export const hrmModule = {
             { label: 'Employees', href: safe('hrm.workforce.employees.index'), icon: Users, permKey: 'employee' },
             { label: 'Departments', href: safe('hrm.workforce.departments.index'), icon: Building2, permKey: 'employee' },
             { label: 'Positions', href: safe('hrm.workforce.positions.index'), icon: Briefcase, permKey: 'employee' },
-            { label: 'Employment Performance & KPI', href: safe('hrm.workforce.performance-kpi.index'), icon: ChartNoAxesCombined, permKey: 'employee' },
+            { label: 'Performance Management', href: safe('hrm.workforce.performance-kpi.index'), icon: ChartNoAxesCombined, permKey: 'employee' },
+            { label: 'KPI Templates', href: safe('hrm.workforce.performance-kpi.templates.index'), icon: ClipboardList, permKey: 'kpi_templates' },
+            { label: 'KPI Evaluation', href: safe('hrm.workforce.performance-kpi.records.index'), icon: Award, permKey: 'employee' },
             { label: 'Employment Types', href: safe('hrm.workforce.employment-types.index'), icon: Layers, permKey: 'employee' },
             agencyDropdown,
             // Recruitment (routes enforce application/interview).
@@ -94,8 +97,8 @@ export const hrmModule = {
         // Agency parent shows only if at least one agency child is granted.
         return list
             .map(child => {
-                if (!child.isDropdown) return hasHrmPermission(child.permKey) ? child : null
-                const kept = (child.children || []).filter(c => hasHrmPermission(c.permKey))
+                if (!child.isDropdown) return (child.public || hasHrmPermission(child.permKey)) ? child : null
+                const kept = (child.children || []).filter(c => c.public || hasHrmPermission(c.permKey))
                 return kept.length ? { ...child, children: kept } : null
             })
             .filter(Boolean)

@@ -13,12 +13,14 @@ class ProbationEvaluation extends Model
     protected $fillable = [
         'user_id', 'evaluator_id', 'reviewer_id', 'period_start', 'period_end', 'period_label', 'due_date',
         'scores', 'overall_score', 'comments', 'strengths', 'improvements', 'recommendation',
-        'status', 'review_notes',
+        'status', 'review_notes', 'evaluation_type', 'template_id', 'template_snapshot', 'manager_id',
+        'employment_status_snapshot', 'employment_type_snapshot', 'classification', 'hr_recommendation',
+        'management_decision', 'acknowledged_at', 'employee_feedback',
     ];
 
     protected function casts(): array
     {
-        return ['scores' => 'array', 'period_start' => 'date', 'period_end' => 'date', 'due_date' => 'date'];
+        return ['scores' => 'array', 'template_snapshot' => 'array', 'acknowledged_at' => 'datetime', 'period_start' => 'date', 'period_end' => 'date', 'due_date' => 'date'];
     }
 
     public function employee(): BelongsTo { return $this->belongsTo(User::class, 'user_id'); }

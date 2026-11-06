@@ -22,10 +22,12 @@ export const MODULES = [
             { id: 'hrm_employees', label: 'Employees', icon: Users, route: 'hrm.workforce.employees.index', permission: 'hrm.employee', priority: 90 },
             { id: 'hrm_departments', label: 'Departments', icon: Building2, route: 'hrm.workforce.departments.index', permission: 'hrm.employee', priority: 50 },
             { id: 'hrm_positions', label: 'Positions', icon: Briefcase, route: 'hrm.workforce.positions.index', permission: 'hrm.employee', priority: 50 },
-            { id: 'hrm_performance_kpi', label: 'Employment Performance & KPI', icon: ChartNoAxesCombined, route: 'hrm.workforce.performance-kpi.index', permission: 'hrm.employee', priority: 48 },
+            { id: 'hrm_performance_kpi', label: 'Performance Management', icon: ChartNoAxesCombined, route: 'hrm.workforce.performance-kpi.index', permission: 'hrm.employee', priority: 48 },
+            { id: 'hrm_kpi_templates', label: 'KPI Templates', icon: ClipboardList, route: 'hrm.workforce.performance-kpi.templates.index', permission: 'hrm.kpi_templates', priority: 47 },
             { id: 'hrm_employment_types', label: 'Employment Types', icon: Layers, route: 'hrm.workforce.employment-types.index', permission: 'hrm.employee', priority: 40 },
             { id: 'hrm_job_postings', label: 'Job Postings', icon: ClipboardList, route: 'hrm.recruitment.job-postings.index', permission: 'hrm.application', priority: 80 },
             { id: 'hrm_applications', label: 'Applications', icon: FileText, route: 'hrm.recruitment.applications.index', permission: 'hrm.application', priority: 85 },
+            { id: 'hrm_agency_referrals', label: 'Agency Referral', icon: Send, route: 'hrm.recruitment.agency-referrals.index', permission: null, public: true, priority: 84 },
             { id: 'hrm_agencies', label: 'Agencies', icon: Building2, route: 'hrm.agencies.index', permission: 'hrm.agencies', priority: 70 },
             { id: 'hrm_workers', label: 'Workers', icon: Users, route: 'hrm.workers.index', permission: 'hrm.workers', priority: 69 },
             { id: 'hrm_manpower_requests', label: 'Manpower Requests', icon: ClipboardList, route: 'hrm.manpower-requests.index', permission: 'hrm.requests', priority: 68 },
@@ -240,6 +242,7 @@ export function getVisibleModules(user, permissions) {
 
 export function getVisiblePages(module, user, permissions) {
     return module.pages.filter(page => {
+        if (page.public) return true
         if (isSuperAdmin(user)) return true
         if (permissions.includes(page.permission)) return true
         if (user?.role === module.id && user?.position === 'manager') return true

@@ -62,7 +62,8 @@ function statusBadge(s: string): string {
 <template>
     <Head title="Requests - Monti ERP" />
     <AgencyLayout>
-        <h1 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Requests</h1>
+        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
+        <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Manpower Requests</h1>
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5 mb-4">Requests addressed to your agency. Propose workers on open requests — HR approves each proposal.</p>
 
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -78,33 +79,31 @@ function statusBadge(s: string): string {
                 </select>
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse min-w-[720px]">
+            <div>
+                <table class="w-full table-fixed text-left border-collapse">
                     <thead>
-                        <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                            <th class="py-3 px-4">Code</th>
-                            <th class="py-3 px-4">Department</th>
-                            <th class="py-3 px-4">Position</th>
-                            <th class="py-3 px-4 text-center">Needed</th>
-                            <th class="py-3 px-4 text-center">Filled</th>
-                            <th class="py-3 px-4">Start</th>
-                            <th class="py-3 px-4 text-center">Status</th>
-                            <th class="py-3 px-4 text-right">Actions</th>
+                        <tr class="bg-slate-800 text-[10px] font-bold uppercase tracking-wider text-white/90">
+                            <th class="w-[24%] py-3 px-3">Department</th>
+                            <th class="w-[28%] py-3 px-3">Position</th>
+                            <th class="w-[9%] py-3 px-2 text-center">Needed</th>
+                            <th class="w-[9%] py-3 px-2 text-center">Filled</th>
+                            <th class="w-[14%] py-3 px-2">Start</th>
+                            <th class="w-[11%] py-3 px-2 text-center">Status</th>
+                            <th class="w-[5%] py-3 px-2 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                         <tr v-for="r in requests" :key="r.id" @click="router.visit(route('agency.requests.show', r.id))" class="transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                            <td class="py-3 px-4 text-xs font-mono font-bold text-slate-700 dark:text-slate-200">{{ r.code }}</td>
-                            <td class="py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">{{ r.department }}</td>
-                            <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{{ r.position_skill }}</td>
-                            <td class="py-3 px-4 text-center text-sm font-bold">{{ r.needed }}</td>
-                            <td class="py-3 px-4 text-center text-sm font-bold">{{ r.filled }}</td>
-                            <td class="py-3 px-4 text-xs text-slate-500">{{ r.start_date || '—' }}</td>
-                            <td class="py-3 px-4 text-center">
+                            <td class="truncate py-0.5 px-3 text-sm font-bold text-slate-900 dark:text-white">{{ r.department }}</td>
+                            <td class="truncate py-0.5 px-3 text-xs text-slate-500 dark:text-slate-400" :title="r.position_skill">{{ r.position_skill }}</td>
+                            <td class="py-0.5 px-2 text-center text-sm font-bold">{{ r.needed }}</td>
+                            <td class="py-0.5 px-2 text-center text-sm font-bold">{{ r.filled }}</td>
+                            <td class="whitespace-nowrap py-0.5 px-2 text-xs text-slate-500">{{ r.start_date || '—' }}</td>
+                            <td class="py-0.5 px-2 text-center">
                                 <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border whitespace-nowrap', statusBadge(r.status)]">{{ r.status }}</span>
                             </td>
-                            <td class="py-3 px-4 text-right">
-                                <Link :href="route('agency.requests.show', r.id)" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="View" @click.stop>
+                            <td class="py-0.5 px-2 text-right">
+                                <Link :href="route('agency.requests.show', r.id)" class="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg" title="View" @click.stop>
                                     <Eye class="w-4 h-4" />
                                 </Link>
                             </td>
@@ -120,7 +119,7 @@ function statusBadge(s: string): string {
                 <p class="text-xs text-slate-500">Page {{ pagination.current_page }} of {{ pagination.last_page }}</p>
                 <div class="flex items-center gap-1">
                     <button :disabled="pagination.current_page <= 1" @click="applyFilters(pagination.current_page - 1)" class="px-3 py-1.5 text-xs font-bold rounded-lg border disabled:opacity-40">Prev</button>
-                    <button v-for="p in pageNumbers" :key="p" @click="applyFilters(p)" :class="['px-3 py-1.5 text-xs font-bold rounded-lg border', p === pagination.current_page ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 dark:border-slate-700']">{{ p }}</button>
+                    <button v-for="p in pageNumbers" :key="p" @click="applyFilters(p)" :class="['px-3 py-1.5 text-xs font-bold rounded-lg border', p === pagination.current_page ? 'bg-slate-800 text-white border-slate-800' : 'border-slate-200 dark:border-slate-700']">{{ p }}</button>
                     <button :disabled="pagination.current_page >= pagination.last_page" @click="applyFilters(pagination.current_page + 1)" class="px-3 py-1.5 text-xs font-bold rounded-lg border disabled:opacity-40">Next</button>
                 </div>
             </div>

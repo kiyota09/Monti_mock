@@ -16,6 +16,7 @@ use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -70,7 +71,7 @@ class JobPostingController extends Controller
             'filterOptions' => [
                 'departments' => HrmDepartment::whereNull('archived_at')->orderBy('name')->get(['id', 'name']),
                 'statuses' => ['Draft', 'Published', 'Closed', 'Archived'],
-                'employmentTypes' => HrmEmploymentType::select('id', 'name')->get(),
+                'employmentTypes' => HrmEmploymentType::where('is_active', true)->whereNull('archived_at')->orderBy('name')->get(['id', 'name']),
             ],
             'metrics' => [
                 'active' => HrmJobPosting::where('status', 'Published')->count(),
@@ -124,7 +125,7 @@ class JobPostingController extends Controller
                     'role' => $u->role,
                 ])->values()->all(),
             'workLocation' => 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite',
-            'employmentTypes' => HrmEmploymentType::select('id', 'name')->get(),
+            'employmentTypes' => HrmEmploymentType::where('is_active', true)->whereNull('archived_at')->orderBy('name')->get(['id', 'name']),
             // Shift options come from Shift management (active definitions).
             'shifts' => HrmShift::where('is_active', true)->orderBy('code')
                 ->get(['id', 'code', 'name', 'shift_type', 'start_time', 'end_time']),
@@ -136,7 +137,10 @@ class JobPostingController extends Controller
     {
         $data = $request->validate([
             'position_id' => 'required|exists:hrm_positions,id',
-            'employment_type_id' => 'nullable|exists:hrm_employment_types,id',
+            'employment_type_id' => [
+                'required',
+                Rule::exists('hrm_employment_types', 'id')->where(fn ($query) => $query->where('is_active', true)->whereNull('archived_at')),
+            ],
             'vacancies' => 'required|integer|min:1',
             'hiring_priority' => 'nullable|in:Normal,High,Urgent',
             'work_mode' => 'nullable|in:On-site,Remote,Hybrid',
@@ -182,7 +186,11 @@ class JobPostingController extends Controller
     {
         $validated = $request->validate([
             'position_id' => 'sometimes|exists:hrm_positions,id',
-            'employment_type_id' => 'nullable|exists:hrm_employment_types,id',
+            'employment_type_id' => [
+                'sometimes',
+                'required',
+                Rule::exists('hrm_employment_types', 'id')->where(fn ($query) => $query->where('is_active', true)->whereNull('archived_at')),
+            ],
             'vacancies' => 'sometimes|integer|min:1',
             'hiring_priority' => 'nullable|in:Normal,High,Urgent',
             'work_mode' => 'nullable|in:On-site,Remote,Hybrid',

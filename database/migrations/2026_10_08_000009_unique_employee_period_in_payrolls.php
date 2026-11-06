@@ -8,6 +8,13 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $indexExists = collect(Schema::getIndexes('payrolls'))
+            ->contains(fn (array $index) => $index['name'] === 'payrolls_employee_period_unique');
+
+        if ($indexExists) {
+            return;
+        }
+
         Schema::table('payrolls', function (Blueprint $table) {
             $table->unique(['employee_id', 'period'], 'payrolls_employee_period_unique');
         });

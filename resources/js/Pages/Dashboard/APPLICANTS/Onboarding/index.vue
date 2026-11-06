@@ -124,56 +124,12 @@
                         <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
                             <h4 class="text-sm font-bold text-slate-900 dark:text-white">Employment Details</h4>
                         </div>
-                        <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                            <div class="flex justify-between gap-3 border-b border-slate-100 dark:border-slate-700/50 py-2"><span class="text-[11px] text-slate-400">Position</span><span class="text-xs font-semibold text-slate-900 dark:text-white text-right">{{ rowModal.position || '—' }}</span></div>
-                            <div class="flex justify-between gap-3 border-b border-slate-100 dark:border-slate-700/50 py-2"><span class="text-[11px] text-slate-400">Department</span><span class="text-xs font-semibold text-slate-900 dark:text-white text-right">{{ rowModal.department || '—' }}</span></div>
-                            <div class="flex justify-between gap-3 border-b border-slate-100 dark:border-slate-700/50 py-2"><span class="text-[11px] text-slate-400">Onboarding Template</span><span class="text-xs font-semibold text-slate-900 dark:text-white text-right">{{ rowModal.template || '—' }}</span></div>
-                            <div class="flex justify-between gap-3 border-b border-slate-100 dark:border-slate-700/50 py-2"><span class="text-[11px] text-slate-400">Start Date</span><span class="text-xs font-semibold text-slate-900 dark:text-white text-right">{{ formatDate(rowModal.start_date) }}</span></div>
-                            <div class="flex justify-between gap-3 border-b border-slate-100 dark:border-slate-700/50 py-2"><span class="text-[11px] text-slate-400">Expected Start</span><span class="text-xs font-semibold text-slate-900 dark:text-white text-right">{{ formatDate(rowModal.expected_start_date) }}</span></div>
-                            <div class="flex justify-between gap-3 border-b border-slate-100 dark:border-slate-700/50 py-2"><span class="text-[11px] text-slate-400">Work Location</span><span class="text-xs font-semibold text-slate-900 dark:text-white text-right">{{ rowModal.work_location || '—' }}</span></div>
-                            <div class="flex justify-between gap-3 border-b border-slate-100 dark:border-slate-700/50 py-2"><span class="text-[11px] text-slate-400">Schedule</span><span class="text-xs font-semibold text-slate-900 dark:text-white text-right">{{ rowModal.work_schedule || '—' }}</span></div>
-                            <div class="flex justify-between gap-3 py-2"><span class="text-[11px] text-slate-400">Assigned Manager</span><span class="text-xs font-semibold text-slate-900 dark:text-white text-right">{{ rowModal.assigned_manager || 'To be assigned' }}</span></div>
+                        <div class="grid grid-cols-1 divide-y divide-slate-100 px-4 dark:divide-slate-700/50">
+                            <div class="flex items-center justify-between gap-4 py-3"><span class="text-[11px] text-slate-400">Position</span><span class="text-right text-xs font-semibold text-slate-900 dark:text-white">{{ rowModal.position || '—' }}</span></div>
+                            <div class="flex items-center justify-between gap-4 py-3"><span class="text-[11px] text-slate-400">Department</span><span class="text-right text-xs font-semibold text-slate-900 dark:text-white">{{ rowModal.department || '—' }}</span></div>
+                            <div class="flex items-center justify-between gap-4 py-3"><span class="text-[11px] text-slate-400">Onboarding Template</span><span class="text-right text-xs font-semibold text-slate-900 dark:text-white">{{ rowModal.template || '—' }}</span></div>
                         </div>
                     </div>
-
-                    <!-- Activities -->
-                    <div class="rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
-                        <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-                            <h4 class="text-sm font-bold text-slate-900 dark:text-white">Orientation & Training</h4>
-                        </div>
-                        <div class="p-4">
-                            <div v-if="!(rowModal.activities || []).length" class="text-center py-4">
-                                <p class="text-xs text-slate-500 dark:text-slate-400">No activities scheduled yet. HR will notify you once schedules are set.</p>
-                            </div>
-                            <div v-else class="space-y-2">
-                                <div v-for="a in rowModal.activities" :key="a.id" class="p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-                                    <div class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
-                                        {{ a.title }}
-                                        <span v-if="a.is_required" class="bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-[9px] font-bold">REQUIRED</span>
-                                        <span :class="['px-2 py-0.5 rounded-full text-[9px] font-bold', activityStatusBadge(a.status)]">{{ a.status }}</span>
-                                    </div>
-                                    <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                        {{ a.type }}
-                                        <template v-if="a.schedule_date"> · {{ formatDate(a.schedule_date) }}<template v-if="a.start_time"> · {{ a.start_time }}<template v-if="a.end_time"> - {{ a.end_time }}</template></template></template>
-                                        <template v-if="a.method"> · {{ a.method }}</template>
-                                        <template v-if="a.location"> · {{ a.location }}</template>
-                                        <template v-if="a.facilitator"> · Facilitator: {{ a.facilitator }}</template>
-                                    </div>
-                                    <div v-if="a.schedule_date" class="mt-1.5 inline-flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded"
-                                        :class="a.attendance_status === 'Confirmed' ? 'text-emerald-700 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400' : 'text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400'">
-                                        <CheckIcon v-if="a.attendance_status === 'Confirmed'" class="w-3 h-3" />
-                                        <BellIcon v-else class="w-3 h-3" />
-                                        <template v-if="a.attendance_status === 'Confirmed'">Attendance confirmed</template>
-                                        <template v-else>
-                                            Will you attend?
-                                            <button @click="confirmAttendance(a)" class="underline font-bold hover:text-blue-700 dark:hover:text-blue-300">Confirm</button>
-                                        </template>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Requirements -->
                     <div class="rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
                         <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
@@ -197,7 +153,7 @@
                                             <span v-if="item.latest_submission.value" class="text-[10px] text-slate-600 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">{{ displayValue(item.latest_submission.value) }}</span>
                                             <span v-if="item.latest_submission.submitted_at" class="text-[9px] text-slate-400">Submitted {{ formatDateTime(item.latest_submission.submitted_at) }}</span>
                                         </div>
-                                        <div v-if="item.status === 'Verified' || item.status === 'Completed'" class="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg">Verified by HR</div>
+                                                        <div v-if="item.status === 'Verified' || item.status === 'Completed'" class="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg">Approved by HR</div>
 
                                         <!-- Submission inputs -->
                                         <div v-if="canSubmit(item)" class="mt-3">
@@ -206,7 +162,7 @@
                                                     <label class="flex-1 flex items-center gap-2 cursor-pointer">
                                                         <input type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" :ref="(el) => { if (el) pickedFileInputs[item.id] = el; }" @change="handleFilePick(item, $event)" class="hidden" />
                                                         <span class="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-bold transition shadow-sm active:scale-95">
-                                                            <ArrowUpTrayIcon class="w-3.5 h-3.5" /> {{ pickedFiles[item.id]?.name || (item.status === 'Rejected' ? 'Resubmit Document' : 'Choose Document') }}
+                                                            <ArrowUpTrayIcon class="w-3.5 h-3.5" /> {{ pickedFiles[item.id]?.name || (['Rejected', 'Requires Resubmission'].includes(item.status) ? 'Resubmit Document' : 'Choose Document') }}
                                                         </span>
                                                     </label>
                                                     <input v-model="itemNotes[item.id]" type="text" placeholder="Optional note..." class="flex-1 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition" />
@@ -391,7 +347,7 @@ const firstName = computed(() => {
 });
 
 const canSubmit = (item) =>
-    item.status !== 'Verified' && item.status !== 'Completed' && !item.is_task;
+    !['Verified', 'Completed'].includes(item.status) && !item.is_task;
 
 // Online activities show the link and hide the location; onsite activities
 // show the location and hide the link. Without a stored method, a present
@@ -590,12 +546,23 @@ const itemStatusBadge = (status) =>
         Verified: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
         Completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
         Rejected: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+        'Requires Resubmission': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
         Resubmitted: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
         Blocked: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
     })[status] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
 
 const itemStatusLabel = (status) =>
-    ({ Pending: 'Not Submitted', Submitted: 'Awaiting Review', 'Under Review': 'Under Review', Rejected: 'Rejected', Verified: 'Verified', Resubmitted: 'Resubmitted', 'In Progress': 'In Progress', Blocked: 'Blocked' })[status] || status;
+    ({
+        Pending: 'Awaiting submission',
+        Submitted: 'Submitted for review',
+        Resubmitted: 'Submitted for review',
+        'Under Review': 'Under review by HR',
+        Completed: 'Approved',
+        Verified: 'Approved',
+        Rejected: 'Rejected – Resubmission required',
+        'Requires Resubmission': 'Please resubmit document',
+        Blocked: 'Rejected – Resubmission required',
+    })[status] || status;
 
 const activityStatusBadge = (status) =>
     ({

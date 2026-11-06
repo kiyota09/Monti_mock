@@ -14,6 +14,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('fabric_sample_requests', 'adjustment_notes')) {
+            return;
+        }
+
         Schema::table('fabric_sample_requests', function (Blueprint $table) {
             $table->text('adjustment_notes')->nullable()->after('notes');
         });

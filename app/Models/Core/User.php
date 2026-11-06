@@ -86,8 +86,10 @@ class User extends Authenticatable
         'mobile_number', 'telephone', 'emergency_contact_name', 'emergency_contact_number',
         'current_address', 'permanent_address', 'country', 'province', 'city', 'postal_code',
         'company', 'branch', 'business_unit', 'cost_center', 'work_location',
+        'work_mode', 'salary_type', 'pay_frequency',
         'department_head', 'immediate_supervisor', 'payroll_group', 'salary_grade',
-        'basic_salary', 'bank_account', 'tax_id', 'sss_id', 'work_schedule', 'shift',
+        'basic_salary', 'bank_account', 'tax_id', 'sss_id', 'pagibig_id', 'philhealth_id',
+        'sss_contribution', 'pagibig_contribution', 'philhealth_contribution', 'work_schedule', 'shift',
         'timezone', 'biometrics_id', 'probation_end_date', 'probation_duration_months',
         'probation_evaluation_interval_months', 'regularization_date',
         'resignation_date', 'last_working_day', 'education', 'certifications',
@@ -196,6 +198,11 @@ class User extends Authenticatable
     public function manager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'manager_id');
+    }
+
+    public function worker(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Hrm\Worker::class, 'worker_id');
     }
 
     public function leaveRequests(): \Illuminate\Database\Eloquent\Relations\HasMany

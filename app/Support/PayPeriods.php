@@ -105,16 +105,18 @@ class PayPeriods
     public static function weeksForMonth(int $year, int $month): array
     {
         $out = [];
-        $cursor = Carbon::create($year, $month, 1)->startOfDay()->startOfWeek(Carbon::MONDAY);
+        $settings = self::settings();
+        $days = max(1, min(31, (int) ($settings['weekly_period_days'] ?? 7)));
+        try { $anchor = Carbon::parse($settings['weekly_anchor_date'] ?? '2000-01-03')->startOfDay(); }
+        catch (\Throwable) { $anchor = Carbon::parse('2000-01-03')->startOfDay(); }
+        $monthStart = Carbon::create($year, $month, 1)->startOfDay();
+        $index = (int) floor($anchor->diffInDays($monthStart, false) / $days);
+        $cursor = $anchor->copy()->addDays($index * $days);
         $monthEnd = Carbon::create($year, $month, 1)->endOfMonth()->startOfDay();
         while ($cursor <= $monthEnd) {
-            $weekStart = $cursor->copy();
-            $weekEnd = $cursor->copy()->addDays(6);
-            // Only weeks that touch this month.
-            if ($weekEnd >= Carbon::create($year, $month, 1)->startOfDay() && $weekStart <= $monthEnd) {
-                $out[] = self::make($weekStart, $weekEnd, 'weekly');
-            }
-            $cursor->addWeek();
+            $weekEnd = $cursor->copy()->addDays($days - 1);
+            if ($weekEnd >= $monthStart) $out[] = self::make($cursor->copy(), $weekEnd, 'weekly');
+            $cursor->addDays($days);
         }
         return $out;
     }
@@ -126,11 +128,18 @@ class PayPeriods
         if ($freq === 'weekly') {
             // 52 Mon–Sun weeks spanning the year.
             $out = [];
-            $cursor = Carbon::create($year, 1, 1)->startOfDay()->startOfWeek(Carbon::MONDAY);
+            $settings = self::settings();
+            $days = max(1, min(31, (int) ($settings['weekly_period_days'] ?? 7)));
+            try { $anchor = Carbon::parse($settings['weekly_anchor_date'] ?? '2000-01-03')->startOfDay(); }
+            catch (\Throwable) { $anchor = Carbon::parse('2000-01-03')->startOfDay(); }
+            $yearStart = Carbon::create($year, 1, 1)->startOfDay();
+            $index = (int) floor($anchor->diffInDays($yearStart, false) / $days);
+            $cursor = $anchor->copy()->addDays($index * $days);
             $yearEnd = Carbon::create($year, 12, 31)->startOfDay();
             while ($cursor <= $yearEnd) {
-                $out[] = self::make($cursor->copy(), $cursor->copy()->addDays(6), 'weekly');
-                $cursor->addWeek();
+                $weekEnd = $cursor->copy()->addDays($days - 1);
+                if ($weekEnd >= $yearStart) $out[] = self::make($cursor->copy(), $weekEnd, 'weekly');
+                $cursor->addDays($days);
             }
             return $out;
         }
@@ -157,8 +166,13 @@ class PayPeriods
             return self::make($today->copy()->startOfMonth(), $today->copy()->endOfMonth(), 'monthly')['label'];
         }
         if ($freq === 'weekly') {
-            $s = $today->copy()->startOfWeek(Carbon::MONDAY);
-            return self::make($s, $s->copy()->addDays(6), 'weekly')['label'];
+            $settings = self::settings();
+            $days = max(1, min(31, (int) ($settings['weekly_period_days'] ?? 7)));
+            try { $anchor = Carbon::parse($settings['weekly_anchor_date'] ?? '2000-01-03')->startOfDay(); }
+            catch (\Throwable) { $anchor = Carbon::parse('2000-01-03')->startOfDay(); }
+            $index = (int) floor($anchor->diffInDays($today, false) / $days);
+            $s = $anchor->copy()->addDays($index * $days);
+            return self::make($s, $s->copy()->addDays($days - 1), 'weekly')['label'];
         }
         $half = $today->day <= 15
             ? self::make($today->copy()->startOfMonth(), $today->copy()->day(15), 'semi_monthly')

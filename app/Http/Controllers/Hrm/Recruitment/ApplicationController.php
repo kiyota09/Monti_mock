@@ -477,7 +477,7 @@ class ApplicationController extends Controller
             'submitted' => (clone $base)->where('status', 'Submitted')->count(),
             'screening' => (clone $base)->where('status', 'Screening')->count(),
             'shortlisted' => (clone $base)->where('status', 'Shortlisted')->count(),
-            'interview' => (clone $base)->whereIn('status', ['Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed'])->count(),
+            'interview' => (clone $base)->whereIn('status', ['Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Interview Passed'])->count(),
             'selected' => (clone $base)->where('status', 'Selected')->count(),
             'onboarding' => (clone $base)->whereIn('status', ['Onboard', 'Onboarding'])->count(),
             'hired' => (clone $base)->where('status', 'Hired')->count(),
@@ -501,7 +501,7 @@ class ApplicationController extends Controller
      */
     public function store(Request $request)
     {
-        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Interview Passed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
         $data = $request->validate([
             'job_posting_id' => 'nullable|exists:hrm_job_postings,id',
             'first_name' => 'required|string|max:255',
@@ -557,7 +557,7 @@ class ApplicationController extends Controller
      */
     public function update(Request $request, Applicant $application)
     {
-        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Interview Passed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
         $data = $request->validate([
             'first_name' => 'sometimes|string|max:255',
             'last_name' => 'sometimes|string|max:255',
@@ -640,7 +640,7 @@ class ApplicationController extends Controller
      */
     public function bulkUpdate(Request $request)
     {
-        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+        $allowed = ['Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Interview Passed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
         $data = $request->validate([
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:applicant_job_applications,id',

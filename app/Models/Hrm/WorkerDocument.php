@@ -45,6 +45,7 @@ class WorkerDocument extends Model
         'worker_id',
         'doc_type',
         'label',
+        'description',
         'file_path',
         'original_name',
         'mime',
