@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { showNotice, confirmModal, successModal } from '@/lib/feedback';
+import { confirmModal, successModal } from '@/lib/feedback';
 // ============================================
 // FILE LOCATION: resources/js/Pages/Dashboard/APPLICANTS/Account/index.vue
 // PURPOSE: Account settings page with modern UI
@@ -76,20 +76,12 @@ function changePassword() {
             isSubmitting.value = false;
             showPasswordModal.value = false;
             passwordForm.reset();
-<<<<<<< HEAD
-            successModal('Password updated successfully!');
-=======
             showNotice('Password Updated', 'Your password was changed successfully.');
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
         },
         onError: (errors) => {
             isSubmitting.value = false;
             const errorMsg = Object.values(errors)[0] || 'Failed to update password. Please try again.';
-<<<<<<< HEAD
-            showNotice(errorMsg);
-=======
             showNotice('Unable to Update Password', errorMsg, true);
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
         }
     });
 }
@@ -99,35 +91,15 @@ function sendVerification() {
         preserveScroll: true,
         onSuccess: () => {
             showVerificationModal.value = false;
-<<<<<<< HEAD
-            successModal('Verification email sent! Please check your inbox.');
-        },
-        onError: (errors) => {
-            const errorMsg = Object.values(errors)[0] || 'Failed to send verification email.';
-            showNotice(errorMsg);
-=======
             showNotice('Verification Email Sent', 'Please check your inbox for the verification link.');
         },
         onError: (errors) => {
             const errorMsg = Object.values(errors)[0] || 'Failed to send verification email.';
             showNotice('Unable to Send Email', errorMsg, true);
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
         }
     });
 }
 
-<<<<<<< HEAD
-async function deactivateAccount() {
-    if (await confirmModal('Are you sure you want to deactivate your account? This action can be reversed later.')) {
-        router.post(route('applicant.account.deactivate'), {}, {
-            preserveScroll: true,
-            onSuccess: () => {
-                successModal('Account deactivated successfully.');
-            },
-            onError: (errors) => {
-                const errorMsg = Object.values(errors)[0] || 'Failed to deactivate account.';
-                showNotice(errorMsg);
-=======
 function deactivateAccount() {
     showDeactivateModal.value = true;
 }
@@ -142,7 +114,6 @@ function confirmDeactivateAccount() {
             onError: (errors) => {
                 const errorMsg = Object.values(errors)[0] || 'Failed to deactivate account.';
                 showNotice('Unable to Deactivate Account', errorMsg, true);
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
             }
         });
 }

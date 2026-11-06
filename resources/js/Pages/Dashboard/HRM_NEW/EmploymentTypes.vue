@@ -418,10 +418,6 @@ const submitForm = async () => {
     }
 };
 
-<<<<<<< HEAD
-const archiveType = async (id) => {
-    if (!await confirmModal('Archive this employment type? It will no longer be available for new employee records.')) return;
-=======
 const askArchive = (type) => { archiveTarget.value = type; };
 const cancelArchive = () => {
     if (!archiving.value) archiveTarget.value = null;
@@ -430,7 +426,6 @@ const cancelArchive = () => {
 const confirmArchive = async () => {
     if (!archiveTarget.value || archiving.value) return;
     archiving.value = true;
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     try {
         const res = await axios.delete(route("hrm.workforce.employment-types.destroy", { employmentType: archiveTarget.value.id }));
         toast.success(res.data?.message || "Employment type archived successfully.");
