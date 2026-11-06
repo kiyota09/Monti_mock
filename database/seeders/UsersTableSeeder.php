@@ -87,13 +87,20 @@ class UsersTableSeeder extends Seeder
         // --------------------------------------------
         $manufacturingRoles = [
             'knitting_yarn'      => 'Knitting Yarn Staff',
+            'knitting_inspector' => 'Knitting Inspector Staff',
+            'knitting_sample' => 'Knitting Sample Staff',
             'dyeing_color'       => 'Dyeing Color Staff',
-            'dyeing_fabric_softener' => 'Dyeing Fabric Softener Staff',
-            'dyeing_squeezer'    => 'Dyeing Squeezer Staff',
-            'dyeing_ironing'     => 'Dyeing Ironing Staff',
+            'dyeing_bleaching' => 'Dyeing Bleaching Staff',
+            'dyeing_pre_treatment' => 'Dyeing Pre Treatment Staff',
+            'dyeing_treatment' => 'Dyeing Post Treatment Staff',
+            'finishing_squeezer' => 'Finishing Squeezer Staff',
+            'finishing_ironing' => 'Finishing Heatsetting Staff',
+            'finishing_hydro' => 'Finishing Hydro Staff',
+            'finishing_tubetex' => 'Finishing Tubetex Staff',
             'finishing_packaging'=> 'Finishing Packaging Staff',
+            'finishing_inspector'=> 'Finishing Shrinkage Inspector',
             'maintenance_checker'=> 'Maintenance Checker Staff',
-            'checker_quality'    => 'Checker Quality Staff',
+            'checker_quality'    => 'Finishing Quality Checker',
         ];
 
         foreach ($manufacturingRoles as $roleKey => $roleName) {

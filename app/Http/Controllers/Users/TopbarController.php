@@ -415,9 +415,13 @@ class TopbarController extends Controller
         }
 
         if ($this->canSeeModule($user, 'INV')) {
-            $mats = \App\Models\Inv\Material::where('name', 'like', $like)->orWhere('mat_id', 'like', $like)->take(4)->get();
+            $mats = \App\Models\Inv\Material::where(function ($query) use ($like) {
+                $query->where('name', 'like', $like)
+                    ->orWhere('yarn_tier', 'like', $like)
+                    ->orWhere('mat_id', 'like', $like);
+            })->take(4)->get();
             foreach ($mats as $m) {
-                $out[] = ['label' => $m->name, 'sub' => 'Material · '.$m->mat_id, 'route' => 'inv.materials', 'params' => []];
+                $out[] = ['label' => $m->display_name, 'sub' => 'Material · '.$m->mat_id, 'route' => 'inv.materials', 'params' => []];
             }
             $prods = \App\Models\Inv\Product::where('name', 'like', $like)->orWhere('sku', 'like', $like)->take(4)->get();
             foreach ($prods as $p) {
@@ -431,7 +435,7 @@ class TopbarController extends Controller
             foreach ($lots as $s) {
                 $out[] = [
                     'label' => $s->control_number,
-                    'sub' => 'Stock lot · '.($s->material?->name ?? '').' '.$s->quantity.$s->unit,
+                    'sub' => 'Stock lot · '.($s->material?->display_name ?? '').' '.$s->quantity.$s->unit,
                     'route' => 'warehouse.monitor', 'params' => ['warehouse' => $s->warehouse_id],
                 ];
             }

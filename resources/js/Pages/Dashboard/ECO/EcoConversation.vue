@@ -1,11 +1,11 @@
 <template>
     <Head :title="`Conversation with ${supplier?.business_name}`" />
     <AuthenticatedLayout>
-        <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
-            <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
+        <div class="eco-conversation-page flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
+            <div class="mx-auto flex w-full max-w-7xl min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
 
                 <!-- Hero header -->
-                <div class="animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/20">
+                <div class="shrink-0 animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-4 sm:p-5 text-white shadow-xl shadow-indigo-500/20">
                     <div class="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-float" />
                     <div class="absolute -bottom-24 -left-10 h-64 w-64 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-delayed" />
                     <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 22px 22px;" />
@@ -33,24 +33,27 @@
                             <button @click="checkSupplierCredit" class="flex items-center gap-1.5 rounded-full bg-amber-300/90 px-3 py-1.5 text-xs font-black text-amber-950 hover:bg-amber-200 transition active:scale-95">
                                 <Shield class="h-3.5 w-3.5" /> Credit Check
                             </button>
+                            <button type="button" @click="showMeetingForm = true" class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 hover:bg-white/25 transition lg:hidden">
+                                Schedule Meeting
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <div class="eco-conversation-grid grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-3">
                     <!-- Main conversation area -->
-                    <div class="animate-fade-up lg:col-span-2 group relative bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 transition-all duration-300 overflow-hidden flex flex-col h-[calc(100vh-250px)]" style="animation-delay:80ms">
+                    <div class="animate-fade-up lg:col-span-2 group relative bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 transition-all duration-300 overflow-hidden flex min-h-0 h-full flex-col" style="animation-delay:80ms">
                         <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <div class="p-5 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-900/20 flex items-center gap-2">
+                        <div class="shrink-0 p-4 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-900/20 flex items-center gap-2">
                             <MessagesSquare class="h-5 w-5 text-indigo-600" />
                             <h2 class="text-sm font-black uppercase tracking-widest">Conversation</h2>
                             <span class="ml-auto rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[11px] font-black px-2.5 py-1">{{ threadMessages.length }} messages</span>
                         </div>
-                        <div v-if="!isApproved" class="px-5 pt-4">
+                        <div v-if="!isApproved" class="shrink-0 px-5 pt-4">
                             <p class="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl text-center">Vendor {{ approvalStatus }} — approval is managed in SCM · Vendors. Chat unlocks after approval.</p>
                         </div>
                         <!-- Messages -->
-                        <div ref="messagesContainer" class="relative flex-1 overflow-y-auto p-6 space-y-4">
+                        <div ref="messagesContainer" class="relative min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4">
                             <div v-if="threadMessages.length === 0" class="flex flex-col items-center justify-center py-10 text-center">
                                 <MessagesSquare class="h-8 w-8 text-indigo-200 mb-2" />
                                 <p class="text-sm font-bold text-gray-500">No messages yet — say hello to start the thread.</p>
@@ -81,7 +84,7 @@
                         </div>
 
                         <!-- Message input -->
-                        <div class="border-t border-gray-100 dark:border-zinc-800 p-4 bg-white/60 dark:bg-zinc-900/60">
+                        <div class="shrink-0 border-t border-gray-100 dark:border-zinc-800 p-3 sm:p-4 bg-white/60 dark:bg-zinc-900/60">
                             <p v-if="sendError" class="mb-2 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 px-3 py-2 rounded-xl">{{ sendError }}</p>
                             <form v-if="canEditSupplier" @submit.prevent="sendMessage" class="flex gap-3">
                                 <input v-model="newMessage" type="text" placeholder="Type your message..."
@@ -100,17 +103,18 @@
                     </div>
 
                     <!-- Sidebar actions -->
-                    <div class="space-y-5">
+                    <div class="eco-meeting-sidebar min-h-0 overflow-y-auto space-y-5" :class="{ 'is-open': showMeetingForm }" @click.self="showMeetingForm = false">
                         <!-- Set Meeting Card -->
-                        <div class="animate-fade-up group relative bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all duration-300 p-5 overflow-hidden" style="animation-delay:160ms">
+                        <div class="eco-meeting-card animate-fade-up group relative bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all duration-300 p-5 overflow-hidden" style="animation-delay:160ms">
                             <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                             <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-indigo-500 to-fuchsia-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
                             <h3 class="relative text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2">
                                 <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-900/20"><Calendar class="h-4 w-4 text-indigo-600" /></span> Schedule Meeting
+                                <button type="button" @click="showMeetingForm = false" aria-label="Close schedule meeting" class="ml-auto rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800 lg:hidden">Close</button>
                             </h3>
                             <form @submit.prevent="scheduleMeeting" class="relative">
                                 <div class="space-y-3">
-                                    <input v-model="meetingData.scheduled_at" type="datetime-local" required
+                                    <input v-model="meetingData.scheduled_at" type="datetime-local" :min="meetingMinDateTime" required
                                         class="w-full rounded-2xl border-0 bg-gray-100 dark:bg-zinc-800 p-2.5 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
                                     <input v-model="meetingData.location" type="text" placeholder="Location (e.g., Zoom, Office)" required
                                         class="w-full rounded-2xl border-0 bg-gray-100 dark:bg-zinc-800 p-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-500 outline-none" />
@@ -135,6 +139,7 @@
 </template>
 
 <script setup>
+import { showNotice } from '@/lib/feedback';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
@@ -176,6 +181,7 @@ const newMessage = ref('');
 const sending = ref(false);
 const sendError = ref('');
 const scheduling = ref(false);
+const showMeetingForm = ref(false);
 const fileInput = ref(null);
 const pollError = ref('');
 const liveState = ref('live'); // live | offline | error
@@ -269,6 +275,7 @@ const sendMessage = async () => {
             },
             credentials: 'same-origin',
             body: JSON.stringify({ message: text }),
+            __suppressSuccessFeedback: true,
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -291,6 +298,11 @@ const meetingData = ref({
     scheduled_at: '',
     location: '',
     type: 'video'
+});
+const meetingMinDateTime = computed(() => {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 });
 
 const triggerFileUpload = () => {
@@ -317,6 +329,7 @@ const uploadAttachment = async (e) => {
             },
             credentials: 'same-origin',
             body: formData,
+            __suppressSuccessFeedback: true,
         });
         if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
         const data = await res.json();
@@ -331,6 +344,10 @@ const uploadAttachment = async (e) => {
 };
 
 const scheduleMeeting = async () => {
+    if (!meetingData.value.scheduled_at || new Date(meetingData.value.scheduled_at) <= new Date()) {
+        sendError.value = 'Choose a meeting date and time in the future.';
+        return;
+    }
     scheduling.value = true;
     sendError.value = '';
     try {
@@ -345,7 +362,10 @@ const scheduleMeeting = async () => {
             credentials: 'same-origin',
             body: JSON.stringify(meetingData.value),
         });
-        if (!res.ok) throw new Error(`Meeting invite failed (HTTP ${res.status})`);
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.errors?.scheduled_at?.[0] || error.message || `Meeting invite failed (HTTP ${res.status})`);
+        }
         const data = await res.json();
         mergeMessages(data.message ? [data.message] : [], true);
         meetingData.value = { scheduled_at: '', location: '', type: 'video' };
@@ -358,7 +378,7 @@ const scheduleMeeting = async () => {
 
 const checkSupplierCredit = async () => {
     const res = await axios.get(route('eco.supplier.credit-check', props.supplier.id));
-    alert(`Credit Status: ${res.data.is_good_payer ? 'Good Payer' : 'High Risk'}\nOutstanding Balance: ₱${res.data.outstanding}`);
+    showNotice(`Credit Status: ${res.data.is_good_payer ? 'Good Payer' : 'High Risk'}\nOutstanding Balance: ₱${res.data.outstanding}`);
 };
 
 const formatDateTime = (date) => new Date(date).toLocaleString('en-PH');
@@ -405,4 +425,21 @@ onUnmounted(() => {
 .modal-enter-active > div, .modal-leave-active > div { transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 .modal-enter-from > div, .modal-leave-to > div { opacity: 0; transform: scale(0.95) translateY(10px); }
+@media (max-width: 1023px) {
+    .eco-conversation-grid { grid-template-rows: minmax(0, 1fr); }
+    .eco-meeting-sidebar { display: none; }
+    .eco-meeting-sidebar.is-open {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow-y: auto;
+        padding: 1rem;
+        background: rgb(15 23 42 / 55%);
+        backdrop-filter: blur(4px);
+    }
+    .eco-meeting-card { width: 100%; max-width: 32rem; max-height: min(90dvh, 42rem); overflow-y: auto; }
+}
 </style>

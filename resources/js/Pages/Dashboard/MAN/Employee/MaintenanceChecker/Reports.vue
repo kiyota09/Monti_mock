@@ -1,4 +1,5 @@
-<script setup>import { computed } from 'vue';
+<script setup>import { confirmModal } from '@/lib/feedback';
+import { computed } from 'vue';
 
 import { router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -12,8 +13,8 @@ const props = defineProps({
     reports: Array,
 });
 
-const resolveReport = (reportId) => {
-    if (confirm('Mark this report as resolved?')) {
+const resolveReport = async (reportId) => {
+    if (await confirmModal('Mark this report as resolved?')) {
         router.patch(route('man.staff.maintenance-checker.resolve-report', reportId), {
             preserveScroll: true,
         });

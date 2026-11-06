@@ -10,6 +10,7 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
+import { confirmModal } from '@/lib/feedback';
 
 // ── Props & state ─────────────────────────────────────────────────────────
 const page   = usePage();
@@ -112,8 +113,9 @@ const cancelLogoSelection = () => {
     if (logoInput.value) logoInput.value.value = '';
 };
 
-const removeCurrentLogo = () => {
+const removeCurrentLogo = async () => {
     if (!client.value?.logo) return;
+    if (!await confirmModal('Remove the current company logo?')) return;
     router.delete(route('client.profile.logo.destroy'), {
         preserveScroll: true,
         onSuccess: () => {

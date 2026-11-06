@@ -31,6 +31,48 @@ class ManufacturingPages
         'recipes' => 'Recipes',
     ];
 
+    /** Supervisor-owned pages shown separately from department staff pages. */
+    public const SUPERVISOR_ACCOUNT_PAGES = [
+        'knitting' => [
+            'dashboard' => 'Dashboard',
+            'production' => 'Production Orders',
+            'assignments' => 'Job Order Assignments',
+            'reject' => 'Rejected Items',
+            'inventory' => 'Production Inventory',
+            'recipes' => 'Recipes',
+            'knitting_machines' => 'Knitting Machines',
+        ],
+        'dyeing' => [
+            'dashboard' => 'Dashboard',
+            'production' => 'Production Orders',
+            'assignments' => 'Job Order Assignments',
+            'reject' => 'Rejected Items',
+            'inventory' => 'Production Inventory',
+            'recipes' => 'Recipes',
+            'dyeing_machines' => 'Dyeing Machines',
+            'dyeing_workflow' => 'Dyeing Workflow',
+        ],
+        'finishing' => [
+            'dashboard' => 'Dashboard',
+            'production' => 'Production Orders',
+            'assignments' => 'Job Order Assignments',
+            'reject' => 'Rejected Items',
+            'inventory' => 'Production Inventory',
+            'recipes' => 'Recipes',
+            'finishing_machines' => 'Finishing Machines',
+            'finishing_workflow' => 'Finishing Workflow',
+        ],
+        'maintenance' => self::OVERVIEW,
+        'boiler' => [
+            'dashboard' => 'Dashboard',
+            'production' => 'Production Orders',
+            'reject' => 'Rejected Items',
+            'inventory' => 'Production Inventory',
+            'recipes' => 'Recipes',
+            'boiler_machines' => 'Boiler Machines',
+        ],
+    ];
+
     /**
      * Role slug => ordered page catalog (key => label).
      *
@@ -51,37 +93,75 @@ class ManufacturingPages
             'history' => 'My History',
             'reports' => 'Reports',
         ],
+        'knitting_inspector' => [
+            'dashboard' => 'Dashboard',
+            'knitting_inspector' => 'Knitting Inspection',
+            'history' => 'My History',
+            'reports' => 'Reports',
+        ],
+        'knitting_sample' => [
+            'dashboard' => 'Dashboard',
+            'knitting_sample' => 'Knitting Sample',
+            'history' => 'My History',
+            'reports' => 'Reports',
+        ],
         'dyeing_color' => [
             'dashboard' => 'Dashboard',
             'dyeing_color' => 'Dyeing Color',
             'history' => 'My History',
             'reports' => 'Reports',
         ],
-        'dyeing_fabric_softener' => [
+        'dyeing_bleaching' => [
             'dashboard' => 'Dashboard',
-            'dyeing_fabric_softener' => 'Fabric Softener',
+            'dyeing_bleaching' => 'Dyeing Bleaching',
             'history' => 'My History',
             'reports' => 'Reports',
         ],
-        'dyeing_squeezer' => [
+        'dyeing_pre_treatment' => [
             'dashboard' => 'Dashboard',
-            'dyeing_squeezer' => 'Dyeing Squeezer',
+            'dyeing_pre_treatment' => 'Dyeing Pre Treatment',
+            'history' => 'History',
+            'reports' => 'Reports',
+        ],
+        'dyeing_treatment' => [
+            'dashboard' => 'Dashboard',
+            'dyeing_treatment' => 'Dyeing Post Treatment',
+            'history' => 'History',
+            'reports' => 'Reports',
+        ],
+        'finishing_squeezer' => [
+            'dashboard' => 'Dashboard',
+            'finishing_squeezer' => 'Finishing Squeezer',
             'history' => 'My History',
             'reports' => 'Reports',
         ],
-        'dyeing_ironing' => [
+        'finishing_ironing' => [
             'dashboard' => 'Dashboard',
-            'dyeing_ironing' => 'Dyeing Ironing',
+            'finishing_ironing' => 'Finishing Heatsetting',
             'history' => 'My History',
+            'reports' => 'Reports',
+        ],
+        'finishing_hydro' => [
+            'dashboard' => 'Dashboard',
+            'finishing_hydro' => 'Finishing Hydro',
+            'history' => 'History',
+            'reports' => 'Reports',
+        ],
+        'finishing_tubetex' => [
+            'dashboard' => 'Dashboard',
+            'finishing_tubetex' => 'Finishing Tubetex',
+            'history' => 'History',
             'reports' => 'Reports',
         ],
         'dyeing_lab_chemist' => [
             'dashboard' => 'Dashboard',
-            'dyeing_lab_chemist' => 'Shade Development',
-            'lab_tests' => 'Tests & CoA',
-            'lab_inventory' => 'Lab Inventory',
-            'lab_transfer' => 'Bulk Transfer',
+            'dyeing_lab_chemist' => 'Color Request',
             'history' => 'My History',
+            'pantones' => 'Pantones',
+            'knit_fabric_requests' => 'Receive Fabric Sample Knit',
+            'lab_tests' => 'Tests & CoA',
+            'lab_transfer' => 'Bulk Transfer',
+            'lab_inventory' => 'Lab Inventory',
             'recipes' => 'Recipes',
         ],
         'finishing_packaging' => [
@@ -90,9 +170,17 @@ class ManufacturingPages
             'history' => 'My History',
             'reports' => 'Reports',
         ],
+        'finishing_inspector' => [
+            'dashboard' => 'Dashboard',
+            'finishing_inspector' => 'Finishing Shrinkage Inspection',
+            'history' => 'History',
+            'reports' => 'Reports',
+        ],
         'checker_quality' => [
             'dashboard' => 'Dashboard',
-            'checker_quality' => 'Quality Inspection',
+            'checker_quality' => 'Finishing Quality Checker',
+            'history' => 'History',
+            'reports' => 'Reports',
         ],
         'maintenance_checker' => [
             'dashboard' => 'Dashboard',
@@ -122,12 +210,11 @@ class ManufacturingPages
      * ManufacturingRoles::DEPARTMENTS; kept here for supervisor scoping).
      */
     public const DEPARTMENT_ROLES = [
-        'knitting' => ['knitting_yarn', 'knitting_mechanic'],
+        'knitting' => ['knitting_yarn', 'knitting_mechanic', 'knitting_inspector', 'knitting_sample'],
         'dyeing' => [
-            'dyeing_color', 'dyeing_fabric_softener', 'dyeing_squeezer',
-            'dyeing_ironing', 'dyeing_lab_chemist',
+            'dyeing_color', 'dyeing_bleaching', 'dyeing_pre_treatment', 'dyeing_treatment', 'dyeing_lab_chemist',
         ],
-        'finishing' => ['finishing_packaging', 'checker_quality'],
+        'finishing' => ['finishing_squeezer', 'finishing_ironing', 'finishing_hydro', 'finishing_tubetex', 'finishing_packaging', 'finishing_inspector', 'checker_quality'],
         'maintenance' => [
             'maintenance_checker', 'pollution_control_operator', 'safety_officer',
         ],
@@ -168,6 +255,35 @@ class ManufacturingPages
     }
 
     /**
+     * Page catalog available to IT when configuring one department supervisor.
+     * The supervisor can be granted access to any workspace handled by their
+     * department's staff, while other departments' staff pages stay excluded.
+     */
+    public static function forSupervisorDepartment(?string $department): array
+    {
+        $pages = self::OVERVIEW;
+        foreach (self::DEPARTMENT_ROLES[$department] ?? [] as $role) {
+            foreach (self::ROLE_PAGES[$role] ?? [] as $key => $label) {
+                $pages[$key] ??= $label;
+            }
+        }
+
+        // These page keys are shared by all staff workspaces in the department.
+        foreach (['dashboard' => 'Staff Dashboards', 'history' => 'Staff History', 'reports' => 'Staff Reports'] as $key => $label) {
+            if (array_key_exists($key, $pages)) {
+                $pages[$key] = $label;
+            }
+        }
+
+        return $pages;
+    }
+
+    public static function forSupervisorAccountDepartment(?string $department): array
+    {
+        return self::SUPERVISOR_ACCOUNT_PAGES[$department] ?? self::OVERVIEW;
+    }
+
+    /**
      * Ordered page catalog for a specific employee.
      *
      * Supervisors and MAN accounts without a plant role keep the shared
@@ -199,6 +315,25 @@ class ManufacturingPages
         }
 
         return isset(self::ROLE_PAGES[$role]) ? $role : null;
+    }
+
+    /** Resolve the staff workspace role from its canonical named route. */
+    public static function roleForRouteName(?string $routeName): ?string
+    {
+        if (! $routeName) {
+            return null;
+        }
+
+        foreach (array_keys(self::ROLE_PAGES) as $role) {
+            $slug = $role === 'pollution_control_operator'
+                ? 'pollution-control'
+                : str_replace('_', '-', $role);
+            if (str_starts_with($routeName, 'man.staff.' . $slug . '.')) {
+                return $role;
+            }
+        }
+
+        return null;
     }
 
     /**

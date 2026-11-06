@@ -77,7 +77,7 @@ class GeofenceAccessMiddleware
     /**
      * Return a geofence denial in the format the caller expects:
      * JSON for API callers, redirect-with-flash for Inertia page visits
-     * (AuthenticatedLayout surfaces flash.geofence_error via SweetAlert).
+     * (AuthenticatedLayout surfaces flash.geofence_error via the shared modal).
      */
     private function deny(Request $request, string $message, array $debug = [])
     {

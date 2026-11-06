@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { computed, ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
@@ -95,8 +96,8 @@ const restorePost = (post) => {
     router.post(route('crm.posts.restore', post.id), {}, { preserveScroll: true });
 };
 
-const deletePost = (post) => {
-    if (window.confirm('Permanently delete this post and its uploaded media?')) {
+const deletePost = async (post) => {
+    if (await confirmModal('Permanently delete this post and its uploaded media?')) {
         router.delete(route('crm.posts.destroy', post.id), { preserveScroll: true });
     }
 };

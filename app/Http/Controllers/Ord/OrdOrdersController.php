@@ -136,6 +136,10 @@ class OrdOrdersController extends Controller
                     'id' => $i->id,
                     'purchase_order_item_id' => $i->id,
                     'product' => $i->product?->name ?? 'N/A',
+                    'fabric' => $i->fabric,
+                    'yarn_type' => $i->fabric_type,
+                    'color' => $i->color,
+                    'design' => $i->design,
                     'quantity' => (float) $i->quantity,
                     'unit_price' => (float) $i->unit_price,
                     'line_total' => (float) $i->line_total,
@@ -266,6 +270,7 @@ class OrdOrdersController extends Controller
             'lines.*.yarn_type' => 'required|string|max:255',
             'lines.*.color' => 'required|string|max:255',
             'lines.*.design' => 'nullable|string|max:255',
+            'lines.*.recipe_id' => 'nullable|integer|exists:bom_records,id',
             'lines.*.quantity' => 'required|numeric|decimal:0,2|min:0.01',
             'lines.*.expected_ship_date' => 'nullable|date',
         ]);
@@ -288,6 +293,23 @@ class OrdOrdersController extends Controller
                     throw ValidationException::withMessages(['lines' => "A selected line does not belong to {$po->po_number}."]);
                 }
                 $item = $items->get((int) $itemId);
+                foreach ($itemLines as $line) {
+                    if (empty($line['recipe_id'])) {
+                        continue;
+                    }
+
+                    $recipeMatchesOrder = \App\Models\Man\BomRecord::query()
+                        ->whereKey($line['recipe_id'])
+                        ->where('client_id', $po->client_id)
+                        ->where('product_id', $item->product_id)
+                        ->exists();
+
+                    if (! $recipeMatchesOrder) {
+                        throw ValidationException::withMessages([
+                            'lines' => 'Choose an approved fabric recipe for the client and product on this PO.',
+                        ]);
+                    }
+                }
                 $quantity = round($itemLines->sum(fn ($line) => (float) $line['quantity']), 2);
                 if ($quantity > (float) $item->quantity + 0.001) {
                     throw ValidationException::withMessages(['lines' => "Allocated quantity for {$item->product?->name} exceeds the PO quantity of {$item->quantity} kg."]);
@@ -337,6 +359,7 @@ class OrdOrdersController extends Controller
                     'yarn_type' => $line['yarn_type'],
                     'color' => $line['color'],
                     'design' => $line['design'] ?? '',
+                    'recipe_id' => $line['recipe_id'] ?? null,
                     'quantity' => $line['quantity'],
                     // The client approved the PO price. Keep its line price
                     // and allocate any PO-level discount across generated JOs.

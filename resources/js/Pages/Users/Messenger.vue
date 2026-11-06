@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
@@ -153,6 +154,7 @@ const sendMessage = async () => {
         if (attachFile.value) payload.append('file', attachFile.value);
         const { data } = await axios.post(route('topbar.threads.send', activeThread.value.id), payload, {
             headers: { 'Content-Type': 'multipart/form-data' },
+            __suppressSuccessFeedback: true,
         });
         messages.value.push(data.message);
         draft.value = '';
@@ -243,6 +245,7 @@ const changePhoto = async (e) => {
 
 const removePhoto = async () => {
     if (groupBusy.value) return;
+    if (!await confirmModal('Remove this group photo?')) return;
     groupBusy.value = true;
     try {
         await axios.patch(route('topbar.threads.update', activeThread.value.id), { remove_photo: true });
@@ -279,6 +282,7 @@ const addMember = async (u) => {
 
 const removeMember = async (u) => {
     if (groupBusy.value) return;
+    if (!await confirmModal(`Remove ${u.name || 'this person'} from the group?`)) return;
     groupBusy.value = true;
     groupError.value = '';
     try {
@@ -292,6 +296,7 @@ const removeMember = async (u) => {
 
 const leaveGroup = async () => {
     if (groupBusy.value) return;
+    if (!await confirmModal('Leave this group conversation?')) return;
     groupBusy.value = true;
     try {
         await axios.post(route('topbar.threads.leave', activeThread.value.id));

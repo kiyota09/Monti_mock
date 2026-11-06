@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmModal } from '@/lib/feedback';
 // Page 7: Worker detail (header + overview + assignments + activity)
 import { ref, computed, watch } from 'vue';
 import { Head, Link, router, usePage, useForm } from '@inertiajs/vue3';
@@ -308,8 +309,8 @@ function reactivate() {
     router.post(route('hrm.workers.reactivate', props.worker.id), {}, { preserveScroll: true });
 }
 
-function liftBlacklist() {
-    if (!window.confirm('Lift the blacklist for this worker? Only HR/IT may do this.')) return;
+async function liftBlacklist() {
+    if (!await confirmModal('Lift the blacklist for this worker? Only HR/IT may do this.')) return;
     router.post(route('hrm.workers.lift-blacklist', props.worker.id), {}, { preserveScroll: true });
 }
 

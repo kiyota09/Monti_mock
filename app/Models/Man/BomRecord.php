@@ -5,7 +5,9 @@ namespace App\Models\Man;
 use App\Models\Crm\Client;
 use App\Models\Inv\Material;
 use App\Models\Inv\Product;
+use App\Models\Crm\FabricSampleRequest;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BomRecord extends Model
 {
@@ -14,14 +16,17 @@ class BomRecord extends Model
     protected $fillable = [
         'client_id',
         'product_id',
+        'fabric_sample_request_id',
         'yarn_type',
         'dye_color',
         'weave_design',
         'materials',
+        'dyeing_formula',
     ];
 
     protected $casts = [
         'materials' => 'array',
+        'dyeing_formula' => 'array',
     ];
 
     /**
@@ -38,6 +43,18 @@ class BomRecord extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function fabricSampleRequest()
+    {
+        return $this->belongsTo(FabricSampleRequest::class, 'fabric_sample_request_id');
+    }
+
+    /** Sample rounds also keep the recipe_id link; use it for older records
+     * created before the direct fabric_sample_request_id was populated. */
+    public function sampleRequests(): HasMany
+    {
+        return $this->hasMany(FabricSampleRequest::class, 'recipe_id');
     }
 
     /**

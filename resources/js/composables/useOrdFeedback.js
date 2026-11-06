@@ -1,7 +1,6 @@
 import { watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 /**
  * Surfaces Inertia flash success/error messages for ORD pages. The shared

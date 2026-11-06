@@ -58,7 +58,7 @@ class ManufacturingInventoryController extends Controller
             }
 
             // Guard against missing material relationship
-            $materialName = $item->material ? $item->material->name : '(Unknown Material)';
+            $materialName = $item->material ? $item->material->display_name : '(Unknown Material)';
 
             return [
                 'id'                 => $item->id,

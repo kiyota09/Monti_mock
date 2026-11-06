@@ -11,8 +11,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AuthLayout from '@/Layouts/AuthLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import { Mail, Lock, CheckCircle2, PartyPopper } from 'lucide-vue-next';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const page = usePage();
 

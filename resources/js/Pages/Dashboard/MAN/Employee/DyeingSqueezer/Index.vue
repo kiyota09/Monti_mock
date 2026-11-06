@@ -11,7 +11,7 @@ const props = defineProps({
 
 <template>
     <AuthenticatedLayout>
-        <Head title="Dyeing Squeezer Dashboard" />
+        <Head title="Finishing Squeezer Dashboard" />
         <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
             <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
 
@@ -26,17 +26,17 @@ const props = defineProps({
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                                <Sparkles class="h-3.5 w-3.5" /> MAN · Dyeing Squeezer
+                                <Sparkles class="h-3.5 w-3.5" /> MAN Â· Finishing Squeezer
                             </p>
-                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Dyeing Squeezer Dashboard</h1>
-                            <p class="text-sm text-blue-100/90">{{ stats.pending }} pending to squeeze · {{ stats.total_today }} done today</p>
+                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Finishing Squeezer Dashboard</h1>
+                            <p class="text-sm text-blue-100/90">{{ stats.pending }} pending to squeeze Â· {{ stats.total_today }} done today</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <Link :href="route('man.staff.dyeing-squeezer.page')"
+                            <Link :href="route('man.staff.finishing-squeezer.page')"
                                 class="rounded-2xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wide text-indigo-700 shadow-lg hover:scale-105 active:scale-95 transition-all duration-200">
                                 Squeeze Fabrics
                             </Link>
-                            <Link :href="route('man.staff.dyeing-squeezer.reports')"
+                            <Link :href="route('man.staff.finishing-squeezer.reports')"
                                 class="rounded-2xl bg-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white ring-1 ring-white/25 backdrop-blur hover:bg-white/25 active:scale-95 transition-all duration-200">
                                 View Reports
                             </Link>
@@ -121,7 +121,7 @@ const props = defineProps({
                             <thead class="bg-gray-50/80 dark:bg-zinc-800/50">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Code</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Softener Job</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fabric</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Machine</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Date</th>
                                 </tr>
@@ -129,7 +129,7 @@ const props = defineProps({
                             <tbody class="divide-y divide-gray-100 dark:divide-zinc-800">
                                 <tr v-for="job in recentJobs" :key="job.id" class="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors">
                                     <td class="px-6 py-4 font-mono text-sm text-gray-900 dark:text-white">{{ job.code }}</td>
-                                    <td class="px-6 py-4 text-gray-600 dark:text-gray-300">{{ job.softener_job?.code || 'N/A' }}</td>
+                                    <td class="px-6 py-4 text-gray-600 dark:text-gray-300">{{ job.fabric?.code || 'N/A' }}</td>
                                     <td class="px-6 py-4 text-gray-600 dark:text-gray-300">{{ job.machine?.machine_no || 'N/A' }}</td>
                                     <td class="px-6 py-4 text-gray-600 dark:text-gray-300">{{ new Date(job.processed_at).toLocaleString() }}</td>
                                 </tr>

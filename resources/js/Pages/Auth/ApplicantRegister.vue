@@ -13,8 +13,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import AuthLayout from '@/Layouts/AuthLayout.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 import { Lock, Mail } from 'lucide-vue-next';
 
 const page = usePage();

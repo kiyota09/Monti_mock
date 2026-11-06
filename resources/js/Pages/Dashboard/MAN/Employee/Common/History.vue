@@ -36,6 +36,7 @@ const subLine = (row) => {
     if (isSampleRow(row)) return `${row.fabric_name} · ${row.color_description}`;
     if (row.fabric?.code) return `Fabric ${row.fabric.code}`;
     if (row.softenerJob?.fabric?.code) return `Fabric ${row.softenerJob.fabric.code}`;
+    if (row.squeezerJob?.fabric?.code) return `Fabric ${row.squeezerJob.fabric.code}`;
     if (row.squeezerJob?.softenerJob?.fabric?.code) return `Fabric ${row.squeezerJob.softenerJob.fabric.code}`;
     if (row.yarn_type) return row.yarn_type;
     if (row.dye_type) return row.dye_type;
@@ -57,7 +58,7 @@ const isFabricRow = (row) => !!row && 'yarn_type' in row && 'weight' in row && !
 const fabricOf = (row) => {
     if (!row) return null;
     if (isFabricRow(row)) return row;
-    return row.fabric ?? row.softenerJob?.fabric ?? row.squeezerJob?.softenerJob?.fabric ?? null;
+    return row.fabric ?? row.softenerJob?.fabric ?? row.squeezerJob?.fabric ?? row.squeezerJob?.softenerJob?.fabric ?? null;
 };
 const machineOf = (row) => row?.machine ?? fabricOf(row)?.machine ?? row?.softenerJob?.machine ?? row?.squeezerJob?.machine ?? null;
 const salesOrderOf = (row) => {

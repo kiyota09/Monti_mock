@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref } from 'vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -9,7 +10,7 @@ defineProps({ bulletins: Array });
 const showForm = ref(false);
 const form = useForm({ title: '', body: '', audience: 'company', priority: 'normal', expires_at: '' });
 const submit = () => form.post(route('vp.bulletins.store'), { preserveScroll: true, onSuccess: () => { showForm.value = false; form.reset(); } });
-const removeBulletin = (b) => { if (confirm(`Remove bulletin "${b.title}"?`)) router.delete(route('vp.bulletins.destroy', b.id), { preserveScroll: true }); };
+const removeBulletin = async (b) => { if (await confirmModal(`Remove bulletin "${b.title}"?`)) router.delete(route('vp.bulletins.destroy', b.id), { preserveScroll: true }); };
 </script>
 
 <template>

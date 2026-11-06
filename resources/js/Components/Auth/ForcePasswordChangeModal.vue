@@ -1,8 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { useForm, usePage } from '@inertiajs/vue3';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const page = usePage();
 

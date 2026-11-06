@@ -5,8 +5,7 @@ import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import { AlertTriangle, CalendarClock, FileCheck2, LoaderCircle } from 'lucide-vue-next';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 import { formatHours } from '@/lib/utils';
 
 const props = defineProps<{

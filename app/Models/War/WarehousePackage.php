@@ -14,7 +14,9 @@ class WarehousePackage extends Model
         'package_number',
         'manufacturing_order_id',
         'product_id',
+        'client_id',
         'quantity',
+        'weight_kg',
         'status',
         'pushed_at',
         'pushed_by',
@@ -22,6 +24,7 @@ class WarehousePackage extends Model
 
     protected $casts = [
         'quantity' => 'decimal:2',
+        'weight_kg' => 'decimal:2',
         'pushed_at' => 'datetime',
     ];
 
@@ -33,6 +36,11 @@ class WarehousePackage extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function client()
+    {
+        return $this->belongsTo(\App\Models\Crm\Client::class);
     }
 
     public function pushedBy()
@@ -54,6 +62,10 @@ class WarehousePackage extends Model
      */
     public function destinationClientId(): ?int
     {
+        if ($this->client_id) {
+            return (int) $this->client_id;
+        }
+
         $mo = $this->manufacturingOrder;
 
         if (! $mo) {

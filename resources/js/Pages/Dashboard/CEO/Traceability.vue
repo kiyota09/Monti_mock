@@ -107,7 +107,9 @@ const statusTone = (value) => {
 const stageIcon = (stage) => ({
     Knitting: Factory,
     Dyeing: FlaskConical,
-    Softener: FlaskConical,
+    Bleaching: FlaskConical,
+    'Finishing Squeezer': Factory,
+    'Finishing Heatsetting': Factory,
     Squeezer: Factory,
     Ironing: Factory,
     Packaging: Package,
@@ -335,7 +337,7 @@ const lotColumns = [
         <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
             <div class="mx-auto max-w-7xl space-y-5 p-4 pb-16 sm:p-6">
 
-                <div class="relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-white shadow-xl sm:p-7">
+                <div data-erp-page-banner="surface" class="relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-white shadow-xl sm:p-7">
                     <div class="absolute inset-0 bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800" />
                     <div class="absolute -top-20 -right-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
                     <div class="relative flex flex-wrap items-center gap-4">

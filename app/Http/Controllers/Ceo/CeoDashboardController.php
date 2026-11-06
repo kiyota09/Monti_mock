@@ -88,9 +88,9 @@ class CeoDashboardController extends Controller
         $stages = collect([
             ['key' => 'pending', 'label' => 'Knitting Queue', 'color' => 'bg-sky-500'],
             ['key' => 'dyeing', 'label' => 'Dyeing', 'color' => 'bg-indigo-500'],
-            ['key' => 'softener', 'label' => 'Softener', 'color' => 'bg-violet-500'],
-            ['key' => 'squeezer', 'label' => 'Squeezer', 'color' => 'bg-fuchsia-500'],
-            ['key' => 'iron', 'label' => 'Ironing', 'color' => 'bg-amber-500'],
+            ['key' => 'bleaching', 'label' => 'Dyeing Bleaching', 'color' => 'bg-violet-500'],
+            ['key' => 'squeezer', 'label' => 'Finishing Squeezer', 'color' => 'bg-fuchsia-500'],
+            ['key' => 'iron', 'label' => 'Finishing Heatsetting', 'color' => 'bg-amber-500'],
             ['key' => 'forming', 'label' => 'Forming', 'color' => 'bg-teal-500'],
             ['key' => 'packed', 'label' => 'Packed / Ready', 'color' => 'bg-emerald-500'],
         ])->map(fn ($stage) => [
@@ -173,19 +173,20 @@ class CeoDashboardController extends Controller
                 'm.mat_id',
                 'm.name',
                 'm.category',
+                'm.yarn_tier',
                 'm.unit',
                 'm.reorder_point',
                 'm.unit_cost',
                 DB::raw('COALESCE(SUM(s.quantity), 0) as stock')
             )
-            ->groupBy('m.id', 'm.mat_id', 'm.name', 'm.category', 'm.unit', 'm.reorder_point', 'm.unit_cost')
+            ->groupBy('m.id', 'm.mat_id', 'm.name', 'm.category', 'm.yarn_tier', 'm.unit', 'm.reorder_point', 'm.unit_cost')
             ->havingRaw('COALESCE(SUM(s.quantity), 0) < m.reorder_point')
             ->orderBy('stock')
             ->get()
             ->map(fn ($material) => [
                 'id' => $material->id,
                 'mat_id' => $material->mat_id,
-                'name' => $material->name,
+                'name' => $material->category === 'Yarn' ? trim(($material->yarn_tier ?: 'Tier not set').' '.$material->name) : $material->name,
                 'category' => $material->category,
                 'unit' => $material->unit,
                 'unit_cost' => (float) $material->unit_cost,

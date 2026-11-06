@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import FabricModalArtwork from '@/Components/FabricModalArtwork.vue';
 
 const props = withDefaults(
     defineProps<{
@@ -113,12 +114,17 @@ const maxWidthClass = computed(() => {
             >
                 <div
                     v-show="show"
-                    class="transform overflow-hidden rounded-lg bg-white shadow-xl transition-all sm:mx-auto sm:w-full dark:bg-zinc-900 dark:shadow-black/40"
+                    class="fabric-generic-modal transform overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-xl transition-all sm:mx-auto sm:w-full dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40"
                     :class="maxWidthClass"
                 >
+                    <FabricModalArtwork kind="info" label="Blue fabric swatches" />
                     <slot v-if="showSlot" />
                 </div>
             </Transition>
         </div>
     </dialog>
 </template>
+
+<style scoped>
+.fabric-generic-modal :deep(.fabric-modal-art) { height: 100px; }
+</style>

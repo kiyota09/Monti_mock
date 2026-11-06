@@ -415,9 +415,8 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Swal from 'sweetalert2';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { dialog } from '@/lib/feedback';
+import { toast } from '@/lib/feedback';
 import {
     LayoutTemplate, Pencil, Copy, Plus, Trash2, PauseCircle, PlayCircle,
     ChevronUp, ChevronDown, Power, X, Info, Paperclip,
@@ -590,7 +589,7 @@ const setStatus = (status) => {
         return;
     }
 
-    Swal.fire({
+    dialog.fire({
         title: 'Deactivate template?',
         text: props.template.name + ' will no longer be used for new hires until it is activated again.',
         icon: 'warning',
@@ -605,7 +604,7 @@ const setStatus = (status) => {
 };
 
 const duplicateTemplate = () => {
-    Swal.fire({
+    dialog.fire({
         title: 'Duplicate template?',
         text: props.template.name + ' will be copied with all its active items.',
         icon: 'question',
@@ -819,7 +818,7 @@ const toggleItemActive = (item) => {
 };
 
 const deleteItem = (item) => {
-    Swal.fire({
+    dialog.fire({
         title: 'Remove item?',
         text: item.name + ' will be removed from this template definition.',
         icon: 'warning',
@@ -949,7 +948,7 @@ const toggleActivityActive = (activity) => {
 };
 
 const deleteActivity = (activity) => {
-    Swal.fire({
+    dialog.fire({
         title: 'Remove activity?',
         text: activity.title + ' will be removed from this template definition.',
         icon: 'warning',

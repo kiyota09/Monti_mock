@@ -3,8 +3,7 @@
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 import { watch } from 'vue';
 
 const props = defineProps<{

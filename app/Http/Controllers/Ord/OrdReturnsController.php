@@ -75,7 +75,11 @@ class OrdReturnsController extends Controller
                 'unit' => 'kg',
             ]);
 
-        return Inertia::render('Dashboard/ORD/Returns', [
+        $page = $request->routeIs('eco.returns')
+            ? 'Dashboard/ECO/Returns'
+            : 'Dashboard/ORD/Returns';
+
+        return Inertia::render($page, [
             'returns' => $returns,
             'counts' => $counts,
             'filters' => $filters,

@@ -18,8 +18,8 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::middleware('guest:agency')->group(function () {
-    Route::get('agency/login', [AgencyAuthController::class, 'showLogin'])->name('agency.login');
-    Route::post('agency/login', [AgencyAuthController::class, 'login'])->middleware('throttle:10,1')->name('agency.login.store');
+    Route::get('agency/login', fn () => redirect()->route('login'))->name('agency.login');
+    Route::post('agency/login', fn () => redirect()->route('login'))->name('agency.login.store');
     Route::post('agency/password/recover', [PasswordRecoveryController::class, 'agency'])->middleware('throttle:6,1')->name('agency.password.recover');
 });
 

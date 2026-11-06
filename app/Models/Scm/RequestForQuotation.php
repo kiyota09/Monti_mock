@@ -2,6 +2,7 @@
 
 namespace App\Models\Scm;
 
+use App\Models\Inv\Material;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -44,6 +45,11 @@ class RequestForQuotation extends Model
     public function materialRequest()
     {
         return $this->belongsTo(MaterialRequest::class, 'mr_id');
+    }
+
+    public function material()
+    {
+        return $this->belongsTo(Material::class, 'material_id');
     }
 
     public function purchaseOrders()

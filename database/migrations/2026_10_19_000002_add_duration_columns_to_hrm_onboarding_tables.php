@@ -8,15 +8,22 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('hrm_onboarding_templates', function (Blueprint $table) {
-            $table->unsignedInteger('duration_days')->nullable()->after('work_mode');
-        });
+        if (!Schema::hasColumn('hrm_onboarding_templates', 'duration_days')) {
+            Schema::table('hrm_onboarding_templates', function (Blueprint $table) {
+                $table->unsignedInteger('duration_days')->nullable()->after('work_mode');
+            });
+        }
 
-        Schema::table('hrm_onboardings', function (Blueprint $table) {
-            $table->unsignedInteger('duration_days')->nullable()->after('expected_completion_date');
-            $table->timestamp('duration_started_at')->nullable()->after('duration_days');
-            $table->timestamp('duration_reminder_sent_at')->nullable()->after('duration_started_at');
-        });
+        foreach (['duration_days', 'duration_started_at', 'duration_reminder_sent_at'] as $column) {
+            if (!Schema::hasColumn('hrm_onboardings', $column)) {
+                Schema::table('hrm_onboardings', function (Blueprint $table) use ($column) {
+                    match ($column) {
+                        'duration_days' => $table->unsignedInteger($column)->nullable()->after('expected_completion_date'),
+                        'duration_started_at', 'duration_reminder_sent_at' => $table->timestamp($column)->nullable(),
+                    };
+                });
+            }
+        }
     }
 
     public function down(): void

@@ -144,9 +144,9 @@ class BoardPackService
         $stages = collect([
             ['key' => 'pending', 'label' => 'Knitting Queue'],
             ['key' => 'dyeing', 'label' => 'Dyeing'],
-            ['key' => 'softener', 'label' => 'Softener'],
-            ['key' => 'squeezer', 'label' => 'Squeezer'],
-            ['key' => 'iron', 'label' => 'Ironing'],
+            ['key' => 'bleaching', 'label' => 'Dyeing Bleaching'],
+            ['key' => 'squeezer', 'label' => 'Finishing Squeezer'],
+            ['key' => 'iron', 'label' => 'Finishing Heatsetting'],
             ['key' => 'forming', 'label' => 'Forming'],
             ['key' => 'packed', 'label' => 'Packed / Ready'],
         ])->map(fn ($stage) => [
@@ -511,19 +511,20 @@ class BoardPackService
                 'm.mat_id',
                 'm.name',
                 'm.category',
+                'm.yarn_tier',
                 'm.unit',
                 'm.reorder_point',
                 'm.unit_cost',
                 DB::raw('COALESCE(SUM(s.quantity), 0) as stock')
             )
-            ->groupBy('m.id', 'm.mat_id', 'm.name', 'm.category', 'm.unit', 'm.reorder_point', 'm.unit_cost')
+            ->groupBy('m.id', 'm.mat_id', 'm.name', 'm.category', 'm.yarn_tier', 'm.unit', 'm.reorder_point', 'm.unit_cost')
             ->havingRaw('COALESCE(SUM(s.quantity), 0) < m.reorder_point')
             ->orderBy('stock')
             ->get()
             ->map(fn ($material) => [
                 'id' => $material->id,
                 'mat_id' => $material->mat_id,
-                'name' => $material->name,
+                'name' => $material->category === 'Yarn' ? trim(($material->yarn_tier ?: 'Tier not set').' '.$material->name) : $material->name,
                 'category' => $material->category ?: '—',
                 'unit' => $material->unit,
                 'unit_cost' => (float) $material->unit_cost,

@@ -410,8 +410,7 @@ import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Building2, Users, Target, BarChart3, ClipboardList, Archive, Search, Pencil, Lock, AlertTriangle, RotateCcw, Download, X } from 'lucide-vue-next';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const props = defineProps({
     departmentsData: { type: Object, default: () => ({ data: [] }) },

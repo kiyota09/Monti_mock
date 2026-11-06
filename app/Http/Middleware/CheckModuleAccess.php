@@ -27,28 +27,6 @@ class CheckModuleAccess
             return $next($request);
         }
 
-        // ── President & Vice President: full access to the CRM module ───────
-        // The President (role CEO) and the Vice President (position
-        // vice_president / role COO) may enter the CRM module shell. Every
-        // page inside is still gated by CheckPagePermission, which grants
-        // them full access there as well.
-        if ($module === 'CRM' && in_array($user->role, ['CEO', 'COO'], true)) {
-            return $next($request);
-        }
-        if ($module === 'CRM' && ($user->position ?? '') === 'vice_president') {
-            return $next($request);
-        }
-
-        // ── Vice President: no HRM access ────────────────────────────────
-        // The COO role is standalone (own VP module + full CRM, like the
-        // President) and has no job in the HRM module — not even with a
-        // legacy per-page grant row.
-        if ($module === 'HRM'
-            && (in_array($user->role, ['COO'], true)
-                || ($user->position ?? '') === 'vice_president')) {
-            abort(403, "You don't have access to the {$module} module.");
-        }
-
         // ── Secretary or Special Officer: check granted_modules ───────────────
         // With no grants saved yet, they fall back to their home (root)
         // module — mirrors User::canAccessModule(). Once the CEO assigns

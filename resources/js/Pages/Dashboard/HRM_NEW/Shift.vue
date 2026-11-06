@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -271,14 +272,16 @@ const submitAssign = () => {
         onSuccess: () => { assignSelected.value = []; assignSearch.value = ''; assignResults.value = []; assignEffectiveDate.value = ''; openView(detail.value); },
     });
 };
-const unassign = (userId) => {
+const unassign = async (userId) => {
     if (!detail.value) return;
+    if (!await confirmModal('Remove this employee from the shift?')) return;
     router.delete(route('hrm.workforce.shifts.unassign', { shift: detail.value.id, user: userId }), {
         preserveScroll: true, onSuccess: () => openView(detail.value),
     });
 };
-const unassignWorker = (workerId) => {
+const unassignWorker = async (workerId) => {
     if (!detail.value) return;
+    if (!await confirmModal('Remove this worker from the shift?')) return;
     router.delete(route('hrm.workforce.shifts.unassign-worker', { shift: detail.value.id, worker: workerId }), {
         preserveScroll: true, onSuccess: () => openView(detail.value),
     });

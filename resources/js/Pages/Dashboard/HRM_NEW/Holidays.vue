@@ -1,4 +1,5 @@
 <script setup>
+import { showNotice, confirmModal } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -85,7 +86,7 @@ const openForDate = (date) => {
     if (existing) {
         // Philippine holidays (calculated) cannot be edited/deleted
         if (existing.is_ph_holiday) {
-            alert('This is a standard Philippine holiday. It cannot be modified.');
+            showNotice('This is a standard Philippine holiday. It cannot be modified.');
             return;
         }
         editing.value = existing;
@@ -110,8 +111,8 @@ const switchToAdd = () => {
 };
 
 const submit = () => {
-    if (!form.value.holiday_name.trim()) { alert('Please enter a holiday name.'); return; }
-    if (!form.value.holiday_date) { alert('Please pick a date.'); return; }
+    if (!form.value.holiday_name.trim()) { showNotice('Please enter a holiday name.'); return; }
+    if (!form.value.holiday_date) { showNotice('Please pick a date.'); return; }
     saving.value = true;
     const payload = { ...form.value };
     if (editing.value) {
@@ -125,9 +126,9 @@ const submit = () => {
     }
 };
 
-const removeHoliday = () => {
+const removeHoliday = async () => {
     if (!editing.value) return;
-    if (!confirm(`Remove holiday "${editing.value.name}" on ${editing.value.date}?`)) return;
+    if (!await confirmModal(`Remove holiday "${editing.value.name}" on ${editing.value.date}?`)) return;
     router.delete(route('hrm.workforce.holidays.destroy', editing.value.id), {
         preserveScroll: true, onSuccess: () => closeModal(),
     });

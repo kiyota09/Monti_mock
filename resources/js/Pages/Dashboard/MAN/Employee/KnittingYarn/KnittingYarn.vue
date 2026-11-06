@@ -39,10 +39,16 @@ const dismissFlash = () => { showFlash.value = false; };
 // Produced JOs are removed server-side (recorded in work history) and only
 // return here if the knitting supervisor rejects the output for a remake.
 const filteredOrders = computed(() => props.jobOrders);
+const submitForSupervisor = (order) => router.post(
+    route('man.staff.knitting-yarn.submit-for-supervisor', order.id), {}, { preserveScroll: true },
+);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getYarnById = (id) => props.yarns.find(y => y.id == id) ?? null;
 const fmtNum      = (n)  => parseFloat(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const yarnMaterialsForOrder = (order) => order.recipe?.requested_yarn
+    ? [{ id: `requested-yarn-${order.id}`, name: order.recipe.requested_yarn }]
+    : [];
 
 // ─── Fabric-Link Modal (Mark Done) ────────────────────────────────────────────
 // Replaces the old simple confirm for the "done" action.
@@ -116,11 +122,41 @@ const closeRecipe = () => { recipeModal.value = false; selectedRecipeOrderId.val
 
 // ─── Main Yarn ────────────────────────────────────────────────────────────────
 const selectedMainYarnId = ref('');
-const mainRollsUsed      = ref('');
+const mainYarnKgUsed      = ref('');
+const mainYarnSearch = ref('');
+const mainYarnMenuOpen = ref(false);
+const additionalYarnSearch = ref([]);
+const additionalYarnMenuOpen = ref([]);
 const selectedMainYarn   = computed(() => getYarnById(selectedMainYarnId.value));
+const yarnsForSelectedOrder = computed(() => {
+    const requestedName = selectedProductionOrder.value?.recipe?.requested_yarn;
+    const requestedMaterialId = Number(selectedProductionOrder.value?.recipe?.requested_yarn_material_id || 0);
+    if (requestedMaterialId) return props.yarns.filter(yarn => Number(yarn.material_id) === requestedMaterialId);
+    if (!requestedName) return [];
+    return props.yarns.filter(yarn => yarn.material_name.trim().toLowerCase() === requestedName.trim().toLowerCase());
+});
+const filteredMainYarns = computed(() => yarnsForSelectedOrder.value.filter(yarn =>
+    `${yarn.material_name} ${yarn.control_number}`.toLowerCase().includes(mainYarnSearch.value.toLowerCase())
+));
+const filteredAdditionalYarns = (index) => {
+    const query = (additionalYarnSearch.value[index] ?? '').toLowerCase();
+    return yarnsForSelectedOrder.value.filter(yarn => `${yarn.material_name} ${yarn.control_number}`.toLowerCase().includes(query));
+};
+const yarnOptionLabel = (yarn) => `${yarn.material_name} (${yarn.control_number})`;
+const selectMainYarn = (yarn) => {
+    selectedMainYarnId.value = yarn.id;
+    mainYarnSearch.value = yarnOptionLabel(yarn);
+    mainYarnMenuOpen.value = false;
+};
+const selectAdditionalYarn = (row, index, yarn) => {
+    row.inventory_item_id = yarn.id;
+    additionalYarnSearch.value[index] = yarnOptionLabel(yarn);
+    additionalYarnMenuOpen.value[index] = false;
+    onAdditionalYarnChange(row);
+};
 
 watch(selectedMainYarnId, () => {
-    mainRollsUsed.value = '';
+    mainYarnKgUsed.value = '';
     form.yarn_type = selectedMainYarn.value?.material_name ?? '';
     recalcWeight();
 });
@@ -128,19 +164,18 @@ watch(selectedMainYarnId, () => {
 // ─── Additional Yarns ─────────────────────────────────────────────────────────
 const additionalYarnItems = ref([]);
 
-const addYarnRow = () => additionalYarnItems.value.push({ inventory_item_id: '', units_used: '' });
+const addYarnRow = () => {
+    additionalYarnItems.value.push({ inventory_item_id: '', weight_kg: '' });
+    additionalYarnSearch.value.push('');
+    additionalYarnMenuOpen.value.push(false);
+};
 const removeYarnRow = (index) => {
     additionalYarnItems.value.splice(index, 1);
+    additionalYarnSearch.value.splice(index, 1);
+    additionalYarnMenuOpen.value.splice(index, 1);
     recalcWeight();
 };
-const clampAdditionalRow = (row) => {
-    const yarn = getYarnById(row.inventory_item_id);
-    if (!yarn) return;
-    if (row.units_used < 1)                   row.units_used = 1;
-    if (row.units_used > yarn.available_units) row.units_used = yarn.available_units;
-    recalcWeight();
-};
-const onAdditionalYarnChange = (row) => { row.units_used = ''; recalcWeight(); };
+const onAdditionalYarnChange = (row) => { row.weight_kg = ''; recalcWeight(); };
 
 // ─── Weight Computation ───────────────────────────────────────────────────────
 const weightIsPartial = ref(false);
@@ -150,23 +185,23 @@ const recalcWeight = () => {
     let allHaveUnitWeight = true;
 
     const mainYarn  = selectedMainYarn.value;
-    const mainRolls = parseInt(mainRollsUsed.value);
-    if (mainYarn && mainRolls >= 1) {
-        if (mainYarn.unit_weight) total += parseFloat(mainYarn.unit_weight) * mainRolls;
-        else allHaveUnitWeight = false;
+    const mainKg = parseFloat(mainYarnKgUsed.value);
+    if (mainYarn && mainKg > 0) {
+        total += mainKg;
+        if (!mainYarn.unit_weight) allHaveUnitWeight = false;
     }
 
     for (const row of additionalYarnItems.value) {
         const yarn  = getYarnById(row.inventory_item_id);
-        const rolls = parseInt(row.units_used);
-        if (yarn && rolls >= 1) {
-            if (yarn.unit_weight) total += parseFloat(yarn.unit_weight) * rolls;
-            else allHaveUnitWeight = false;
+        const kg = parseFloat(row.weight_kg);
+        if (yarn && kg > 0) {
+            total += kg;
+            if (!yarn.unit_weight) allHaveUnitWeight = false;
         }
     }
 
-    const hasEntry = (mainYarn && mainRolls >= 1) ||
-        additionalYarnItems.value.some(r => getYarnById(r.inventory_item_id) && parseInt(r.units_used) >= 1);
+    const hasEntry = (mainYarn && mainKg > 0) ||
+        additionalYarnItems.value.some(r => getYarnById(r.inventory_item_id) && parseFloat(r.weight_kg) > 0);
 
     form.weight = hasEntry ? total.toFixed(2) : '';
     weightIsPartial.value = hasEntry && !allHaveUnitWeight;
@@ -175,56 +210,64 @@ const recalcWeight = () => {
 const weightBreakdown = computed(() => {
     const parts = [];
     const mainYarn = selectedMainYarn.value;
-    const mainRolls = parseInt(mainRollsUsed.value);
-    if (mainYarn && mainRolls >= 1 && mainYarn.unit_weight)
-        parts.push(`${mainYarn.material_name}: ${mainRolls} × ${mainYarn.unit_weight} kg = ${(parseFloat(mainYarn.unit_weight) * mainRolls).toFixed(2)} kg`);
+    const mainKg = parseFloat(mainYarnKgUsed.value);
+    if (mainYarn && mainKg > 0 && mainYarn.unit_weight)
+        parts.push(`${mainYarn.material_name}: ${mainKg.toFixed(2)} kg = ${(mainKg / parseFloat(mainYarn.unit_weight)).toFixed(2)} roll equivalents`);
     for (const row of additionalYarnItems.value) {
         const yarn = getYarnById(row.inventory_item_id);
-        const rolls = parseInt(row.units_used);
-        if (yarn && rolls >= 1 && yarn.unit_weight)
-            parts.push(`${yarn.material_name}: ${rolls} × ${yarn.unit_weight} kg = ${(parseFloat(yarn.unit_weight) * rolls).toFixed(2)} kg`);
+        const kg = parseFloat(row.weight_kg);
+        if (yarn && kg > 0 && yarn.unit_weight)
+            parts.push(`${yarn.material_name}: ${kg.toFixed(2)} kg = ${(kg / parseFloat(yarn.unit_weight)).toFixed(2)} roll equivalents`);
     }
     return parts;
 });
 
-watch(mainRollsUsed, recalcWeight);
+watch(mainYarnKgUsed, recalcWeight);
 watch(additionalYarnItems, recalcWeight, { deep: true });
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
-const form = useForm({ machine_id: '', yarn_type: '', weight: '', remarks: '', yarns_used: [] });
+const form = useForm({ sales_order_id: '', machine_id: '', yarn_type: '', weight: '', remarks: '', yarns_used: [] });
+const selectedProductionOrder = computed(() => props.jobOrders.find((order) => Number(order.id) === Number(form.sales_order_id)) ?? null);
+const assignedMachines = computed(() => selectedProductionOrder.value?.assigned_machines ?? []);
+const setupReadyMachines = computed(() => assignedMachines.value.filter((machine) => machine.setup_status === 'done'));
+
+const rollsRemainingAfterKg = (yarn, kg) => {
+    const perRollKg = Number(yarn?.unit_weight || 0);
+    return perRollKg > 0 ? Math.max(0, Math.floor((Number(yarn.remaining_quantity || 0) - Number(kg || 0) + 1e-8) / perRollKg)) : 0;
+};
 
 const mainYarnExceedsAvailable = computed(() =>
-    selectedMainYarn.value && mainRollsUsed.value
-        ? parseInt(mainRollsUsed.value) > selectedMainYarn.value.available_units
+    selectedMainYarn.value && mainYarnKgUsed.value
+        ? parseFloat(mainYarnKgUsed.value) > Number(selectedMainYarn.value.remaining_quantity)
         : false
 );
 const additionalRowErrors = computed(() =>
     additionalYarnItems.value.map(row => {
-        if (!row.inventory_item_id || !row.units_used) return null;
+        if (!row.inventory_item_id || !row.weight_kg) return null;
         const yarn = getYarnById(row.inventory_item_id);
-        return yarn && parseInt(row.units_used) > yarn.available_units
-            ? `Only ${yarn.available_units} rolls available` : null;
+        return yarn && parseFloat(row.weight_kg) > Number(yarn.remaining_quantity)
+            ? `Only ${Number(yarn.remaining_quantity).toFixed(2)} kg available` : null;
     })
 );
-const hasInvalidAdditionalUnits = computed(() => additionalRowErrors.value.some(e => e !== null));
-const canSubmit = computed(() =>
-    form.machine_id && selectedMainYarnId.value && parseInt(mainRollsUsed.value) >= 1 &&
-    !mainYarnExceedsAvailable.value && !hasInvalidAdditionalUnits.value &&
-    parseFloat(form.weight) > 0 && !form.processing
+const requestMechanicSetup = (order, machine) => router.post(
+    route('man.staff.knitting-yarn.request-setup', order.id),
+    { machine_id: machine.id },
+    { preserveScroll: true },
 );
 
 const submitFabric = () => {
+    form.yarn_type = selectedProductionOrder.value?.yarn_type || selectedProductionOrder.value?.recipe?.yarn_type || form.yarn_type;
     form.yarns_used = [
-        { inventory_item_id: parseInt(selectedMainYarnId.value), units_used: parseInt(mainRollsUsed.value) },
+        { inventory_item_id: parseInt(selectedMainYarnId.value), weight_kg: parseFloat(mainYarnKgUsed.value) },
         ...additionalYarnItems.value
-            .filter(item => item.inventory_item_id && parseInt(item.units_used) >= 1)
-            .map(item => ({ inventory_item_id: parseInt(item.inventory_item_id), units_used: parseInt(item.units_used) })),
+            .filter(item => item.inventory_item_id && parseFloat(item.weight_kg) > 0)
+            .map(item => ({ inventory_item_id: parseInt(item.inventory_item_id), weight_kg: parseFloat(item.weight_kg) })),
     ];
     form.post(route('man.staff.knitting-yarn.store-fabric'), {
         preserveScroll: true,
         onSuccess: () => {
             form.reset();
-            selectedMainYarnId.value = ''; mainRollsUsed.value = '';
+            selectedMainYarnId.value = ''; mainYarnKgUsed.value = '';
             additionalYarnItems.value = []; weightIsPartial.value = false;
         },
     });
@@ -337,13 +380,24 @@ const submitFabric = () => {
                                     <p class="font-black text-gray-800 dark:text-gray-100">{{ fmtNum(order.quantity) }} kg</p>
                                 </div>
                                 <div>
-                                    <p class="text-[10px] text-gray-400 uppercase tracking-wide font-bold">Yarn Type</p>
-                                    <p class="font-black text-gray-800 dark:text-gray-100 truncate">{{ order.yarn_type }}</p>
+                                    <p class="text-[10px] text-gray-400 uppercase tracking-wide font-bold">Required Yarn</p>
+                                    <p class="font-black text-gray-800 dark:text-gray-100 truncate">{{ yarnMaterialsForOrder(order).map(material => material.name).join(', ') || 'See yarn materials below' }}</p>
                                 </div>
                                 <div>
                                     <p class="text-[10px] text-gray-400 uppercase tracking-wide font-bold">Design</p>
                                     <p class="font-black text-gray-800 dark:text-gray-100 truncate">{{ order.design }}</p>
                                 </div>
+                            </div>
+
+                            <div class="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+                                <p class="text-[10px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-300">Yarn requested by client</p>
+                                <template v-if="yarnMaterialsForOrder(order).length">
+                                    <div v-for="material in yarnMaterialsForOrder(order)" :key="material.id" class="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm font-bold text-amber-950 dark:text-amber-100">
+                                        <span>{{ material.name }}<span v-if="material.yarn_tier" class="ml-1 text-xs font-semibold text-amber-800 dark:text-amber-200">({{ material.yarn_tier }})</span></span>
+                                        <span v-if="material.quantity != null && material.unit" class="text-xs font-semibold text-amber-800 dark:text-amber-200">{{ material.quantity }} {{ material.unit }}</span>
+                                    </div>
+                                </template>
+                                <p v-else class="mt-0.5 text-xs text-amber-800 dark:text-amber-200">No yarn is selected in the linked client sample request. Ask the supervisor to confirm the requested yarn.</p>
                             </div>
 
                             <div v-if="order.is_knitting_done && order.knitting_done_at"
@@ -359,12 +413,24 @@ const submitFabric = () => {
                                 <span class="ml-1 text-indigo-400 truncate">({{ order.linked_fabrics.map(f => f.code).join(', ') }})</span>
                             </div>
 
-                            <div v-if="order.recipe" class="bg-blue-50/70 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-2xl px-3 py-2 mb-2">
-                                <p class="text-[10px] text-blue-400 font-black uppercase tracking-wide">Recipe</p>
-                                <p class="text-xs font-bold text-blue-800 dark:text-blue-200 mt-0.5 truncate">{{ order.recipe.yarn_type }}</p>
-                                <p class="text-[10px] text-blue-500 mt-0.5 truncate">
-                                    Dye: {{ order.recipe.dye_color }} · Weave: {{ order.recipe.weave_design }}
-                                </p>
+                            <div v-if="order.assignment_id" class="mb-2 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                                <p v-if="order.remake_request_code" class="mb-2 rounded-lg bg-amber-100 px-2 py-1 text-[10px] font-black uppercase text-amber-900 dark:bg-amber-500/15 dark:text-amber-200">Dyeing batch remake · {{ order.remake_request_code }} · replace each rejected fabric code</p>
+                                <div v-if="order.remake_fabrics?.length" class="mb-2 grid gap-1 sm:grid-cols-2"><p v-for="target in order.remake_fabrics" :key="target.id" class="rounded-lg bg-white px-2 py-1 text-[10px] dark:bg-zinc-900"><span class="font-mono font-black">{{ target.code }}</span> · {{ target.yarn_type }} · {{ fmtNum(target.weight) }} kg · {{ target.replacement_created ? 'replacement recorded' : 'replacement needed' }}</p></div>
+                                <div class="flex justify-between text-[10px] font-black uppercase tracking-wide text-indigo-700 dark:text-indigo-200"><span>Your shift target</span><span>{{ fmtNum(order.produced_weight) }} / {{ fmtNum(order.assigned_weight) }} kg</span></div>
+                                <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-indigo-100 dark:bg-zinc-800"><div class="h-full rounded-full bg-indigo-600" :style="{ width: `${Math.min(100, order.assigned_weight ? order.produced_weight / order.assigned_weight * 100 : 0)}%` }"/></div>
+                                <p class="mt-1 text-[10px] text-indigo-700 dark:text-indigo-200">{{ fmtNum(order.remaining_assigned_weight) }} kg remaining in your JO allocation</p>
+                                <div class="mt-2 flex flex-wrap gap-1.5">
+                                    <div v-for="machine in order.assigned_machines" :key="machine.id" class="flex items-center gap-1.5 rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">
+                                        <span class="text-[10px] font-bold">{{ machine.machine_no }}</span>
+                                        <span v-if="machine.setup_status === 'done'" class="text-[9px] font-black uppercase text-emerald-600">Setup ready</span>
+                                        <span v-else-if="['pending','in_progress'].includes(machine.setup_status)" class="text-[9px] font-black uppercase text-amber-600">Mechanic {{ machine.setup_status.replace('_',' ') }}</span>
+                                        <button v-else-if="canEditProduction" type="button" @click="requestMechanicSetup(order, machine)" class="text-[9px] font-black text-indigo-700 underline dark:text-indigo-300">Request mechanic</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="order.rejected_cycles?.length" class="mb-2 space-y-1 rounded-xl border border-rose-200 bg-rose-50 p-2 dark:border-rose-900/50 dark:bg-rose-950/20">
+                                <p class="text-[10px] font-black uppercase tracking-wide text-rose-700 dark:text-rose-300">Inspector return · remake required</p>
+                                <p v-for="cycle in order.rejected_cycles" :key="cycle.code" class="text-[10px] text-rose-700 dark:text-rose-200">{{ cycle.code }} · {{ cycle.weight }} kg · {{ cycle.machine_no }}<span v-if="cycle.reason"> — {{ cycle.reason }}</span></p>
                             </div>
 
                             <div class="mt-auto flex gap-2 pt-3 border-t border-gray-100 dark:border-zinc-800">
@@ -372,7 +438,12 @@ const submitFabric = () => {
                                     class="flex-1 flex items-center justify-center gap-1.5 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-xs font-bold px-3 py-2.5 rounded-2xl transition active:scale-95">
                                     <Layers class="w-3.5 h-3.5" /> Full Recipe
                                 </button>
-                                <button v-if="!order.is_knitting_done && canEditProduction"
+                                <template v-if="order.assignment_id">
+                                    <button v-if="order.handoff_requested" type="button" disabled class="flex-1 rounded-2xl bg-amber-50 px-3 py-2.5 text-center text-[10px] font-black text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">Sent to Supervisor</button>
+                                    <button v-else-if="order.can_submit_handoff && canEditProduction" type="button" @click="submitForSupervisor(order)" class="flex-1 rounded-2xl bg-emerald-600 px-3 py-2.5 text-center text-xs font-black text-white transition hover:bg-emerald-700">Send JO to Supervisor</button>
+                                    <span v-else class="flex-1 self-center text-center text-[10px] font-bold text-slate-500">Waiting for Inspector approval</span>
+                                </template>
+                                <button v-else-if="!order.is_knitting_done && canEditProduction"
                                     @click="openFabricLink(order)" type="button"
                                     class="flex-1 flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white text-xs font-bold px-3 py-2.5 rounded-2xl transition active:scale-95">
                                     <CheckCheck class="w-3.5 h-3.5" /> Mark Done
@@ -421,14 +492,25 @@ const submitFabric = () => {
                                 </div>
 
                                 <div>
+                                    <label class="block text-xs font-black text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5">Assigned Job Order <span class="text-red-500">*</span></label>
+                                    <select v-model="form.sales_order_id" @change="form.machine_id = ''; form.yarn_type = selectedProductionOrder?.yarn_type || ''" required class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                                        <option value="">— Select your assigned JO —</option>
+                                        <option v-for="order in jobOrders" :key="order.id" :value="order.id">{{ order.jo_number }} · {{ order.remaining_assigned_weight }} kg remaining</option>
+                                    </select>
+                                </div>
+                                <div>
                                     <label class="block text-xs font-black text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5">
                                         Machine No. <span class="text-red-500">*</span>
                                     </label>
-                                    <select v-model="form.machine_id" required
+                                    <select v-model="form.machine_id" required :disabled="!form.sales_order_id"
                                         class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                                        <option value="">— Select Machine —</option>
-                                        <option v-for="machine in machines" :key="machine.id" :value="machine.id">{{ machine.machine_no }}</option>
+                                        <option value="">— Select an assigned machine —</option>
+                                        <option v-for="machine in assignedMachines" :key="machine.id" :value="machine.id" :disabled="machine.setup_status !== 'done'">
+                                            {{ machine.machine_no }}{{ machine.setup_status === 'done' ? ' · Setup ready' : machine.setup_status ? ` · Mechanic ${machine.setup_status.replace('_', ' ')}` : ' · Setup required' }}
+                                        </option>
                                     </select>
+                                    <p v-if="form.sales_order_id && !assignedMachines.length" class="mt-1 text-[11px] font-semibold text-amber-700">No machine is assigned to this JO. Ask the knitting supervisor to assign a machine.</p>
+                                    <p v-else-if="form.sales_order_id && !setupReadyMachines.length" class="mt-1 text-[11px] font-semibold text-amber-700">Your assigned machine is listed above, but a mechanic must finish its setup before you can record a cycle. Request setup from the JO card.</p>
                                 </div>
 
                                 <div class="border border-gray-200 dark:border-zinc-700 rounded-3xl overflow-hidden">
@@ -449,13 +531,21 @@ const submitFabric = () => {
                                                 <span class="w-5 h-5 bg-indigo-600 text-white rounded-full text-[10px] font-black flex items-center justify-center">1</span>
                                                 <p class="text-xs font-black text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">Primary Yarn</p>
                                             </div>
-                                            <select v-model="selectedMainYarnId" required
-                                                class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                                                <option value="">— Select Yarn Lot —</option>
-                                                <option v-for="yarn in yarns" :key="yarn.id" :value="yarn.id">
-                                                    {{ yarn.material_name }} ({{ yarn.control_number }}) — {{ yarn.available_units }} rolls left
-                                                </option>
-                                            </select>
+                                            <div class="relative">
+                                                <input v-model="mainYarnSearch" type="search" placeholder="Search yarn name or control number..."
+                                                    @focus="mainYarnMenuOpen = true" @input="selectedMainYarnId = ''; mainYarnKgUsed = ''; mainYarnMenuOpen = true"
+                                                    class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
+                                                <div v-if="mainYarnMenuOpen" class="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                                                    <button v-for="yarn in filteredMainYarns" :key="yarn.id" type="button" @mousedown.prevent="selectMainYarn(yarn)"
+                                                        class="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-indigo-50 dark:hover:bg-indigo-500/10">
+                                                        <span class="min-w-0"><span class="font-bold">{{ yarn.material_name }}</span><span class="ml-1 text-gray-500">{{ yarn.control_number }}</span></span>
+                                                        <span class="shrink-0 text-gray-500">{{ yarn.available_units }} rolls · {{ Number(yarn.remaining_quantity).toFixed(2) }} kg</span>
+                                                    </button>
+                                                    <p v-if="!filteredMainYarns.length" class="px-3 py-2 text-xs text-gray-500">No matching yarn lots.</p>
+                                                </div>
+                                            </div>
+                                            <p v-if="selectedProductionOrder && !selectedProductionOrder.recipe?.requested_yarn" class="mt-1 text-[11px] font-semibold text-amber-700">This JO has no yarn selected in its linked client sample request. Ask the supervisor to confirm the request before recording production.</p>
+                                            <p v-else-if="selectedProductionOrder?.recipe?.requested_yarn && !yarnsForSelectedOrder.length" class="mt-1 text-[11px] font-semibold text-amber-700">No inventory lot matches the client-requested yarn: {{ selectedProductionOrder.recipe.requested_yarn }}.</p>
                                             <div v-if="selectedMainYarn" class="flex flex-wrap gap-2">
                                                 <span class="inline-flex items-center gap-1.5 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-xs text-gray-600 dark:text-gray-300 px-2.5 py-1 rounded-lg">
                                                     <Package class="w-3 h-3 text-gray-400" /> {{ selectedMainYarn.control_number }}
@@ -469,19 +559,19 @@ const submitFabric = () => {
                                             </div>
                                             <div v-if="selectedMainYarn">
                                                 <label class="block text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1">
-                                                    Rolls Used <span class="text-red-500">*</span>
-                                                    <span class="text-gray-400 font-normal normal-case ml-1">(max {{ selectedMainYarn.available_units }})</span>
+                                                    Yarn Used (kg) <span class="text-red-500">*</span>
+                                                    <span class="text-gray-400 font-normal normal-case ml-1">(max {{ Number(selectedMainYarn.remaining_quantity).toFixed(2) }} kg)</span>
                                                 </label>
-                                                <input v-model.number="mainRollsUsed" type="number" min="1"
-                                                    :max="selectedMainYarn.available_units" required
+                                                <input v-model.number="mainYarnKgUsed" type="number" min="0.01" step="0.01"
+                                                    :max="selectedMainYarn.remaining_quantity" required
                                                     class="w-full border rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                                                     :class="mainYarnExceedsAvailable ? 'border-red-300' : 'border-gray-200 dark:border-zinc-700'"
-                                                    placeholder="e.g. 30" />
+                                                    placeholder="Enter kilograms used" />
                                                 <p v-if="mainYarnExceedsAvailable" class="text-xs text-red-500 mt-1 flex items-center gap-1">
-                                                    <AlertTriangle class="w-3 h-3" /> Only {{ selectedMainYarn.available_units }} rolls available.
+                                                    <AlertTriangle class="w-3 h-3" /> Only {{ Number(selectedMainYarn.remaining_quantity).toFixed(2) }} kg available.
                                                 </p>
-                                                <p v-else-if="parseInt(mainRollsUsed) >= 1" class="text-xs text-emerald-600 mt-1">
-                                                    ✓ {{ selectedMainYarn.available_units - parseInt(mainRollsUsed) }} rolls will remain.
+                                                <p v-else-if="parseFloat(mainYarnKgUsed) > 0" class="text-xs text-emerald-600 mt-1">
+                                                    ✓ {{ rollsRemainingAfterKg(selectedMainYarn, mainYarnKgUsed) }} full rolls will remain ({{ (Number(mainYarnKgUsed) / Number(selectedMainYarn.unit_weight || 1)).toFixed(2) }} roll equivalents used).
                                                 </p>
                                             </div>
                                         </div>
@@ -498,13 +588,19 @@ const submitFabric = () => {
                                                     <Trash2 class="w-3.5 h-3.5" /> Remove
                                                 </button>
                                             </div>
-                                            <select v-model="row.inventory_item_id" @change="onAdditionalYarnChange(row)"
-                                                class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                                                <option value="">— Select Yarn Lot —</option>
-                                                <option v-for="yarn in yarns" :key="yarn.id" :value="yarn.id">
-                                                    {{ yarn.material_name }} ({{ yarn.control_number }}) — {{ yarn.available_units }} rolls left
-                                                </option>
-                                            </select>
+                                            <div class="relative">
+                                                <input v-model="additionalYarnSearch[index]" type="search" placeholder="Search yarn name or control number..."
+                                                    @focus="additionalYarnMenuOpen[index] = true" @input="row.inventory_item_id = ''; row.weight_kg = ''; additionalYarnMenuOpen[index] = true"
+                                                    class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
+                                                <div v-if="additionalYarnMenuOpen[index]" class="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                                                    <button v-for="yarn in filteredAdditionalYarns(index)" :key="yarn.id" type="button" @mousedown.prevent="selectAdditionalYarn(row, index, yarn)"
+                                                        class="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-indigo-50 dark:hover:bg-indigo-500/10">
+                                                        <span class="min-w-0"><span class="font-bold">{{ yarn.material_name }}</span><span class="ml-1 text-gray-500">{{ yarn.control_number }}</span></span>
+                                                        <span class="shrink-0 text-gray-500">{{ yarn.available_units }} rolls · {{ Number(yarn.remaining_quantity).toFixed(2) }} kg</span>
+                                                    </button>
+                                                    <p v-if="!filteredAdditionalYarns(index).length" class="px-3 py-2 text-xs text-gray-500">No matching yarn lots.</p>
+                                                </div>
+                                            </div>
                                             <div v-if="row.inventory_item_id && getYarnById(row.inventory_item_id)" class="flex flex-wrap gap-2">
                                                 <span class="inline-flex items-center gap-1.5 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-xs text-gray-600 dark:text-gray-300 px-2.5 py-1 rounded-lg">
                                                     🧶 {{ getYarnById(row.inventory_item_id).available_units }} rolls left
@@ -515,25 +611,24 @@ const submitFabric = () => {
                                             </div>
                                             <div v-if="row.inventory_item_id">
                                                 <label class="block text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1">
-                                                    Rolls Used <span class="text-red-500">*</span>
+                                                    Yarn Used (kg) <span class="text-red-500">*</span>
                                                 </label>
-                                                <input v-model.number="row.units_used" type="number" min="1"
-                                                    :max="getYarnById(row.inventory_item_id)?.available_units || 1"
-                                                    @input="clampAdditionalRow(row)"
+                                                <input v-model.number="row.weight_kg" type="number" min="0.01" step="0.01"
+                                                    :max="getYarnById(row.inventory_item_id)?.remaining_quantity || 0"
                                                     class="w-full border rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                                                     :class="additionalRowErrors[index] ? 'border-red-300' : 'border-gray-200 dark:border-zinc-700'"
-                                                    placeholder="e.g. 10" />
+                                                    placeholder="Enter kilograms used" />
                                                 <p v-if="additionalRowErrors[index]" class="text-xs text-red-500 mt-1 flex items-center gap-1">
                                                     <AlertTriangle class="w-3 h-3" /> {{ additionalRowErrors[index] }}
                                                 </p>
-                                                <p v-else-if="parseInt(row.units_used) >= 1" class="text-xs text-emerald-600 mt-1">
-                                                    ✓ {{ getYarnById(row.inventory_item_id).available_units - parseInt(row.units_used) }} rolls will remain.
+                                                <p v-else-if="parseFloat(row.weight_kg) > 0" class="text-xs text-emerald-600 mt-1">
+                                                    ✓ {{ rollsRemainingAfterKg(getYarnById(row.inventory_item_id), row.weight_kg) }} full rolls will remain.
                                                 </p>
                                             </div>
                                         </div>
 
                                         <p v-if="additionalYarnItems.length === 0" class="text-xs text-gray-400 italic px-1">
-                                            Click "Add Lot" if more than one yarn lot was used for this fabric.
+                                            Enter the kilograms used from each yarn lot. The remaining full rolls are calculated automatically.
                                         </p>
                                     </div>
                                 </div>
@@ -543,9 +638,10 @@ const submitFabric = () => {
                                         Total Fabric Weight (kg) <span class="text-red-500">*</span>
                                         <span v-if="weightBreakdown.length" class="text-indigo-500 font-normal normal-case ml-1">(auto-calculated)</span>
                                     </label>
-                                    <input type="number" step="0.01" v-model="form.weight" required
+                                    <input type="number" step="0.01" min="0.01" v-model="form.weight" required
                                         class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                                         placeholder="0.00" />
+                                    <p class="mt-1 text-[11px] text-slate-500">You may record any cycle weight up to your remaining JO allocation of {{ selectedProductionOrder?.remaining_assigned_weight ?? 0 }} kg.</p>
                                     <div v-if="weightBreakdown.length" class="mt-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700 rounded-2xl px-3 py-2 space-y-0.5">
                                         <p v-for="(line, i) in weightBreakdown" :key="i" class="pl-1">+ {{ line }}</p>
                                         <p class="pl-1 font-black text-gray-700 dark:text-gray-200 border-t border-gray-200 dark:border-zinc-700 pt-1 mt-1">= {{ form.weight }} kg total</p>
@@ -564,17 +660,17 @@ const submitFabric = () => {
                                 </div>
 
                                 <div class="pt-1 space-y-2">
-                                    <button v-if="canEditProduction" type="submit" :disabled="!canSubmit || !canEditProduction"
+                                    <button v-if="canEditProduction" type="submit" :disabled="form.processing || !canEditProduction"
                                         class="w-full py-3 rounded-2xl text-sm font-bold transition active:scale-95"
-                                        :class="canSubmit ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/20' : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 cursor-not-allowed'">
+                                        :class="form.processing ? 'bg-gray-100 dark:bg-zinc-800 text-gray-400 cursor-wait' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/20'">
                                         {{ form.processing ? 'Recording…' : 'Record Fabric' }}
                                     </button>
                                     <div class="space-y-1 text-xs">
                                         <p v-if="!selectedMainYarnId && form.machine_id" class="text-amber-600 flex items-center gap-1">
                                             <AlertTriangle class="w-3 h-3" /> Select a primary yarn lot.
                                         </p>
-                                        <p v-if="selectedMainYarnId && parseInt(mainRollsUsed) < 1" class="text-amber-600 flex items-center gap-1">
-                                            <AlertTriangle class="w-3 h-3" /> Enter rolls used.
+                                        <p v-if="selectedMainYarnId && parseFloat(mainYarnKgUsed) <= 0" class="text-amber-600 flex items-center gap-1">
+                                            <AlertTriangle class="w-3 h-3" /> Enter kilograms of primary yarn used.
                                         </p>
                                         <p v-if="mainYarnExceedsAvailable" class="text-red-600 flex items-center gap-1">
                                             <AlertTriangle class="w-3 h-3" /> Rolls exceed available inventory.

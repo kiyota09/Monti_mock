@@ -72,7 +72,8 @@
                 <TransitionGroup v-else name="card" tag="div" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     <div v-for="(product, i) in filteredProducts" :key="product.id"
                         :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }"
-                        class="group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all duration-300 overflow-hidden">
+                        role="button" tabindex="0" @click="openProductDetails(product)" @keydown.enter="openProductDetails(product)"
+                        class="group relative flex cursor-pointer flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all duration-300 overflow-hidden">
 
                         <!-- hover glow -->
                         <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -82,6 +83,7 @@
                         <div class="absolute top-3 left-3 z-10">
                             <input
                                 type="checkbox"
+                                @click.stop
                                 :value="product.id"
                                 v-model="selectedProducts"
                                 class="w-5 h-5 rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 shadow-lg cursor-pointer"
@@ -126,7 +128,7 @@
                                              :style="`background-color: ${c.hex}`" :title="c.name" />
                                     </div>
                                     <div v-else class="relative w-full max-w-[200px]">
-                                        <select class="w-full appearance-none pl-3 pr-8 py-1.5 text-xs bg-gray-50 dark:bg-zinc-800 border border-transparent focus:border-indigo-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-200 text-gray-700 dark:text-gray-300 font-medium cursor-pointer">
+                                        <select @click.stop class="w-full appearance-none pl-3 pr-8 py-1.5 text-xs bg-gray-50 dark:bg-zinc-800 border border-transparent focus:border-indigo-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-200 text-gray-700 dark:text-gray-300 font-medium cursor-pointer">
                                             <option v-for="c in getParsedColors(product.colors)" :key="c.hex" :value="c.hex">
                                                 {{ c.name }}
                                             </option>
@@ -154,7 +156,7 @@
 
                             <div class="mt-auto flex items-center justify-end pt-3 border-t border-gray-100 dark:border-zinc-800">
                                 <!-- Inquire button always enabled -->
-                                <button @click="openInquiryModal(product)"
+                                <button @click.stop="openInquiryModal(product)"
                                     class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:scale-105 active:scale-95 transition-all">
                                     Inquire
                                 </button>
@@ -165,37 +167,127 @@
             </div>
         </div>
 
-        <!-- Single Product Inquiry Modal -->
+        <!-- Read-only product details modal -->
         <Teleport to="body">
             <Transition name="modal">
-                <div v-if="showSingleModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showSingleModal = false">
-                    <div class="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden">
-                        <div class="bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 p-5 relative overflow-hidden">
-                            <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15 blur-2xl" />
-                            <div class="relative flex items-center gap-3">
-                                <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30"><Package class="w-5 h-5 text-white" /></span>
+                <div v-if="showProductDetailModal && selectedProduct" class="fixed inset-0 z-[55] flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm" @click.self="showProductDetailModal = false">
+                    <div class="relative my-auto w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5 dark:bg-zinc-900 dark:ring-white/10">
+                        <button @click="showProductDetailModal = false" title="Close" class="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-md ring-1 ring-black/5 backdrop-blur transition hover:rotate-90 hover:bg-slate-900 hover:text-white dark:bg-zinc-800/90 dark:text-slate-300 dark:ring-white/10 dark:hover:bg-white dark:hover:text-slate-900">
+                            <X class="h-4 w-4" />
+                        </button>
+
+                        <div class="grid md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+                            <div class="relative flex min-h-[320px] flex-col gap-3 overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-4 sm:p-5">
+                                <div class="pointer-events-none absolute -top-16 -left-16 h-56 w-56 rounded-full bg-white/10 blur-3xl animate-float" />
+                                <div class="pointer-events-none absolute -bottom-20 -right-10 h-56 w-56 rounded-full bg-fuchsia-400/25 blur-3xl animate-float-delayed" />
+                                <div class="pointer-events-none absolute inset-0 opacity-[0.12]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 20px 20px;" />
+                                <template v-if="productImages(selectedProduct).length">
+                                    <div class="relative aspect-square w-full overflow-hidden rounded-3xl bg-black/20 shadow-2xl shadow-indigo-950/40 ring-1 ring-white/25">
+                                        <img :src="productImages(selectedProduct)[detailImageIndex] || productImages(selectedProduct)[0]" :alt="selectedProduct.name" class="absolute inset-0 h-full w-full object-cover" />
+                                        <template v-if="productImages(selectedProduct).length > 1">
+                                            <button @click="detailImageIndex = (detailImageIndex - 1 + productImages(selectedProduct).length) % productImages(selectedProduct).length" aria-label="Previous image" class="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-lg backdrop-blur transition hover:scale-110"><ChevronLeft class="h-4 w-4" /></button>
+                                            <button @click="detailImageIndex = (detailImageIndex + 1) % productImages(selectedProduct).length" aria-label="Next image" class="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-lg backdrop-blur transition hover:scale-110"><ChevronRight class="h-4 w-4" /></button>
+                                        </template>
+                                        <span class="absolute bottom-3 left-3 rounded-full bg-black/50 px-3 py-1 text-[11px] font-bold text-white backdrop-blur">{{ detailImageIndex + 1 }} / {{ productImages(selectedProduct).length }}</span>
+                                    </div>
+                                    <div v-if="productImages(selectedProduct).length > 1" class="relative flex gap-2 overflow-x-auto pb-1">
+                                        <button v-for="(image, index) in productImages(selectedProduct)" :key="`${image}-${index}`" @click="detailImageIndex = index" :class="['h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl transition-all', index === detailImageIndex ? 'ring-2 ring-white ring-offset-2 ring-offset-indigo-700' : 'opacity-60 ring-1 ring-white/30 hover:opacity-100']"><img :src="image" :alt="`${selectedProduct.name} image ${index + 1}`" class="h-full w-full object-cover" /></button>
+                                    </div>
+                                </template>
+                                <div v-else class="relative flex min-h-[280px] flex-1 flex-col justify-between rounded-3xl bg-white/10 p-4 ring-1 ring-white/25 backdrop-blur">
+                                    <div class="grid grid-cols-5 gap-2">
+                                        <span v-for="(color, index) in getParsedColors(selectedProduct.colors)" :key="`${color.hex}-${index}`" class="aspect-square rounded-xl shadow-lg ring-2 ring-white/70" :style="{ backgroundColor: color.hex || '#CBD5E1' }" :title="color.name" />
+                                        <span v-if="!getParsedColors(selectedProduct.colors).length" class="aspect-square rounded-xl shadow-lg ring-2 ring-white/70" :style="{ backgroundColor: selectedProduct.colorHex || '#64748b' }" />
+                                    </div>
+                                    <div class="mt-6 flex items-center gap-3 text-white"><span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30"><Package class="h-5 w-5" /></span><div><p class="text-sm font-black">Product colorways</p><p class="text-xs text-blue-100/90">{{ getParsedColors(selectedProduct.colors).length || 1 }} available variants</p></div></div>
+                                </div>
+                            </div>
+
+                            <div class="flex min-w-0 flex-col gap-6 p-6 sm:p-8">
                                 <div>
-                                    <h3 class="font-black text-white">Confirm Inquiry</h3>
-                                    <p class="text-[11px] text-blue-100">{{ selectedProduct?.sku }}</p>
+                                    <div class="mb-2.5 flex flex-wrap items-center gap-2">
+                                        <span class="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-500 dark:bg-zinc-800 dark:text-slate-400">{{ selectedProduct.product_id }}</span>
+                                        <span v-if="selectedProduct.category && selectedProduct.category !== 'Uncategorized'" class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300"><Tag class="h-3 w-3" /> {{ selectedProduct.category }}</span>
+                                    </div>
+                                    <h2 class="text-2xl font-black leading-tight tracking-tight text-slate-900 dark:text-white sm:text-3xl">{{ selectedProduct.name }}</h2>
+                                    <p v-if="selectedProduct.sku" class="mt-1 font-mono text-xs text-slate-400">{{ selectedProduct.sku }}</p>
+                                </div>
+
+                                <div>
+                                    <div class="mb-3 flex items-center justify-between"><div class="flex items-center gap-2"><Palette class="h-4 w-4 text-slate-400" /><h3 class="text-sm font-black text-slate-800 dark:text-slate-100">Available colorways</h3></div><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-500 dark:bg-zinc-800 dark:text-slate-400">{{ getParsedColors(selectedProduct.colors).length || (selectedProduct.colorHex ? 1 : 0) }}</span></div>
+                                    <div class="grid max-h-56 grid-cols-2 gap-2.5 overflow-y-auto pr-1 sm:grid-cols-3">
+                                        <template v-if="getParsedColors(selectedProduct.colors).length">
+                                            <div v-for="(color, index) in getParsedColors(selectedProduct.colors)" :key="`${color.hex}-${index}`" class="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-2 dark:border-zinc-800 dark:bg-zinc-800/50"><span class="h-10 w-10 flex-shrink-0 rounded-xl shadow-inner ring-1 ring-black/10 dark:ring-white/10" :style="{ backgroundColor: color.hex || '#CBD5E1' }" /><div class="min-w-0"><p class="truncate text-xs font-bold text-slate-800 dark:text-slate-100">{{ color.name }}</p><p class="font-mono text-[10px] uppercase text-slate-400">{{ color.hex }}</p></div></div>
+                                        </template>
+                                        <div v-else-if="selectedProduct.colorHex" class="flex items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-2 dark:border-zinc-800 dark:bg-zinc-800/50"><span class="h-10 w-10 flex-shrink-0 rounded-xl shadow-inner ring-1 ring-black/10" :style="{ backgroundColor: selectedProduct.colorHex }" /><div class="min-w-0"><p class="truncate text-xs font-bold text-slate-800 dark:text-slate-100">{{ selectedProduct.colorName || 'Color' }}</p><p class="font-mono text-[10px] uppercase text-slate-400">{{ selectedProduct.colorHex }}</p></div></div>
+                                        <p v-else class="col-span-full rounded-2xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400 dark:border-zinc-700">No colorways have been listed.</p>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-2xl border border-violet-100 bg-violet-50/40 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
+                                    <div class="mb-3 flex items-center justify-between gap-3"><div class="flex items-center gap-2"><Layers class="h-4 w-4 text-violet-600 dark:text-violet-300" /><div><h3 class="text-sm font-black text-slate-800 dark:text-slate-100">Eligible yarns</h3><p class="text-[10px] text-slate-500 dark:text-slate-400">Compatible inventory materials</p></div></div><span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-violet-700 shadow-sm dark:bg-zinc-900 dark:text-violet-300">{{ selectedProduct.yarnMaterials?.length || 0 }}</span></div>
+                                    <div v-if="selectedProduct.yarnMaterials?.length" class="grid max-h-44 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                                        <div v-for="material in selectedProduct.yarnMaterials" :key="material.id" class="flex min-w-0 items-center gap-2.5 rounded-xl border border-violet-100 bg-white p-2.5 dark:border-violet-900/40 dark:bg-zinc-900"><span class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><Layers class="h-4 w-4" /></span><div class="min-w-0 flex-1"><p class="truncate text-xs font-bold text-slate-800 dark:text-slate-100">{{ material.display_name || material.name }}</p><p class="truncate font-mono text-[10px] text-slate-400">{{ material.mat_id }}<template v-if="material.unit"> · {{ material.unit }}</template></p></div><span class="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-black text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">{{ material.yarn_tier }}</span></div>
+                                    </div>
+                                    <p v-else class="rounded-xl border border-dashed border-violet-200 bg-white/60 px-3 py-3 text-xs text-slate-500 dark:border-violet-900/50 dark:bg-zinc-900/50 dark:text-slate-400">No eligible yarns have been assigned yet.</p>
+                                </div>
+
+                                <div class="mt-auto flex flex-wrap items-center gap-2.5 border-t border-slate-100 pt-5 dark:border-zinc-800">
+                                    <button @click="showProductDetailModal = false; openInquiryModal(selectedProduct)" class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-xl active:scale-95"><Send class="h-4 w-4" /> Request a quote</button>
+                                    <button @click="showProductDetailModal = false" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 transition hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-zinc-800">Close</button>
                                 </div>
                             </div>
                         </div>
-                        <div class="p-6 text-center">
-                            <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                                Would you like to request a formal quotation for <strong class="text-gray-700 dark:text-gray-300">{{ selectedProduct?.name }}</strong>? Our ECO team will reach out to you within 24 hours.
-                            </p>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- Single Product Inquiry Modal -->
+        <Teleport to="body">
+            <Transition name="modal">
+                <div v-if="showSingleModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-5" @click.self="showSingleModal = false">
+                    <div class="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900">
+                        <div class="relative flex flex-shrink-0 items-center gap-3 overflow-hidden bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 p-5 text-white">
+                            <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15 blur-2xl" />
+                            <span class="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30"><Package class="h-5 w-5" /></span>
+                            <div class="relative min-w-0 flex-1"><h3 class="font-black">Product inquiry</h3><p class="truncate text-[11px] text-blue-100">{{ selectedProduct?.name }} · {{ selectedProduct?.sku }}</p></div>
+                            <button type="button" aria-label="Close inquiry" @click="showSingleModal = false" class="relative rounded-xl bg-white/15 p-2 hover:bg-white/25"><X class="h-4 w-4" /></button>
                         </div>
-                        <div class="p-4 bg-gray-50 dark:bg-zinc-800/50 flex gap-3 border-t border-gray-100 dark:border-zinc-800">
-                            <button @click="showSingleModal = false" :disabled="submitting" class="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-500 font-bold text-sm hover:bg-gray-200 active:scale-95 transition">
-                                Cancel
-                            </button>
-                            <button @click="submitSingleInquiry" :disabled="submitting" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-black text-sm shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex justify-center items-center gap-2">
-                                <span v-if="submitting" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                                <template v-else>
-                                    <Check class="w-4 h-4" />
-                                    <span>Confirm</span>
-                                </template>
-                            </button>
+                        <div class="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 sm:grid-cols-2 sm:p-5">
+                            <section class="min-w-0 rounded-2xl border border-violet-100 p-3 dark:border-violet-900/40">
+                                <div class="mb-2 flex items-center justify-between gap-2"><div><h4 class="text-sm font-black text-slate-900 dark:text-white">Pantone colors</h4><p class="text-[10px] text-slate-500">Select one or more product colorways.</p></div><span class="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">{{ inquiryPantoneIds.length }} selected</span></div>
+                                <input v-model="pantoneSearch" type="search" placeholder="Search Pantone name or hex" class="mb-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
+                                <p v-if="getParsedColors(selectedProduct?.colors).length > 150 && !pantoneSearch" class="mb-1 text-[10px] text-slate-400">Showing the first 150 colorways. Search to find others.</p>
+                                <div class="max-h-64 space-y-1 overflow-y-auto">
+                                    <label v-for="pantone in filteredInquiryPantones" :key="pantone.pantone_id || `${pantone.name}-${pantone.hex}`" class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 p-2 hover:bg-violet-50 dark:border-zinc-800 dark:hover:bg-violet-950/30">
+                                        <input v-model="inquiryPantoneIds" type="checkbox" :value="Number(pantone.pantone_id)" class="rounded border-slate-300 text-violet-600" />
+                                        <span class="h-7 w-7 shrink-0 rounded-md border border-black/10" :style="{ backgroundColor: pantone.hex }" />
+                                        <span class="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-800 dark:text-zinc-100">{{ pantone.name }}</span>
+                                        <span class="shrink-0 text-[9px] text-slate-400">{{ inquiryCategoryLabel(pantone.color_category) }}</span>
+                                    </label>
+                                    <p v-if="!filteredInquiryPantones.length" class="p-4 text-center text-xs text-slate-500">No Pantone colorways available for this product.</p>
+                                </div>
+                            </section>
+                            <section class="min-w-0 rounded-2xl border border-blue-100 p-3 dark:border-blue-900/40">
+                                <div class="mb-2 flex items-center justify-between gap-2"><div><h4 class="text-sm font-black text-slate-900 dark:text-white">Yarn types</h4><p class="text-[10px] text-slate-500">Select one or more compatible yarns.</p></div><span class="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">{{ inquiryYarnIds.length }} selected</span></div>
+                                <input v-model="yarnSearch" type="search" placeholder="Search yarn name, tier, or ID" class="mb-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
+                                <div class="max-h-64 space-y-1 overflow-y-auto">
+                                    <label v-for="yarn in filteredInquiryYarns" :key="yarn.id" class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 p-2 hover:bg-blue-50 dark:border-zinc-800 dark:hover:bg-blue-950/30">
+                                        <input v-model="inquiryYarnIds" type="checkbox" :value="Number(yarn.id)" class="rounded border-slate-300 text-blue-600" />
+                                        <span class="min-w-0 flex-1"><span class="block truncate text-[11px] font-bold text-slate-800 dark:text-zinc-100">{{ yarn.display_name || yarn.name }}</span><span class="block text-[9px] text-slate-400">{{ yarn.mat_id }} · {{ yarn.yarn_tier || 'Yarn' }}</span></span>
+                                    </label>
+                                    <p v-if="!filteredInquiryYarns.length" class="p-4 text-center text-xs text-slate-500">No compatible yarns are assigned.</p>
+                                </div>
+                            </section>
+                            <label class="text-xs font-bold text-slate-600 dark:text-slate-300">GSM <span class="font-normal text-slate-400">(optional)</span><input v-model="inquiryGsm" type="number" inputmode="numeric" min="1" max="10000" step="1" placeholder="e.g. 180" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" /></label>
+                            <label class="text-xs font-bold text-slate-600 dark:text-slate-300">Fabric texture <span class="font-normal text-slate-400">(optional)</span><select v-model="inquiryTexture" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"><option value="">Choose texture</option><option value="Hard">Hard</option><option value="Medium">Medium</option><option value="Soft">Soft</option></select></label>
+                            <label class="text-xs font-bold text-slate-600 dark:text-slate-300 sm:col-span-2">Note for the sales team <span class="font-normal text-slate-400">(optional)</span><textarea v-model="clientInquiryNote" rows="2" maxlength="800" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" placeholder="Quantity, delivery needs, or other details"></textarea></label>
+                            <p v-if="inquiryError" class="text-xs font-semibold text-rose-600 sm:col-span-2">{{ inquiryError }}</p>
+                        </div>
+                        <div class="flex flex-shrink-0 gap-3 border-t border-slate-100 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/50">
+                            <button type="button" @click="showSingleModal = false" :disabled="submitting" class="flex-1 rounded-xl bg-white py-2.5 text-sm font-bold text-slate-600 dark:bg-zinc-900 dark:text-zinc-300">Cancel</button>
+                            <button type="button" @click="submitSingleInquiry" :disabled="submitting || !inquiryPantoneIds.length || !inquiryYarnIds.length" class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-2.5 text-sm font-black text-white shadow-lg disabled:opacity-50"><Loader2 v-if="submitting" class="h-4 w-4 animate-spin" /><Send v-else class="h-4 w-4" />Send inquiry</button>
                         </div>
                     </div>
                 </div>
@@ -254,6 +346,8 @@
             </Transition>
         </Teleport>
 
+        <FabricInquiryNotice v-model="showInquiryNotice" @close="continueToInquiryConversation" />
+
         <!-- Toast Notification -->
         <Transition name="toast">
             <div v-if="toast.show" class="fixed bottom-8 right-8 z-50 px-6 py-3 rounded-2xl shadow-xl text-white font-bold text-sm"
@@ -268,7 +362,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ref, computed, onMounted } from 'vue';
-import { Package, Search, ChevronDown, ChevronLeft, ChevronRight, X, Check, Send, Sparkles } from 'lucide-vue-next';
+import { Package, Search, ChevronDown, ChevronLeft, ChevronRight, X, Check, Send, Loader2, Sparkles, Palette, Tag, Layers } from 'lucide-vue-next';
+import FabricInquiryNotice from '@/Components/FabricInquiryNotice.vue';
 
 const props = defineProps({
     products: {
@@ -312,9 +407,21 @@ const selectedProducts = ref([]);
 // Modal states
 const showSingleModal = ref(false);
 const showBulkModal = ref(false);
+const showProductDetailModal = ref(false);
 const selectedProduct = ref(null);
+const detailImageIndex = ref(0);
 const submitting = ref(false);
+const inquiryPantoneIds = ref([]);
+const inquiryYarnIds = ref([]);
+const pantoneSearch = ref('');
+const yarnSearch = ref('');
+const clientInquiryNote = ref('');
+const inquiryGsm = ref('');
+const inquiryTexture = ref('');
+const inquiryError = ref('');
 const bulkSubmitting = ref(false);
+const showInquiryNotice = ref(false);
+const inquiryConversationUrl = ref('');
 const toast = ref({ show: false, type: 'success', message: '' });
 
 // Categories
@@ -341,6 +448,18 @@ const getProductName = (id) => {
     return product ? product.name : 'Unknown product';
 };
 
+const filteredInquiryPantones = computed(() => {
+    const query = pantoneSearch.value.trim().toLowerCase();
+    const pantones = getParsedColors(selectedProduct.value?.colors).filter((color) => color.pantone_id);
+    return (query ? pantones.filter((color) => `${color.name} ${color.hex}`.toLowerCase().includes(query)) : pantones).slice(0, 150);
+});
+const filteredInquiryYarns = computed(() => {
+    const query = yarnSearch.value.trim().toLowerCase();
+    const yarns = selectedProduct.value?.yarnMaterials || [];
+    return query ? yarns.filter((yarn) => `${yarn.display_name} ${yarn.name} ${yarn.mat_id} ${yarn.yarn_tier}`.toLowerCase().includes(query)) : yarns;
+});
+const inquiryCategoryLabel = (category) => ({ white: 'White', light: 'Light', dark: 'Dark' }[category] || '');
+
 let debounceTimer;
 const debouncedSearch = () => {
     clearTimeout(debounceTimer);
@@ -356,23 +475,44 @@ const clearFilters = () => {
 // Single inquiry – no stock check
 const openInquiryModal = (product) => {
     selectedProduct.value = product;
+    inquiryPantoneIds.value = [];
+    inquiryYarnIds.value = [];
+    pantoneSearch.value = '';
+    yarnSearch.value = '';
+    clientInquiryNote.value = '';
+    inquiryGsm.value = '';
+    inquiryTexture.value = '';
+    inquiryError.value = '';
     showSingleModal.value = true;
 };
 
+const openProductDetails = (product) => {
+    selectedProduct.value = product;
+    detailImageIndex.value = cardIndex(product.id);
+    showProductDetailModal.value = true;
+};
+
 const submitSingleInquiry = async () => {
-    if (!selectedProduct.value) return;
+    if (!selectedProduct.value || !inquiryPantoneIds.value.length || !inquiryYarnIds.value.length) return;
     submitting.value = true;
-    try {
-        await router.post(route('client.products.inquire', selectedProduct.value.id), {
-            message: `I would like to request more information and a formal quotation for ${selectedProduct.value.name}.`
-        });
-        showSingleModal.value = false;
-        showToast('success', 'Inquiry sent! You can continue the conversation in "My Conversations".');
-    } catch (error) {
-        showToast('error', 'Failed to send inquiry. Please try again.');
-    } finally {
-        submitting.value = false;
-    }
+    inquiryError.value = '';
+    const note = clientInquiryNote.value.trim();
+    router.post(route('client.products.inquire', selectedProduct.value.id), {
+        message: `I would like to request a formal quotation for ${selectedProduct.value.name}.${note ? ` Note: ${note}` : ''}`,
+        pantone_ids: inquiryPantoneIds.value,
+        yarn_material_ids: inquiryYarnIds.value,
+        gsm: inquiryGsm.value === '' ? null : Number(inquiryGsm.value),
+        texture: inquiryTexture.value || null,
+    }, {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            showSingleModal.value = false;
+            inquiryConversationUrl.value = page.props.flash?.inquiry_redirect_url || '';
+            showInquiryNotice.value = true;
+        },
+        onError: (errors) => { inquiryError.value = Object.values(errors)[0] || 'Failed to send inquiry. Please try again.'; },
+        onFinish: () => { submitting.value = false; },
+    });
 };
 
 // Bulk inquiry
@@ -387,22 +527,29 @@ const openBulkInquiryModal = () => {
 const submitBulkInquiry = async () => {
     if (selectedProducts.value.length === 0) return;
     bulkSubmitting.value = true;
-    try {
-        // Only send `message` when the client typed an optional note.
-        // When empty the backend builds the full detailed product message.
-        await router.post(route('client.products.bulk-inquire'), {
-            product_ids: selectedProducts.value,
-            ...(bulkNotes.value.trim() ? { message: bulkNotes.value.trim() } : {}),
-        });
-        showBulkModal.value = false;
-        selectedProducts.value = [];
-        bulkNotes.value = '';
-        showToast('success', 'Bulk inquiry sent! Our team will contact you shortly.');
-    } catch (error) {
-        showToast('error', 'Failed to send bulk inquiry. Please try again.');
-    } finally {
-        bulkSubmitting.value = false;
-    }
+    // Only send `message` when the client typed an optional note. When empty,
+    // the backend builds the full detailed product message.
+    router.post(route('client.products.bulk-inquire'), {
+        product_ids: selectedProducts.value,
+        ...(bulkNotes.value.trim() ? { message: bulkNotes.value.trim() } : {}),
+    }, {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            showBulkModal.value = false;
+            selectedProducts.value = [];
+            bulkNotes.value = '';
+            inquiryConversationUrl.value = page.props.flash?.inquiry_redirect_url || '';
+            showInquiryNotice.value = true;
+        },
+        onError: () => showToast('error', 'Failed to send bulk inquiry. Please try again.'),
+        onFinish: () => { bulkSubmitting.value = false; },
+    });
+};
+
+const continueToInquiryConversation = () => {
+    const destination = inquiryConversationUrl.value;
+    inquiryConversationUrl.value = '';
+    if (destination) router.visit(destination);
 };
 
 const showToast = (type, message) => {

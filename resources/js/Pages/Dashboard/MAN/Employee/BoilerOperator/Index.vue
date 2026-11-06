@@ -7,6 +7,8 @@ const props = defineProps({
     stats: Object,
     recentLogs: Array,
     efficiency: Object,
+    steamConsumers: { type: Array, default: () => [] },
+    steamAvailable: Boolean,
 });
 </script>
 
@@ -58,6 +60,23 @@ const props = defineProps({
                         <div class="rounded-2xl bg-rose-50/70 dark:bg-rose-950/30 p-3"><p class="text-2xl font-black text-rose-700 dark:text-rose-300">{{ efficiency.machines?.down ?? 0 }}/{{ efficiency.machines?.total ?? 0 }}</p><p class="text-[10px] font-bold uppercase tracking-wide text-gray-500">Boilers down</p></div>
                     </div>
                 </div>
+
+                <section class="rounded-3xl border bg-white/90 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 class="text-sm font-black text-gray-900 dark:text-white">Steam Powered Production Machines</h2>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-zinc-400">Dyeing and finishing machines configured to use boiler steam.</p>
+                        </div>
+                        <span class="rounded-full px-3 py-1 text-[10px] font-black uppercase" :class="steamAvailable ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300'">Boiler steam {{ steamAvailable ? 'Available' : 'Unavailable' }}</span>
+                    </div>
+                    <div v-if="steamConsumers.length" class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        <article v-for="machine in steamConsumers" :key="machine.id" class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-800/50">
+                            <div class="min-w-0"><p class="font-mono text-sm font-black text-slate-900 dark:text-white">{{ machine.machine_no }}</p><p class="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">{{ machine.type.replaceAll('_', ' ') }}<span v-if="machine.load_capacity_kg"> · {{ machine.load_capacity_kg }} kg/cycle</span></p></div>
+                            <span class="shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase" :class="machine.status === 'available' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300'">{{ machine.status.replaceAll('_', ' ') }}</span>
+                        </article>
+                    </div>
+                    <p v-else class="mt-4 rounded-xl border border-dashed p-4 text-center text-xs text-gray-500 dark:border-zinc-700 dark:text-zinc-400">No Dyeing or Finishing machines are currently configured with Steam power.</p>
+                </section>
 
                 <TransitionGroup name="card" tag="div" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div key="boilers" class="group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 p-5 overflow-hidden">

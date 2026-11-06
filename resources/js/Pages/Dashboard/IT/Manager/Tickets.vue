@@ -132,7 +132,7 @@ const selectedFresh = computed(() => rows.value.find(t => selected.value && t.id
 <template>
     <Head title="Service Desk | IT Department" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="it-page-hero mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     Service <span class="text-blue-600">Desk</span>
@@ -183,7 +183,7 @@ const selectedFresh = computed(() => rows.value.find(t => selected.value && t.id
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left min-w-[720px]">
+                <table class="it-responsive-table w-full text-left min-w-[720px]">
                     <thead>
                         <tr class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-700">
                             <th class="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Ticket</th>
@@ -196,23 +196,23 @@ const selectedFresh = computed(() => rows.value.find(t => selected.value && t.id
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                         <tr v-for="t in rows" :key="t.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-800/60">
-                            <td class="px-4 sm:px-6 py-3 sm:py-4">
+                            <td data-label="Ticket" class="px-4 sm:px-6 py-3 sm:py-4">
                                 <button @click="openDetail(t)" class="text-left">
                                     <p class="text-sm font-bold text-slate-900 dark:text-white hover:text-blue-600">{{ t.ticket_no }} — {{ t.title }}</p>
                                     <p class="flex items-center gap-1 text-[11px] text-slate-400">{{ t.category.replace('_', ' ') }} · {{ t.system_area }} · <MessageSquare class="h-3 w-3" /> {{ t.comments_count ?? 0 }}</p>
                                 </button>
                             </td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4"><span :class="['px-2 py-0.5 rounded-full text-[10px] font-black', priorityClass(t.priority)]">{{ t.priority }}</span></td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4"><span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', statusClass(t.status)]">{{ t.status.replace('_', ' ') }}</span></td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4 text-sm text-slate-600 dark:text-slate-300">{{ t.assignee?.name || '—' }}</td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4">
+                            <td data-label="Priority" class="px-4 sm:px-6 py-3 sm:py-4"><span :class="['px-2 py-0.5 rounded-full text-[10px] font-black', priorityClass(t.priority)]">{{ t.priority }}</span></td>
+                            <td data-label="Status" class="px-4 sm:px-6 py-3 sm:py-4"><span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', statusClass(t.status)]">{{ t.status.replace('_', ' ') }}</span></td>
+                            <td data-label="Assignee" class="px-4 sm:px-6 py-3 sm:py-4 text-sm text-slate-600 dark:text-slate-300">{{ t.assignee?.name || '—' }}</td>
+                            <td data-label="SLA Due" class="px-4 sm:px-6 py-3 sm:py-4">
                                 <span v-if="t.sla_due_at" class="inline-flex items-center gap-1 text-xs font-mono"
                                     :class="t.sla_due_at && new Date(t.sla_due_at) < new Date() && ['open','assigned','in_progress','pending','reopened'].includes(t.status) ? 'text-red-500 font-bold' : 'text-slate-500'">
                                     <Clock class="w-3.5 h-3.5" /> {{ new Date(t.sla_due_at).toLocaleString() }}
                                 </span>
                                 <span v-else class="text-xs text-slate-400">—</span>
                             </td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4 text-right whitespace-nowrap">
+                            <td data-label="Actions" class="px-4 sm:px-6 py-3 sm:py-4 text-right whitespace-nowrap">
                                 <button @click="openDetail(t)" class="px-3 py-2 sm:py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg">Open</button>
                                 <button v-if="isManager && canEditTickets" @click="askDeleteTicket(t)" title="Delete ticket" class="p-2.5 sm:p-1.5 text-slate-400 hover:text-red-500"><Trash2 class="w-4 h-4" /></button>
                             </td>

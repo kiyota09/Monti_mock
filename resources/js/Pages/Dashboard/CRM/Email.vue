@@ -135,8 +135,8 @@ const isOutbound = (m) => m.direction === 'outbound';
 <template>
     <Head title="CRM Email" />
     <AuthenticatedLayout>
-        <div class="bg-slate-50 dark:bg-zinc-950">
-            <div class="mx-auto flex h-[calc(100vh-4rem)] max-w-[100rem] flex-col gap-3 p-3 sm:p-4">
+        <div class="h-full bg-slate-50 dark:bg-zinc-950">
+            <div class="mx-auto flex h-full max-w-[100rem] flex-col gap-3 p-3 sm:p-4">
                 <!-- Header -->
                 <div class="relative flex-none overflow-hidden rounded-2xl bg-gradient-to-br from-sky-700 via-indigo-700 to-violet-800 px-5 py-4 text-white shadow-lg shadow-indigo-500/20">
                     <div class="absolute -top-16 -right-16 h-40 w-40 rounded-full bg-white/10 blur-3xl" />

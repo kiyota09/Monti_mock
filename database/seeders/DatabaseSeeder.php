@@ -188,7 +188,13 @@ class DatabaseSeeder extends Seeder
         $this->call(HRMAGENCYAPPLICCANT::class);
 
         // ==========================================
-        // 9. PROVISION HRM PAGE PERMISSIONS
+        // 9. SEED MANUFACTURING ROLE ACCOUNTS + COMPLETE HIRING FILES
+        // ==========================================
+        $this->call(ManufacturingRoleAccountsSeeder::class);
+        $this->call(FinishingPackerAccountSeeder::class);
+
+        // ==========================================
+        // 10. PROVISION HRM PAGE PERMISSIONS
         // ==========================================
         // Runs after the users exist so the full HRM sidebar (Agency,
         // Workers, Requests, Attendance, Billing, Compensation, ...) is
@@ -197,7 +203,7 @@ class DatabaseSeeder extends Seeder
         $this->call(AddHrmManagerPermissionsSeeder::class);
 
         // ==========================================
-        // 10. SEED CRM EMAIL INBOX (demo received client emails)
+        // 11. SEED CRM EMAIL INBOX (demo received client emails)
         // ==========================================
         $this->call(CrmEmailDemoSeeder::class);
     }

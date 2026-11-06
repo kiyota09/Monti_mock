@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ItPager from '@/Components/it/ItPager.vue';
 import { Search, ScrollText } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -11,8 +12,17 @@ const props = defineProps({
 });
 
 const applyFilters = (patch) => {
-    router.get(route('it.access-logs'), { ...props.filters, ...patch }, { preserveScroll: true, replace: true });
+    router.get(route('it.access-logs'), { ...props.filters, ...patch, page: 1 }, { preserveScroll: true, replace: true });
 };
+
+// Debounced search — one request per pause, not per keystroke.
+const searchBox = ref(props.filters.search || '');
+let searchTimer = null;
+const onSearchInput = () => {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => applyFilters({ search: searchBox.value }), 400);
+};
+onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer); });
 
 const rows = computed(() => props.logs.data || []);
 
@@ -27,16 +37,12 @@ const actionClass = (a) => ({
 }[a] || 'bg-slate-100 text-slate-600');
 
 const actionLabel = (a) => a.replace('account.', '').replace('position.', 'promoted: ').replace('.', ' → ').replace('_', ' ');
-
-const goPage = (url) => {
-    if (url) router.get(url, {}, { preserveScroll: true });
-};
 </script>
 
 <template>
     <Head title="Access Logs | IT Department" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="it-page-hero mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     Access <span class="text-blue-600">Logs</span>
@@ -55,7 +61,7 @@ const goPage = (url) => {
             <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-3 bg-slate-50/50 dark:bg-slate-800/50">
                 <div class="relative flex-1">
                     <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input :value="filters.search || ''" @input="applyFilters({ search: $event.target.value })" type="text"
+                    <input v-model="searchBox" @input="onSearchInput" type="text"
                         placeholder="Search details, actor, or employee..."
                         class="w-full pl-9 pr-4 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200 placeholder-slate-400" />
                 </div>
@@ -67,7 +73,7 @@ const goPage = (url) => {
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left min-w-[720px]">
+                <table class="it-responsive-table w-full text-left min-w-[720px]">
                     <thead>
                         <tr class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-700">
                             <th class="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">When</th>
@@ -79,19 +85,19 @@ const goPage = (url) => {
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                         <tr v-for="log in rows" :key="log.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-800/60">
-                            <td class="px-4 sm:px-6 py-3 sm:py-3.5 text-xs font-mono text-slate-500 whitespace-nowrap">
+                            <td data-label="When" class="px-4 sm:px-6 py-3 sm:py-3.5 text-xs font-mono text-slate-500 whitespace-nowrap">
                                 {{ new Date(log.created_at).toLocaleString() }}
                             </td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-3.5 whitespace-nowrap">
+                            <td data-label="Action" class="px-4 sm:px-6 py-3 sm:py-3.5 whitespace-nowrap">
                                 <span :class="['px-2.5 py-1 rounded-full text-[10px] font-black uppercase', actionClass(log.action)]">
                                     {{ actionLabel(log.action) }}
                                 </span>
                             </td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-3.5 text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                            <td data-label="Employee" class="px-4 sm:px-6 py-3 sm:py-3.5 text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap">
                                 {{ log.target?.name || '—' }}
                             </td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-3.5 text-xs text-slate-500 max-w-md">{{ log.details }}</td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-3.5 text-xs text-slate-500 whitespace-nowrap">
+                            <td data-label="Details" class="px-4 sm:px-6 py-3 sm:py-3.5 text-xs text-slate-500 max-w-md">{{ log.details }}</td>
+                            <td data-label="Changed By" class="px-4 sm:px-6 py-3 sm:py-3.5 text-xs text-slate-500 whitespace-nowrap">
                                 {{ log.actor?.name || 'system' }}
                                 <span v-if="log.ip_address" class="block font-mono text-[10px] text-slate-400">{{ log.ip_address }}</span>
                             </td>
@@ -104,16 +110,7 @@ const goPage = (url) => {
                 </div>
             </div>
 
-            <div v-if="logs.prev_page_url || logs.next_page_url"
-                class="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 flex items-center justify-between">
-                <span class="text-xs text-slate-500">Page {{ logs.current_page }} of {{ logs.last_page }} · {{ logs.total }} entries</span>
-                <div class="flex gap-2">
-                    <button @click="goPage(logs.prev_page_url)" :disabled="!logs.prev_page_url"
-                        class="px-3 py-2 sm:py-1.5 text-xs font-bold text-slate-500 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50">Previous</button>
-                    <button @click="goPage(logs.next_page_url)" :disabled="!logs.next_page_url"
-                        class="px-3 py-2 sm:py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50">Next</button>
-                </div>
-            </div>
+            <ItPager :paginator="logs" route-name="it.access-logs" :filters="filters" />
         </div>
     </AuthenticatedLayout>
 </template>

@@ -56,9 +56,17 @@ export function useDynamicDropdowns(prefix = 'role_') {
 /** Sidebar scroll position persistence. */
 export function useSidebarScroll() {
     const scrollRef = ref(null)
+    let saveTimer = null
+    let pendingScrollTop = 0
 
     const onScroll = () => {
-        if (scrollRef.value) setStored('scrollTop', scrollRef.value.scrollTop)
+        if (!scrollRef.value) return
+        pendingScrollTop = scrollRef.value.scrollTop
+        if (saveTimer) clearTimeout(saveTimer)
+        saveTimer = setTimeout(() => {
+            setStored('scrollTop', pendingScrollTop)
+            saveTimer = null
+        }, 150)
     }
 
     onMounted(() => {
@@ -70,6 +78,11 @@ export function useSidebarScroll() {
 
     onBeforeUnmount(() => {
         scrollRef.value?.removeEventListener('scroll', onScroll)
+        if (saveTimer) {
+            clearTimeout(saveTimer)
+            setStored('scrollTop', pendingScrollTop)
+            saveTimer = null
+        }
     })
 
     return { scrollRef }

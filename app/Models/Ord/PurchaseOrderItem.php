@@ -24,8 +24,16 @@ class PurchaseOrderItem extends Model
     protected $fillable = [
         'purchase_order_id',
         'product_id',
+        'eco_quotation_item_id',
+        'recipe_id',
         'quantity',
         'unit_price',
+        'fabric',
+        'fabric_type',
+        'design',
+        'color',
+        'kilos',
+        'price',
     ];
 
     /**
@@ -44,6 +52,16 @@ class PurchaseOrderItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function quotationItem(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Eco\EcoQuotationItem::class, 'eco_quotation_item_id');
+    }
+
+    public function recipe(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Man\BomRecord::class, 'recipe_id');
     }
 
     /**

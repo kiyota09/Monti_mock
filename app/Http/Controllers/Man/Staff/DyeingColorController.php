@@ -4,12 +4,16 @@ namespace App\Http\Controllers\Man\Staff;
 
 use App\Models\Man\DyeJob;
 use App\Models\Man\DyeJobChemical;
+use App\Models\Man\DyeingStageRecord;
 use App\Models\Man\Fabric;
 use App\Models\Man\Machine;
 use App\Models\Man\MachineReport;
+use App\Models\Man\ManufacturingOrder;
 use App\Models\Man\ManufacturingInventoryItem;
+use App\Services\Man\BoilerSteamService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class DyeingColorController extends ManufacturingStaffController
@@ -69,7 +73,7 @@ class DyeingColorController extends ManufacturingStaffController
             'roleLabel' => 'Dyeing Color',
             'historyRoute' => 'man.staff.dyeing-color.history',
             'dateColumn' => 'processed_at',
-            'jobs' => $this->staffHistory(DyeJob::class, ['fabric.machine', 'fabric.salesOrder.client', 'fabric.salesOrder.recipe.product', 'machine', 'operator', 'chemicals', 'fabric.softenerJobs', 'fabric.packages']),
+            'jobs' => $this->staffHistory(DyeJob::class, ['fabric.machine', 'fabric.salesOrder.client', 'fabric.salesOrder.recipe.product', 'machine', 'operator', 'chemicals', 'fabric.bleachingJobs', 'fabric.packages']),
         ]);
     }
 
@@ -77,9 +81,9 @@ class DyeingColorController extends ManufacturingStaffController
     {
         // Fabrics ready for dyeing — eager-load their linked JO + recipe.
         // Only fabrics with no dye job recorded yet: once recorded, the
-        // fabric waits on the quality checker (stays 'dyeing') until the
-        // checker approves it to softener or rejects it.
-        $fabricsQuery = Fabric::with(['machine', 'operator', 'salesOrder.recipe'])
+        // fabric waits for the dyeing supervisor's gate (stays 'dyeing') until the
+        // checker approves it to bleaching or rejects it.
+        $fabricsQuery = Fabric::with(['machine', 'operator', 'salesOrder.recipe', 'dyeingBatchFabric.batch'])
             ->where('status', 'dyeing')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -110,6 +114,11 @@ class DyeingColorController extends ManufacturingStaffController
 
                 return [
                     'id'           => $fabric->id,
+                    'manufacturing_order_id' => $fabric->manufacturing_order_id,
+                    'sales_order_id' => $fabric->sales_order_id,
+                    'batch_id'     => $fabric->dyeingBatchFabric?->dyeing_batch_id,
+                    'batch_machine_id' => $fabric->dyeingBatchFabric?->batch?->machine_id,
+                    'batch_capacity_kg' => (float)($fabric->dyeingBatchFabric?->batch?->load_capacity_kg ?? 0),
                     'code'         => $fabric->code,
                     'yarn_type'    => $fabric->yarn_type,
                     'weight'       => $fabric->weight,
@@ -141,8 +150,13 @@ class DyeingColorController extends ManufacturingStaffController
                 ];
             });
 
+        $steamReady = app(BoilerSteamService::class)->isAvailable();
         $machines = Machine::where('type', 'dyeing')
             ->where('status', 'available')
+            ->where(function ($query) use ($steamReady) {
+                $query->where('power', '!=', 'Steam');
+                if ($steamReady) $query->orWhere('power', 'Steam');
+            })
             ->get(['id', 'machine_no']);
 
         // Dye chemicals available in production inventory (dyeing department)
@@ -153,124 +167,112 @@ class DyeingColorController extends ManufacturingStaffController
             ->where('remaining_quantity', '>', 0)
             ->orderBy('created_at', 'asc')
             ->get()
+            ->filter(fn ($item) => strtolower((string)$item->unit) === 'kg')
             ->map(fn ($item) => [
                 'id'                 => $item->id,
+                'material_id'        => $item->material_id,
                 'control_number'     => $item->control_number,
-                'material_name'      => $item->material->name,
+                'material_name'      => $item->material->display_name,
                 'remaining_quantity' => $item->remaining_quantity,
                 'unit'               => $item->unit,
             ]);
 
         return Inertia::render('Dashboard/MAN/Employee/DyeingColor/DyeingColor', [
             'fabrics'  => $fabrics,
+            'assignedOrders' => $this->assignedProductionOrders('dyeing'),
             'machines' => $machines,
+            'steamReady' => $steamReady,
             'dyes'     => $dyes,       // NEW — inventory-sourced dye chemicals
         ]);
     }
 
-    /**
-     * Record a dye job, consuming chemical lots from production inventory.
-     *
-     * dyes_used[] mirrors the knitting yarns_used[] pattern:
-     *   [{ inventory_item_id, quantity_used }]
-     */
+    /** Record a dye job using the JO formula and automatically allocated inventory lots. */
     public function storeDye(Request $request)
     {
         $validated = $request->validate([
-            'fabric_id'                       => 'required|exists:fabrics,id',
-            'machine_id'                      => 'required|exists:machines,id',
-            'remarks'                         => 'nullable|string',
-            'dyes_used'                       => 'required|array|min:1',
-            'dyes_used.*.inventory_item_id'   => 'required|exists:manufacturing_inventory_items,id',
-            'dyes_used.*.quantity_used'       => 'required|numeric|min:0.01',
+            'fabric_ids' => 'required|array|min:1', 'fabric_ids.*' => 'required|integer|distinct|exists:fabrics,id',
+            'machine_id' => 'required|exists:machines,id', 'remarks' => 'nullable|string',
+            'dyes_used' => 'required|array|min:1',
+            'dyes_used.*.material_id' => 'required|integer|exists:materials,id',
+            'dyes_used.*.quantity_used' => 'required|numeric|min:0.01',
         ]);
-
-        // Pre-validate sufficient quantity for every dye lot
-        $insufficient = [];
-        foreach ($validated['dyes_used'] as $usage) {
-            $item = ManufacturingInventoryItem::with('material')
-                ->find($usage['inventory_item_id']);
-            if (!$item) {
-                return back()->withErrors(['dyes_used' => 'Invalid dye item selected.']);
-            }
-            if ($item->remaining_quantity < $usage['quantity_used']) {
-                $insufficient[] = "{$item->material->name} ({$item->control_number})"
-                    . " — only {$item->remaining_quantity} {$item->unit} left";
-            }
-        }
-        if (!empty($insufficient)) {
-            return back()->withErrors([
-                'dyes_used' => 'Insufficient chemicals: ' . implode(', ', $insufficient),
-            ]);
-        }
-
+        $machine = Machine::whereKey($validated['machine_id'])->where('type','dyeing')->where('status','available')->firstOrFail();
+        if ($machine->power === 'Steam' && !app(BoilerSteamService::class)->isAvailable()) return back()->withErrors(['machine_id'=>'Steam is not available.']);
         DB::beginTransaction();
         try {
-            // Checker gate: only fabrics the checker placed at 'dyeing' may
-            // be dyed (recolored rejects re-enter here through the checker).
-            $fabric = Fabric::findOrFail($validated['fabric_id']);
-            if ($fabric->status !== 'dyeing') {
-                DB::rollBack();
-                return back()->withErrors(['fabric_id' => 'This fabric is not awaiting dyeing (it may already be recorded or approved).']);
-            }
-            if ($fabric->dyeJobs()->exists()) {
-                DB::rollBack();
-                return back()->withErrors(['fabric_id' => 'A dye job is already recorded for this fabric — awaiting quality check.']);
-            }
-            if (! $this->isAssignedItem($fabric->manufacturing_order_id, $fabric->sales_order_id)) {
-                DB::rollBack();
-                return back()->withErrors(['fabric_id' => 'This Job Order is not assigned to you by your supervisor.']);
-            }
+            $fabrics=Fabric::with(['dyeingBatchFabric.batch', 'manufacturingOrder', 'salesOrder'])->whereIn('id',$validated['fabric_ids'])->lockForUpdate()->get();
+            abort_unless($fabrics->count()===count($validated['fabric_ids']) && $fabrics->every(fn($f)=>$f->status==='dyeing'),422,'One or more fabrics are no longer waiting for dyeing.');
+            $items=$fabrics->map(fn($f)=>$f->dyeingBatchFabric); $first=$items->first();
+            abort_unless($first && $items->every(fn($i)=>$i && $i->dyeing_batch_id===$first->dyeing_batch_id && $i->current_stage==='color' && $i->status==='active'),422,'Select active fabrics from the same JO batch.');
+            abort_unless((int)$first->batch->machine_id===(int)$machine->id,422,'Use the machine assigned to this JO batch.');
+            abort_if($fabrics->sum(fn($f)=>(float)$f->weight)>(float)$first->batch->load_capacity_kg+0.001,422,'Selected fabrics exceed the machine load capacity.');
+            foreach($fabrics as $f) abort_unless($this->isAssignedFabric((int) $f->id, $f->manufacturing_order_id, $f->sales_order_id),403,'This fabric code is not assigned to you by the Dyeing Supervisor.');
 
-            // Use the first dye lot as the "primary" for the dye_jobs main columns
-            $primaryItem = ManufacturingInventoryItem::with('material')
-                ->findOrFail($validated['dyes_used'][0]['inventory_item_id']);
+            $firstFabric = $fabrics->first();
+            $order = $firstFabric->manufacturingOrder
+                ?: ManufacturingOrder::find($first->batch?->manufacturing_order_id)
+                ?: $firstFabric->salesOrder?->manufacturingOrder;
+            $salesOrder = $firstFabric->salesOrder ?: $order?->salesOrder ?: $first->batch?->salesOrder;
+            $formula = $this->dyeingFormulaForOrder($order, $salesOrder);
+            $selectedWeight = (float)$fabrics->sum(fn($fabric)=>(float)$fabric->weight);
+            $formulaGroups = $formula ? $this->dyeingFormulaGroups($formula, $selectedWeight) : [];
+            $dyeStuffGroup = collect($formulaGroups)->first(fn ($group) => strtolower($group['label'] ?? '') === 'dye stuffs');
+            $formulaRows = collect($dyeStuffGroup['materials'] ?? []);
+            abort_if($formulaRows->isEmpty(),422,'No dye stuffs are configured in this Job Order recipe. Ask the supervisor or dyeing lab chemist to complete it.');
 
-            $dyeJob = DyeJob::create([
-                'fabric_id'    => $validated['fabric_id'],
-                'machine_id'   => $validated['machine_id'],
-                'dye_type'     => $primaryItem->material->name,
-                'chemical_no'  => $primaryItem->control_number,
-                'remarks'      => $validated['remarks'],
-                'operator_id'  => $this->staff()->id,
-                'shift'        => $this->getShift(),
-                'code'         => $this->generateCode('CHEM', DyeJob::class),
-                'processed_at' => now(),
-            ]);
-
-            // Create chemical detail rows and deduct from each inventory lot
-            foreach ($validated['dyes_used'] as $usage) {
-                $item = ManufacturingInventoryItem::with('material')
-                    ->findOrFail($usage['inventory_item_id']);
-
-                DyeJobChemical::create([
-                    'dye_job_id'        => $dyeJob->id,
-                    'inventory_item_id' => $item->id,
-                    'dye_type'          => $item->material->name,
-                    'control_number'    => $item->control_number,
-                    'quantity_used'     => $usage['quantity_used'],
-                ]);
-
-                // Deduct quantity from inventory (kg-based, not roll-based)
-                $item->remaining_quantity = max(0, $item->remaining_quantity - $usage['quantity_used']);
-                $item->status = $item->remaining_quantity <= 0 ? 'depleted' : 'partial';
-                $item->save();
-            }
-
-            // Checker gate: fabric stays 'dyeing' until the quality checker
-            // approves it (passDye → softener) or rejects it. Staff must
-            // never advance it — that would bypass quality inspection.
-            DB::commit();
-            return redirect()->back()->with(
-                'message',
-                'Dye job recorded. Awaiting quality check before it can move to softener.'
+            $expectedMaterialIds = $formulaRows->pluck('material_id')->map(fn ($id) => (int)$id)->unique()->values();
+            abort_if($expectedMaterialIds->contains(0),422,'A dye stuff in this JO recipe is not linked to an inventory material. Ask the supervisor to correct the recipe.');
+            $neededByMaterial = collect($validated['dyes_used'])
+                ->groupBy(fn ($row) => (int)$row['material_id'])
+                ->map(fn ($rows) => round((float)$rows->sum(fn ($row) => (float)$row['quantity_used']), 2));
+            $submittedMaterialIds = $neededByMaterial->keys()->map(fn ($id) => (int)$id);
+            abort_unless(
+                $expectedMaterialIds->diff($submittedMaterialIds)->isEmpty()
+                    && $submittedMaterialIds->diff($expectedMaterialIds)->isEmpty(),
+                422,
+                'The submitted dye materials do not match this Job Order recipe.'
             );
-        } catch (\Exception $e) {
+
+            $stockRows=[];
+            foreach($neededByMaterial as $materialId=>$needed){
+                $lots=ManufacturingInventoryItem::with('material')->where('department','dyeing')->where('category','Dye')
+                    ->where('material_id',$materialId)->whereRaw('LOWER(unit) = ?', ['kg'])
+                    ->where('status','!=','depleted')->where('remaining_quantity','>',0)
+                    ->orderBy('received_at')->orderBy('id')->lockForUpdate()->get();
+                foreach($lots as $stock){
+                    if($needed <= 0) break;
+                    $use=round(min((float)$needed,(float)$stock->remaining_quantity),2);
+                    if($use <= 0) continue;
+                    $stockRows[]=['usage'=>['quantity_used'=>$use],'item'=>$stock];
+                    $needed=round($needed-$use,2);
+                }
+                abort_if($needed > 0,422,'Not enough inventory for one or more dye stuffs in this JO recipe. Ask the dyeing supervisor to check stock.');
+            }
+            $submission='COLOR-'.now()->format('ymdHis').'-'.Str::upper(Str::random(5));
+            $primary=$stockRows[0]['item']; $totalWeight=(float)$fabrics->sum(fn($f)=>(float)$f->weight);
+            foreach($fabrics as $fabric){
+                $job=DyeJob::create(['fabric_id'=>$fabric->id,'machine_id'=>$machine->id,'dye_type'=>$primary->material?->display_name ?? 'Dye','chemical_no'=>$primary->control_number,
+                    'remarks'=>null,'operator_id'=>$this->staff()->id,'shift'=>$this->getShift(),'code'=>$this->generateCode('CHEM',DyeJob::class),'processed_at'=>now()]);
+                $batchItem=$fabric->dyeingBatchFabric; $attempt=$batchItem->records()->where('stage','color')->max('attempt')+1;
+                $materialDetails=[];
+                foreach($stockRows as $row){$share=round((float)$row['usage']['quantity_used']*((float)$fabric->weight/$totalWeight),4);$stock=$row['item'];
+                    DyeJobChemical::create(['dye_job_id'=>$job->id,'inventory_item_id'=>$stock->id,'dye_type'=>$stock->material?->display_name ?? 'Dye','control_number'=>$stock->control_number,'quantity_used'=>$share]);
+                    $materialDetails[]=['inventory_item_id'=>$stock->id,'name'=>$stock->material?->display_name ?? 'Dye','quantity_used'=>$share,'unit'=>'kg'];
+                }
+                DyeingStageRecord::create(['dyeing_batch_fabric_id'=>$batchItem->id,'stage'=>'color','attempt'=>$attempt,'operator_id'=>$this->staff()->id,'dye_job_id'=>$job->id,
+                    'code'=>$submission.'-'.$fabric->id,'submission_code'=>$submission,'materials_used'=>$fabric->id===$fabrics->first()->id?array_map(fn($row)=>['inventory_item_id'=>$row['item']->id,'name'=>$row['item']->material?->display_name ?? 'Dye','quantity_used'=>(float)$row['usage']['quantity_used'],'unit'=>'kg'],$stockRows):null,
+                    'review_status'=>'awaiting_review','processed_at'=>now()]);
+                $batchItem->update(['status'=>'awaiting_review']);
+            }
+            foreach($stockRows as $row){$stock=$row['item'];$stock->remaining_quantity=max(0,(float)$stock->remaining_quantity-(float)$row['usage']['quantity_used']);$stock->status=$stock->remaining_quantity<=0?'depleted':'partial';$stock->save();}
+            DB::commit();
+            return back()->with('message','Grouped dye job recorded. Awaiting supervisor inspection.');
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return back()->withErrors(['error' => 'Failed to record dye job: ' . $e->getMessage()]);
+            if($e instanceof \Illuminate\Validation\ValidationException) throw $e;
+            return back()->withErrors(['error'=>'Failed to record dye job: '.$e->getMessage()]);
         }
     }
-
     public function reports()
     {
         $machines  = Machine::where('type', 'dyeing')->get(['id', 'machine_no', 'status']);

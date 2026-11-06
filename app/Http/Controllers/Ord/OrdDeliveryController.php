@@ -136,7 +136,13 @@ class OrdDeliveryController extends Controller
                     continue;
                 }
 
-                foreach (['production_done', 'ready_for_dispatch', 'in_transit', 'delivered'] as $step) {
+                $allPackagesDelivered = $this->salesOrderPackagesFullyDelivered((int) $so->id);
+                $forwardSteps = ['production_done', 'ready_for_dispatch', 'in_transit'];
+                if ($allPackagesDelivered) {
+                    $forwardSteps[] = 'delivered';
+                }
+
+                foreach ($forwardSteps as $step) {
                     if (in_array($step, OrderLifecycleService::allowedSoTransitions($so->status), true)) {
                         $so = $this->lifecycle->transitionSalesOrder(
                             $so, $step, auth()->user(), "Auto-sync from shipment {$delivery->delivery_number}"
@@ -152,6 +158,29 @@ class OrdDeliveryController extends Controller
         });
 
         return back()->with('success', "Synced {$updated} job order(s) to delivered from {$delivery->delivery_number}.");
+    }
+
+    /**
+     * A job order may be split across truck loads. Keep it in transit until
+     * every warehouse package for the JO has a delivered load with proof.
+     */
+    private function salesOrderPackagesFullyDelivered(int $salesOrderId): bool
+    {
+        $packages = \App\Models\War\WarehousePackage::query()
+            ->whereHas('manufacturingOrder', fn ($query) => $query->where('sales_order_id', $salesOrderId));
+        $total = (clone $packages)->count();
+
+        if ($total === 0) {
+            return false;
+        }
+
+        $delivered = (clone $packages)
+            ->whereHas('deliveries', fn ($query) => $query
+                ->where('deliveries.status', 'delivered')
+                ->whereHas('proofOfDelivery'))
+            ->count();
+
+        return $delivered >= $total;
     }
 
     private function deliveryRow($delivery): array

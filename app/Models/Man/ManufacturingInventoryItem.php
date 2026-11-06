@@ -99,6 +99,29 @@ class ManufacturingInventoryItem extends Model
         return $this->save();
     }
 
+    /** Consume an exact yarn weight while keeping whole-roll availability in sync. */
+    public function consumeWeight(float $kilograms): bool
+    {
+        if ($kilograms <= 0 || $this->remaining_quantity === null || $kilograms > (float) $this->remaining_quantity + 0.00001) {
+            return false;
+        }
+
+        $perRollWeight = (float) ($this->unit_weight
+            ?: (($this->total_units > 0 && $this->initial_quantity > 0)
+                ? $this->initial_quantity / $this->total_units
+                : 0));
+        if ($perRollWeight <= 0) {
+            return false;
+        }
+
+        $this->remaining_quantity = max(0, (float) $this->remaining_quantity - $kilograms);
+        $wholeRollsRemaining = (int) floor(((float) $this->remaining_quantity + 0.00001) / $perRollWeight);
+        $this->used_units = max(0, (int) $this->total_units - $wholeRollsRemaining);
+        $this->status = $this->remaining_quantity <= 0 ? 'depleted' : 'partial';
+
+        return $this->save();
+    }
+
     /**
      * Accessor for available units (remaining rolls/boxes).
      *

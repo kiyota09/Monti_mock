@@ -39,6 +39,7 @@ class InvDashboardController extends Controller
                 'id' => $mat->id,
                 'mat_id' => $mat->mat_id,
                 'name' => $mat->name,
+                'display_name' => $mat->display_name,
                 'category' => $mat->category,
                 'unit' => $mat->unit,
                 'reorder_point' => $mat->reorder_point,
@@ -105,6 +106,7 @@ class InvDashboardController extends Controller
                     $alertItems[] = [
                         'sku' => $mat->mat_id,
                         'name' => $mat->name,
+                        'display_name' => $mat->display_name,
                         'warehouse' => $wh->name,
                         'qty' => (float) $qty,
                         'reorder' => (float) $mat->reorder_point,
@@ -138,7 +140,7 @@ class InvDashboardController extends Controller
                 return [
                     'time' => $item->received_at ? $item->received_at->diffForHumans() : 'Unknown',
                     'action' => $action,
-                    'item' => $item->material->name,
+                    'item' => $item->material->display_name,
                     'qty' => number_format($qty, 0) . ' ' . $item->material->unit,
                     'color' => $color,
                     'warehouse' => $item->warehouse->name,
@@ -149,7 +151,7 @@ class InvDashboardController extends Controller
 
         // Category breakdown
         $categoryBreakdown = $materials
-            ->groupBy('category')
+            ->groupBy(fn ($material) => $material->category === 'Dye' ? 'Dye Stuff' : $material->category)
             ->map(function ($group, $cat) use ($totalSkus) {
                 $safeTotal = $totalSkus ?: 1;
                 return [
@@ -195,7 +197,15 @@ class InvDashboardController extends Controller
     {
         $palette = [
             'Yarn' => 'bg-blue-500',
-            'Dye' => 'bg-violet-500',
+            'Dye Stuff' => 'bg-violet-500',
+            'Auxillary Agent' => 'bg-cyan-500',
+            'Basic Chemicals' => 'bg-fuchsia-500',
+            'Boiler Chemicals' => 'bg-sky-600',
+            'Post-Treatment' => 'bg-amber-500',
+            'Pre-Treatment' => 'bg-orange-500',
+            'Bio-Processing Enzymes' => 'bg-lime-500',
+            'Care Agents' => 'bg-teal-500',
+            // Preserve colors for existing materials until they are recategorized.
             'Supplies' => 'bg-emerald-500',
             'Packaging' => 'bg-amber-500',
         ];

@@ -18,7 +18,6 @@ export const warehouseModule = {
             { label: 'Packages', href: route('warehouse.packages'), icon: Package, permKey: 'packages' },
             { label: 'Rejects', href: route('warehouse.rejects'), icon: XCircle, permKey: 'reject' },
         ]
-        if (isCEO) return all
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         if (userPosition === 'manager' && user?.role === 'WAR' && !ctx.hasExplicitModuleGrants('WAR')) return all

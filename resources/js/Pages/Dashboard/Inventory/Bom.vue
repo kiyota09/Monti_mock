@@ -1,4 +1,5 @@
 <script setup>
+import { showNotice, confirmModal } from '@/lib/feedback';
 import { ref, computed, watch } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -27,6 +28,8 @@ const props = defineProps({
 // UI State
 const searchQuery = ref('');
 const showForm = ref(false);
+const selectedRecipe = ref(null);
+const samplePreview = ref(null);
 const editingId = ref(null);
 const processing = ref(false);
 
@@ -52,12 +55,12 @@ const addMaterialToRecipe = () => {
     if (!selectedMaterialId.value) return;
     const matId = parseInt(selectedMaterialId.value);
     if (form.materials[matId] !== undefined) {
-        alert('Material already added — adjust its quantity below.');
+        showNotice('Material already added — adjust its quantity below.');
         return;
     }
     const qty = Number(newMaterialQty.value);
     if (!(qty > 0)) {
-        alert('Quantity must be above zero (kg per 1 unit ordered).');
+        showNotice('Quantity must be above zero (kg per 1 unit ordered).');
         return;
     }
     form.materials[matId] = qty;
@@ -110,17 +113,17 @@ const openEdit = (recipe) => {
 // Submit form (create or update)
 const submitForm = () => {
     if (!form.client_id || !form.product_id || !form.yarn_type || !form.dye_color || !form.weave_design) {
-        alert('Please fill all required fields.');
+        showNotice('Please fill all required fields.');
         return;
     }
     const ids = Object.keys(form.materials);
     if (ids.length === 0) {
-        alert('Please add at least one material to the recipe.');
+        showNotice('Please add at least one material to the recipe.');
         return;
     }
     for (const id of ids) {
         if (!(Number(form.materials[id]) > 0)) {
-            alert('Every material needs a quantity above zero (kg per 1 unit ordered).');
+            showNotice('Every material needs a quantity above zero (kg per 1 unit ordered).');
             return;
         }
     }
@@ -146,21 +149,56 @@ const submitForm = () => {
 };
 
 // Delete recipe
-const deleteRecipe = (id) => {
-    if (!confirm('Delete this recipe? This action cannot be undone.')) return;
+const deleteRecipe = async (id) => {
+    if (!await confirmModal('Delete this recipe? This action cannot be undone.')) return;
     router.delete(route('inv.bom.destroy', id), { preserveScroll: true });
 };
 
 // Filter recipes by search
+const sortedRecipes = computed(() => [...(props.boms ?? [])].sort((a, b) => {
+    const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
+    const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+    return bTime - aTime || Number(b.id) - Number(a.id);
+}));
+
 const filteredRecipes = computed(() => {
-    if (!searchQuery.value) return props.boms;
+    if (!searchQuery.value) return sortedRecipes.value;
     const q = searchQuery.value.toLowerCase();
-    return props.boms.filter(recipe =>
+    return sortedRecipes.value.filter(recipe =>
         recipe.client?.company_name?.toLowerCase().includes(q) ||
         recipe.product?.name?.toLowerCase().includes(q) ||
-        recipe.yarn_type.toLowerCase().includes(q)
+        String(recipe.yarn_type || '').toLowerCase().includes(q) ||
+        String(recipe.dye_color || '').toLowerCase().includes(q) ||
+        String(recipe.weave_design || '').toLowerCase().includes(q) ||
+        String(recipe.sample_info?.code || '').toLowerCase().includes(q)
     );
 });
+
+const approvedFormulaSections = (recipe) => {
+    const formula = recipe.approved_formula || {};
+    return [
+        { label: 'Dye stuffs', rows: formula.dyestuffs || formula.dye_stuffs || [], amount: (row) => `${row.pct ?? row.amount ?? '—'} % OWF` },
+        { label: 'Auxiliary agents', rows: formula.auxiliary_agents || [], amount: (row) => `${row.gpl ?? row.amount ?? '—'} g/L` },
+        { label: 'Basic chemicals', rows: formula.basic_chemicals || [], amount: (row) => `${row.gpl ?? row.amount ?? '—'} g/L` },
+        { label: 'Post-treatment', rows: formula.post_treatment || [], amount: (row) => `${row.gpl ?? row.amount ?? '—'} g/L` },
+        { label: 'Other auxiliaries', rows: formula.auxiliaries || [], amount: (row) => `${row.gpl ?? row.amount ?? '—'} g/L` },
+        { label: 'Yarns', rows: formula.yarns || [], amount: (row) => `${row.qty ?? row.amount ?? '—'} kg/kg` },
+    ].map((section) => ({
+        ...section,
+        rows: section.rows.map((row) => ({
+            ...row,
+            production_quantity: recipe.formula_materials?.find((material) => Number(material.material_id) === Number(row.material_id))?.quantity,
+        })),
+    })).filter((section) => section.rows.length);
+};
+
+const formatDateTime = (value) => value ? new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+const recipeCardTitle = (recipe) => recipe.sample_info?.fabric_design?.split(' · ')[0]
+    || recipe.product?.name
+    || getProductName(recipe.product_id);
+
+const openRecipe = (recipe) => { selectedRecipe.value = recipe; };
+const openSamplePreview = (sample) => { samplePreview.value = sample; };
 
 // Helper: get client name by id
 const getClientName = (id) => {
@@ -177,7 +215,7 @@ const getProductName = (id) => {
 // Helper: get material name by id
 const getMaterialName = (id) => {
     const mat = props.materials.find(m => m.id === id);
-    return mat ? `${mat.mat_id} - ${mat.name}` : 'Unknown';
+    return mat ? `${mat.mat_id} - ${mat.display_name || mat.name}` : 'Unknown';
 };
 </script>
 
@@ -234,55 +272,39 @@ const getMaterialName = (id) => {
                         <p class="text-xs text-gray-400 mt-1">Try a different search.</p>
                         <button v-if="searchQuery" @click="searchQuery=''" class="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition active:scale-95">Clear filters</button>
                     </div>
-                    <TransitionGroup v-else name="card" tag="div" class="overflow-x-auto">
-                        <table key="bom-table" class="w-full text-left text-sm">
-                            <thead class="bg-slate-50/80 dark:bg-zinc-800/60 border-b border-gray-100 dark:border-zinc-800">
-                                <tr>
-                                    <th class="px-5 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-400">Client</th>
-                                    <th class="px-5 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-400">Product</th>
-                                    <th class="px-5 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-400">Yarn Type</th>
-                                    <th class="px-5 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-400">Dye Color</th>
-                                    <th class="px-5 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-400">Weave Design</th>
-                                    <th class="px-5 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-400">Formula · kg/unit</th>
-                                    <th class="px-5 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-400">Used By Orders</th>
-                                    <th class="px-5 py-3.5 text-center text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-400 w-24">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-zinc-800">
-                                <tr v-for="recipe in filteredRecipes" :key="recipe.id" class="hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
-                                    <td class="px-5 py-4 font-bold text-gray-900 dark:text-white">{{ recipe.client?.company_name || getClientName(recipe.client_id) }}</td>
-                                    <td class="px-5 py-4 text-gray-600 dark:text-gray-300">{{ recipe.product?.name || getProductName(recipe.product_id) }}</td>
-                                    <td class="px-5 py-4"><span class="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30 rounded-full text-[11px] font-bold"><span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ recipe.yarn_type }}</span></td>
-                                    <td class="px-5 py-4"><span class="inline-flex items-center gap-1 px-2.5 py-1 bg-violet-100 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30 rounded-full text-[11px] font-bold"><span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ recipe.dye_color }}</span></td>
-                                    <td class="px-5 py-4 text-gray-600 dark:text-gray-300">{{ recipe.weave_design }}</td>
-                                    <td class="px-5 py-4">
-                                        <div class="flex flex-wrap gap-1">
-                                            <span v-for="(qty, matId) in recipe.materials" :key="matId" class="text-[10px] font-mono font-bold bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-gray-300 px-2 py-0.5 rounded-full">
-                                                {{ getMaterialName(parseInt(matId)) }} × {{ qty }}/unit
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="px-5 py-4">
-                                        <div v-if="recipeOrders(recipe.id).length" class="flex flex-wrap gap-1">
-                                            <span v-for="o in recipeOrders(recipe.id)" :key="o.id" class="text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full ring-1 ring-indigo-100 dark:ring-indigo-800">
-                                                {{ o.jo_number }}
-                                            </span>
-                                        </div>
-                                        <span v-else class="text-[11px] text-slate-400 italic">Shared formulation</span>
-                                    </td>
-                                    <td class="px-5 py-4 text-center">
-                                        <div class="flex items-center justify-center gap-2">
-                                            <button v-if="canEditBom" @click="openEdit(recipe)" class="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:bg-indigo-600 hover:text-white hover:scale-110 transition-all" title="Edit">
-                                                <Edit2 class="w-4 h-4" />
-                                            </button>
-                                            <button v-if="canEditBom" @click="deleteRecipe(recipe.id)" class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-900/20 text-rose-400 hover:bg-rose-600 hover:text-white hover:scale-110 transition-all" title="Delete">
-                                                <Trash2 class="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <TransitionGroup v-else name="card" tag="div" class="grid gap-4 p-4 sm:p-5 xl:grid-cols-2">
+                        <article v-for="recipe in filteredRecipes" :key="recipe.id" role="button" tabindex="0" @click="openRecipe(recipe)" @keydown.enter="openRecipe(recipe)" @keydown.space.prevent="openRecipe(recipe)" class="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-700">
+                            <header class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50/80 to-white px-4 py-4 dark:border-zinc-800 dark:from-indigo-950/30 dark:to-zinc-900 sm:px-5">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <h2 class="truncate text-base font-black text-slate-900 dark:text-white">{{ recipeCardTitle(recipe) }}</h2>
+                                        <span v-if="recipe.sample_info" class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">Client approved</span>
+                                    </div>
+                                    <p class="mt-1 text-xs font-semibold text-slate-600 dark:text-zinc-300">{{ recipe.client?.company_name || getClientName(recipe.client_id) }}</p>
+                                    <p class="mt-1 text-[11px] text-slate-500">Updated {{ formatDateTime(recipe.updated_at || recipe.created_at) }}<span v-if="recipe.sample_info?.code"> · {{ recipe.sample_info.code }}</span></p>
+                                </div>
+                                <div v-if="canEditBom" class="flex shrink-0 gap-1.5">
+                                    <button type="button" @click.stop="openEdit(recipe)" class="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 hover:bg-indigo-600 hover:text-white dark:bg-zinc-800 dark:ring-zinc-700" title="Edit recipe"><Edit2 class="h-4 w-4" /></button>
+                                    <button type="button" @click.stop="deleteRecipe(recipe.id)" class="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-rose-500 shadow-sm ring-1 ring-slate-200 hover:bg-rose-600 hover:text-white dark:bg-zinc-800 dark:ring-zinc-700" title="Delete recipe"><Trash2 class="h-4 w-4" /></button>
+                                </div>
+                            </header>
+
+                            <div class="space-y-3 p-4 sm:p-5">
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800/60"><p class="text-[10px] font-black uppercase tracking-wide text-slate-500">Yarn type</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-zinc-100">{{ recipe.yarn_type || '—' }}</p></div>
+                                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800/60"><p class="text-[10px] font-black uppercase tracking-wide text-slate-500">Dye color</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-zinc-100">{{ recipe.dye_color || '—' }}</p></div>
+                                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800/60"><p class="text-[10px] font-black uppercase tracking-wide text-slate-500">Weave / fabric design</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-zinc-100">{{ recipe.weave_design || recipe.sample_info?.fabric_design || '—' }}</p></div>
+                                    <div v-if="recipe.sample_info" class="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800/60"><p class="text-[10px] font-black uppercase tracking-wide text-slate-500">Sample specifications</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-zinc-100"><span v-if="recipe.sample_info.gsm">{{ recipe.sample_info.gsm }} GSM</span><span v-if="recipe.sample_info.gsm && recipe.sample_info.texture"> · </span><span v-if="recipe.sample_info.texture">{{ recipe.sample_info.texture }} texture</span><span v-if="!recipe.sample_info.gsm && !recipe.sample_info.texture">—</span></p></div>
+                                </div>
+
+                                <div v-if="recipe.sample_info?.image_path" class="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-zinc-700" @click.stop>
+                                    <img v-if="!String(recipe.sample_info.image_path).toLowerCase().endsWith('.pdf')" :src="`/storage/${recipe.sample_info.image_path}`" alt="Approved fabric sample" class="h-14 w-14 rounded-lg border border-slate-200 bg-white object-cover dark:border-zinc-700 dark:bg-zinc-800" />
+                                    <span class="min-w-0 flex-1 text-xs font-semibold text-slate-600 dark:text-zinc-300">{{ recipe.sample_info.code }} approved swatch</span>
+                                    <button type="button" @click.stop="openSamplePreview(recipe.sample_info)" class="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300">{{ String(recipe.sample_info.image_path).toLowerCase().endsWith('.pdf') ? 'View sample PDF' : 'View sample' }}</button>
+                                </div>
+                                <p class="text-right text-[11px] font-bold text-indigo-600 transition group-hover:text-indigo-700 dark:text-indigo-300">View full recipe <span aria-hidden="true">→</span></p>
+                            </div>
+                        </article>
                     </TransitionGroup>
                     <div class="px-5 py-3 border-t border-gray-100 dark:border-zinc-800 text-xs text-slate-400 dark:text-gray-500 font-medium">
                         Total: {{ filteredRecipes.length }} recipes
@@ -290,6 +312,82 @@ const getMaterialName = (id) => {
                 </div>
             </div>
         </div>
+
+        <!-- Full recipe details -->
+        <Teleport to="body">
+            <Transition name="modal">
+                <div v-if="selectedRecipe" class="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm" @click.self="selectedRecipe = null" @keydown.esc="selectedRecipe = null">
+                    <section class="modal-panel my-6 w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900" role="dialog" aria-modal="true" aria-labelledby="recipe-modal-title">
+                        <header class="relative overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-5 text-white sm:p-6">
+                            <div class="absolute -right-12 -top-16 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
+                            <div class="relative flex items-start justify-between gap-4">
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2"><h2 id="recipe-modal-title" class="text-xl font-black">{{ recipeCardTitle(selectedRecipe) }}</h2><span v-if="selectedRecipe.sample_info" class="rounded-full bg-emerald-300/20 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-100">Client approved</span></div>
+                                    <p class="mt-1 text-sm text-blue-100">{{ selectedRecipe.client?.company_name || getClientName(selectedRecipe.client_id) }}<span v-if="selectedRecipe.sample_info?.code"> · {{ selectedRecipe.sample_info.code }}</span></p>
+                                </div>
+                                <button type="button" @click="selectedRecipe = null" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 transition hover:bg-white/25" aria-label="Close recipe details"><X class="h-4 w-4" /></button>
+                            </div>
+                        </header>
+                        <div class="max-h-[75vh] space-y-5 overflow-y-auto p-4 sm:p-6">
+                            <div class="grid gap-2 sm:grid-cols-2">
+                                <div class="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800/60"><p class="text-[10px] font-black uppercase tracking-wide text-slate-500">Yarn type</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-zinc-100">{{ selectedRecipe.yarn_type || '—' }}</p></div>
+                                <div class="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800/60"><p class="text-[10px] font-black uppercase tracking-wide text-slate-500">Dye color</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-zinc-100">{{ selectedRecipe.dye_color || '—' }}</p></div>
+                                <div class="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800/60"><p class="text-[10px] font-black uppercase tracking-wide text-slate-500">Weave / fabric design</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-zinc-100">{{ selectedRecipe.weave_design || selectedRecipe.sample_info?.fabric_design || '—' }}</p></div>
+                                <div v-if="selectedRecipe.sample_info" class="rounded-xl bg-slate-50 p-3 dark:bg-zinc-800/60"><p class="text-[10px] font-black uppercase tracking-wide text-slate-500">Sample specifications</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-zinc-100"><span v-if="selectedRecipe.sample_info.gsm">{{ selectedRecipe.sample_info.gsm }} GSM</span><span v-if="selectedRecipe.sample_info.gsm && selectedRecipe.sample_info.texture"> · </span><span v-if="selectedRecipe.sample_info.texture">{{ selectedRecipe.sample_info.texture }} texture</span><span v-if="!selectedRecipe.sample_info.gsm && !selectedRecipe.sample_info.texture">—</span></p></div>
+                            </div>
+
+                            <div v-if="selectedRecipe.sample_info?.image_path" class="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-zinc-700">
+                                <img v-if="!String(selectedRecipe.sample_info.image_path).toLowerCase().endsWith('.pdf')" :src="`/storage/${selectedRecipe.sample_info.image_path}`" alt="Approved fabric sample" class="h-20 w-20 rounded-lg border border-slate-200 bg-white object-cover dark:border-zinc-700 dark:bg-zinc-800" />
+                                <span class="min-w-0 flex-1 text-xs font-semibold text-slate-600 dark:text-zinc-300">{{ selectedRecipe.sample_info.code }} approved swatch</span>
+                                <button type="button" @click="openSamplePreview(selectedRecipe.sample_info)" class="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300">{{ String(selectedRecipe.sample_info.image_path).toLowerCase().endsWith('.pdf') ? 'View sample PDF' : 'View sample' }}</button>
+                            </div>
+
+                            <section v-if="approvedFormulaSections(selectedRecipe).length" class="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+                                <div class="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 class="text-sm font-black uppercase tracking-wide text-indigo-900 dark:text-indigo-200">Approved lab recipe</h3><p class="mt-1 text-xs text-indigo-700 dark:text-indigo-300">The exact formulation approved for this sample.</p></div><span v-if="selectedRecipe.approved_formula?.liquor_ratio" class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 dark:bg-zinc-900 dark:text-zinc-300">Liquor ratio {{ selectedRecipe.approved_formula.liquor_ratio }}</span></div>
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <div v-for="section in approvedFormulaSections(selectedRecipe)" :key="section.label" class="rounded-xl bg-white p-3 dark:bg-zinc-900">
+                                        <h4 class="text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-400">{{ section.label }}</h4>
+                                        <div class="mt-2 space-y-2">
+                                            <div v-for="(row, index) in section.rows" :key="row.material_id || row.name || index" class="flex items-start justify-between gap-3 border-b border-slate-100 pb-2 text-xs last:border-0 last:pb-0 dark:border-zinc-800"><span class="min-w-0 font-semibold text-slate-700 dark:text-zinc-200">{{ row.name || row.material_name || 'Material' }}<span v-if="row.production_quantity != null" class="mt-1 block font-mono text-[10px] font-medium text-slate-500 dark:text-zinc-400">{{ Number(row.production_quantity).toFixed(4) }} kg / unit for production</span></span><span class="shrink-0 font-mono font-bold text-indigo-700 dark:text-indigo-300">{{ section.amount(row) }}</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p v-if="selectedRecipe.approved_formula?.notes" class="mt-3 rounded-xl bg-white/80 p-3 text-xs text-slate-600 dark:bg-zinc-900/80 dark:text-zinc-300"><span class="font-bold">Lab notes:</span> {{ selectedRecipe.approved_formula.notes }}</p>
+                                <p v-if="!approvedFormulaSections(selectedRecipe).length" class="text-xs text-slate-500">No formulation details were saved for this recipe.</p>
+                            </section>
+                            <section v-else class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">No approved lab formula is linked to this recipe.</section>
+
+                            <section v-if="!approvedFormulaSections(selectedRecipe).length && selectedRecipe.formula_materials?.length" class="rounded-2xl border border-slate-200 p-4 dark:border-zinc-700">
+                                <div class="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 class="text-sm font-black uppercase tracking-wide text-slate-800 dark:text-zinc-100">Production material quantities</h3><p class="mt-1 text-xs text-slate-500">Normalized kg of each material per unit of fabric.</p></div><span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">{{ selectedRecipe.formula_materials?.length || 0 }} materials</span></div>
+                                <div v-if="selectedRecipe.formula_materials?.length" class="divide-y divide-slate-100 dark:divide-zinc-800">
+                                    <div v-for="material in selectedRecipe.formula_materials" :key="material.material_id" class="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"><div class="min-w-0"><p class="text-xs font-bold text-slate-800 dark:text-zinc-100">{{ material.name }}</p><p v-if="material.mat_id" class="mt-0.5 font-mono text-[10px] text-slate-400">{{ material.mat_id }}</p></div><p class="font-mono text-xs font-black text-slate-700 dark:text-zinc-200">{{ Number(material.quantity).toFixed(4) }} kg / unit</p></div>
+                                </div>
+                                <p v-else class="text-xs text-slate-400">No material quantities were recorded.</p>
+                            </section>
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-zinc-800"><div v-if="recipeOrders(selectedRecipe.id).length" class="flex flex-wrap items-center gap-1.5"><span class="text-[10px] font-black uppercase tracking-wide text-slate-400">Used by</span><span v-for="order in recipeOrders(selectedRecipe.id)" :key="order.id" class="rounded-full bg-indigo-50 px-2.5 py-1 font-mono text-[10px] font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">{{ order.jo_number }}</span></div><span v-else class="text-[11px] italic text-slate-400">Not assigned to an order</span><span class="text-[10px] text-slate-400">Updated {{ formatDateTime(selectedRecipe.updated_at || selectedRecipe.created_at) }}<span v-if="selectedRecipe.sample_info?.approved_at"> · Approved {{ formatDateTime(selectedRecipe.sample_info.approved_at) }}</span></span></div>
+                        </div>
+                    </section>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- Fabric sample preview -->
+        <Teleport to="body">
+            <Transition name="modal">
+                <div v-if="samplePreview" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm sm:p-6" @click.self="samplePreview = null" @keydown.esc="samplePreview = null">
+                    <section class="modal-panel relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-slate-900 shadow-2xl" role="dialog" aria-modal="true" aria-label="Fabric sample preview">
+                        <header class="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 text-white sm:px-5">
+                            <div class="min-w-0"><h2 class="truncate text-sm font-black">Fabric sample</h2><p class="truncate text-xs text-slate-300">{{ samplePreview.code }} approved swatch</p></div>
+                            <button type="button" @click="samplePreview = null" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 transition hover:bg-white/20" aria-label="Close sample preview"><X class="h-4 w-4" /></button>
+                        </header>
+                        <div class="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-black/30 p-2 sm:p-4">
+                            <iframe v-if="String(samplePreview.image_path).toLowerCase().endsWith('.pdf')" :src="`/storage/${samplePreview.image_path}`" title="Fabric sample PDF" class="h-[75vh] w-full rounded-lg bg-white" />
+                            <img v-else :src="`/storage/${samplePreview.image_path}`" :alt="`${samplePreview.code} fabric sample`" class="max-h-[78vh] max-w-full rounded-lg object-contain shadow-xl" />
+                        </div>
+                    </section>
+                </div>
+            </Transition>
+        </Teleport>
 
         <!-- Edit Recipe Modal -->
         <Teleport to="body">
@@ -353,7 +451,7 @@ const getMaterialName = (id) => {
                                     <div class="flex flex-col sm:flex-row gap-2 mb-4">
                                         <select v-model="selectedMaterialId" class="flex-1 px-3 py-2.5 text-sm bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-700 rounded-2xl text-gray-900 dark:text-white outline-none">
                                             <option value="">Select material...</option>
-                                            <option v-for="mat in materials" :key="mat.id" :value="mat.id">{{ mat.mat_id }} – {{ mat.name }} ({{ mat.unit }})</option>
+                                            <option v-for="mat in materials" :key="mat.id" :value="mat.id">{{ mat.mat_id }} – {{ mat.display_name || mat.name }} ({{ mat.unit }})</option>
                                         </select>
                                         <input v-model.number="newMaterialQty" type="number" step="0.0001" min="0.0001" placeholder="kg/unit"
                                             class="w-full sm:w-32 px-3 py-2.5 text-sm bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-700 rounded-2xl text-gray-900 dark:text-white outline-none font-mono font-bold" />

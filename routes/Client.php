@@ -28,8 +28,8 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest:client')->group(function () {
     Route::get('client/register', [ClientAuthController::class, 'create'])->name('client.register');
     Route::post('client/register', [ClientAuthController::class, 'store'])->middleware('throttle:6,1')->name('client.register.store');
-    Route::get('client/login', [ClientAuthController::class, 'showLogin'])->name('client.login');
-    Route::post('client/login', [ClientAuthController::class, 'login'])->middleware('throttle:10,1')->name('client.login.store');
+    Route::get('client/login', fn () => redirect()->route('login'))->name('client.login');
+    Route::post('client/login', fn () => redirect()->route('login'))->name('client.login.store');
     Route::post('client/password/recover', [PasswordRecoveryController::class, 'client'])->middleware('throttle:6,1')->name('client.password.recover');
 });
 
@@ -69,12 +69,17 @@ Route::middleware(['auth:client', 'client.access'])->prefix('partner')->name('cl
         ->name('client.quotation.download');
     // CORRECTED: send-po route name
     Route::post('/conversation/{inquiry}/send-po', [ClientConversationController::class, 'sendPO'])->name('conversation.send-po');
+    Route::post('/conversations/{inquiry}/sample-requests', [ClientConversationController::class, 'requestFabricSample'])->name('conversation.sample-request');
 
     // NEW: Attachment approval by client
     Route::post('/conversation/attachment/{attachment}/approve', [ClientConversationController::class, 'approveAttachment'])
         ->name('conversation.attachment.approve');
 
-    // Fabric sample loop: approve the forwarded sample or request a color adjustment.
+    // Fabric sample delivery acknowledgements and final decision.
+    Route::post('/sample-requests/{sampleRequest}/noted', [ClientConversationController::class, 'noteSampleDelivery'])
+        ->name('sample.noted');
+    Route::post('/sample-requests/{sampleRequest}/received', [ClientConversationController::class, 'receiveDeliveredSample'])
+        ->name('sample.received');
     Route::post('/sample-requests/{sampleRequest}/approve', [ClientConversationController::class, 'approveSample'])
         ->name('sample.approve');
     Route::post('/sample-requests/{sampleRequest}/adjust', [ClientConversationController::class, 'adjustSample'])

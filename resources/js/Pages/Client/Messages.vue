@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
@@ -9,6 +10,7 @@ import {
     PhoneOutgoing, PhoneMissed, Ban,
 } from 'lucide-vue-next';
 import { usePartnerCallCenter } from '@/composables/crm/usePartnerCallCenter';
+import { csrfFetch } from '@/lib/http';
 
 const props = defineProps({
     messages: { type: Array, default: () => [] },
@@ -42,8 +44,6 @@ const partnerCall = usePartnerCallCenter();
 
 const lastMessageId = computed(() => threadMessages.value.reduce((m, x) => Math.max(m, typeof x.id === 'number' ? x.id : 0), 0));
 const callHistory = computed(() => threadMessages.value.filter((m) => m.type === 'call').slice().sort((a, b) => (b.id ?? 0) - (a.id ?? 0)));
-
-const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
 const scrollToBottom = () => {
     nextTick(() => {
@@ -92,12 +92,11 @@ const measurePanel = () => {
 };
 
 const postJson = async (url, body) => {
-    const res = await fetch(url, {
+    const res = await csrfFetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
-            'X-CSRF-TOKEN': csrfToken(),
             'X-Requested-With': 'XMLHttpRequest',
         },
         credentials: 'same-origin',
@@ -144,11 +143,12 @@ const sendMessage = async () => {
         const form = new FormData();
         form.append('body', text);
         if (reply?.id) form.append('reply_to_id', reply.id);
-        const res = await fetch(route('client.messages.store'), {
+        const res = await csrfFetch(route('client.messages.store'), {
             method: 'POST',
-            headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin',
             body: form,
+            __suppressSuccessFeedback: true,
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.message ?? `Send failed (HTTP ${res.status})`);
@@ -175,11 +175,12 @@ const onFilesChosen = async (event) => {
         const form = new FormData();
         files.forEach((f) => form.append('files[]', f));
         if (reply?.id) form.append('reply_to_id', reply.id);
-        const res = await fetch(route('client.messages.store'), {
+        const res = await csrfFetch(route('client.messages.store'), {
             method: 'POST',
-            headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin',
             body: form,
+            __suppressSuccessFeedback: true,
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.message ?? `Upload failed (HTTP ${res.status})`);
@@ -218,7 +219,7 @@ const react = async (m, emoji) => {
 const unsend = async (m, scope) => {
     openMenuId.value = null;
     const label = scope === 'everyone' ? 'Unsend for everyone? This cannot be undone.' : 'Remove this message for you?';
-    if (!window.confirm(label)) return;
+    if (!await confirmModal(label)) return;
     try {
         if (scope === 'everyone') {
             const data = await postJson(route('client.messages.unsend-for-everyone', m.id));

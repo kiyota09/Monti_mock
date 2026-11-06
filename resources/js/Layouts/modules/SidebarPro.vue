@@ -19,7 +19,6 @@ export const proModule = {
             { label: 'Receipts', href: route('pro.manager.receipt'), icon: Send, permKey: 'receipt' },
             { label: 'Order Tracking', href: route('pro.manager.tracking'), icon: Navigation, permKey: 'tracking' },
         ]
-        if (isCEO) return all
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         if (userPosition === 'manager' && user?.role === 'PRO' && !ctx.hasExplicitModuleGrants('PRO')) return all

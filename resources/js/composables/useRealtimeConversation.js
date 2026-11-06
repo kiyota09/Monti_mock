@@ -25,6 +25,7 @@ export function useRealtimeConversation({
     feedUrl,
     typingUrl,
     sendUrl,
+    suppressSuccessFeedback = true,
     onNewMessages = () => {},
     pollInterval = 2500,
 }) {
@@ -82,6 +83,7 @@ export function useRealtimeConversation({
             files.forEach((f, i) => fd.append(`files[${i}]`, f));
             const { data } = await axios.post(sendUrl, fd, {
                 headers: { Accept: 'application/json' },
+                ...(suppressSuccessFeedback ? { __suppressSuccessFeedback: true } : {}),
             });
             if (data?.message) appendMessages([data.message]);
             onNewMessages(data?.message ? [data.message] : []);

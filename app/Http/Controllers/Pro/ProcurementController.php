@@ -60,7 +60,7 @@ class ProcurementController extends Controller
                 'id' => $r->id,
                 'req_number' => $r->req_number,
                 'material_id' => $r->material_id,
-                'material_name' => $r->material?->name ?? $r->material_name,
+                'material_name' => $r->material?->display_name ?? $r->material_name,
                 'category' => $r->material?->category ?? $r->category,
                 'unit' => $r->material?->unit ?? $r->unit,
                 'required_qty' => $r->required_qty,
@@ -128,7 +128,7 @@ class ProcurementController extends Controller
 
                 return redirect()->back()->withErrors([
                     'error' => 'RFQ blocked: ' . $offenders->pluck('business_name')->implode(', ')
-                        . ' do(es) not carry ' . ($mr->material?->name ?? $mr->material_name)
+                        . ' do(es) not carry ' . ($mr->material?->display_name ?? $mr->material_name)
                         . ' in their product catalog.',
                 ]);
             }
@@ -138,7 +138,7 @@ class ProcurementController extends Controller
                 'mr_ref' => $mr->req_number,
                 'mr_id' => $mr->id,
                 'material_id' => $mr->material_id,
-                'material_name' => $mr->material_name,
+                'material_name' => $mr->material?->display_name ?? $mr->material_name,
                 'category' => $mr->category,
                 'unit' => $mr->unit,
                 'required_qty' => $mr->required_qty,
@@ -169,14 +169,14 @@ class ProcurementController extends Controller
      */
     public function supplierQuotations()
     {
-        $rfqs = RequestForQuotation::with(['responses.supplier'])
+        $rfqs = RequestForQuotation::with(['responses.supplier', 'material'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(fn ($rfq) => [
                 'id' => $rfq->id,
                 'rfq_number' => $rfq->rfq_number,
                 'mr_ref' => $rfq->mr_ref,
-                'material_name' => $rfq->material_name,
+                'material_name' => $rfq->material?->display_name ?? $rfq->material_name,
                 'category' => $rfq->category,
                 'unit' => $rfq->unit,
                 'required_qty' => $rfq->required_qty,
@@ -248,7 +248,7 @@ class ProcurementController extends Controller
             // 5. Add line item to PO
             $po->items()->create([
                 'material_id' => $rfq->material_id,
-                'material_name' => $rfq->material_name,
+                'material_name' => $rfq->material?->display_name ?? $rfq->material_name,
                 'qty' => $rfq->required_qty,
                 'unit' => $rfq->unit,
                 'unit_price' => $response->unit_price,

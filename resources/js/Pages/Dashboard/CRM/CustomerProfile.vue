@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, watch } from 'vue';
 import { Head, router, useForm, Link, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -267,8 +268,8 @@ const confirmApprove = () => {
         },
     });
 };
-const rejectContact = (c) => {
-    if (!confirm(`Reject ${c.name}'s representative registration?`)) return;
+const rejectContact = async (c) => {
+    if (!await confirmModal(`Reject ${c.name}'s representative registration?`)) return;
     router.post(route('crm.contacts.reject-account', c.id), {}, { preserveScroll: true });
 };
 </script>

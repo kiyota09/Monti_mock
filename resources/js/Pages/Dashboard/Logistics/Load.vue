@@ -112,7 +112,7 @@
                                     </th>
                                     <th class="px-6 py-4">Package #</th>
                                     <th class="px-6 py-4">Product</th>
-                                    <th class="px-6 py-4 text-center">Quantity</th>
+                                    <th class="px-6 py-4 text-center">Load Weight</th>
                                     <th class="px-6 py-4">From Order</th>
                                     <th class="px-6 py-4 text-center">Created At</th>
                                 </tr>
@@ -120,7 +120,7 @@
                             <TransitionGroup name="card" tag="tbody" class="divide-y divide-gray-50 dark:divide-zinc-800">
                                 <tr v-for="(pkg, i) in filteredPackages" :key="pkg.id" :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }" class="group text-sm hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
                                     <td class="px-6 py-3">
-                                        <input v-if="canEditLoad" type="checkbox" v-model="selectedIds" :value="pkg.id" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <input v-if="canEditLoad" type="checkbox" v-model="selectedIds" :value="pkg.id" :disabled="pkg.weight_kg == null || Number(pkg.weight_kg) <= 0" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                     </td>
                                     <td class="px-6 py-3">
                                         <div class="flex items-center gap-3">
@@ -134,7 +134,7 @@
                                         <p class="font-bold text-gray-900 dark:text-white">{{ pkg.product?.name || '—' }}</p>
                                         <p class="text-[10px] text-gray-400">{{ pkg.product?.sku }}</p>
                                     </td>
-                                    <td class="px-6 py-3 text-center font-bold text-gray-900 dark:text-white">{{ pkg.quantity }} pcs</td>
+                                    <td class="px-6 py-3 text-center font-bold text-gray-900 dark:text-white">{{ pkg.weight_kg == null ? 'Weight missing' : `${pkg.weight_kg} kg` }}</td>
                                     <td class="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">
                                         {{ pkg.manufacturing_order?.purchase_order?.po_number || '—' }}
                                     </td>
@@ -183,7 +183,7 @@
                                     <th class="px-6 py-4">Package #</th>
                                     <th class="px-6 py-4">Product</th>
                                     <th class="px-6 py-4">Destination Client</th>
-                                    <th class="px-6 py-4 text-center">Quantity</th>
+                                    <th class="px-6 py-4 text-center">Load Weight</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-50 dark:divide-zinc-800">
@@ -191,7 +191,7 @@
                                     <td class="px-6 py-3 font-mono text-sm font-black text-gray-900 dark:text-white">{{ pkg.package_number }}</td>
                                     <td class="px-6 py-3 font-bold text-gray-700 dark:text-gray-200">{{ pkg.product?.name || '—' }}</td>
                                     <td class="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{{ pkg.client_name || 'Unassigned' }}</td>
-                                    <td class="px-6 py-3 text-center font-bold text-gray-900 dark:text-white">{{ pkg.quantity }} pcs</td>
+                                    <td class="px-6 py-3 text-center font-bold text-gray-900 dark:text-white">{{ pkg.weight_kg == null ? 'Weight missing' : `${pkg.weight_kg} kg` }}</td>
                                 </tr>
                             </tbody>
                         </table>

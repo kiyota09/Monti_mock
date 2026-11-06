@@ -32,9 +32,6 @@ export const crmModule = {
             { label: 'Company Posts', href: route('crm.posts'), icon: Megaphone, permKey: 'campaigns' },
             { label: 'Due Diligence', href: route('crm.investigation.index'), icon: AlertCircle, permKey: 'investigation' },
         ]
-        if (isCEO) return all
-        // President & Vice President (COO / vice_president): full CRM access.
-        if (user?.role === 'COO' || user?.position === 'vice_president') return all
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         if (userPosition === 'manager' && user?.role === 'CRM' && !ctx.hasExplicitModuleGrants('CRM')) return all

@@ -72,5 +72,7 @@ class ManufacturingRoleAccountsSeeder extends Seeder
 
             $roleIndex++;
         }
+
+        $this->call(ManufacturingHiringLifecycleSeeder::class);
     }
 }

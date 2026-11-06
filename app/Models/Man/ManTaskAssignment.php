@@ -22,11 +22,16 @@ class ManTaskAssignment extends Model
         'status',
         'sequence',
         'notes',
+        'assigned_weight',
+        'dyeing_remake_request_id',
+        'machine_ids',
         'completed_at',
     ];
 
     protected $casts = [
         'completed_at' => 'datetime',
+        'assigned_weight' => 'decimal:2',
+        'machine_ids' => 'array',
     ];
 
     public function manufacturingOrder()
@@ -52,6 +57,11 @@ class ManTaskAssignment extends Model
     public function assigner()
     {
         return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    public function dyeingRemakeRequest()
+    {
+        return $this->belongsTo(DyeingRemakeRequest::class, 'dyeing_remake_request_id');
     }
 
     // ─── Scopes ───────────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@ const props = defineProps({
 
 <template>
     <AuthenticatedLayout>
-        <Head title="Lab Chemist Dashboard" />
+        <Head title="Color Request Dashboard" />
         <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
             <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
 
@@ -28,19 +28,19 @@ const props = defineProps({
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                                <Sparkles class="h-3.5 w-3.5" /> MAN · Dyeing Lab Chemist
+                                <Sparkles class="h-3.5 w-3.5" /> MAN · Color Request
                             </p>
-                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Lab Chemist Dashboard</h1>
+                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Color Request Dashboard</h1>
                             <p class="text-sm text-blue-100/90">{{ stats.pending }} open dips · FTR {{ labMetrics.ftr_rate }}% · {{ stats.total_today }} logged today</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <Link :href="route('man.staff.dyeing-lab-chemist.page')"
                                 class="rounded-2xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wide text-indigo-700 shadow-lg hover:scale-105 active:scale-95 transition-all duration-200">
-                                Shade Development
+                                Color Request
                             </Link>
-                            <Link :href="route('man.staff.dyeing-lab-chemist.transfer')"
+                            <Link :href="route('man.staff.dyeing-lab-chemist.pantones')"
                                 class="rounded-2xl bg-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white ring-1 ring-white/25 backdrop-blur hover:bg-white/25 active:scale-95 transition-all duration-200">
-                                Bulk Transfer
+                                Pantones
                             </Link>
                             <Link :href="route('man.staff.dyeing-lab-chemist.history')"
                                 class="rounded-2xl bg-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white ring-1 ring-white/25 backdrop-blur hover:bg-white/25 active:scale-95 transition-all duration-200">

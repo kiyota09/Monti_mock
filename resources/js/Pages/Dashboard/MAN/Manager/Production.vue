@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, computed, watchEffect } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -6,9 +6,10 @@ import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
 const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const humanize = (value) => String(value ?? '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 import {
     Package, Shirt, Droplet, Factory,
-    CheckCircle, XCircle, ClipboardList,
+    ClipboardList,
     Wind, Flame, Truck,
     AlertTriangle, Sparkles,
 } from 'lucide-vue-next';
@@ -16,27 +17,36 @@ import {
 const props = defineProps({
     department:   { type: String, default: null },
     fabrics:      Array,
-    dyeJobs:      Array,
-    softenerJobs: Array,
+    dyeingStages: { type: Array, default: () => [] },
     squeezerJobs: Array,
     ironJobs:     Array,
     packages:     Array, // Now includes status, product_name, product_sku, quantity, fabric_code, yarn_type, weight, operator
+    finishingReadyOrders: { type: Array, default: () => [] },
+    knittingHandoffs: { type: Array, default: () => [] },
 });
 
-// ─── Tabs (department-scoped for supervisors) ─────────────────────────────────
+const declineReasons = ref({});
+const releaseKnittingHandoff = (handoff) => router.post(route('man.production.knitting.release', handoff.id), {}, { preserveScroll: true });
+const declineKnittingHandoff = (handoff) => router.post(route('man.production.knitting.decline', handoff.id), {
+    reason: declineReasons.value[handoff.id] || '',
+}, { preserveScroll: true });
+
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Tabs (department-scoped for supervisors) ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 const DEPT_TABS = {
     knitting:  ['fabrics'],
-    dyeing:    ['dye', 'softener', 'squeezer', 'iron'],
-    finishing: ['packed'],
+    dyeing:    ['bleaching', 'pre_treatment', 'color', 'post_treatment'],
+    finishing: ['squeezer', 'iron', 'packed'],
 };
 
 const allTabs = computed(() => [
     { key: 'fabrics',  label: 'Fabrics',   icon: Shirt,    count: props.fabrics?.length      ?? 0 },
-    { key: 'dye',      label: 'Dye',       icon: Droplet,  count: props.dyeJobs?.length      ?? 0 },
-    { key: 'softener', label: 'Softener',  icon: Wind,     count: props.softenerJobs?.length ?? 0 },
-    { key: 'squeezer', label: 'Squeezer',  icon: Factory,  count: props.squeezerJobs?.length ?? 0 },
-    { key: 'iron',     label: 'Iron',      icon: Flame,    count: props.ironJobs?.length     ?? 0 },
-    { key: 'packed',   label: 'Packed',    icon: Package,  count: props.packages?.length     ?? 0 },
+    { key: 'bleaching', label: 'Bleaching', icon: Wind, count: props.dyeingStages.filter((item) => item.current_stage === 'bleaching').length },
+    { key: 'pre_treatment', label: 'Pre Treatment', icon: Sparkles, count: props.dyeingStages.filter((item) => item.current_stage === 'pre_treatment').length },
+    { key: 'color', label: 'Color', icon: Droplet, count: props.dyeingStages.filter((item) => item.current_stage === 'color').length },
+    { key: 'post_treatment', label: 'Post Treatment', icon: Flame, count: props.dyeingStages.filter((item) => item.current_stage === 'post_treatment').length },
+    { key: 'squeezer', label: 'Finishing Squeezer',  icon: Factory,  count: props.squeezerJobs?.length ?? 0 },
+    { key: 'iron',     label: 'Finishing Heatsetting', icon: Flame,    count: props.ironJobs?.length     ?? 0 },
+    { key: 'packed',   label: 'Packed / Logistics', icon: Package, count: (props.packages?.length ?? 0) + (props.finishingReadyOrders?.length ?? 0) },
 ]);
 
 const tabs = computed(() => {
@@ -44,15 +54,15 @@ const tabs = computed(() => {
     return allowed ? allTabs.value.filter((t) => allowed.includes(t.key)) : allTabs.value;
 });
 
-// ─── Active Tab ───────────────────────────────────────────────────────────────
-const activeTab = ref('fabrics');
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Active Tab ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+const activeTab = ref(props.finishingReadyOrders?.length || props.department === 'finishing' ? 'packed' : 'fabrics');
 watchEffect(() => {
     if (!tabs.value.some((t) => t.key === activeTab.value)) {
         activeTab.value = tabs.value[0]?.key ?? 'fabrics';
     }
 });
 
-// ─── Confirm Modal ────────────────────────────────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Confirm Modal ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 const confirmModal   = ref(false);
 const confirmLabel   = ref('');
 const confirmSub     = ref('');
@@ -78,49 +88,22 @@ const cancelConfirm = () => {
     confirmAction.value  = null;
 };
 
-// ─── Actions (department supervisor gates) ─────────────────────────────────────
-const passFabric = (fabricId, destination) =>
-    router.post(route('man.gates.knitting.pass-fabric', fabricId), { action: 'approve', destination });
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Actions (department supervisor gates) ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+const dyeingStagesForActiveTab = computed(() => props.dyeingStages.filter((item) => item.current_stage === activeTab.value));
 
-const rejectFabricWithReason = (fabric) => {
-    const reason = prompt('Why is this fabric not good? The Job Order will be sent back to the knitting yarn staff to be made again:');
-    if (reason !== null && reason.trim() !== '') {
-        router.post(route('man.gates.knitting.pass-fabric', fabric.id), {
-            action: 'reject',
-            rejection_reason: reason.trim(),
-        }, { preserveScroll: true });
-    } else if (reason !== null) {
-        alert('A reason is required so the staff knows what to fix.');
-    }
+const reviewDyeingStage = (item, decision) => {
+    router.post(`/dashboard/man/production/dyeing-stages/${item.record_id}/review`, { decision }, { preserveScroll: true });
 };
 
-const passDye = (dyeId, action, rejectionReason = null) => {
-    const data = { action };
-    if (action === 'reject' && rejectionReason) {
-        data.rejection_reason = rejectionReason;
-    }
-    router.post(route('man.gates.dyeing.pass-dye', dyeId), data, {
-        preserveScroll: true,
-    });
+const requestDyeingReprocess = (item) => {
+    askConfirm(
+        'Return for reprocessing?',
+        `Return ${item.fabric_code} to ${humanize(item.current_stage)} for another attempt?`,
+        () => reviewDyeingStage(item, 'redo'),
+        'Return for reprocessing',
+        'danger',
+    );
 };
-
-const rejectDyeWithReason = (dye) => {
-    const reason = prompt('Please enter rejection reason:');
-    if (reason !== null && reason.trim() !== '') {
-        passDye(dye.id, 'reject', reason.trim());
-    } else if (reason !== null) {
-        alert('Rejection reason is required.');
-    }
-};
-
-const passSoftener = (softenerId, action) =>
-    router.post(route('man.gates.dyeing.pass-softener', softenerId), { action });
-
-const passSqueezer = (squeezerId) =>
-    router.post(route('man.gates.dyeing.pass-squeezer', squeezerId), { action: 'quality' });
-
-const passIron = (ironId) =>
-    router.post(route('man.gates.dyeing.pass-iron', ironId), { action: 'pack' });
 
 const pushToLogistics = (pkg) => {
     askConfirm(
@@ -130,6 +113,16 @@ const pushToLogistics = (pkg) => {
             preserveScroll: true,
         }),
         'Yes, Push',
+        'success',
+    );
+};
+
+const pushFinishingOrderToLogistics = (workOrder) => {
+    askConfirm(
+        'Push JO to Logistics?',
+        `Send ${workOrder.jo_number} and its quality-approved fabric rolls to Logistics?`,
+        () => router.post(route('man.manager.production.finishing.push-to-logistics', workOrder.id), {}, { preserveScroll: true }),
+        'Push JO',
         'success',
     );
 };
@@ -151,7 +144,7 @@ const pushToLogistics = (pkg) => {
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                                <Sparkles class="h-3.5 w-3.5" /> MAN · Manager
+                                <Sparkles class="h-3.5 w-3.5" /> MAN Ãƒâ€šÃ‚Â· Manager
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Production Pipeline</h1>
                             <span v-if="!canEditProduction" class="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">View only</span>
@@ -162,7 +155,7 @@ const pushToLogistics = (pkg) => {
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
-                                {{ (fabrics?.length ?? 0) + (dyeJobs?.length ?? 0) + (packages?.length ?? 0) }} items
+                                {{ (fabrics?.length ?? 0) + (dyeingStages?.length ?? 0) + (packages?.length ?? 0) + (finishingReadyOrders?.length ?? 0) }} items
                             </span>
                             <span class="hidden sm:flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 ring-1 ring-white/25 backdrop-blur">
                                 <span class="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
@@ -202,6 +195,18 @@ const pushToLogistics = (pkg) => {
 
                 <!-- FABRICS TAB -->
                 <div v-if="activeTab === 'fabrics'">
+                    <section v-if="department === 'knitting'" class="mb-6 rounded-3xl border border-indigo-200 bg-indigo-50/70 p-5 shadow-sm dark:border-indigo-900 dark:bg-indigo-950/30">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div><h2 class="text-lg font-black text-indigo-950 dark:text-indigo-100">Knitting supervisor review</h2><p class="mt-1 text-xs text-indigo-800 dark:text-indigo-200">Completed Job Orders submitted by Knitting Yarn staff appear here for release to Dyeing or return for remake.</p></div>
+                            <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700 dark:bg-zinc-900 dark:text-indigo-200">{{ knittingHandoffs.length }} awaiting review</span>
+                        </div>
+                        <p v-if="!knittingHandoffs.length" class="mt-4 rounded-xl bg-white/80 px-4 py-3 text-sm text-slate-500 dark:bg-zinc-900/70 dark:text-zinc-400">No completed Job Orders are waiting for review.</p>
+                        <article v-for="handoff in knittingHandoffs" :key="handoff.id" class="mt-4 rounded-2xl border border-indigo-100 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                            <div class="flex flex-wrap items-start justify-between gap-3"><div><p class="font-mono text-base font-black text-slate-900 dark:text-white">{{ handoff.jo_number }}</p><p class="mt-1 text-xs text-slate-500">{{ handoff.client }} Â· Submitted {{ handoff.submitted_at }}</p><p class="mt-1 text-xs font-semibold text-slate-700 dark:text-zinc-300">{{ handoff.approved_weight }} / {{ handoff.total_quantity }} kg inspector approved</p><p class="mt-1 text-xs text-slate-500">Knitting Yarn staff: {{ handoff.staff.join(', ') || 'Assigned staff' }}</p></div><div class="flex flex-wrap gap-2"><button type="button" :disabled="!canEditProduction || Number(handoff.approved_weight) + 0.001 < Number(handoff.total_quantity)" @click="releaseKnittingHandoff(handoff)" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">Push to Dyeing</button></div></div>
+                            <div class="mt-3 flex flex-wrap gap-1.5"><span v-for="fabric in handoff.fabrics" :key="fabric.code" class="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-700 dark:bg-zinc-800 dark:text-zinc-200">{{ fabric.code }} Â· {{ fabric.weight }} kg Â· {{ fabric.operator || 'Operator unknown' }}</span></div>
+                            <div v-if="canEditProduction" class="mt-4 flex flex-col gap-2 sm:flex-row"><textarea v-model="declineReasons[handoff.id]" rows="2" maxlength="500" placeholder="Reason for return (required)" class="min-w-0 flex-1 rounded-xl border-slate-200 text-xs dark:border-zinc-700 dark:bg-zinc-800"/><button type="button" :disabled="!declineReasons[handoff.id]?.trim()" @click="declineKnittingHandoff(handoff)" class="rounded-xl bg-rose-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">Decline and request remake</button></div>
+                        </article>
+                    </section>
                     <div v-if="!fabrics?.length"
                          class="animate-fade-up flex flex-col items-center justify-center py-20 text-center bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 shadow-sm">
                         <div class="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 rounded-full mb-4 animate-bounce-soft">
@@ -231,181 +236,79 @@ const pushToLogistics = (pkg) => {
                                     Weight: <span class="font-black text-gray-900 dark:text-white">{{ fabric.weight }} kg</span>
                                 </p>
                             </div>
-                            <div class="mt-auto flex flex-col sm:flex-row gap-2">
-                                <button v-if="canEditProduction"
-                                    @click="passFabric(fabric.id, 'dyeing')"
-                                    class="flex-1 flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 active:scale-95"
-                                >
-                                    <Droplet class="w-3.5 h-3.5" /> Pass to Dyeing
-                                </button>
-                                <button v-if="canEditProduction"
-                                    @click="rejectFabricWithReason(fabric)"
-                                    class="flex-1 flex items-center justify-center gap-1.5 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 hover:bg-rose-100 text-xs font-black px-3 py-2.5 rounded-2xl transition active:scale-95"
-                                >
-                                    <XCircle class="w-3.5 h-3.5" /> Not Good — Remake
-                                </button>
-                            </div>
+                            <p class="mt-auto rounded-xl bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Awaiting Knitting Inspector</p>
                         </div>
                     </TransitionGroup>
                 </div>
 
-                <!-- DYE TAB -->
-                <div v-if="activeTab === 'dye'">
-                    <div v-if="!dyeJobs?.length"
-                         class="animate-fade-up flex flex-col items-center justify-center py-20 text-center bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 shadow-sm">
-                        <div class="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 rounded-full mb-4 animate-bounce-soft">
-                            <Droplet class="h-9 w-9 text-indigo-400" />
-                        </div>
-                        <p class="text-sm font-black text-gray-700 dark:text-gray-200">No dye jobs in progress</p>
-                        <p class="text-xs text-gray-400 mt-1">New dye jobs will appear here.</p>
+                <!-- DYEING FLOW TABS -->
+                <div v-if="['bleaching', 'pre_treatment', 'color', 'post_treatment'].includes(activeTab)">
+                    <div v-if="!dyeingStagesForActiveTab.length" class="animate-fade-up flex flex-col items-center justify-center rounded-3xl border border-dashed bg-white py-20 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                        <Droplet class="mb-4 h-9 w-9 text-indigo-400" />
+                        <p class="text-sm font-black text-gray-700 dark:text-gray-200">No {{ humanize(activeTab) }} work in progress</p>
+                        <p class="mt-1 text-xs text-gray-400">Staff submissions will appear here when they are ready for supervisor review.</p>
                     </div>
-
-                    <TransitionGroup v-else name="card" tag="div" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                        <div
-                            v-for="(dye, i) in dyeJobs"
-                            :key="dye.id"
-                            :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }"
-                            class="group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 hover:scale-[1.01] transition-all duration-300 p-5 overflow-hidden"
-                        >
-                            <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                            <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-indigo-500 to-fuchsia-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-xs font-black text-gray-900 dark:text-white font-mono tracking-wide">{{ dye.code }}</span>
-                                <span class="inline-flex items-center gap-1 bg-blue-100 text-blue-700 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30 ring-1 text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
-                                    <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> Dyeing
-                                </span>
+                    <TransitionGroup v-else name="card" tag="div" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        <article v-for="(item, i) in dyeingStagesForActiveTab" :key="item.id" :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }" class="flex flex-col rounded-3xl border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                            <div class="flex items-start justify-between gap-3"><div><p class="font-mono text-sm font-black text-slate-900 dark:text-white">{{ item.jo_number || 'Job Order' }}</p><p class="mt-1 text-xs text-slate-500">Fabric {{ item.fabric_code }} Â· {{ item.weight }} kg</p></div><span class="rounded-full bg-indigo-100 px-2.5 py-1 text-[9px] font-black uppercase text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{{ humanize(item.current_stage) }}</span></div>
+                            <div class="mt-4 space-y-1.5 text-xs text-slate-600 dark:text-zinc-300"><p><b>Selected route:</b> {{ item.requires_bleaching ? 'Bleaching â†’ Pre Treatment â†’ Color â†’ Post Treatment' : 'Pre Treatment â†’ Color â†’ Post Treatment' }}</p><p v-if="item.color"><b>Color:</b> {{ item.color }}</p><p v-if="item.yarn_type"><b>Yarn:</b> {{ item.yarn_type }}</p><p><b>Batch / machine:</b> {{ item.batch_code }} Â· {{ item.machine_no }}</p><p><b>Submitted by:</b> {{ item.operator || 'Unknown staff member' }}</p><p v-if="item.attempt"><b>Inspection:</b> Attempt {{ item.attempt }} Â· Awaiting supervisor review</p></div>
+                            <div class="mt-3 rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800 dark:bg-indigo-500/10 dark:text-indigo-200">
+                                {{ item.stage_progress?.passed ?? 0 }} of {{ item.stage_progress?.total ?? 0 }} fabric codes passed {{ humanize(item.current_stage) }}
                             </div>
-                            <div class="mb-4">
-                                <p class="text-xs text-gray-500 dark:text-gray-400">
-                                    Fabric: <span class="font-bold text-gray-800 dark:text-gray-200 font-mono">{{ dye.fabric?.code }}</span>
-                                </p>
+                            <div class="mt-3 rounded-xl border border-slate-200 p-3 dark:border-zinc-700">
+                                <div class="flex items-center justify-between gap-2 text-xs font-black text-slate-800 dark:text-zinc-100">
+                                    <span>Fabric codes in this batch</span>
+                                    <span>{{ item.batch_total_weight_kg ?? 0 }} kg total</span>
+                                </div>
+                                <div class="mt-2 divide-y divide-slate-100 dark:divide-zinc-800">
+                                    <div v-for="fabric in item.batch_fabrics || []" :key="fabric.code" class="flex items-center justify-between gap-3 py-2 text-xs">
+                                        <span class="font-mono font-bold text-slate-800 dark:text-zinc-100">{{ fabric.code }}</span>
+                                        <span class="text-right text-slate-500 dark:text-zinc-400">{{ fabric.weight }} kg · {{ humanize(fabric.current_stage) }}</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="mt-auto flex flex-col sm:flex-row gap-2">
-                                <button v-if="canEditProduction"
-                                    @click="passDye(dye.id, 'quality')"
-                                    class="flex-1 flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 active:scale-95"
-                                >
-                                    <CheckCircle class="w-3.5 h-3.5" /> Quality Pass
-                                </button>
-                                <button v-if="canEditProduction"
-                                    @click="rejectDyeWithReason(dye)"
-                                    class="flex-1 flex items-center justify-center gap-1.5 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 hover:bg-rose-100 text-xs font-black px-3 py-2.5 rounded-2xl transition active:scale-95"
-                                >
-                                    <XCircle class="w-3.5 h-3.5" /> Reject
-                                </button>
+                            <div class="mt-3 rounded-xl border border-slate-200 p-3 dark:border-zinc-700">
+                                <p class="text-xs font-black text-slate-800 dark:text-zinc-100">{{ item.recipe_source || 'No production recipe linked to this Job Order' }}</p>
+                                <template v-if="item.recipe_source">
+                                    <div v-for="(rows, group) in item.recipe_groups" :key="group">
+                                        <div v-if="rows?.length" class="mt-2">
+                                            <p class="text-[10px] font-black uppercase tracking-wide text-slate-500">{{ humanize(group) }}</p>
+                                            <p v-for="(row, rowIndex) in rows" :key="`${group}-${rowIndex}`" class="mt-1 text-xs text-slate-700 dark:text-zinc-300">
+                                                {{ row.name }} · {{ row.dose }} {{ row.dose_unit }} → <b>{{ row.amount_kg }} kg</b>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
-                        </div>
+                            <div v-if="canEditProduction && item.record_id" class="mt-5 flex gap-2 border-t border-slate-100 pt-4 dark:border-zinc-800">
+                                <button type="button" @click="reviewDyeingStage(item, 'pass')" class="flex-1 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-black text-white transition hover:bg-emerald-800">Pass to next stage</button>
+                                <button type="button" @click="requestDyeingReprocess(item)" class="flex-1 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-black text-rose-700 transition hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">Reprocess</button>
+                            </div>
+                        </article>
                     </TransitionGroup>
                 </div>
 
-                <!-- SOFTENER TAB -->
-                <div v-if="activeTab === 'softener'">
-                    <div v-if="!softenerJobs?.length"
-                         class="animate-fade-up flex flex-col items-center justify-center py-20 text-center bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 shadow-sm">
-                        <div class="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 rounded-full mb-4 animate-bounce-soft">
-                            <Wind class="h-9 w-9 text-indigo-400" />
-                        </div>
-                        <p class="text-sm font-black text-gray-700 dark:text-gray-200">No softener jobs awaiting quality check</p>
-                        <p class="text-xs text-gray-400 mt-1">New softener jobs will appear here.</p>
-                    </div>
-
-                    <TransitionGroup v-else name="card" tag="div" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                        <div
-                            v-for="(job, i) in softenerJobs"
-                            :key="job.id"
-                            :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }"
-                            class="group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 hover:scale-[1.01] transition-all duration-300 p-5 overflow-hidden"
-                        >
-                            <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                            <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-indigo-500 to-fuchsia-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-xs font-black text-gray-900 dark:text-white font-mono tracking-wide">{{ job.code }}</span>
-                                <span
-                                    class="text-[10px] font-black uppercase px-2.5 py-1 rounded-full ring-1 inline-flex items-center gap-1"
-                                    :class="job.status === 'softened'
-                                        ? 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30'
-                                        : 'bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30'"
-                                >
-                                    <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ job.status }}
-                                </span>
-                            </div>
-                            <div class="mb-4">
-                                <p class="text-xs text-gray-500 dark:text-gray-400">
-                                    Fabric: <span class="font-bold text-gray-800 dark:text-gray-200 font-mono">{{ job.fabric?.code }}</span>
-                                </p>
-                            </div>
-                            <div v-if="job.status === 'softened'" class="mt-auto flex flex-col sm:flex-row gap-2">
-                                <button v-if="canEditProduction"
-                                    @click="passSoftener(job.id, 'quality')"
-                                    class="flex-1 flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 active:scale-95"
-                                >
-                                    <CheckCircle class="w-3.5 h-3.5" /> Pass to Squeezer
-                                </button>
-                                <button v-if="canEditProduction"
-                                    @click="passSoftener(job.id, 'resoften')"
-                                    class="flex-1 flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-black px-3 py-2.5 rounded-2xl transition active:scale-95"
-                                >
-                                    <Wind class="w-3.5 h-3.5" /> Resoften
-                                </button>
-                            </div>
-                            <div v-else class="mt-auto">
-                                <p class="text-xs text-gray-400 italic text-center py-1">Awaiting softening…</p>
-                            </div>
-                        </div>
-                    </TransitionGroup>
-                </div>
-
-                <!-- SQUEEZER TAB -->
+                <!-- FINISHING SQUEEZER TAB -->
                 <div v-if="activeTab === 'squeezer'">
-                    <div v-if="!squeezerJobs?.length"
-                         class="animate-fade-up flex flex-col items-center justify-center py-20 text-center bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 shadow-sm">
-                        <div class="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 rounded-full mb-4 animate-bounce-soft">
-                            <Factory class="h-9 w-9 text-indigo-400" />
-                        </div>
-                        <p class="text-sm font-black text-gray-700 dark:text-gray-200">No squeezer jobs in progress</p>
-                        <p class="text-xs text-gray-400 mt-1">New squeezer jobs will appear here.</p>
+                    <div v-if="!squeezerJobs?.length" class="animate-fade-up flex flex-col items-center justify-center rounded-3xl border border-dashed bg-white py-20 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                        <Factory class="mb-4 h-9 w-9 text-indigo-400"/><p class="text-sm font-black text-gray-700 dark:text-gray-200">No Finishing Squeezer jobs in progress</p>
                     </div>
-
-                    <TransitionGroup v-else name="card" tag="div" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                        <div
-                            v-for="(job, i) in squeezerJobs"
-                            :key="job.id"
-                            :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }"
-                            class="group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 hover:scale-[1.01] transition-all duration-300 p-5 overflow-hidden"
-                        >
-                            <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                            <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-indigo-500 to-fuchsia-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-xs font-black text-gray-900 dark:text-white font-mono tracking-wide">{{ job.code }}</span>
-                                <span class="inline-flex items-center gap-1 bg-blue-100 text-blue-700 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30 ring-1 text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
-                                    <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> Squeezer
-                                </span>
-                            </div>
-                            <div class="mb-4">
-                                <p class="text-xs text-gray-500 dark:text-gray-400">
-                                    Fabric: <span class="font-bold text-gray-800 dark:text-gray-200 font-mono">{{ job.softenerJob?.fabric?.code }}</span>
-                                </p>
-                            </div>
-                            <div class="mt-auto flex flex-col sm:flex-row gap-2">
-                                <button v-if="canEditProduction"
-                                    @click="passSqueezer(job.id)"
-                                    class="flex-1 flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 active:scale-95"
-                                >
-                                    <CheckCircle class="w-3.5 h-3.5" /> Pass to Iron
-                                </button>
-                            </div>
-                        </div>
+                    <TransitionGroup v-else name="card" tag="div" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        <article v-for="job in squeezerJobs" :key="job.id" class="flex flex-col rounded-3xl border bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                            <p class="font-mono text-sm font-black">{{ job.code }}</p><p class="mt-2 text-xs text-gray-500">Fabric: <span class="font-mono font-bold">{{ job.fabric?.code }}</span></p>
+                            <p class="mt-auto rounded-xl bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Awaiting Finishing Shrinkage Inspector</p>
+                        </article>
                     </TransitionGroup>
                 </div>
 
-                <!-- IRON TAB -->
+                <!-- FINISHING IRONING TAB -->
                 <div v-if="activeTab === 'iron'">
                     <div v-if="!ironJobs?.length"
                          class="animate-fade-up flex flex-col items-center justify-center py-20 text-center bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 shadow-sm">
                         <div class="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 rounded-full mb-4 animate-bounce-soft">
                             <Flame class="h-9 w-9 text-indigo-400" />
                         </div>
-                        <p class="text-sm font-black text-gray-700 dark:text-gray-200">No iron jobs in progress</p>
+                        <p class="text-sm font-black text-gray-700 dark:text-gray-200">No Finishing Heatsetting jobs in progress</p>
                         <p class="text-xs text-gray-400 mt-1">New iron jobs will appear here.</p>
                     </div>
 
@@ -426,33 +329,47 @@ const pushToLogistics = (pkg) => {
                             </div>
                             <div class="mb-4">
                                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                                    Fabric: <span class="font-bold text-gray-800 dark:text-gray-200 font-mono">{{ iron.squeezerJob?.softenerJob?.fabric?.code }}</span>
+                                    Fabric: <span class="font-bold text-gray-800 dark:text-gray-200 font-mono">{{ iron.squeezerJob?.fabric?.code }}</span>
                                 </p>
                             </div>
-                            <div class="mt-auto">
-                                <button v-if="canEditProduction"
-                                    @click="passIron(iron.id)"
-                                    class="w-full flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-3 py-2.5 rounded-2xl shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 active:scale-95"
-                                >
-                                    <Package class="w-3.5 h-3.5" /> Pass to Pack
-                                </button>
-                            </div>
+                            <p class="mt-auto rounded-xl bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Awaiting Finishing Shrinkage Inspector</p>
                         </div>
                     </TransitionGroup>
                 </div>
 
                 <!-- PACKED TAB -->
                 <div v-if="activeTab === 'packed'">
-                    <div v-if="!packages?.length"
+                    <div v-if="!packages?.length && !finishingReadyOrders?.length"
                          class="animate-fade-up flex flex-col items-center justify-center py-20 text-center bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 shadow-sm">
                         <div class="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 rounded-full mb-4 animate-bounce-soft">
                             <Package class="h-9 w-9 text-indigo-400" />
                         </div>
-                        <p class="text-sm font-black text-gray-700 dark:text-gray-200">No packages ready for assignment</p>
-                        <p class="text-xs text-gray-400 mt-1">Packed items will appear here.</p>
+                        <p class="text-sm font-black text-gray-700 dark:text-gray-200">No packages or quality-approved JOs ready</p>
+                        <p class="text-xs text-gray-400 mt-1">Packed packages and JOs that pass final Quality Check will appear here.</p>
                     </div>
 
-                    <TransitionGroup v-else name="card" tag="div" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <section v-if="finishingReadyOrders?.length" class="mb-6 space-y-3">
+                        <h2 class="text-sm font-black uppercase tracking-wide text-gray-700 dark:text-gray-200">Final Quality Check Passed · Ready for Logistics</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                            <article v-for="order in finishingReadyOrders" :key="`finishing-${order.id}`" class="rounded-3xl border border-emerald-200 bg-white p-5 shadow-sm dark:border-emerald-900 dark:bg-zinc-900">
+                                <div class="flex items-center justify-between gap-3">
+                                    <h3 class="font-mono text-sm font-black text-gray-900 dark:text-white">{{ order.jo_number || `JO #${order.id}` }}</h3>
+                                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">QC Passed</span>
+                                </div>
+                                <ul class="my-4 space-y-2 text-xs text-gray-600 dark:text-gray-300">
+                                    <li v-for="item in order.items" :key="item.code" class="flex justify-between gap-3">
+                                        <span class="font-mono font-bold">{{ item.code }}</span><span>{{ Number(item.weight).toLocaleString() }} kg</span>
+                                    </li>
+                                </ul>
+                                <div class="mb-4 border-t border-gray-100 pt-3 text-xs font-black text-gray-900 dark:border-zinc-800 dark:text-white">Total: {{ Number(order.total_weight_kg).toLocaleString() }} kg</div>
+                                <button v-if="canEditProduction" @click="pushFinishingOrderToLogistics(order)" class="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white transition hover:bg-emerald-700">
+                                    <Truck class="h-3.5 w-3.5" /> Push JO to Logistics
+                                </button>
+                            </article>
+                        </div>
+                    </section>
+
+                    <TransitionGroup v-if="packages?.length" name="card" tag="div" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                         <div
                             v-for="(pkg, i) in packages"
                             :key="pkg.id"
@@ -470,7 +387,7 @@ const pushToLogistics = (pkg) => {
                                         : 'bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30'"
                                 >
                                     <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-                                    {{ pkg.status === 'checked' ? 'Checked · ready' : 'Awaiting QC' }}
+                                    {{ pkg.status === 'checked' ? 'Checked Ãƒâ€šÃ‚Â· ready' : 'Awaiting QC' }}
                                 </span>
                             </div>
                             <div class="mb-4 space-y-1">

@@ -6,6 +6,7 @@ use App\Support\ManufacturingPages;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 class CheckPagePermission
@@ -15,8 +16,8 @@ class CheckPagePermission
      *
      * Permission levels: 'view' grants read-only access, 'edit' grants
      * read + write, 'disabled' explicitly blocks access (set by IT).
-     * 'edit' implies 'view'. Role-based shortcuts (CEO,
-     * module-native manager/staff) still grant full access — UNLESS an
+     * 'edit' implies 'view'. Module-native manager/staff shortcuts still
+     * grant full access — UNLESS an
      * explicit 'disabled' row exists, which always wins.
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
@@ -42,6 +43,59 @@ class CheckPagePermission
 
         // Determine the module from the route name or URI
         $module = $this->detectModule($request);
+
+        // IT department managers and staff always retain full edit access to
+        // their own module. Page rows managed for cross-module assignments
+        // must not accidentally lock native IT accounts out of IT pages.
+        if (strtoupper((string) $user->role) === 'IT'
+            && in_array($user->position, ['manager', 'staff'], true)
+            && strtoupper((string) $module) === 'IT') {
+            return $next($request);
+        }
+
+        // Supervisor grants for staff workspaces are role-scoped so disabling
+        // Dyeing Color history does not also disable Pre-treatment history.
+        $manufacturingRole = $module === 'MAN'
+            ? ManufacturingPages::roleForRouteName($request->route()?->getName())
+            : null;
+        if ($user->is_manufacturing_supervisor && $manufacturingRole) {
+            $staffGrant = DB::table('man_supervisor_staff_page_permissions')
+                ->where('supervisor_user_id', $user->id)
+                ->where('manufacturing_role', $manufacturingRole)
+                ->where('page', strtolower($page))
+                ->first(['permission_level']);
+
+            if ($staffGrant) {
+                $level = strtolower((string) $staffGrant->permission_level);
+            } else {
+                // Before IT configures a role-specific row, preserve the
+                // supervisor's legacy Production grant as the default for
+                // staff workspace pages. Do not let an identically named
+                // supervisor page (for example their own Dashboard) leak
+                // access into every staff role.
+                $productionGrant = DB::table('page_permissions')
+                    ->where('user_id', $user->id)
+                    ->whereIn('module', ['MAN', 'man'])
+                    ->where('page', 'production')
+                    ->first(['permission_level']);
+                if ($productionGrant) {
+                    $level = strtolower((string) ($productionGrant->permission_level ?? 'edit'));
+                } elseif (! $this->hasExplicitModuleGrants($user, 'MAN')) {
+                    $level = 'edit';
+                } else {
+                    $level = 'disabled';
+                }
+            }
+
+            if ($level === 'disabled') {
+                abort(403, "The '{$page}' page for {$manufacturingRole} staff is disabled for this supervisor by IT Access Control.");
+            }
+            $sufficient = $requiredLevel === 'view'
+                ? in_array($level, ['view', 'edit'], true)
+                : $level === 'edit';
+            if ($sufficient) return $next($request);
+            abort(403, "The '{$page}' page for {$manufacturingRole} staff requires '{$requiredLevel}' permission; this supervisor only has '{$level}'.");
+        }
 
         // Fetch the explicit record first — an explicit 'disabled' row set by
         // IT always denies, even for native managers/staff or secretaries.
@@ -73,6 +127,14 @@ class CheckPagePermission
             }
         }
 
+        // Special Officers retain their home module by default. Once IT has
+        // an explicit page set, it is enforced exactly like other grants.
+        if ($module && strtoupper((string) $user->role) === $module
+            && $user->position === 'special_officer'
+            && ! $this->hasExplicitModuleGrants($user, $module)) {
+            return $next($request);
+        }
+
         // ── MAN role workspaces: legacy / supervisor fallback ────────────
         // Plant staff pages used to be gated by the single "production" page.
         // Keep that grant working when IT has not yet saved the new per-role
@@ -101,31 +163,6 @@ class CheckPagePermission
                     }
                 }
             }
-        }
-
-        // Secretaries and Special Officers have full access to their root module
-        if (in_array($user->position, ['secretary', 'special_officer'])) {
-            $rootModule = $this->getRootModuleForUser($user);
-            if ($module && $rootModule && strtoupper($module) === $rootModule) {
-                return $next($request);
-            }
-        }
-
-        // Vice President: no HRM pages — the COO role is standalone (own VP
-        // module + full CRM, like the President) and has no job in HRM.
-        if ($module && strtoupper($module) === 'HRM'
-            && (in_array($user->role, ['COO'], true)
-                || ($user->position ?? '') === 'vice_president')) {
-            abort(403, "You do not have permission to access the '{$page}' page in the {$module} module.");
-        }
-
-        // President & Vice President have full (edit) access to every CRM
-        // page. An explicit 'disabled' row (handled above) still wins, so
-        // IT can revoke this per page when needed.
-        if ($module && strtoupper($module) === 'CRM'
-            && (in_array($user->role, ['CEO', 'COO'], true)
-                || ($user->position ?? '') === 'vice_president')) {
-            return $next($request);
         }
 
         // Fallback: HRM staff can always view the dashboard (legacy)
@@ -246,28 +283,4 @@ class CheckPagePermission
         return in_array($module, $validModules);
     }
 
-    /**
-     * Get the root module for a secretary or general manager.
-     * Mirrors the logic in CeoAccessController.
-     *
-     * @param \App\Models\Core\User $user
-     * @return string|null
-     */
-    protected function getRootModuleForUser($user): ?string
-    {
-        $coreModules = ['HRM', 'CRM', 'MAN', 'LOG'];
-
-        if ($user->is_manufacturing_supervisor) {
-            return 'MAN';
-        }
-
-        $roleUpper = strtoupper($user->role);
-        foreach ($coreModules as $core) {
-            if (str_contains($roleUpper, $core)) {
-                return $core;
-            }
-        }
-
-        return null;
-    }
 }

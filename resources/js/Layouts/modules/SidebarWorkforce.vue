@@ -17,7 +17,6 @@ export const workforceModule = {
             { label: 'Leave Requests', href: route('workforce.leave'), icon: FileText, permKey: 'leave' },
             { label: 'Absence Tracking', href: route('workforce.absent'), icon: UserX, permKey: 'absent' },
         ]
-        if (isCEO) return all
         if (userPosition === 'manager' && user?.role === 'WRF') return all
         if (isSecretaryOrGM && canAccessModule('WRF')) return all
         if (user?.is_manufacturing_supervisor && grantedModules.includes('WRF')) return all

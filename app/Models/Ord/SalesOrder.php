@@ -31,7 +31,7 @@ class SalesOrder extends Model
         'status',
         'pushed_to',
         'inv_check_sufficient',
-         'knitting_done_at', 'knitting_done_by',        // ← Added: stores 'SCM' or 'Order Mgmt'
+         'knitting_done_at', 'knitting_done_by', 'knitting_handoff_requested_at', 'knitting_handoff_requested_by',
         // ORD lifecycle fields (see 2026_09_08_100000 migration)
         'expected_ship_date',
         'priority',
@@ -60,6 +60,7 @@ class SalesOrder extends Model
         'production_started_at' => 'datetime',
         'production_done_at' => 'datetime',
         'delivered_at' => 'datetime',
+        'knitting_handoff_requested_at' => 'datetime',
     ];
 
     /**

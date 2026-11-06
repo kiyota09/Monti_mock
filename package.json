@@ -39,11 +39,9 @@
         "radix-vue": "^1.9.17",
         "reka-ui": "^2.8.0",
         "shadcn-vue": "^2.4.3",
-        "sweetalert2": "^11.26.24",
         "tailwind-merge": "^3.4.0",
         "tailwindcss-animate": "^1.0.7",
         "vee-validate": "^4.15.1",
-        "vue3-toastify": "^0.2.9",
         "vuedraggable": "^4.1.0",
         "ziggy-js": "^2.6.1",
         "zod": "^3.25.76"

@@ -249,7 +249,7 @@ class StockSustainabilityService
 
             $rows[] = [
                 'material_id' => $matId,
-                'material_name' => $materials[$matId]->name ?? 'Unknown material',
+                'material_name' => $materials[$matId]->display_name ?? 'Unknown material',
                 'unit' => $materials[$matId]->unit ?? 'kg',
                 'required' => round($need, 2),
                 'committed' => round($taken, 2),

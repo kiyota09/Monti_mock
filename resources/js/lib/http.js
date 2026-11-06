@@ -30,6 +30,46 @@ export const csrfHeaders = () => {
     return meta ? { 'X-CSRF-TOKEN': meta } : {};
 };
 
+// Ziggy can emit an absolute URL based on APP_URL, which may not exactly match
+// the host users opened (for example www/non-www or a reverse-proxy hostname).
+// Keep authenticated portal API calls on the page's origin so its session and
+// XSRF cookies are always sent with the request.
+const sameOriginUrl = (url) => {
+    if (typeof window === 'undefined') return url;
+    try {
+        const target = new URL(url, window.location.href);
+        if (target.origin !== window.location.origin) {
+            target.protocol = window.location.protocol;
+            target.host = window.location.host;
+        }
+        return target.toString();
+    } catch {
+        return url;
+    }
+};
+
+/**
+ * Fetch helper for JSON and FormData mutations. Read Laravel's current XSRF
+ * cookie on every attempt because the initial page's CSRF meta tag can become
+ * stale during a long lived Inertia session. A 419 response refreshes that
+ * cookie, so retry the request once with the new value.
+ */
+export const csrfFetch = async (url, init = {}) => {
+    const send = () => {
+        const headers = new Headers(init.headers ?? {});
+        Object.entries(csrfHeaders()).forEach(([name, value]) => headers.set(name, value));
+
+        return fetch(sameOriginUrl(url), {
+            ...init,
+            headers,
+            credentials: 'same-origin',
+        });
+    };
+
+    const response = await send();
+    return response.status === 419 ? send() : response;
+};
+
 /**
  * fetch() wrapper returning parsed JSON and throwing an Error (with `.status`
  * and `.message`) on non-2xx. Retries once on 419 so a rotated token that the
@@ -38,7 +78,7 @@ export const csrfHeaders = () => {
 export const request = async (url, method = 'POST', body, retryOn419 = true) => {
     const isGet = method === 'GET';
 
-    const res = await fetch(url, {
+    const res = await fetch(sameOriginUrl(url), {
         method,
         headers: {
             Accept: 'application/json',

@@ -59,6 +59,358 @@
   }
 }
 
+/* Ecommerce Credit page text contrast across every ERP theme. */
+html[data-theme='light'] .eco-credit-page .text-gray-400 { color: #6b7280 !important; }
+html[data-theme='light'] .eco-credit-page .text-gray-500 { color: #4b5563 !important; }
+html[data-theme='light'] .eco-credit-page .text-gray-600 { color: #374151 !important; }
+html[data-theme='light'] .eco-credit-page .text-slate-400 { color: #6b7280 !important; }
+html[data-theme='light'] .eco-credit-page input::placeholder { color: #6b7280 !important; }
+html[data-theme='light'] .eco-credit-page header[data-erp-page-banner] .text-blue-100,
+html[data-theme='light'] .eco-credit-page header[data-erp-page-banner] .text-blue-100\/90 { color: #334155 !important; }
+
+html[data-theme='blue'] .eco-credit-page .text-gray-400,
+html[data-theme='blue'] .eco-credit-page .text-slate-400 { color: #52638b !important; }
+html[data-theme='blue'] .eco-credit-page .text-gray-500 { color: #40527a !important; }
+html[data-theme='blue'] .eco-credit-page .text-gray-600 { color: #263b68 !important; }
+html[data-theme='blue'] .eco-credit-page .text-gray-700,
+html[data-theme='blue'] .eco-credit-page .text-gray-900 { color: #0b1b4f !important; }
+html[data-theme='blue'] .eco-credit-page input::placeholder { color: #52638b !important; }
+
+html[data-theme='red'] .eco-credit-page .text-gray-400,
+html[data-theme='red'] .eco-credit-page .text-slate-400 { color: #754451 !important; }
+html[data-theme='red'] .eco-credit-page .text-gray-500 { color: #653341 !important; }
+html[data-theme='red'] .eco-credit-page .text-gray-600 { color: #592130 !important; }
+html[data-theme='red'] .eco-credit-page .text-gray-700,
+html[data-theme='red'] .eco-credit-page .text-gray-900 { color: #4c0519 !important; }
+html[data-theme='red'] .eco-credit-page input::placeholder { color: #754451 !important; }
+
+html[data-theme='green'] .eco-credit-page .text-gray-400,
+html[data-theme='green'] .eco-credit-page .text-slate-400 { color: #52685a !important; }
+html[data-theme='green'] .eco-credit-page .text-gray-500 { color: #405747 !important; }
+html[data-theme='green'] .eco-credit-page .text-gray-600 { color: #284934 !important; }
+html[data-theme='green'] .eco-credit-page .text-gray-700,
+html[data-theme='green'] .eco-credit-page .text-gray-900 { color: #1b4332 !important; }
+html[data-theme='green'] .eco-credit-page input::placeholder { color: #52685a !important; }
+
+html[data-theme='dark'] .eco-credit-page .text-gray-400,
+html[data-theme='dark'] .eco-credit-page .text-slate-400 { color: #a1a1aa !important; }
+html[data-theme='dark'] .eco-credit-page .text-gray-500 { color: #d4d4d8 !important; }
+html[data-theme='dark'] .eco-credit-page .text-gray-600 { color: #e4e4e7 !important; }
+html[data-theme='dark'] .eco-credit-page .text-gray-700,
+html[data-theme='dark'] .eco-credit-page .text-gray-900 { color: #f4f4f5 !important; }
+html[data-theme='dark'] .eco-credit-page input::placeholder { color: #a1a1aa !important; }
+html[data-theme='dark'] .eco-credit-page .text-amber-600,
+html[data-theme='dark'] .eco-credit-page .text-amber-700,
+html[data-theme='dark'] .eco-credit-page .text-amber-800 { color: #fcd34d !important; }
+html[data-theme='dark'] .eco-credit-page .text-emerald-600,
+html[data-theme='dark'] .eco-credit-page .text-emerald-700 { color: #6ee7b7 !important; }
+html[data-theme='dark'] .eco-credit-page .text-rose-600,
+html[data-theme='dark'] .eco-credit-page .text-rose-700 { color: #fda4af !important; }
+html[data-theme='dark'] .eco-credit-page .text-indigo-600,
+html[data-theme='dark'] .eco-credit-page .text-indigo-700,
+html[data-theme='dark'] .eco-credit-page .text-indigo-800 { color: #a5b4fc !important; }
+
+/* Keep small semantic labels legible on the light surfaces used by the
+   light, blue, red, and green palettes. */
+html[data-theme='light'] .eco-credit-page .text-amber-600,
+html[data-theme='blue'] .eco-credit-page .text-amber-600,
+html[data-theme='red'] .eco-credit-page .text-amber-600,
+html[data-theme='green'] .eco-credit-page .text-amber-600 { color: #92400e !important; }
+html[data-theme='light'] .eco-credit-page .text-emerald-600,
+html[data-theme='blue'] .eco-credit-page .text-emerald-600,
+html[data-theme='red'] .eco-credit-page .text-emerald-600,
+html[data-theme='green'] .eco-credit-page .text-emerald-600 { color: #047857 !important; }
+html[data-theme='light'] .eco-credit-page .text-rose-600,
+html[data-theme='blue'] .eco-credit-page .text-rose-600,
+html[data-theme='red'] .eco-credit-page .text-rose-600,
+html[data-theme='green'] .eco-credit-page .text-rose-600 { color: #be123c !important; }
+
+/* Theme-wide header rules style the global navigation bar and use !important.
+   Keep supplier page banners on their reactive, high-contrast theme gradient. */
+html[data-theme] header.supplier-page-header {
+  background: var(--supplier-page-header-background) !important;
+  background-image: var(--supplier-page-header-background) !important;
+  color: var(--supplier-page-header-ink) !important;
+}
+html[data-theme] header.supplier-page-header .supplier-page-header-title { color: var(--supplier-page-header-ink) !important; }
+html[data-theme='light'] header.supplier-page-header .supplier-page-header-chip {
+  background: rgba(15, 23, 42, 0.08) !important;
+  color: #1e293b !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+html[data-theme='dark'] header.supplier-page-header .supplier-page-header-chip {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+html[data-theme='light'] header.supplier-page-header .supplier-page-header-filter {
+  background: rgba(255, 255, 255, 0.78) !important;
+  color: #334155 !important;
+}
+html[data-theme='dark'] header.supplier-page-header .supplier-page-header-filter {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+/* The shared page-header surface follows the active ERP theme. Existing
+   module banners are marked by AuthenticatedLayout; plain page headings use
+   the padded fallback treatment. */
+html[data-theme='light'] {
+  --erp-banner-background: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%);
+  --erp-banner-ink: #ffffff;
+  --erp-banner-subtitle: #e5e5e5;
+  --erp-banner-border: rgba(0, 0, 0, .22);
+}
+html[data-theme='dark'] {
+  --erp-banner-background: linear-gradient(135deg, #111827 0%, #1e293b 58%, #334155 100%);
+  --erp-banner-ink: #f8fafc;
+  --erp-banner-subtitle: #e2e8f0;
+  --erp-banner-border: rgba(255, 255, 255, .16);
+}
+
+html[data-theme='blue'] {
+  --erp-banner-background: linear-gradient(135deg, #12365b 0%, #1d4e89 55%, #1e40af 100%);
+  --erp-banner-ink: #ffffff;
+  --erp-banner-subtitle: #eff6ff;
+  --erp-banner-border: rgba(255, 255, 255, .24);
+}
+html[data-theme='red'] {
+  --erp-banner-background: linear-gradient(135deg, #641b27 0%, #9f233d 55%, #881337 100%);
+  --erp-banner-ink: #ffffff;
+  --erp-banner-subtitle: #fff1f2;
+  --erp-banner-border: rgba(255, 255, 255, .24);
+}
+html[data-theme='green'] {
+  --erp-banner-background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 55%, #40916c 100%);
+  --erp-banner-ink: #ffffff;
+  --erp-banner-subtitle: #f0fff4;
+  --erp-banner-border: rgba(255, 255, 255, .24);
+}
+html[data-theme] .app-viewport [data-erp-page-banner] {
+  background: var(--erp-banner-background) !important;
+  background-image: var(--erp-banner-background) !important;
+  color: var(--erp-banner-ink) !important;
+  border-color: var(--erp-banner-border) !important;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(1.25rem, 3vw, 2rem) !important;
+  border-radius: 1.5rem !important;
+  box-shadow: 0 18px 42px -28px rgba(15, 23, 42, .42);
+  transition: background 220ms ease, color 220ms ease;
+}
+html[data-theme] .app-viewport [data-erp-page-banner] :is(h1, h2, h1 span) {
+  color: var(--erp-banner-ink) !important;
+  -webkit-text-fill-color: var(--erp-banner-ink) !important;
+  background-image: none !important;
+}
+html[data-theme] .app-viewport [data-erp-page-banner] p {
+  color: var(--erp-banner-subtitle) !important;
+}
+html[data-theme] .app-viewport [data-erp-page-banner='fallback'] {
+  overflow: hidden;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--erp-banner-border);
+  border-radius: 1.5rem;
+  box-shadow: 0 18px 42px -28px rgba(15, 23, 42, .42);
+}
+html[data-theme='light'] .app-viewport [data-erp-page-banner] div[class*='backdrop-blur'] {
+  color: #e5e5e5 !important;
+}
+html[data-theme='light'] .app-viewport [data-erp-page-banner] .text-white:not(button):not(a) {
+  color: #ffffff !important;
+}
+html[data-theme='light'] .app-viewport [data-erp-page-banner] :is(h1, h2, h3, h4, p, span, small, label, strong, em, li):not(button *):not(a *) {
+  color: #f5f5f5 !important;
+  -webkit-text-fill-color: #f5f5f5 !important;
+}
+/* Fallback banners also receive the dark monochrome surface. Keep text on
+   intentionally light chips dark instead of inheriting the banner text. */
+html[data-theme] .app-viewport [data-erp-page-banner='fallback'] {
+  background: var(--erp-banner-background) !important;
+  background-image: var(--erp-banner-background) !important;
+  color: var(--erp-banner-ink) !important;
+}
+html[data-theme='light'] .app-viewport [data-erp-page-banner] :is(
+  [class~="bg-white"], [class~="bg-white/80"], [class~="bg-white/90"], [class~="bg-white/95"],
+  [class~="bg-slate-50"], [class~="bg-gray-50"]
+) {
+  color: #171717 !important;
+  -webkit-text-fill-color: #171717 !important;
+}
+
+/* Textile inspired trim for page-authored dialogs that use ARIA modal roles. */
+:is([role='dialog'], [role='alertdialog'])[aria-modal='true'] > div[class*='rounded-']:not([class*='fabric-']),
+:is([role='dialog'], [role='alertdialog'])[aria-modal='true'] > section:not([class*='fabric-']),
+:is([role='dialog'], [role='alertdialog'])[aria-modal='true'].rounded-2xl,
+:is([role='dialog'], [role='alertdialog'])[aria-modal='true'].rounded-3xl {
+  overflow: hidden;
+  border-color: #d7e8f8;
+  border-radius: 1.5rem;
+}
+
+:is([role='dialog'], [role='alertdialog'])[aria-modal='true'] > div[class*='rounded-']:not([class*='fabric-'])::before,
+:is([role='dialog'], [role='alertdialog'])[aria-modal='true'] > section:not([class*='fabric-'])::before,
+:is([role='dialog'], [role='alertdialog'])[aria-modal='true'].rounded-2xl::before,
+:is([role='dialog'], [role='alertdialog'])[aria-modal='true'].rounded-3xl::before {
+  content: '';
+  display: block;
+  height: 7px;
+  background-color: #dceeff;
+  background-image: repeating-linear-gradient(90deg, transparent 0 5px, rgb(43 114 174 / 22%) 5px 6px), repeating-linear-gradient(0deg, transparent 0 3px, rgb(255 255 255 / 80%) 3px 4px);
+}
+
+.dark :is([role='dialog'], [role='alertdialog'])[aria-modal='true'] > div[class*='rounded-']:not([class*='fabric-']),
+.dark :is([role='dialog'], [role='alertdialog'])[aria-modal='true'] > section:not([class*='fabric-']),
+.dark :is([role='dialog'], [role='alertdialog'])[aria-modal='true'].rounded-2xl,
+.dark :is([role='dialog'], [role='alertdialog'])[aria-modal='true'].rounded-3xl {
+  border-color: #334b63;
+}
+
+/* Legacy modal backdrops often predate ARIA roles but use this centered shell. */
+div.fixed.inset-0.flex.items-center.justify-center > div[class*='rounded-']:not([class*='fabric-']) {
+  overflow: hidden;
+  border: 1px solid #d7e8f8;
+  border-radius: 1.5rem;
+}
+
+div.fixed.inset-0.flex.items-center.justify-center > div[class*='rounded-']:not([class*='fabric-'])::before {
+  content: '';
+  display: block;
+  height: 7px;
+  background-color: #dceeff;
+  background-image: repeating-linear-gradient(90deg, transparent 0 5px, rgb(43 114 174 / 22%) 5px 6px), repeating-linear-gradient(0deg, transparent 0 3px, rgb(255 255 255 / 80%) 3px 4px);
+}
+
+.dark div.fixed.inset-0.flex.items-center.justify-center > div[class*='rounded-']:not([class*='fabric-']) {
+  border-color: #334b63;
+}
+/* CEO heroes use a separate absolute gradient layer over the banner surface. */
+html[data-theme='light'] .app-viewport [data-erp-page-banner] > [class*="from-blue-"],
+html[data-theme='light'] .app-viewport [data-erp-page-banner] > [class*="from-indigo-"],
+html[data-theme='light'] .app-viewport [data-erp-page-banner] > [class*="from-sky-"],
+html[data-theme='light'] .app-viewport [data-erp-page-banner] > [class*="from-violet-"] {
+  background: #111111 !important;
+  background-image: none !important;
+}
+
+/* Keep the light-theme sidebar white with pure black text; brand gradients
+   and colored navigation accents remain intact. */
+html[data-theme='light'] [data-erp-sidebar] > div,
+html[data-theme='light'] [data-erp-mobile-sidebar-nav],
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  color: #000000 !important;
+}
+html[data-theme='light'] [data-erp-sidebar] [class~="text-gray-900"],
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class~="text-gray-900"],
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class~="text-gray-900"] {
+  color: #000000 !important;
+}
+html[data-theme='light'] [data-erp-sidebar] [class~="text-gray-700"],
+html[data-theme='light'] [data-erp-sidebar] [class~="text-gray-600"],
+html[data-theme='light'] [data-erp-sidebar] [class~="text-gray-500"],
+html[data-theme='light'] [data-erp-sidebar] [class~="text-gray-400"],
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class~="text-gray-700"],
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class~="text-gray-600"],
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class~="text-gray-500"],
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class~="text-gray-400"],
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class~="text-gray-700"],
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class~="text-gray-600"],
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class~="text-gray-500"],
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class~="text-gray-400"] {
+  color: #000000 !important;
+}
+html[data-theme='light'] [data-erp-sidebar] [class*="border-gray-"],
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class*="border-gray-"],
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class*="border-gray-"] {
+  border-color: #e5e7eb !important;
+}
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class*="bg-gray-50"] {
+  background-color: #ffffff !important;
+}
+html[data-theme='light'] [data-erp-sidebar-accent] {
+  display: none !important;
+}
+html[data-theme='light'] [data-erp-sidebar-logo] {
+  background: #ffffff !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+html[data-theme='light'] [data-erp-sidebar-logo-image] {
+  filter: brightness(0) !important;
+}
+html[data-theme='light'] [data-erp-sidebar] [class*="from-blue-700"]:not([data-erp-sidebar-logo]),
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class*="from-blue-700"]:not([data-erp-sidebar-logo]),
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class*="from-blue-700"]:not([data-erp-sidebar-logo]) {
+  background: #111111 !important;
+  background-image: none !important;
+  --tw-shadow-color: rgb(0 0 0 / 0.16) !important;
+}
+html[data-theme='light'] [data-erp-sidebar] [class*="bg-indigo-"],
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class*="bg-indigo-"],
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class*="bg-indigo-"] {
+  background-color: #f4f4f5 !important;
+}
+html[data-theme='light'] [data-erp-sidebar] [class*="hover:bg-indigo-"]:hover,
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class*="hover:bg-indigo-"]:hover,
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class*="hover:bg-indigo-"]:hover {
+  background-color: #f4f4f5 !important;
+}
+html[data-theme='light'] [data-erp-sidebar] [class~="text-white"],
+html[data-theme='light'] [data-erp-sidebar] [class~="text-white"] *,
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class~="text-white"],
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] [class~="text-white"] *,
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class~="text-white"],
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] [class~="text-white"] * {
+  color: #ffffff !important;
+}
+html[data-theme='light'] [data-erp-sidebar] :is(span, p, a, button)[class*="text-indigo-"]:not([class~="text-white"]),
+html[data-theme='light'] [data-erp-mobile-sidebar-nav] :is(span, p, a, button)[class*="text-indigo-"]:not([class~="text-white"]),
+html[data-theme='light'] [data-erp-mobile-sidebar-drawer] :is(span, p, a, button)[class*="text-indigo-"]:not([class~="text-white"]) {
+  color: #000000 !important;
+}
+
+/* Supplier workspaces: clear light canvas and a consistent slate surface
+   hierarchy for the standard dark theme. */
+html[data-module='supplier'][data-theme='light'] .app-viewport {
+  background: linear-gradient(135deg, #f7faf9 0%, #f1f5f4 100%) !important;
+  color: #0f172a;
+}
+html[data-module='supplier'][data-theme='dark'] .app-viewport {
+  background: linear-gradient(135deg, #0b1220 0%, #111827 100%) !important;
+  color: #e2e8f0;
+}
+html[data-module='supplier'][data-theme='dark'] .app-viewport .dark\:bg-slate-900,
+html[data-module='supplier'][data-theme='dark'] .app-viewport .dark\:bg-zinc-900 {
+  background-color: #111827 !important;
+}
+html[data-module='supplier'][data-theme='dark'] .app-viewport .dark\:bg-slate-800,
+html[data-module='supplier'][data-theme='dark'] .app-viewport .dark\:bg-zinc-800 {
+  background-color: #1f2937 !important;
+}
+html[data-module='supplier'][data-theme='dark'] .app-viewport .dark\:border-slate-800,
+html[data-module='supplier'][data-theme='dark'] .app-viewport .dark\:border-slate-700,
+html[data-module='supplier'][data-theme='dark'] .app-viewport .dark\:border-zinc-800,
+html[data-module='supplier'][data-theme='dark'] .app-viewport .dark\:border-zinc-700 {
+  border-color: #334155 !important;
+}
+html[data-module='supplier'][data-theme='light'] .app-viewport .bg-indigo-600,
+html[data-module='supplier'][data-theme='light'] .app-viewport .bg-blue-600,
+html[data-module='supplier'][data-theme='dark'] .app-viewport .bg-indigo-600,
+html[data-module='supplier'][data-theme='dark'] .app-viewport .bg-blue-600 {
+  background-color: #047857 !important;
+  color: #fff !important;
+}
+html[data-module='supplier'][data-theme='light'] .app-viewport .hover\:bg-indigo-700:hover,
+html[data-module='supplier'][data-theme='light'] .app-viewport .hover\:bg-blue-700:hover,
+html[data-module='supplier'][data-theme='dark'] .app-viewport .hover\:bg-indigo-700:hover,
+html[data-module='supplier'][data-theme='dark'] .app-viewport .hover\:bg-blue-700:hover {
+  background-color: #065f46 !important;
+}
+
+
 @layer base {
   * {
     @apply border-border;
@@ -1805,6 +2157,31 @@ html[data-theme='green'] .dark\:bg-slate-800,
 html[data-theme='green'] .dark\:bg-slate-900 {
   background-color: rgba(253, 255, 254, 0.88) !important;
 }
+/* Green mode enables Tailwind dark variants, so deep dark surfaces must be
+   translated too. Keep the page in the sage palette instead of leaving
+   zinc/slate near-black panels behind. */
+html[data-theme='green'] .dark\:bg-zinc-950,
+html[data-theme='green'] .dark\:bg-slate-950,
+html[data-theme='green'] .dark\:bg-gray-950,
+html[data-theme='green'] .dark\:bg-black,
+html[data-theme='green'] main .bg-zinc-950,
+html[data-theme='green'] main .bg-slate-950,
+html[data-theme='green'] main .bg-gray-950 {
+  background-color: #F1F8F3 !important;
+  background-image: none !important;
+}
+html[data-theme='green'] .dark\:bg-zinc-950\/40,
+html[data-theme='green'] .dark\:bg-slate-950\/40,
+html[data-theme='green'] .dark\:bg-gray-950\/40,
+html[data-theme='green'] .dark\:bg-zinc-900\/40,
+html[data-theme='green'] .dark\:bg-slate-900\/40 {
+  background-color: rgba(237, 245, 239, 0.94) !important;
+}
+html[data-theme='green'] .dark\:bg-zinc-950\/80,
+html[data-theme='green'] .dark\:bg-slate-950\/80,
+html[data-theme='green'] .dark\:bg-gray-950\/80 {
+  background-color: rgba(223, 237, 226, 0.98) !important;
+}
 html[data-theme='green'] .dark\:bg-slate-900\/40,
 html[data-theme='green'] .dark\:bg-slate-800\/50,
 html[data-theme='green'] .dark\:bg-zinc-800\/50,
@@ -2075,4 +2452,522 @@ html[data-theme='blue'] .crm-posts-page .posts-header *,
 html[data-theme='red'] .crm-posts-page .posts-header *,
 html[data-theme='green'] .crm-posts-page .posts-header * {
   color: #fff !important;
+}
+
+/* CRM Opportunities: coordinated eucalyptus and sage surfaces. */
+html[data-theme='green'] .crm-opportunities-page {
+  color: #1B4332;
+  background: linear-gradient(135deg, #F1F8F3 0%, #E7F1E9 55%, #DFEDE2 100%) !important;
+}
+html[data-theme='green'] .crm-opportunities-hero,
+html[data-theme='green'] .crm-opportunities-notes-header {
+  color: #F4FAF6 !important;
+  background: linear-gradient(125deg, #1B4332 0%, #2D6A4F 58%, #40916C 100%) !important;
+  box-shadow: 0 12px 28px rgba(27, 67, 50, 0.18) !important;
+}
+html[data-theme='green'] .crm-opportunities-hero .text-blue-100,
+html[data-theme='green'] .crm-opportunities-hero .text-blue-100\/90,
+html[data-theme='green'] .crm-opportunities-notes-header .text-indigo-100 {
+  color: #D8F3DC !important;
+}
+html[data-theme='green'] .crm-opportunities-toolbar {
+  background: rgba(253, 255, 254, 0.88) !important;
+  border-color: rgba(27, 67, 50, 0.12) !important;
+  box-shadow: 0 5px 16px rgba(27, 67, 50, 0.06) !important;
+}
+html[data-theme='green'] .crm-opportunities-page [class*='dark:bg-zinc-900/70'],
+html[data-theme='green'] .crm-opportunities-page [class*='dark:bg-zinc-800/60'],
+html[data-theme='green'] .crm-opportunities-page [class*='dark:bg-zinc-800/40'] {
+  background-color: rgba(231, 241, 233, 0.94) !important;
+}
+html[data-theme='green'] .crm-opportunities-page .bg-slate-900 {
+  background-color: #2D6A4F !important;
+  color: #F4FAF6 !important;
+}
+html[data-theme='green'] .crm-opportunities-page .text-gray-300,
+html[data-theme='green'] .crm-opportunities-page .text-gray-400,
+html[data-theme='green'] .crm-opportunities-page .dark\:text-zinc-500,
+html[data-theme='green'] .crm-opportunities-page .dark\:text-zinc-600 {
+  color: #5C7A66 !important;
+}
+html[data-theme='green'] .crm-opportunities-page .text-gray-500,
+html[data-theme='green'] .crm-opportunities-page .text-slate-500,
+html[data-theme='green'] .crm-opportunities-page .dark\:text-slate-300 {
+  color: #476A56 !important;
+}
+html[data-theme='green'] .crm-opportunities-page .border-gray-100,
+html[data-theme='green'] .crm-opportunities-page .border-slate-50,
+html[data-theme='green'] .crm-opportunities-page .dark\:border-zinc-800 {
+  border-color: rgba(27, 67, 50, 0.12) !important;
+}
+
+/* CRM Dashboard: keep its metrics, task queue and account list in the active theme. */
+html[data-theme='green'] .crm-dashboard {
+  --crm-page: #F1F8F3;
+  --crm-panel: #FDFFFE;
+  --crm-ink: #1B4332;
+  --crm-muted: #52715D;
+  --crm-line: #D5E5D9;
+  --crm-accent: #2D6A4F;
+  --crm-accent-dark: #1B4332;
+  --crm-accent-soft: #E6F2E9;
+  --crm-accent-ink: #245B40;
+  --crm-soft-green: #E5F3E9;
+  --crm-green: #1B7A4B;
+  --crm-green-ink: #17623D;
+  --crm-warning: #FBF4E4;
+  --crm-warning-ink: #795B20;
+}
+
+/* Welcome login/register popovers: pair readable ink with the light-theme panel. */
+html[data-theme='light'] .welcome-scope .welcome-auth-menu,
+html[data-theme='blue'] .welcome-scope .welcome-auth-menu,
+html[data-theme='red'] .welcome-scope .welcome-auth-menu,
+html[data-theme='green'] .welcome-scope .welcome-auth-menu {
+  color: var(--w-ink) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: var(--w-line) !important;
+  --tw-ring-color: var(--w-line) !important;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.2) !important;
+}
+html[data-theme='light'] .welcome-scope .welcome-auth-heading,
+html[data-theme='blue'] .welcome-scope .welcome-auth-heading,
+html[data-theme='red'] .welcome-scope .welcome-auth-heading,
+html[data-theme='green'] .welcome-scope .welcome-auth-heading,
+html[data-theme='light'] .welcome-scope .welcome-auth-item-label,
+html[data-theme='blue'] .welcome-scope .welcome-auth-item-label,
+html[data-theme='red'] .welcome-scope .welcome-auth-item-label,
+html[data-theme='green'] .welcome-scope .welcome-auth-item-label {
+  color: var(--w-ink) !important;
+  text-shadow: none !important;
+}
+html[data-theme='light'] .welcome-scope .welcome-auth-description,
+html[data-theme='blue'] .welcome-scope .welcome-auth-description,
+html[data-theme='red'] .welcome-scope .welcome-auth-description,
+html[data-theme='green'] .welcome-scope .welcome-auth-description,
+html[data-theme='light'] .welcome-scope .welcome-auth-item-description,
+html[data-theme='blue'] .welcome-scope .welcome-auth-item-description,
+html[data-theme='red'] .welcome-scope .welcome-auth-item-description,
+html[data-theme='green'] .welcome-scope .welcome-auth-item-description {
+  color: var(--w-muted) !important;
+}
+html[data-theme='light'] .welcome-scope .welcome-auth-item:hover,
+html[data-theme='blue'] .welcome-scope .welcome-auth-item:hover,
+html[data-theme='red'] .welcome-scope .welcome-auth-item:hover,
+html[data-theme='green'] .welcome-scope .welcome-auth-item:hover,
+html[data-theme='light'] .welcome-scope .welcome-auth-item:focus-visible,
+html[data-theme='blue'] .welcome-scope .welcome-auth-item:focus-visible,
+html[data-theme='red'] .welcome-scope .welcome-auth-item:focus-visible,
+html[data-theme='green'] .welcome-scope .welcome-auth-item:focus-visible {
+  background: var(--w-accent-wash) !important;
+}
+html[data-theme='light'] .welcome-scope .welcome-auth-icon,
+html[data-theme='blue'] .welcome-scope .welcome-auth-icon,
+html[data-theme='red'] .welcome-scope .welcome-auth-icon,
+html[data-theme='green'] .welcome-scope .welcome-auth-icon {
+  color: var(--w-accent) !important;
+  background: var(--w-accent-wash) !important;
+  border-color: var(--w-accent-bd) !important;
+}
+html[data-theme='light'] .welcome-scope .welcome-auth-arrow,
+html[data-theme='blue'] .welcome-scope .welcome-auth-arrow,
+html[data-theme='red'] .welcome-scope .welcome-auth-arrow,
+html[data-theme='green'] .welcome-scope .welcome-auth-arrow {
+  color: var(--w-muted) !important;
+}
+html[data-theme='light'] .welcome-scope .welcome-auth-divider,
+html[data-theme='blue'] .welcome-scope .welcome-auth-divider,
+html[data-theme='red'] .welcome-scope .welcome-auth-divider,
+html[data-theme='green'] .welcome-scope .welcome-auth-divider {
+  background: var(--w-line) !important;
+}
+
+/* IT module page headers and mobile data tables. Scoped so other modules retain their layouts. */
+html[data-module='it'] .it-page-hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: fit-content;
+  min-height: 0;
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 10px !important;
+  border: 1px solid rgba(191, 219, 254, 0.22);
+  border-radius: 1rem;
+  color: #fff;
+  background: linear-gradient(125deg, #12345a 0%, #1d4ed8 58%, #4338ca 100%);
+  box-shadow: 0 14px 32px rgba(30, 64, 175, 0.16);
+}
+html[data-module='it'] .it-page-hero h1 {
+  color: #fff !important;
+  font-size: clamp(1.35rem, 5vw, 1.875rem);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+html[data-module='it'] .it-page-hero h1 span { color: #bfdbfe !important; }
+html[data-module='it'] .it-page-hero p { color: #dbeafe !important; }
+html[data-module='it'] .it-page-hero > div:first-child:not(.absolute) {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+html[data-module='it'] .it-page-hero > .relative.flex.flex-wrap {
+  flex: 1 1 100%;
+  gap: 8px;
+}
+html[data-module='it'] .it-page-hero > a,
+html[data-module='it'] .it-page-hero > button {
+  align-self: center;
+  width: 100%;
+  justify-content: center;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+html[data-module='it'] .it-page-hero > div:not(:first-child) {
+  flex: 1 1 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+@media (min-width: 640px) {
+  html[data-module='it'] .it-page-hero {
+    padding: 10px !important;
+  }
+  html[data-module='it'] .it-page-hero > a,
+  html[data-module='it'] .it-page-hero > button { width: auto; }
+  html[data-module='it'] .it-page-hero > div:not(:first-child) { flex: 0 1 auto; }
+}
+
+html[data-module='it'] .it-page-hero > .relative.flex.flex-wrap > div:first-child {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+html[data-module='it'] .it-page-hero > .relative.flex.flex-wrap > div:first-child svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* IT hero banners follow the selected ERP theme, including readable controls. */
+html[data-module='it'] .it-page-hero {
+  --it-hero-heading: #ffffff;
+  --it-hero-copy: #dbeafe;
+  --it-hero-accent: #bfdbfe;
+  --it-hero-control-bg: rgba(255, 255, 255, 0.12);
+  --it-hero-control-border: rgba(255, 255, 255, 0.28);
+  --it-hero-control-text: #ffffff;
+  --it-hero-control-placeholder: rgba(255, 255, 255, 0.72);
+  color: var(--it-hero-heading) !important;
+  background: linear-gradient(125deg, #12345a 0%, #1d4ed8 58%, #4338ca 100%) !important;
+  border-color: rgba(191, 219, 254, 0.24) !important;
+  box-shadow: 0 14px 32px rgba(30, 64, 175, 0.16) !important;
+}
+
+html[data-module='it'] .it-page-hero h1 { color: var(--it-hero-heading) !important; }
+html[data-module='it'] .it-page-hero h1 span { color: var(--it-hero-accent) !important; }
+html[data-module='it'] .it-page-hero p { color: var(--it-hero-copy) !important; }
+html[data-module='it'] .it-page-hero input,
+html[data-module='it'] .it-page-hero select {
+  color: var(--it-hero-control-text) !important;
+  background-color: var(--it-hero-control-bg) !important;
+  border-color: var(--it-hero-control-border) !important;
+}
+html[data-module='it'] .it-page-hero input::placeholder { color: var(--it-hero-control-placeholder) !important; }
+
+html[data-module='it'][data-theme='light'] .it-page-hero {
+  --it-hero-heading: #17324d;
+  --it-hero-copy: #475569;
+  --it-hero-accent: #1d4ed8;
+  --it-hero-control-bg: rgba(255, 255, 255, 0.88);
+  --it-hero-control-border: rgba(51, 65, 85, 0.18);
+  --it-hero-control-text: #1e293b;
+  --it-hero-control-placeholder: #64748b;
+  background: linear-gradient(125deg, #f1f5f9 0%, #dbeafe 58%, #e0e7ff 100%) !important;
+  border-color: rgba(100, 116, 139, 0.2) !important;
+  box-shadow: 0 12px 28px rgba(30, 64, 175, 0.1) !important;
+}
+html[data-module='it'][data-theme='light'] .it-page-hero > .relative.flex.flex-wrap > div:first-child {
+  background: #1d4ed8 !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+html[data-module='it'][data-theme='dark'] .it-page-hero {
+  --it-hero-heading: #f4f4f5;
+  --it-hero-copy: #d4d4d8;
+  --it-hero-accent: #93c5fd;
+  background: linear-gradient(125deg, #18181b 0%, #27272a 58%, #312e81 100%) !important;
+  border-color: rgba(161, 161, 170, 0.2) !important;
+  box-shadow: 0 14px 32px rgba(9, 9, 11, 0.32) !important;
+}
+
+html[data-module='it'][data-theme='blue'] .it-page-hero {
+  --it-hero-heading: #ffffff;
+  --it-hero-copy: #dbeafe;
+  --it-hero-accent: #bfdbfe;
+  background: linear-gradient(125deg, #102a43 0%, #1d4ed8 58%, #3730a3 100%) !important;
+  border-color: rgba(191, 219, 254, 0.26) !important;
+  box-shadow: 0 14px 32px rgba(30, 64, 175, 0.2) !important;
+}
+
+html[data-module='it'][data-theme='red'] .it-page-hero {
+  --it-hero-heading: #fffafa;
+  --it-hero-copy: #ffe4e6;
+  --it-hero-accent: #fda4af;
+  background: linear-gradient(125deg, #4c0519 0%, #881337 58%, #be123c 100%) !important;
+  border-color: rgba(255, 228, 230, 0.24) !important;
+  box-shadow: 0 14px 32px rgba(76, 5, 25, 0.22) !important;
+}
+
+html[data-module='it'][data-theme='green'] .it-page-hero {
+  --it-hero-heading: #f4faf6;
+  --it-hero-copy: #e9f5ec;
+  --it-hero-accent: #b7e4c7;
+  background: linear-gradient(125deg, #1b4332 0%, #2d6a4f 58%, #40916c 100%) !important;
+  border-color: rgba(183, 228, 199, 0.3) !important;
+  box-shadow: 0 14px 32px rgba(27, 67, 50, 0.22) !important;
+}
+
+/* Mobile tables: each row becomes a tidy card with a highlighted header,
+   label/value rows, and a full-width action footer. */
+@media (max-width: 767px) {
+  html[data-module='it'] table.it-responsive-table {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  html[data-module='it'] table.it-responsive-table thead { display: none; }
+  html[data-module='it'] table.it-responsive-table tbody {
+    display: block;
+    width: 100%;
+    padding: 0.75rem;
+  }
+  html[data-module='it'] table.it-responsive-table tbody tr {
+    display: block;
+    position: relative;
+    margin: 0 0 0.8rem;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -16px rgba(15, 23, 42, 0.35);
+  }
+  html[data-module='it'] table.it-responsive-table tbody tr:last-child { margin-bottom: 0; }
+
+  /* First cell is the card header — no label, left aligned. */
+  html[data-module='it'] table.it-responsive-table tbody td[data-label]:first-child {
+    display: block;
+    width: auto;
+    max-width: none;
+    padding: 0.85rem 1rem !important;
+    border-bottom: 1px solid #e8eef7;
+    background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%);
+    text-align: left;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  html[data-module='it'] table.it-responsive-table tbody td[data-label]:first-child::before {
+    display: none;
+  }
+  html[data-module='it'] table.it-responsive-table tbody td[data-label]:first-child > button {
+    display: block;
+    width: 100%;
+    text-align: left;
+  }
+
+  /* Remaining cells become label/value rows. */
+  html[data-module='it'] table.it-responsive-table tbody td[data-label]:not(:first-child) {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 38%) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.6rem;
+    width: auto;
+    max-width: none;
+    padding: 0.6rem 1rem !important;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: right;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  html[data-module='it'] table.it-responsive-table tbody td[data-label]:not(:first-child)::before {
+    content: attr(data-label);
+    color: #64748b;
+    font-size: 0.6rem;
+    font-weight: 800;
+    line-height: 1.3;
+    letter-spacing: 0.06em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  /* Keep tap targets comfortable even between the sm and card breakpoints. */
+  html[data-module='it'] table.it-responsive-table tbody td[data-label]:not(:first-child) button {
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+  }
+
+  /* Long-form text reads better left aligned. */
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Details'],
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Description'],
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Module / Position'] {
+    text-align: left;
+  }
+
+  /* Action-style cells: label on its own line, buttons beneath. */
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Actions'],
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Manage'],
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Access'],
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Save'] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    padding: 0.75rem 1rem !important;
+    background: #f8fafc;
+    text-align: right;
+  }
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Actions']::before,
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Manage']::before,
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Access']::before,
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Save']::before {
+    content: attr(data-label);
+    flex: 1 1 100%;
+    margin: 0;
+    color: #64748b;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  /* Permission toggles fill the row so the state is easy to tap. */
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Access'] > div {
+    display: flex;
+    width: 100%;
+  }
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Access'] > div > * {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Actions'] > button {
+    flex: 0 0 auto;
+  }
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Manage'] > button,
+  html[data-module='it'] table.it-responsive-table tbody td[data-label='Save'] > button {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  html[data-module='it'] table.it-responsive-table tbody tr td[data-label]:last-child {
+    border-bottom: 0;
+  }
+
+  html.dark[data-module='it'] table.it-responsive-table tbody tr,
+  .dark html[data-module='it'] table.it-responsive-table tbody tr {
+    border-color: #334155;
+    background: #1e293b;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 24px -16px rgba(0, 0, 0, 0.6);
+  }
+  html.dark[data-module='it'] table.it-responsive-table tbody td[data-label]:first-child,
+  .dark html[data-module='it'] table.it-responsive-table tbody td[data-label]:first-child {
+    border-bottom-color: #334155;
+    background: linear-gradient(135deg, #1e293b 0%, #172554 100%);
+  }
+  html.dark[data-module='it'] table.it-responsive-table tbody td[data-label],
+  .dark html[data-module='it'] table.it-responsive-table tbody td[data-label] {
+    border-bottom-color: #334155;
+  }
+  html.dark[data-module='it'] table.it-responsive-table tbody td[data-label='Actions'],
+  html.dark[data-module='it'] table.it-responsive-table tbody td[data-label='Manage'],
+  html.dark[data-module='it'] table.it-responsive-table tbody td[data-label='Access'],
+  html.dark[data-module='it'] table.it-responsive-table tbody td[data-label='Save'],
+  .dark html[data-module='it'] table.it-responsive-table tbody td[data-label='Actions'],
+  .dark html[data-module='it'] table.it-responsive-table tbody td[data-label='Manage'],
+  .dark html[data-module='it'] table.it-responsive-table tbody td[data-label='Access'],
+  .dark html[data-module='it'] table.it-responsive-table tbody td[data-label='Save'] {
+    background: #172033;
+  }
+  html.dark[data-module='it'] table.it-responsive-table tbody td[data-label]::before,
+  .dark html[data-module='it'] table.it-responsive-table tbody td[data-label]::before {
+    color: #94a3b8;
+  }
+}
+
+/* Catch blue page heroes even when a page's header was not marked by the
+   shared banner detector (for example, a rounded-xl/rounded-2xl hero). */
+html[data-theme='light'] .app-viewport :is(
+  header,
+  [data-erp-page-banner],
+  [class*="rounded-3xl"]:has(h1),
+  [class*="rounded-2xl"]:has(h1),
+  [class*="rounded-xl"]:has(h1)
+):is(
+  [class*="from-blue-"], [class*="from-indigo-"], [class*="from-sky-"],
+  [class*="from-violet-"], [class*="bg-blue-"], [class*="bg-indigo-"],
+  [class*="bg-sky-"], [class*="bg-violet-"]
+) {
+  background: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
+  background-image: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
+  border-color: #303030 !important;
+}
+html[data-theme='light'] .app-viewport :is(
+  header,
+  [data-erp-page-banner],
+  [class*="rounded-3xl"]:has(h1),
+  [class*="rounded-2xl"]:has(h1),
+  [class*="rounded-xl"]:has(h1)
+):is(
+  [class*="from-blue-"], [class*="from-indigo-"], [class*="from-sky-"],
+  [class*="from-violet-"], [class*="bg-blue-"], [class*="bg-indigo-"],
+  [class*="bg-sky-"], [class*="bg-violet-"]
+) :is(h1, h2, h3, h4, p, span, small, label, strong, em, li):not(button *):not(a *) {
+  color: #f5f5f5 !important;
+  -webkit-text-fill-color: #f5f5f5 !important;
+}
+
+/* Some pages put the blue gradient on a nested wrapper that is not rounded
+   and is therefore missed by the banner marker. Target the gradient wrapper
+   that actually contains the page heading, then force readable text colors. */
+html[data-theme='light'] .app-viewport :is(
+  [class*="from-blue-"]:has(:is(h1, h2)),
+  [class*="from-indigo-"]:has(:is(h1, h2)),
+  [class*="from-sky-"]:has(:is(h1, h2)),
+  [class*="from-violet-"]:has(:is(h1, h2)),
+  [class*="bg-blue-"]:has(:is(h1, h2)),
+  [class*="bg-indigo-"]:has(:is(h1, h2)),
+  [class*="bg-sky-"]:has(:is(h1, h2)),
+  [class*="bg-violet-"]:has(:is(h1, h2))
+) {
+  background: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
+  background-image: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
+  border-color: #303030 !important;
+}
+html[data-theme='light'] .app-viewport :is(
+  [class*="from-blue-"]:has(:is(h1, h2)),
+  [class*="from-indigo-"]:has(:is(h1, h2)),
+  [class*="from-sky-"]:has(:is(h1, h2)),
+  [class*="from-violet-"]:has(:is(h1, h2)),
+  [class*="bg-blue-"]:has(:is(h1, h2)),
+  [class*="bg-indigo-"]:has(:is(h1, h2)),
+  [class*="bg-sky-"]:has(:is(h1, h2)),
+  [class*="bg-violet-"]:has(:is(h1, h2))
+) :is(h1, h2, h3, h4, p, span, small, label, strong, em, li, a):not(button *) {
+  color: #f5f5f5 !important;
+  -webkit-text-fill-color: #f5f5f5 !important;
+  background-image: none !important;
+  -webkit-background-clip: initial !important;
+  background-clip: initial !important;
+}
+html[data-theme='light'] .app-viewport [data-erp-page-banner] :is(
+  [class~="bg-white"], [class~="bg-white/80"], [class~="bg-white/90"], [class~="bg-white/95"],
+  [class~="bg-slate-50"], [class~="bg-gray-50"]
+) {
+  color: #171717 !important;
+  -webkit-text-fill-color: #171717 !important;
 }

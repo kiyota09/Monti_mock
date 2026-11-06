@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Man\Manager;
 use App\Http\Controllers\Controller;
 use App\Models\Man\Fabric;
 use App\Models\Man\DyeJob;
+use App\Models\Man\DyeingBatchFabric;
+use App\Models\Inv\Material;
 use App\Models\Man\Machine;
 use App\Models\Man\BoilerLog;
 use App\Models\Man\KnittingMachineSetup;
@@ -16,9 +18,10 @@ use App\Models\Vp\VpBulletin;
 use App\Models\Man\ShiftHandover;
 use App\Models\Man\IronJob;
 use App\Models\Man\ManufacturingOrder;
+use App\Models\Man\ManTaskAssignment;
 use App\Models\Man\Package;
-use App\Models\Man\SoftenerJob;
 use App\Models\Man\SqueezerJob;
+use App\Models\Man\FinishingWorkOrder;
 use App\Models\Ord\OrderQueue;
 use App\Models\Ord\PurchaseOrder;
 use App\Models\Ord\SalesOrder;
@@ -161,13 +164,13 @@ class ManufacturingManagerController extends Controller
             ],
             'dyeing' => [
                 'in_dyeing' => Fabric::where('status', 'dyeing')->count(),
-                'in_softener' => Fabric::where('status', 'softener')->count(),
-                'in_squeezer' => Fabric::where('status', 'squeezer')->count(),
-                'in_iron' => Fabric::where('status', 'iron')->count(),
-                'ready_to_pack' => Fabric::where('status', 'packed')->count(),
+                'in_bleaching' => Fabric::where('status', 'bleaching')->count(),
                 'pending_lab_dips' => LabDipRequest::whereIn('status', ['pending', 'in_progress', 'awaiting_spectro'])->count(),
             ],
             'finishing' => [
+                'in_squeezer' => Fabric::where('status', 'squeezer')->count(),
+                'in_iron' => Fabric::where('status', 'iron')->count(),
+                'ready_to_pack' => Fabric::where('status', 'packed')->count(),
                 'packages_pending' => Package::where('status', 'pending')->count(),
                 'rejected_fabrics' => Fabric::where('status', 'rejected')->count(),
             ],
@@ -202,25 +205,119 @@ class ManufacturingManagerController extends Controller
             $department = null;
         }
 
+        $finishingReadyOrders = FinishingWorkOrder::with(['salesOrder', 'manufacturingOrder', 'items.fabric'])
+            ->whereIn('status', ['ready_logistics', 'packing'])
+            ->latest()
+            ->get()
+            ->map(function (FinishingWorkOrder $workOrder) {
+                $items = $workOrder->items->map(fn ($item) => [
+                    'code' => $item->fabric?->code,
+                    'weight' => (float) ($item->fabric?->weight ?? 0),
+                ])->filter(fn ($item) => $item['code'])->values();
+
+                return [
+                    'id' => $workOrder->id,
+                    'jo_number' => $workOrder->salesOrder?->jo_number ?? $workOrder->manufacturingOrder?->code,
+                    'items' => $items,
+                    'total_weight_kg' => round($items->sum('weight'), 3),
+                ];
+            })
+            ->filter(fn ($workOrder) => $workOrder['items']->isNotEmpty())
+            ->values();
+
         $fabrics = Fabric::with('machine', 'operator', 'salesOrder')
             ->where('status', 'pending')
             ->orderBy('created_at')
             ->get();
 
-        $dyeJobs = DyeJob::with('fabric.salesOrder', 'machine', 'operator')
-            ->whereHas('fabric', fn($q) => $q->where('status', 'dyeing'))
+        $dyeingStages = collect();
+        if ($department === 'dyeing') {
+            $dyeingStages = DyeingBatchFabric::with([
+                'fabric.manufacturingOrder',
+                'fabric.salesOrder.recipe',
+                'batch.manufacturingOrder',
+                'batch.machine',
+                'batch.operator',
+                'batch.fabrics.fabric',
+                'batch.fabrics.records',
+                'records.operator',
+            ])->whereIn('current_stage', ['bleaching', 'pre_treatment', 'color', 'post_treatment'])
+                ->where('status', 'awaiting_review')->latest()->get()->map(function (DyeingBatchFabric $item) {
+                    $record = $item->records->first(fn ($record) => $record->stage === $item->current_stage && $record->review_status === 'awaiting_review');
+                    $order = $item->fabric?->manufacturingOrder ?? $item->batch?->manufacturingOrder;
+                    $salesOrder = $item->fabric?->salesOrder;
+                    $formula = $order?->dyeing_production_recipe;
+                    $recipeSource = $formula ? 'Production order recipe' : null;
+                    if (! $formula) {
+                        $formula = $salesOrder?->recipe?->dyeing_formula;
+                        $recipeSource = $formula ? 'Sample recipe (production order recipe not set)' : null;
+                    }
+                    $weight = (float) ($item->fabric?->weight ?? 0);
+                    $liquorRatio = (float) ($formula['liquor_ratio'] ?? 10);
+                    $recipeGroups = [];
+                    $groupDefinitions = [
+                        'dyestuffs' => ['aliases' => ['dyestuffs', 'dye_stuffs'], 'dose' => 'pct'],
+                        'basic_chemicals' => ['aliases' => ['basic_chemicals', 'basic_chemical'], 'dose' => 'gpl'],
+                        'auxiliary_agents' => ['aliases' => ['auxiliary_agents', 'auxiliaries', 'auxiliary'], 'dose' => 'gpl'],
+                        'post_treatment' => ['aliases' => ['post_treatment', 'post_treatment_agents'], 'dose' => 'gpl'],
+                    ];
+                    foreach ($groupDefinitions as $group => $definition) {
+                        $rows = collect($definition['aliases'])->flatMap(fn ($key) => $formula[$key] ?? [])->values();
+                        $materialIds = $rows->pluck('material_id')->filter()->unique();
+                        $materials = $materialIds->isEmpty() ? collect() : Material::whereIn('id', $materialIds)->get()->keyBy('id');
+                        $recipeGroups[$group] = $rows->map(function ($row) use ($definition, $weight, $liquorRatio, $materials) {
+                            $dose = (float) ($row[$definition['dose']] ?? $row['quantity'] ?? 0);
+                            $amount = $definition['dose'] === 'pct' ? $weight * $dose / 100 : $dose * $liquorRatio * $weight / 1000;
+                            $material = $materials->get($row['material_id'] ?? null);
+                            return [
+                                'name' => $material?->display_name ?? $row['name'] ?? $row['material_name'] ?? 'Material',
+                                'dose' => $dose,
+                                'dose_unit' => $definition['dose'] === 'pct' ? '% OWF' : 'g/L',
+                                'amount_kg' => round($amount, 3),
+                            ];
+                        })->all();
+                    }
+                    $stageFabrics = $item->batch?->fabrics ?? collect();
+                    $passedCount = $stageFabrics->filter(fn ($fabric) => $fabric->records->contains(fn ($stageRecord) =>
+                        $stageRecord->stage === $item->current_stage && $stageRecord->review_status === 'approved'
+                    ))->count();
+                    $batchFabricRows = $stageFabrics->map(fn ($batchFabric) => [
+                        'code' => $batchFabric->fabric?->code,
+                        'weight' => (float) ($batchFabric->fabric?->weight ?? 0),
+                        'current_stage' => $batchFabric->current_stage,
+                        'status' => $batchFabric->status,
+                    ])->values();
+
+                    return [
+                        'id' => $item->id,
+                        'record_id' => $record?->id,
+                        'fabric_code' => $item->fabric?->code,
+                        'weight' => $weight,
+                        'jo_number' => $salesOrder?->jo_number,
+                        'yarn_type' => $item->fabric?->yarn_type,
+                        'color' => $salesOrder?->recipe?->dye_color ?? $salesOrder?->color,
+                        'current_stage' => $item->current_stage,
+                        'requires_bleaching' => (bool) $item->requires_bleaching,
+                        'batch_code' => $item->batch?->code,
+                        'machine_no' => $item->batch?->machine?->machine_no,
+                        'operator' => $record?->operator?->name ?? $item->batch?->operator?->name,
+                        'review_status' => $record?->review_status,
+                        'attempt' => $record?->attempt,
+                        'stage_progress' => ['passed' => $passedCount, 'total' => $stageFabrics->count()],
+                        'batch_fabrics' => $batchFabricRows,
+                        'batch_total_weight_kg' => round($batchFabricRows->sum('weight'), 3),
+                        'recipe_source' => $recipeSource,
+                        'recipe_groups' => $recipeGroups,
+                    ];
+                })->values();
+        }
+
+        $squeezerJobs = SqueezerJob::with('fabric.salesOrder', 'machine', 'operator', 'ironJob')
+            ->whereHas('fabric', fn($q) => $q->where('status', 'squeezer'))
             ->get();
 
-        $softenerJobs = SoftenerJob::with('fabric.salesOrder', 'machine', 'operator', 'squeezerJob')
-            ->whereHas('fabric', fn($q) => $q->where('status', 'softener'))
-            ->get();
-
-        $squeezerJobs = SqueezerJob::with('softenerJob.fabric.salesOrder', 'machine', 'operator', 'ironJob')
-            ->whereHas('softenerJob.fabric', fn($q) => $q->where('status', 'squeezer'))
-            ->get();
-
-        $ironJobs = IronJob::with('squeezerJob.softenerJob.fabric.salesOrder', 'operator')
-            ->whereHas('squeezerJob.softenerJob.fabric', fn($q) => $q->where('status', 'iron'))
+        $ironJobs = IronJob::with('squeezerJob.fabric.salesOrder', 'operator')
+            ->whereHas('squeezerJob.fabric', fn($q) => $q->where('status', 'iron'))
             ->get();
 
         // Inspector handles 'pending'; the finishing supervisor pushes 'checked'.
@@ -244,14 +341,49 @@ class ManufacturingManagerController extends Controller
                 ];
             });
 
+        $knittingHandoffs = collect();
+        if ($department === 'knitting') {
+            $knittingHandoffs = SalesOrder::with('client')
+                ->whereNotNull('knitting_handoff_requested_at')
+                ->whereHas('activeManufacturingOrder', fn ($query) => $query->whereHas('fabrics', fn ($fabrics) =>
+                    $fabrics->where('status', 'knitting_approved')))
+                ->latest('knitting_handoff_requested_at')
+                ->get()
+                ->map(function (SalesOrder $salesOrder) {
+                    $order = $salesOrder->activeManufacturingOrder;
+                    $fabrics = Fabric::where('manufacturing_order_id', $order->id)
+                        ->where('status', 'knitting_approved')->get();
+                    $allocations = ManTaskAssignment::with('assignee:id,name')
+                        ->where('manufacturing_order_id', $order->id)
+                        ->where('department', 'knitting')->where('stage', 'knitting')
+                        ->whereIn('status', ['pending', 'in_progress'])->get();
+
+                    return [
+                        'id' => $order->id,
+                        'jo_number' => $salesOrder->jo_number,
+                        'client' => $salesOrder->client?->company_name ?? 'N/A',
+                        'total_quantity' => (float) $order->total_quantity,
+                        'approved_weight' => (float) $fabrics->sum('weight'),
+                        'submitted_at' => $salesOrder->knitting_handoff_requested_at?->format('M d, Y h:i A'),
+                        'staff' => $allocations->map(fn ($allocation) => $allocation->assignee?->name)->filter()->unique()->values(),
+                        'fabrics' => $fabrics->map(fn ($fabric) => [
+                            'code' => $fabric->code,
+                            'weight' => (float) $fabric->weight,
+                            'operator' => $fabric->operator?->name,
+                        ])->values(),
+                    ];
+                })->values();
+        }
+
         return Inertia::render('Dashboard/MAN/Manager/Production', [
             'department' => $department,
             'fabrics' => $fabrics,
-            'dyeJobs' => $dyeJobs,
-            'softenerJobs' => $softenerJobs,
+            'dyeingStages' => $dyeingStages,
             'squeezerJobs' => $squeezerJobs,
             'ironJobs' => $ironJobs,
             'packages' => $packages,
+            'finishingReadyOrders' => $finishingReadyOrders,
+            'knittingHandoffs' => $knittingHandoffs,
         ]);
     }
 
@@ -315,7 +447,7 @@ class ManufacturingManagerController extends Controller
             // Redo replaces the failed QC rows: drop this fabric's dye jobs
             // so it re-queues on the dyeing page (fabrics with a recorded
             // dye job are otherwise excluded as "awaiting quality check").
-            // Downstream rows cannot exist here — softener/squeezer/iron
+            // Downstream rows cannot exist here — bleaching/squeezer/iron
             // work all require later fabric statuses.
             DyeJob::where('fabric_id', $fabric->id)->delete();
 
@@ -367,7 +499,7 @@ class ManufacturingManagerController extends Controller
     }
 
     /**
-     * Forward an order (Purchase Order or Sales Order) to Checker Quality.
+     * Forward an order (Purchase Order or Sales Order) to the Finishing Quality Checker.
      * Creates a ManufacturingOrder record and updates the order's stage/status.
      */
     public function forwardToChecker(Request $request, $orderId)
@@ -445,7 +577,7 @@ class ManufacturingManagerController extends Controller
         }
 
         $validated = $request->validate([
-            'manufacturing_role' => 'required|in:knitting_yarn,knitting_mechanic,dyeing_color,dyeing_fabric_softener,dyeing_squeezer,dyeing_ironing,dyeing_lab_chemist,finishing_packaging,maintenance_checker,pollution_control_operator,safety_officer,boiler_operator,checker_quality',
+            'manufacturing_role' => 'required|in:knitting_yarn,knitting_mechanic,knitting_inspector,knitting_sample,dyeing_color,dyeing_bleaching,dyeing_pre_treatment,dyeing_treatment,dyeing_lab_chemist,finishing_squeezer,finishing_ironing,finishing_hydro,finishing_tubetex,finishing_packaging,finishing_inspector,maintenance_checker,pollution_control_operator,safety_officer,boiler_operator,checker_quality',
         ]);
 
         // Supervisors may only move staff within their own department —

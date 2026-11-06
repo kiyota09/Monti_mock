@@ -80,7 +80,6 @@ export const hrmModule = {
             .map(child => (child.isDropdown ? cleanAgency(child) : child))
             .filter(child => child.isDropdown ? (child.children && child.children.length > 0) : (child.href && child.href !== '#'))
         const list = existing.length ? existing : all
-        if (isCEO) return list
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         if (userPosition === 'manager' && user?.role === 'HRM' && !ctx.hasExplicitModuleGrants('HRM')) return list

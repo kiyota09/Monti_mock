@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmModal } from '@/lib/feedback';
 // Page 10: Manpower request detail (assign picker + progress + activity)
 import { ref, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
@@ -93,8 +94,8 @@ function submitCancel() {
     });
 }
 
-function closeRequest() {
-    if (!window.confirm('Close this filled request?')) return;
+async function closeRequest() {
+    if (!await confirmModal('Close this filled request?')) return;
     router.post(route('hrm.manpower-requests.close', props.request.id), {}, { preserveScroll: true });
 }
 

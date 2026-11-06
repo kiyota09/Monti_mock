@@ -1156,6 +1156,7 @@
 </template>
 
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -1695,6 +1696,9 @@ const validateScheduleForm = () => {
         if (selectedDate < today) {
             errors.push('Please select a future date (today or later).');
         }
+        if (scheduleForm.value.start_time && new Date(`${scheduleForm.value.date}T${scheduleForm.value.start_time}`) <= new Date()) {
+            errors.push('Please select a start time in the future.');
+        }
     }
     if (!scheduleForm.value.start_time) {
         errors.push('Please select a start time.');
@@ -1900,6 +1904,9 @@ const rescheduleInterview = async () => {
     if (!rescheduleForm.value.date || !rescheduleForm.value.start_time || !rescheduleForm.value.end_time || !rescheduleForm.value.interviewer_id || !rescheduleForm.value.reason) {
         showToastMessage('Validation Error', 'Please complete the new schedule, interviewer, and reason.', 'error'); return;
     }
+    if (new Date(`${rescheduleForm.value.date}T${rescheduleForm.value.start_time}`) <= new Date()) {
+        showToastMessage('Validation Error', 'Choose an interview date and start time in the future.', 'error'); return;
+    }
     if (rescheduleForm.value.start_time >= rescheduleForm.value.end_time) {
         showToastMessage('Validation Error', 'End time must be after start time.', 'error'); return;
     }
@@ -1943,7 +1950,7 @@ const approveReschedule = async (interview) => {
 
 const denyReschedule = async (interview) => {
     if (!interview || isSubmitting.value) return;
-    if (!confirm('Deny this reschedule request? The interview will keep its original schedule.')) return;
+    if (!await confirmModal('Deny this reschedule request? The interview will keep its original schedule.')) return;
     isSubmitting.value = true;
     try {
         const { data } = await axios.post(`/hrm/recruitment/interviews/${interview.id}/reschedule/deny`);
@@ -1976,7 +1983,7 @@ const cancelInterview = async () => {
 };
 
 const markNoShow = async (interview) => {
-    if (!confirm(`Mark ${interview.candidate_name} as No Show?`)) return;
+    if (!await confirmModal(`Mark ${interview.candidate_name} as No Show?`)) return;
     isSubmitting.value = true;
     try {
         await axios.post(`/hrm/recruitment/interviews/${interview.id}/no-show`);
@@ -2138,7 +2145,7 @@ const scheduleNewInterview = (interview) => {
 };
 
 const advanceToOnboarding = async (interview) => {
-    if (!confirm(`Advance ${interview.candidate_name} to Onboarding / Training? The applicant will be notified through the portal.`)) return;
+    if (!await confirmModal(`Advance ${interview.candidate_name} to Onboarding / Training? The applicant will be notified through the portal.`)) return;
     isSubmitting.value = true;
     try {
         const response = await axios.post(`/hrm/recruitment/interviews/${interview.id}/advance-to-onboarding`);

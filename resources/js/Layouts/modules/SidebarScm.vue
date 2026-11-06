@@ -22,7 +22,6 @@ export const scmModule = {
             { label: 'Vendors', href: route('scm.vendors'), icon: Building2, permKey: 'vendor' },
             { label: 'Analytics', href: route('scm.analytics'), icon: BarChart3, permKey: 'analytics' },
         ]
-        if (isCEO) return all
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         if (userPosition === 'manager' && user?.role === 'SCM' && !ctx.hasExplicitModuleGrants('SCM')) return all

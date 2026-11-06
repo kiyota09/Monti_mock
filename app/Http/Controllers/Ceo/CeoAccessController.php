@@ -61,7 +61,7 @@ class CeoAccessController extends Controller
             'knitting' => 'Knitting',
             'dyeing' => 'Dyeing',
             'maintenance' => 'Maintenance',
-            'checker' => 'Quality Checker',
+            'checker' => 'Finishing Quality Checker',
         ],
         'LOG' => [
             'dashboard'  => 'Dashboard',
@@ -91,6 +91,7 @@ class CeoAccessController extends Controller
         ],
         'ECO' => [
             'store' => 'Store',
+            'pricing' => 'Pricing',
             'push' => 'Push Notifications',
             'credit' => 'Credit',
             'supplier' => 'Suppliers',
@@ -152,13 +153,20 @@ class CeoAccessController extends Controller
     protected $manufacturingRoleLabels = [
         'knitting_yarn' => 'Knitting Yarn Staff',
         'knitting_mechanic' => 'Knitting Mechanic Staff',
+        'knitting_inspector' => 'Knitting Inspector Staff',
+        'knitting_sample' => 'Knitting Sample Staff',
         'dyeing_color' => 'Dyeing Color Staff',
-        'dyeing_fabric_softener' => 'Dyeing Fabric Softener Staff',
-        'dyeing_squeezer' => 'Dyeing Squeezer Staff',
-        'dyeing_ironing' => 'Dyeing Ironing Staff',
+        'dyeing_bleaching' => 'Dyeing Bleaching Staff',
+        'dyeing_pre_treatment' => 'Dyeing Pre Treatment Staff',
+        'dyeing_treatment' => 'Dyeing Post Treatment Staff',
+        'finishing_squeezer' => 'Finishing Squeezer Staff',
+        'finishing_ironing' => 'Finishing Heatsetting Staff',
+        'finishing_hydro' => 'Finishing Hydro Staff',
+        'finishing_tubetex' => 'Finishing Tubetex Staff',
         'finishing_packaging' => 'Finishing Packaging Staff',
+        'finishing_inspector' => 'Finishing Shrinkage Inspector',
         'dyeing_lab_chemist' => 'Dyeing Lab Chemist',
-        'checker_quality' => 'Checker Quality Staff',
+        'checker_quality' => 'Finishing Quality Checker',
         'maintenance_checker' => 'Maintenance Checker Staff',
         'pollution_control_operator' => 'Pollution Control Operator',
         'safety_officer' => 'Safety Officer Staff',
@@ -447,7 +455,9 @@ class CeoAccessController extends Controller
     {
         $ceo = User::where('role', 'CEO')->where('position', '!=', 'vice_president')->first();
 
-        $vicePresident = User::where('position', 'vice_president')->first();
+        $vicePresident = User::where(function ($query) {
+            $query->where('position', 'vice_president')->orWhere('role', 'COO');
+        })->first();
 
         $allUsers = User::with(['moduleAccess', 'pagePermissions'])
             ->where('role', '!=', 'CEO')

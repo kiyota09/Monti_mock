@@ -116,7 +116,7 @@ describe('resolveNav', () => {
         })
         const allPages = [...result.barItems, ...result.moreGroups.flatMap(g => g.pages)]
         const manPages = allPages.filter(p => p.moduleId === 'MAN')
-        // Quality Checker shares the man.production grant, so it is included.
+        // Finishing Quality Checker shares the man.production grant, so it is included.
         expect(manPages.map(p => p.id).sort()).toEqual(['man_dashboard', 'man_production', 'man_quality_checker'])
         expect(allPages.some(p => p.id === 'man_rejected')).toBe(false)
         expect(allPages.some(p => p.id === 'man_inventory')).toBe(false)

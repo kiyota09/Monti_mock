@@ -7,9 +7,8 @@ import TextInput from '@/Components/TextInput.vue';
 import ForgotPasswordModal from '@/Components/Auth/ForgotPasswordModal.vue';
 import AuthLayout from '@/Layouts/AuthLayout.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
-import Swal from 'sweetalert2';
+import { toast } from '@/lib/feedback';
+import { dialog } from '@/lib/feedback';
 
 defineProps<{
     canResetPassword?: boolean;
@@ -32,7 +31,7 @@ onMounted(() => {
 
 watch(() => (page.props.flash as any)?.geofence_error, (message) => {
     if (message) {
-        Swal.fire({
+        dialog.fire({
             title: 'Security Perimeter Block',
             text: message,
             icon: 'error',
@@ -104,6 +103,9 @@ watch(() => form.identity, (val) => {
 });
 
 const submit = () => {
+    // Prevent Enter/button double submissions from queuing multiple success dialogs.
+    if (form.processing) return;
+
     if (!form.identity) {
         toast.error('Identification is required.');
         triggerWarning('Required field.');
@@ -132,15 +134,13 @@ const submit = () => {
         }
     }
 
-    const routeName = isEmail ? 'login' : 'employee.login.store';
-
     const data = {
         password: form.password,
         remember: form.remember,
-        [isEmail ? 'email' : 'employee_id']: form.identity
+        identity: form.identity,
     };
 
-    form.transform(() => data).post(route(routeName), {
+    form.transform(() => data).post(route('login.store'), {
         onSuccess: () => {
             toast.success('Access Granted! Initializing session...');
         },
@@ -154,15 +154,15 @@ const submit = () => {
     });
 };
 
-const identityPlaceholder = computed(() => "user@monticorp.com or EMP-XXXX-X");
+const identityPlaceholder = computed(() => "Email address or employee ID");
 </script>
 
 <template>
     <AuthLayout
-        title="System Access"
+        title="Unified Portal"
         highlight="Access"
-        subtitle="Provide your employee ID or corporate email to initialize access."
-        badge="Employee Portal"
+        subtitle="Sign in with your email or employee ID. Monti Textile will open the portal linked to your account."
+        badge="Unified Portal Access"
         accent="blue"
     >
         <Head title="ERP Secure Authorization | Monti Corp" />
@@ -191,7 +191,7 @@ const identityPlaceholder = computed(() => "user@monticorp.com or EMP-XXXX-X");
                                     <InputLabel for="password" value="Password" class="text-white/90" />
                                     <button type="button" @click="showForgot = true"
                                         class="text-sm text-blue-300 hover:text-blue-200 font-medium transition-colors">
-                                        Forgot Key?
+                                        Forgot password?
                                     </button>
                                 </div>
 
@@ -255,7 +255,7 @@ const identityPlaceholder = computed(() => "user@monticorp.com or EMP-XXXX-X");
                             </div>
                         </form>
 
-        <ForgotPasswordModal v-model="showForgot" route-name="password.recover"
-            portal-label="Employee Portal" accent="blue" />
+        <ForgotPasswordModal v-model="showForgot" route-name="password.recover.unified"
+            portal-label="Unified Portal Access" accent="blue" />
     </AuthLayout>
 </template>

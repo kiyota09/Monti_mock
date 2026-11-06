@@ -547,7 +547,7 @@ class MonitorController extends Controller
 
         return redirect()->back()->with(
             'success',
-            "{$quantityToTransfer} {$stockItem->unit} of {$stockItem->material->name} transferred to {$department} department."
+            "{$quantityToTransfer} {$stockItem->unit} of {$stockItem->material->display_name} transferred to {$department} department."
         );
     }
 }

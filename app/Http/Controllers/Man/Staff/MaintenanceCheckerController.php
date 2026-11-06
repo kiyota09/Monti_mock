@@ -42,24 +42,6 @@ class MaintenanceCheckerController extends ManufacturingStaffController
         ]);
     }
 
-    public function storeMachine(Request $request)
-    {
-        $validated = $request->validate([
-            'machine_no' => 'required|string|unique:machines,machine_no',
-            'type' => 'required|string|in:knitting,dyeing,softening,squeezer,boiler',
-            'remarks' => 'nullable|string',
-        ]);
-
-        Machine::create([
-            'machine_no' => $validated['machine_no'],
-            'type' => $validated['type'],
-            'status' => 'available',
-            'remarks' => $validated['remarks'],
-        ]);
-
-        return redirect()->back()->with('message', 'Machine added successfully.');
-    }
-
     public function updateMachineStatus(Request $request, $machineId)
     {
         $validated = $request->validate([

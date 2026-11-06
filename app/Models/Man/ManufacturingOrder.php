@@ -16,12 +16,16 @@ class ManufacturingOrder extends Model
         'remaining_quantity',
         'status',
         'notes',
+        'dyeing_bleaching_required',
+        'dyeing_production_recipe',
     ];
 
     protected $casts = [
         'total_quantity' => 'decimal:2',
         'remaining_quantity' => 'decimal:2',
         'status' => 'string',
+        'dyeing_bleaching_required' => 'boolean',
+        'dyeing_production_recipe' => 'array',
     ];
 
     public function purchaseOrder()
@@ -42,5 +46,15 @@ class ManufacturingOrder extends Model
     public function packages()
     {
         return $this->hasMany(Package::class);
+    }
+
+    public function dyeingBatches()
+    {
+        return $this->hasMany(DyeingBatch::class);
+    }
+
+    public function taskAssignments()
+    {
+        return $this->hasMany(ManTaskAssignment::class);
     }
 }

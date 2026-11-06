@@ -185,9 +185,9 @@
             <Teleport to="body">
                 <Transition name="modal">
                     <div v-if="showDetailModal && selectedProduct"
-                        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                        class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm"
                         @click.self="showDetailModal = false">
-                        <div class="bg-white/95 dark:bg-zinc-900/95 backdrop-blur w-full max-w-4xl rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+                        <div class="modal-panel relative my-auto w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5 dark:bg-zinc-900 dark:ring-white/10">
                             <div class="relative overflow-hidden px-8 py-6 bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 text-white flex justify-between items-center flex-shrink-0">
                                 <div class="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-3xl animate-float" />
                                 <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 22px 22px;" />
@@ -207,12 +207,17 @@
 
                             <div class="p-6 sm:p-8 overflow-y-auto flex-1">
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                    <div class="space-y-4">
-                                        <div class="relative bg-gray-100 dark:bg-zinc-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-zinc-800">
+                                    <div class="relative flex flex-col gap-3 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-4 sm:p-5">
+                                        <div class="pointer-events-none absolute -top-16 -left-16 h-56 w-56 rounded-full bg-white/10 blur-3xl animate-float" />
+                                        <div class="pointer-events-none absolute -bottom-20 -right-10 h-56 w-56 rounded-full bg-fuchsia-400/25 blur-3xl animate-float-delayed" />
+                                        <div class="relative aspect-square w-full overflow-hidden rounded-3xl bg-black/20 shadow-2xl shadow-indigo-950/40 ring-1 ring-white/25">
                                             <img v-if="productImages(selectedProduct).length" :src="productImages(selectedProduct)[detailImageIndex]" :alt="selectedProduct.name"
-                                                class="w-full object-cover max-h-80" />
-                                            <div v-else class="h-64 flex items-center justify-center text-gray-400">
-                                                <Package class="h-16 w-16" />
+                                                class="absolute inset-0 h-full w-full object-cover" />
+                                            <div v-else class="flex h-full items-center justify-center text-white/70">
+                                                <div class="grid w-4/5 grid-cols-5 gap-2">
+                                                    <span v-for="(color, index) in productColors(selectedProduct)" :key="`${color.hex}-${index}`" class="aspect-square rounded-xl shadow-lg ring-2 ring-white/70" :style="{ backgroundColor: color.hex || '#CBD5E1' }" :title="color.name" />
+                                                    <Package v-if="!productColors(selectedProduct).length" class="col-span-5 m-auto h-16 w-16" />
+                                                </div>
                                             </div>
                                             <template v-if="productImages(selectedProduct).length > 1">
                                                 <button @click="detailPrev" class="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/45 p-2 text-white backdrop-blur hover:bg-black/65 active:scale-95">
@@ -224,9 +229,9 @@
                                                 <span class="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-black text-white">{{ detailImageIndex + 1 }}/{{ productImages(selectedProduct).length }}</span>
                                             </template>
                                         </div>
-                                        <div v-if="productImages(selectedProduct).length > 1" class="flex gap-2 overflow-x-auto pb-2">
+                                        <div v-if="productImages(selectedProduct).length > 1" class="relative flex gap-2 overflow-x-auto pb-1">
                                             <img v-for="(img, idx) in productImages(selectedProduct)" :key="img + idx" :src="img" @click="detailImageIndex = idx"
-                                                :class="['h-20 w-20 rounded-2xl object-cover border-2 cursor-pointer transition-all hover:-translate-y-0.5', detailImageIndex === idx ? 'border-indigo-500 ring-2 ring-indigo-200' : 'border-gray-200 dark:border-zinc-700 hover:border-indigo-300']" />
+                                                :class="['h-16 w-16 rounded-xl object-cover cursor-pointer transition-all', detailImageIndex === idx ? 'ring-2 ring-white ring-offset-2 ring-offset-indigo-700' : 'opacity-60 ring-1 ring-white/30 hover:opacity-100']" />
                                         </div>
                                     </div>
 
@@ -273,6 +278,23 @@
                                             {{ selectedProduct.description }}
                                         </div>
 
+                                        <div>
+                                            <div class="mb-3 flex items-center justify-between"><div class="flex items-center gap-2"><Palette class="h-4 w-4 text-slate-400" /><h3 class="text-sm font-black text-slate-800 dark:text-slate-100">Available colorways</h3></div><span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-500 dark:bg-zinc-800 dark:text-slate-400">{{ productColors(selectedProduct).length || (selectedProduct.colorHex ? 1 : 0) }}</span></div>
+                                            <div class="grid max-h-56 grid-cols-2 gap-2.5 overflow-y-auto pr-1 sm:grid-cols-3">
+                                                <template v-if="productColors(selectedProduct).length"><div v-for="(color, index) in productColors(selectedProduct)" :key="`${color.hex}-${index}`" class="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-2 dark:border-zinc-800 dark:bg-zinc-800/50"><span class="h-10 w-10 flex-shrink-0 rounded-xl shadow-inner ring-1 ring-black/10 dark:ring-white/10" :style="{ backgroundColor: color.hex || '#CBD5E1' }" /><div class="min-w-0"><p class="truncate text-xs font-bold text-slate-800 dark:text-slate-100">{{ color.name }}</p><p class="font-mono text-[10px] uppercase text-slate-400">{{ color.hex }}</p></div></div></template>
+                                                <div v-else-if="selectedProduct.colorHex" class="flex items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-2 dark:border-zinc-800 dark:bg-zinc-800/50"><span class="h-10 w-10 flex-shrink-0 rounded-xl shadow-inner ring-1 ring-black/10" :style="{ backgroundColor: selectedProduct.colorHex }" /><div class="min-w-0"><p class="truncate text-xs font-bold text-slate-800 dark:text-slate-100">{{ selectedProduct.colorName || 'Color' }}</p><p class="font-mono text-[10px] uppercase text-slate-400">{{ selectedProduct.colorHex }}</p></div></div>
+                                                <p v-else class="col-span-full rounded-2xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400 dark:border-zinc-700">No colorways have been listed.</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="rounded-2xl border border-violet-100 bg-violet-50/40 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
+                                            <div class="mb-3 flex items-center justify-between gap-3"><div class="flex items-center gap-2"><Layers class="h-4 w-4 text-violet-600 dark:text-violet-300" /><div><h3 class="text-sm font-black text-slate-800 dark:text-slate-100">Eligible yarns</h3><p class="text-[10px] text-slate-500 dark:text-slate-400">Compatible inventory materials</p></div></div><span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-violet-700 shadow-sm dark:bg-zinc-900 dark:text-violet-300">{{ selectedProduct.yarnMaterials?.length || 0 }}</span></div>
+                                            <div v-if="selectedProduct.yarnMaterials?.length" class="grid max-h-44 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                                                <div v-for="material in selectedProduct.yarnMaterials" :key="material.id" class="flex min-w-0 items-center gap-2.5 rounded-xl border border-violet-100 bg-white p-2.5 dark:border-violet-900/40 dark:bg-zinc-900"><span class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><Layers class="h-4 w-4" /></span><div class="min-w-0 flex-1"><p class="truncate text-xs font-bold text-slate-800 dark:text-slate-100">{{ material.display_name || material.name }}</p><p class="truncate font-mono text-[10px] text-slate-400">{{ material.mat_id }}<template v-if="material.unit"> · {{ material.unit }}</template></p></div><span class="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-black text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">{{ material.yarn_tier }}</span></div>
+                                            </div>
+                                            <p v-else class="rounded-xl border border-dashed border-violet-200 bg-white/60 px-3 py-3 text-xs text-slate-500 dark:border-violet-900/50 dark:bg-zinc-900/50 dark:text-slate-400">No eligible yarns have been assigned yet.</p>
+                                        </div>
+
                                         <div v-if="selectedProduct.sizes && selectedProduct.sizes.length">
                                             <h4 class="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Available Sizes</h4>
                                             <div class="flex flex-wrap gap-2">
@@ -311,6 +333,7 @@
 </template>
 
 <script setup>
+import { showNotice } from '@/lib/feedback';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import { ref, computed, onMounted } from 'vue';
@@ -326,6 +349,8 @@ import {
     Ruler,
     Boxes,
     Tag,
+    Palette,
+    Layers,
     Download
 } from 'lucide-vue-next';
 
@@ -350,6 +375,20 @@ const productImages = (product) => {
     return product.images
         .map((img) => (typeof img === 'string' ? img : img?.url))
         .filter(Boolean);
+};
+
+const productColors = (product) => {
+    const colors = product?.colors;
+    if (Array.isArray(colors)) return colors;
+    if (typeof colors === 'string') {
+        try {
+            const parsed = JSON.parse(colors);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+    return [];
 };
 
 // Derived categories
@@ -433,7 +472,7 @@ const debouncedSearch = () => {
 };
 
 const exportCatalog = () => {
-    alert('Export functionality will be implemented.');
+    showNotice('Export functionality will be implemented.');
 };
 
 onMounted(() => {

@@ -6,6 +6,7 @@ use App\Models\Core\User;
 use App\Models\Crm\Client;
 use App\Models\Eco\Inquiry;
 use App\Models\Inv\Product;
+use App\Models\Inv\Material;
 use App\Services\Fin\FinanceService;
 use App\Support\InquiryHash;
 use Illuminate\Database\Schema\Blueprint;
@@ -44,6 +45,9 @@ class B2BOrderToCashTest extends TestCase
             'name' => 'Cotton Jersey', 'sku' => 'CJ-001', 'status' => 'Active',
             'product_id' => 'P-001', 'stock_on_hand' => 100,
         ]);
+        $yarn = Material::create([
+            'mat_id' => 'YRN-001', 'name' => 'Cotton 30s', 'category' => 'Yarn', 'unit' => 'kg',
+        ]);
         $crm = $this->staff('CRM', 'manager', 'Ramon Cruz');
         $eco = $this->staff('ECO', 'manager', 'Eko Manager');
         $ord = $this->staff('ORD', 'manager', 'Ordy Manager');
@@ -81,19 +85,11 @@ class B2BOrderToCashTest extends TestCase
 
         // ── 4. CRM requests a fabric sample (lab loop entry) ──────────
         // NOTE: {inquiry} binds hashed keys only — raw numeric IDs 404.
-        $this->actingAs($crm)
-            ->post(route('crm.inquiry.sample-request', $hash), [
-                'product_id' => $product->id,
-                'color_description' => 'Navy blue, shade-matched',
-            ])
-            ->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('fabric_sample_requests', ['inquiry_id' => $inquiry->id]);
-
         // ── 5. Quotation issued → client accepts ──────────────────────
         $this->actingAs($crm)
             ->post(route('crm.inquiry.quotation', $hash), [
                 'items' => [[
-                    'fabric' => 'Cotton Jersey', 'design' => 'Plain',
+                    'product_id' => $product->id, 'fabric' => 'Cotton Jersey', 'fabric_type_id' => $yarn->id, 'design' => 'Plain',
                     'kilos' => 500, 'price_white' => 100, 'price_light' => 110, 'price_dark' => 120,
                 ]],
                 'vat_type' => 'exclusive', 'payment_terms' => '30 days',
@@ -106,6 +102,44 @@ class B2BOrderToCashTest extends TestCase
             ->post(route('client.quotation.accept', $quotation), [])
             ->assertSessionHasNoErrors();
         $this->assertSame('accepted', $quotation->fresh()->status);
+
+        $quoteItemId = $quotation->items()->where('color', 'Dark Colors')->value('id');
+        $this->actingAs($client, 'client')->post(route('client.conversation.sample-request', $hash), [
+            'request_method' => 'pantone',
+            'fabric_designs' => [[
+                'quotation_item_id' => $quoteItemId,
+                'colors' => [[
+                    'pantone_code' => '19-4052 TCX', 'pantone_color' => 'Classic Blue',
+                    'texture' => 'Medium', 'gsm' => 180, 'reference_type' => 'hex', 'color_hex' => '#0F4C81',
+                ]],
+            ]],
+        ])->assertRedirect();
+        $sample = \App\Models\Crm\FabricSampleRequest::firstOrFail();
+        $this->assertSame('client_submitted', $sample->status);
+        $this->actingAs($crm)->post(route('crm.inquiry.sample.pass-to-lab', [$hash, $sample->id]))->assertRedirect();
+        $chemist = $this->staff('MAN', 'staff', 'Dyeing Lab Chemist');
+        \App\Models\Core\User::whereKey($chemist->id)->update(['manufacturing_role' => 'dyeing_lab_chemist']);
+        $chemist->refresh();
+        \App\Models\Core\PagePermission::create([
+            'user_id' => $chemist->id, 'module' => 'MAN', 'page' => 'production', 'permission_level' => 'edit',
+        ]);
+        $dye = Material::create(['mat_id' => 'DYE-001', 'name' => 'Blue RR', 'category' => 'Dye', 'unit' => 'kg']);
+        $this->actingAs($chemist)->patch(route('man.staff.dyeing-lab-chemist.sample.start', $sample->id))->assertRedirect();
+        $this->actingAs($chemist)->post(route('man.staff.dyeing-lab-chemist.sample.formulate', $sample->id), [
+            'dyestuffs' => [['material_id' => $dye->id, 'name' => 'Blue RR', 'pct' => 2.5]],
+            'yarns' => [['material_id' => $yarn->id, 'name' => 'Cotton 30s', 'qty' => 5]],
+            'weave_design' => 'Plain', 'sample_photo' => $this->fakePodPhoto(),
+        ])->assertRedirect();
+        $sample->refresh();
+        $this->assertSame(\App\Models\Crm\FabricSampleRequest::STATUS_AWAITING_CRM_REVIEW, $sample->status);
+        $this->actingAs($crm)->post(route('crm.inquiry.sample.deliver', [$hash, $sample->id]), [
+            'delivery_courier' => 'Test Courier', 'delivery_tracking_reference' => 'SAMPLE-TRACK-1',
+        ])->assertRedirect();
+        $this->actingAs($client, 'client')->post(route('client.sample.noted', $sample->id))->assertRedirect();
+        $this->actingAs($client, 'client')->post(route('client.sample.received', $sample->id))->assertRedirect();
+        $this->actingAs($client, 'client')->post(route('client.sample.approve', $sample->id))->assertRedirect();
+        $sample->refresh();
+        $this->assertSame(\App\Models\Crm\FabricSampleRequest::STATUS_APPROVED, $sample->status);
 
         // ── 6. Client sends signed PO file ────────────────────────────
         $this->actingAs($client, 'client')
@@ -122,6 +156,7 @@ class B2BOrderToCashTest extends TestCase
                 'client_id' => $client->id,
                 'items' => [['product_id' => $product->id, 'quantity' => 500, 'unit_price' => 120]],
             ])
+            ->assertRedirect()
             ->assertSessionHasNoErrors();
         $po = \App\Models\Ord\PurchaseOrder::firstOrFail();
         $this->assertSame('credit_review', $po->status);
@@ -144,15 +179,24 @@ class B2BOrderToCashTest extends TestCase
             ->post(route('ord.orders.generate-so', $po), ['lines' => [[
                 'purchase_order_item_id' => $item->id,
                 'yarn_type' => 'Cotton', 'color' => 'Navy', 'design' => 'Plain',
-                'quantity' => 500, 'unit_price' => 120,
-            ]]])
+                'quantity' => 500, 'unit_price' => 120, 'recipe_id' => $sample->fresh()->recipe_id,
+            ]]] )
+            ->assertRedirect()
             ->assertSessionHasNoErrors();
         $so = \App\Models\Ord\SalesOrder::firstOrFail();
         $this->assertSame('confirmed', $so->status);
         $this->assertSame('released_to_production', $po->fresh()->status);
 
         // ── 11. Production pipeline to ready_for_dispatch ─────────────
-        foreach (['in_planning', 'in_production', 'production_done', 'ready_for_dispatch'] as $step) {
+        $this->actingAs($ord)
+            ->post(route('ord.productions.release', $so->id))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+        $mfg = \App\Models\Man\ManufacturingOrder::where('sales_order_id', $so->id)->firstOrFail();
+        $this->assertSame('pending', $mfg->status);
+        $this->assertSame($sample->fresh()->recipe_id, $so->fresh()->recipe_id);
+        $mfg->update(['remaining_quantity' => 0, 'status' => 'completed']);
+        foreach (['production_done', 'ready_for_dispatch'] as $step) {
             $this->actingAs($ord)
                 ->post(route('ord.orders.transition', ['type' => 'so', 'id' => $so->id]), ['to' => $step])
                 ->assertSessionHasNoErrors();
@@ -160,33 +204,84 @@ class B2BOrderToCashTest extends TestCase
         $this->assertSame('ready_for_dispatch', $so->fresh()->status);
 
         // ── 12. Packaging → warehouse → load → delivery (pending) ─────
-        $mfg = \App\Models\Man\ManufacturingOrder::create([
-            'sales_order_id' => $so->id, 'total_quantity' => 500,
+        $finishingSupervisor = $this->staff('MAN', 'manager', 'Finishing Supervisor');
+        \App\Models\Core\User::whereKey($finishingSupervisor->id)->update([
+            'is_manufacturing_supervisor' => true, 'supervisor_department' => 'finishing',
+        ]);
+        $finishingSupervisor->refresh();
+        $workOrder = \App\Models\Man\FinishingWorkOrder::create([
+            'manufacturing_order_id' => $mfg->id, 'sales_order_id' => $so->id,
+            'extraction_method' => 'hydro', 'extraction_assigned_to' => $finishingSupervisor->id,
+            'drying_method' => 'tubetex', 'drying_assigned_to' => $finishingSupervisor->id,
+            'status' => 'ready_logistics', 'quality_checked_by' => $finishingSupervisor->id,
+            'quality_checked_at' => now(),
+        ]);
+        $group = \App\Models\Man\FinishingPackageGroup::create([
+            'finishing_work_order_id' => $workOrder->id, 'code' => 'FG-TEST-001',
+            'group_name' => 'Acme Garments', 'packed_by' => $finishingSupervisor->id, 'status' => 'packed',
+        ]);
+        foreach (range(1, 20) as $roll) {
+            $fabric = \App\Models\Man\Fabric::create([
+                'code' => 'FAB-TEST-' . str_pad((string) $roll, 3, '0', STR_PAD_LEFT),
+                'manufacturing_order_id' => $mfg->id, 'sales_order_id' => $so->id,
+                'yarn_type' => 'Cotton 30s', 'roll_no' => (string) $roll, 'weight' => 25,
+                'operator_id' => $ord->id, 'shift' => 'day', 'processed_at' => now(), 'status' => 'squeezer',
+            ]);
+            $workItem = \App\Models\Man\FinishingWorkItem::create([
+                'finishing_work_order_id' => $workOrder->id, 'fabric_id' => $fabric->id, 'status' => 'packed',
+            ]);
+            \App\Models\Man\FinishingPackageGroupItem::create([
+                'finishing_package_group_id' => $group->id, 'finishing_work_item_id' => $workItem->id,
+            ]);
+        }
+        $this->actingAs($finishingSupervisor)
+            ->post(route('man.finishing-workflow.logistics', $workOrder))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+        $packageIds = \App\Models\War\WarehousePackage::where('manufacturing_order_id', $mfg->id)->pluck('id')->all();
+        $this->assertCount(20, $packageIds);
+        $this->assertSame(500.0, (float) \App\Models\War\WarehousePackage::whereIn('id', $packageIds)->sum('weight_kg'));
+        $secondClient = Client::create([
+            'company_name' => 'Northstar Apparel', 'email' => 'buyer@northstar.test',
+            'password' => Hash::make('secret123'), 'status' => 'active',
+        ]);
+        $secondSo = \App\Models\Ord\SalesOrder::create([
+            'client_id' => $secondClient->id, 'jo_number' => 'JO-NORTHSTAR-001',
+            'control_number' => 'CTL-NORTHSTAR-001', 'color' => 'Red', 'quantity' => 100,
+            'unit_price' => 120, 'subtotal' => 12000, 'tax_rate' => 12, 'tax_amount' => 1440,
+            'total_amount' => 13440, 'yarn_type' => 'Cotton', 'design' => 'Jersey',
+            'recipe_id' => $sample->fresh()->recipe_id, 'status' => 'ready_for_dispatch',
+        ]);
+        $secondMfg = \App\Models\Man\ManufacturingOrder::create([
+            'sales_order_id' => $secondSo->id, 'total_quantity' => 100,
             'remaining_quantity' => 0, 'status' => 'completed',
         ]);
-        $pkg = \App\Models\War\WarehousePackage::create([
-            'package_number' => 'WP-TEST-1', 'manufacturing_order_id' => $mfg->id,
-            'product_id' => $product->id, 'quantity' => 500, 'status' => 'pushed_to_logistics',
+        $secondPackage = \App\Models\War\WarehousePackage::create([
+            'package_number' => 'WP-NORTHSTAR-001', 'manufacturing_order_id' => $secondMfg->id,
+            'product_id' => $product->id, 'quantity' => 100, 'weight_kg' => 100, 'status' => 'pushed_to_logistics',
         ]);
+        $packageIds[] = $secondPackage->id;
         $route = \App\Models\Logistics\Route::create([
             'name' => 'Plant → Acme', 'client_id' => $client->id,
             'origin' => 'Plant', 'destination' => 'Acme site',
         ]);
-        $truck = \App\Models\Logistics\Truck::create(['truck_number' => 'TRK-1', 'status' => 'available']);
+        $truck = \App\Models\Logistics\Truck::create(['truck_number' => 'TRK-1', 'status' => 'available', 'max_load_kg' => 300]);
+        $firstTruckPackages = array_slice($packageIds, 0, 12);
+        $secondTruckPackages = array_slice($packageIds, 12);
         $this->actingAs($log)
-            ->post(route('logistics.load.pass'), ['package_ids' => [$pkg->id]])
+            ->post(route('logistics.load.pass'), ['package_ids' => $packageIds])
             ->assertSessionHasNoErrors();
-        $delivery = \App\Models\Logistics\Delivery::firstOrFail();
-        $this->assertSame('pending', $delivery->status);
 
         // ── 13. Dispatch → transit → POD → delivered ──────────────────
         $driver = \App\Models\Logistics\Driver::create(['user_id' => $driverUser->id, 'is_available' => true]);
         $this->actingAs($log)
-            ->post(route('logistics.dispatch.assign', $delivery), [
+            ->post(route('logistics.dispatch.store'), [
                 'truck_id' => $truck->id, 'driver_id' => $driver->id,
-                'route_id' => $route->id, 'scheduled_departure' => now()->addHour()->format('Y-m-d H:i:s'),
+                'package_ids' => $firstTruckPackages, 'scheduled_departure' => now()->addHour()->format('Y-m-d H:i:s'),
             ])
+            ->assertRedirect(route('logistics.dispatch.index'))
             ->assertSessionHasNoErrors();
+        $delivery = \App\Models\Logistics\Delivery::firstOrFail();
         $this->assertSame('dispatched', $delivery->fresh()->status);
         $this->actingAs($driverUser)
             ->post(route('logistics.driver.transit', $delivery))
@@ -203,11 +298,34 @@ class B2BOrderToCashTest extends TestCase
         $this->actingAs($ord)
             ->post(route('ord.delivery.sync', $delivery))
             ->assertSessionHasNoErrors();
+        $this->assertSame('in_transit', $so->fresh()->status, 'A partial JO delivery must not mark the whole JO delivered.');
+
+        $truck2 = \App\Models\Logistics\Truck::create(['truck_number' => 'TRK-2', 'status' => 'available', 'max_load_kg' => 300]);
+        $driverUser2 = $this->staff('LOG', 'staff', 'Dan Driver Two');
+        $driver2 = \App\Models\Logistics\Driver::create(['user_id' => $driverUser2->id, 'is_available' => true]);
+        $this->actingAs($log)->post(route('logistics.dispatch.store'), [
+            'truck_id' => $truck2->id, 'driver_id' => $driver2->id,
+            'package_ids' => $secondTruckPackages, 'scheduled_departure' => now()->addHours(2)->format('Y-m-d H:i:s'),
+        ])->assertRedirect(route('logistics.dispatch.index'))->assertSessionHasNoErrors();
+        $delivery2 = \App\Models\Logistics\Delivery::latest('id')->firstOrFail();
+        $this->assertCount(2, $delivery2->stops, 'One truck load can make separate client stops for multiple JOs.');
+        $this->actingAs($driverUser2)->post(route('logistics.driver.transit', $delivery2))->assertSessionHasNoErrors();
+        $this->actingAs($driverUser2)->post(route('logistics.driver.proof', $delivery2), [
+            'image' => $this->fakePodPhoto(), 'notes' => 'Remaining rolls delivered.',
+        ])->assertSessionHasNoErrors();
+        $this->actingAs($ord)->post(route('ord.delivery.sync', $delivery2))->assertSessionHasNoErrors();
         $this->assertSame('delivered', $so->fresh()->status);
+        $this->assertSame('delivered', $secondSo->fresh()->status);
 
         // ── 15. Client confirms receipt ───────────────────────────────
         $this->actingAs($client, 'client')
             ->post(route('client.receiving.mark', $delivery))
+            ->assertSessionHasNoErrors();
+        $this->actingAs($client, 'client')
+            ->post(route('client.receiving.mark', $delivery2))
+            ->assertSessionHasNoErrors();
+        $this->actingAs($secondClient, 'client')
+            ->post(route('client.receiving.mark', $delivery2))
             ->assertSessionHasNoErrors();
 
         // ── 16. FIN invoice syncs from the job order → paid in full ──
@@ -307,12 +425,13 @@ class B2BOrderToCashTest extends TestCase
             'crm_page_permissions', 'crm_client_assignments', 'hrm_departments',
             'clients', 'client_quotations', 'credit_accounts', 'products', 'inquiries',
             'conversation_messages', 'eco_conversation_attachments', 'eco_quotations',
-            'eco_quotation_items', 'fabric_sample_requests', 'purchase_orders',
-            'purchase_order_items', 'sales_orders', 'order_status_histories',
+            'eco_quotation_items', 'fabric_sample_requests', 'fabric_sample_formulations', 'purchase_orders',
+            'purchase_order_items', 'sales_orders', 'order_status_histories', 'order_queues',
             'manufacturing_orders', 'warehouse_packages', 'delivery_packages',
             'deliveries', 'routes', 'trucks', 'drivers', 'conductors',
             'proof_of_deliveries', 'fin_invoices', 'fin_invoice_payments',
-            'order_returns', 'bom_records',
+            'order_returns', 'bom_records', 'materials', 'delivery_stops', 'ceo_locations', 'client_notifications', 'notifications',
+            'fabrics', 'finishing_work_orders', 'finishing_work_items', 'finishing_package_groups', 'finishing_package_group_items',
         ] as $table) {
             Schema::dropIfExists($table);
         }
@@ -380,6 +499,11 @@ class B2BOrderToCashTest extends TestCase
             $t->string('status')->default('Active'); $t->text('colors')->nullable();
             $t->integer('stock_on_hand')->default(0); $t->timestamps();
         });
+        Schema::create('materials', function (Blueprint $t) {
+            $t->id(); $t->string('mat_id')->nullable(); $t->string('name');
+            $t->string('category'); $t->string('unit')->nullable(); $t->string('yarn_tier')->nullable();
+            $t->integer('reorder_point')->nullable(); $t->decimal('unit_cost', 12, 2)->nullable(); $t->timestamps();
+        });
         Schema::create('inquiries', function (Blueprint $t) {
             $t->id(); $t->foreignId('client_id'); $t->foreignId('product_id')->nullable();
             $t->text('initial_message')->nullable(); $t->string('status')->default('open');
@@ -409,6 +533,7 @@ class B2BOrderToCashTest extends TestCase
         });
         Schema::create('eco_quotation_items', function (Blueprint $t) {
             $t->id(); $t->foreignId('eco_quotation_id'); $t->foreignId('product_id')->nullable();
+            $t->foreignId('fabric_type_id')->nullable(); $t->string('fabric_type')->nullable();
             $t->string('fabric')->nullable(); $t->string('design')->nullable();
             $t->string('color')->nullable(); $t->decimal('kilos', 12, 2)->default(0);
             $t->decimal('unit_price', 12, 2)->default(0); $t->decimal('price', 12, 2)->default(0);
@@ -423,11 +548,29 @@ class B2BOrderToCashTest extends TestCase
             $t->string('status')->default('requested'); $t->text('formula')->nullable();
             $t->string('sample_image_path')->nullable(); $t->foreignId('recipe_id')->nullable();
             $t->foreignId('requested_by')->nullable(); $t->foreignId('formulated_by')->nullable();
-            $t->foreignId('parent_id')->nullable(); $t->timestamps();
+            $t->foreignId('parent_id')->nullable(); $t->string('request_method')->nullable();
+            $t->string('texture')->nullable(); $t->integer('gsm')->nullable(); $t->string('color_hex')->nullable();
+            $t->string('color_image_path')->nullable(); $t->string('carrier_name')->nullable();
+            $t->string('client_reference_path')->nullable();
+            $t->json('pantone_colors')->nullable(); $t->json('pantone_formula')->nullable();
+            $t->timestamp('delivery_sent_at')->nullable();
+            $t->timestamp('client_noted_at')->nullable(); $t->timestamp('client_received_at')->nullable();
+            $t->string('delivery_courier')->nullable(); $t->string('delivery_tracking_reference')->nullable();
+            $t->text('delivery_notes')->nullable(); $t->string('delivery_group_code')->nullable();
+            $t->unsignedBigInteger('delivery_message_id')->nullable(); $t->timestamps();
+        });
+        Schema::create('fabric_sample_formulations', function (Blueprint $t) {
+            $t->id(); $t->foreignId('fabric_sample_request_id'); $t->unsignedSmallInteger('version');
+            $t->json('formula'); $t->string('attachment_path'); $t->string('attachment_name');
+            $t->string('attachment_mime'); $t->foreignId('submitted_by')->nullable();
+            $t->string('status')->default('awaiting_crm'); $t->foreignId('reviewed_by')->nullable();
+            $t->timestamp('reviewed_at')->nullable(); $t->text('review_notes')->nullable();
+            $t->foreignId('conversation_message_id')->nullable(); $t->timestamps();
         });
         Schema::create('purchase_orders', function (Blueprint $t) {
             $t->id(); $t->foreignId('client_id'); $t->string('po_number');
             $t->decimal('subtotal', 12, 2)->default(0); $t->decimal('discount_amount', 12, 2)->default(0);
+            $t->decimal('tax_rate', 5, 2)->default(12); $t->decimal('tax_amount', 12, 2)->default(0);
             $t->decimal('total_amount', 12, 2)->default(0); $t->string('status')->default('credit_review');
             $t->string('tier_level')->nullable(); $t->text('notes')->nullable();
             $t->date('delivery_date')->nullable(); $t->string('attachment_path')->nullable();
@@ -447,7 +590,9 @@ class B2BOrderToCashTest extends TestCase
             $t->id(); $t->string('purchase_order_id')->nullable(); $t->foreignId('client_id');
             $t->string('jo_number'); $t->string('control_number')->nullable();
             $t->string('color')->nullable(); $t->decimal('quantity', 12, 2)->default(0);
-            $t->decimal('unit_price', 12, 2)->default(0); $t->decimal('total_amount', 12, 2)->default(0);
+            $t->decimal('unit_price', 12, 2)->default(0); $t->decimal('subtotal', 12, 2)->default(0);
+            $t->decimal('tax_rate', 5, 2)->default(12); $t->decimal('tax_amount', 12, 2)->default(0);
+            $t->decimal('total_amount', 12, 2)->default(0);
             $t->string('yarn_type')->nullable(); $t->string('design')->nullable();
             $t->foreignId('recipe_id')->nullable(); $t->string('status')->default('pending');
             $t->string('pushed_to')->nullable(); $t->timestamp('knitting_done_at')->nullable();
@@ -465,26 +610,73 @@ class B2BOrderToCashTest extends TestCase
             $t->string('from_status')->nullable(); $t->string('to_status');
             $t->foreignId('changed_by')->nullable(); $t->text('notes')->nullable(); $t->timestamps();
         });
+        Schema::create('order_queues', function (Blueprint $t) {
+            $t->id(); $t->foreignId('purchase_order_id')->nullable(); $t->foreignId('sales_order_id')->nullable();
+            $t->string('stage')->nullable(); $t->timestamp('scm_received_at')->nullable();
+            $t->timestamp('inv_checked_at')->nullable(); $t->timestamp('man_started_at')->nullable();
+            $t->timestamp('completed_at')->nullable(); $t->text('notes')->nullable(); $t->timestamps();
+        });
         Schema::create('manufacturing_orders', function (Blueprint $t) {
             $t->id(); $t->foreignId('purchase_order_id')->nullable();
             $t->foreignId('sales_order_id')->nullable(); $t->integer('total_quantity')->default(0);
             $t->integer('remaining_quantity')->default(0); $t->string('status')->default('pending');
             $t->text('notes')->nullable(); $t->timestamps();
         });
+        Schema::create('fabrics', function (Blueprint $t) {
+            $t->id(); $t->string('code')->unique(); $t->foreignId('manufacturing_order_id')->nullable();
+            $t->foreignId('sales_order_id')->nullable(); $t->foreignId('machine_id')->nullable();
+            $t->foreignId('dyeing_remake_request_id')->nullable(); $t->string('yarn_type');
+            $t->string('roll_no')->nullable(); $t->decimal('weight', 10, 2); $t->text('remarks')->nullable();
+            $t->foreignId('operator_id')->nullable(); $t->string('shift')->nullable();
+            $t->timestamp('processed_at')->nullable(); $t->string('status')->default('pending'); $t->timestamps();
+        });
+        Schema::create('finishing_work_orders', function (Blueprint $t) {
+            $t->id(); $t->foreignId('manufacturing_order_id')->unique(); $t->foreignId('sales_order_id');
+            $t->string('extraction_method'); $t->foreignId('extraction_assigned_to');
+            $t->string('drying_method')->nullable(); $t->foreignId('drying_assigned_to')->nullable();
+            $t->string('status')->default('extraction'); $t->foreignId('quality_checked_by')->nullable();
+            $t->timestamp('quality_checked_at')->nullable(); $t->text('quality_remarks')->nullable(); $t->timestamps();
+        });
+        Schema::create('finishing_work_items', function (Blueprint $t) {
+            $t->id(); $t->foreignId('finishing_work_order_id'); $t->foreignId('fabric_id')->unique();
+            $t->string('status')->default('extraction'); $t->timestamps();
+        });
+        Schema::create('finishing_package_groups', function (Blueprint $t) {
+            $t->id(); $t->foreignId('finishing_work_order_id'); $t->string('code')->unique();
+            $t->string('group_name')->nullable(); $t->foreignId('packed_by'); $t->string('status')->default('packed');
+            $t->foreignId('warehouse_package_id')->nullable(); $t->timestamp('sent_to_logistics_at')->nullable(); $t->timestamps();
+        });
+        Schema::create('finishing_package_group_items', function (Blueprint $t) {
+            $t->id(); $t->foreignId('finishing_package_group_id'); $t->foreignId('finishing_work_item_id')->unique();
+            $t->foreignId('warehouse_package_id')->nullable(); $t->timestamps();
+        });
         Schema::create('warehouse_packages', function (Blueprint $t) {
             $t->id(); $t->string('package_number');
             $t->foreignId('manufacturing_order_id')->nullable(); $t->foreignId('product_id')->nullable();
-            $t->integer('quantity')->default(0); $t->string('status')->default('pending');
+            $t->decimal('quantity', 12, 2)->default(0); $t->decimal('weight_kg', 12, 2)->nullable(); $t->string('status')->default('pending');
             $t->timestamp('pushed_at')->nullable(); $t->foreignId('pushed_by')->nullable(); $t->timestamps();
         });
         Schema::create('delivery_packages', function (Blueprint $t) {
             $t->foreignId('delivery_id'); $t->foreignId('warehouse_package_id');
+            $t->foreignId('delivery_stop_id')->nullable(); $t->timestamps();
+        });
+        Schema::create('delivery_stops', function (Blueprint $t) {
+            $t->id(); $t->foreignId('delivery_id'); $t->foreignId('client_id')->nullable();
+            $t->integer('sequence')->default(1); $t->string('label')->nullable(); $t->text('address')->nullable();
+            $t->decimal('latitude', 10, 7)->nullable(); $t->decimal('longitude', 10, 7)->nullable();
+            $t->string('status')->default('pending'); $t->timestamp('arrived_at')->nullable();
+            $t->text('notes')->nullable(); $t->string('outcome')->nullable(); $t->string('signature_path')->nullable();
+            $t->string('pod_photo_path')->nullable(); $t->text('pod_notes')->nullable();
+            $t->string('recipient_name')->nullable(); $t->timestamp('completed_at')->nullable(); $t->timestamps();
         });
         Schema::create('deliveries', function (Blueprint $t) {
             $t->id(); $t->string('delivery_number');
             $t->foreignId('truck_id')->nullable(); $t->foreignId('driver_id')->nullable();
             $t->foreignId('conductor1_id')->nullable(); $t->foreignId('conductor2_id')->nullable();
-            $t->foreignId('route_id')->nullable(); $t->string('status')->default('pending');
+            $t->foreignId('route_id')->nullable(); $t->decimal('origin_lat', 11, 8)->nullable();
+            $t->decimal('origin_lng', 11, 8)->nullable(); $t->string('origin_label')->nullable();
+            $t->decimal('total_distance_km', 10, 2)->nullable(); $t->integer('estimated_minutes')->nullable();
+            $t->json('route_geometry')->nullable(); $t->string('status')->default('pending');
             $t->timestamp('scheduled_departure')->nullable(); $t->timestamp('actual_departure')->nullable();
             $t->timestamp('arrival_time')->nullable(); $t->text('notes')->nullable(); $t->timestamps();
         });
@@ -493,8 +685,25 @@ class B2BOrderToCashTest extends TestCase
             $t->string('origin')->nullable(); $t->string('destination')->nullable(); $t->timestamps();
         });
         Schema::create('trucks', function (Blueprint $t) {
-            $t->id(); $t->string('truck_number')->nullable();
+            $t->id(); $t->string('truck_number')->nullable(); $t->decimal('max_load_kg', 12, 2)->nullable();
             $t->string('status')->default('available'); $t->timestamps();
+        });
+        Schema::create('ceo_locations', function (Blueprint $t) {
+            $t->id(); $t->foreignId('user_id')->nullable(); $t->decimal('latitude', 11, 8)->nullable();
+            $t->decimal('longitude', 11, 8)->nullable(); $t->integer('range_radius')->nullable();
+            $t->boolean('is_active')->default(true); $t->string('label')->nullable();
+            $t->string('place_name')->nullable(); $t->timestamps();
+        });
+        Schema::create('client_notifications', function (Blueprint $t) {
+            $t->id(); $t->foreignId('client_id'); $t->string('type')->nullable();
+            $t->string('title'); $t->text('body')->nullable(); $t->string('link_route')->nullable();
+            $t->foreignId('delivery_id')->nullable(); $t->boolean('is_read')->default(false); $t->timestamps();
+        });
+        Schema::create('notifications', function (Blueprint $t) {
+            $t->id(); $t->foreignId('user_id'); $t->string('type'); $t->string('title');
+            $t->text('body')->nullable(); $t->string('link_route')->nullable();
+            $t->foreignId('memo_id')->nullable(); $t->boolean('is_read')->default(false);
+            $t->foreignId('created_by')->nullable(); $t->timestamps();
         });
         Schema::create('drivers', function (Blueprint $t) {
             $t->id(); $t->foreignId('user_id'); $t->string('license_number')->nullable();
@@ -528,6 +737,7 @@ class B2BOrderToCashTest extends TestCase
         });
         Schema::create('bom_records', function (Blueprint $t) {
             $t->id(); $t->foreignId('client_id')->nullable(); $t->foreignId('product_id')->nullable();
+            $t->foreignId('fabric_sample_request_id')->nullable();
             $t->string('yarn_type')->nullable(); $t->string('dye_color')->nullable();
             $t->string('weave_design')->nullable(); $t->text('materials')->nullable(); $t->timestamps();
         });

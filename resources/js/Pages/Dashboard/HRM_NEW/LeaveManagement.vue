@@ -422,8 +422,7 @@ import { ref, computed, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { TreePalm, Hospital, Siren, Baby, ClipboardList, Check, X, Eye, ChevronDown } from 'lucide-vue-next';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const props = defineProps({
     balances: { type: [Array, Object], default: () => [] },

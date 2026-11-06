@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, watch, onUnmounted } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
 import { X, Upload, Trash2, FileText, Download } from 'lucide-vue-next';
@@ -44,8 +45,9 @@ const submit = () => {
     });
 };
 
-const remove = (doc) => {
+const remove = async (doc) => {
     if (!props.canEdit) return;
+    if (!await confirmModal(`Delete "${doc.original_name || doc.name || 'this file'}" permanently?`)) return;
     router.delete(route('crm.opportunities.documents.destroy', doc.id), { preserveScroll: true });
 };
 

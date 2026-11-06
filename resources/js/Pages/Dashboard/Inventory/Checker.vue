@@ -30,18 +30,55 @@ const props = defineProps({
     auth: Object,
 });
 
+const materialCategories = [
+    'Yarn',
+    'Dye Stuff',
+    'Auxillary Agent',
+    'Basic Chemicals',
+    'Post-Treatment',
+    'Pre-Treatment',
+    'Bio-Processing Enzymes',
+    'Care Agents',
+];
+const legacyCategories = ['Supplies', 'Packaging'];
+const activeCategory = ref('All');
+const displayCategory = (category) => category === 'Dye' ? 'Dye Stuff' : category;
+
 // UI state
 const searchQuery = ref('');
 const processingMaterial = ref(null);
+const clearFilters = () => {
+    searchQuery.value = '';
+    activeCategory.value = 'All';
+};
 
 // Filter materials
+const categoryTabs = computed(() => {
+    const tabs = [
+        { value: 'All', label: 'All materials', count: props.materials.length },
+        ...materialCategories.map((category) => ({
+            value: category,
+            label: category,
+            count: props.materials.filter((material) => displayCategory(material.category) === category).length,
+        })),
+    ];
+    legacyCategories.forEach((category) => {
+        const count = props.materials.filter((material) => material.category === category).length;
+        if (count) tabs.push({ value: category, label: `${category} (existing)`, count });
+    });
+    return tabs;
+});
+
 const filteredMaterials = computed(() => {
-    if (!searchQuery.value) return props.materials;
-    const q = searchQuery.value.toLowerCase();
-    return props.materials.filter(mat =>
-        mat.name.toLowerCase().includes(q) ||
-        mat.mat_id.toLowerCase().includes(q)
-    );
+    const q = searchQuery.value.trim().toLowerCase();
+    return props.materials.filter((mat) => {
+        const matchesCategory = activeCategory.value === 'All' || displayCategory(mat.category) === activeCategory.value;
+        const matchesSearch = !q
+            || String(mat.display_name || mat.name || '').toLowerCase().includes(q)
+            || String(mat.yarn_tier || '').toLowerCase().includes(q)
+            || String(mat.mat_id || '').toLowerCase().includes(q);
+        return matchesCategory && matchesSearch;
+    });
 });
 
 /**
@@ -199,7 +236,7 @@ const openedBadge = (label) => {
         <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
             <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
                 <!-- Hero header -->
-                <div class="animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/20">
+                <div data-erp-page-banner="surface" class="animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/20">
                     <div class="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-float" />
                     <div class="absolute -bottom-24 -left-10 h-64 w-64 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-delayed" />
                     <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 22px 22px;" />
@@ -212,7 +249,7 @@ const openedBadge = (label) => {
                                 <Sparkles class="h-3.5 w-3.5" /> Inventory · Stock Health
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Stock Checker <span v-if="!canEditChecker" class="ml-2 inline-block rounded-full bg-amber-400/90 px-3 py-1 align-middle text-xs font-black uppercase tracking-widest text-amber-950">View only</span></h1>
-                            <p class="text-sm text-blue-100/90">Monitor material stock levels and trigger procurement for low items.</p>
+                            <p class="text-sm text-blue-100/90">Showing {{ filteredMaterials.length }} of {{ materials.length }} materials · monitor stock and request replenishment.</p>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
@@ -234,6 +271,23 @@ const openedBadge = (label) => {
                     </div>
                 </div>
 
+                <nav class="-mb-2 flex gap-2 overflow-x-auto pb-2" aria-label="Filter stock checker materials by category">
+                    <button
+                        v-for="tab in categoryTabs"
+                        :key="tab.value"
+                        type="button"
+                        @click="activeCategory = tab.value"
+                        :aria-pressed="activeCategory === tab.value"
+                        :class="activeCategory === tab.value
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                            : 'bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-indigo-50 dark:bg-zinc-900/80 dark:text-gray-300 dark:ring-zinc-800 dark:hover:bg-indigo-950/40'"
+                        class="inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-black transition"
+                    >
+                        {{ tab.label }}
+                        <span :class="activeCategory === tab.value ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-gray-400'" class="rounded-full px-2 py-0.5 text-[10px]">{{ tab.count }}</span>
+                    </button>
+                </nav>
+
                 <!-- Bulk procurement bar -->
                 <div v-if="canEditChecker && bulkCount > 0" class="animate-fade-up flex flex-col sm:flex-row sm:items-center gap-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur rounded-3xl border border-indigo-200 dark:border-indigo-800 shadow-lg shadow-indigo-500/10 px-5 py-4">
                     <div class="flex items-center gap-2 min-w-0">
@@ -254,8 +308,8 @@ const openedBadge = (label) => {
                             <Package class="h-9 w-9 text-indigo-400" />
                         </div>
                         <p class="text-sm font-black text-gray-700 dark:text-gray-200">No materials found</p>
-                        <p class="text-xs text-gray-400 mt-1">Try a different search.</p>
-                        <button v-if="searchQuery" @click="searchQuery=''" class="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition active:scale-95">Clear filters</button>
+                        <p class="text-xs text-gray-400 mt-1">Try another category or search.</p>
+                        <button v-if="searchQuery || activeCategory !== 'All'" @click="clearFilters" class="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition active:scale-95">Clear filters</button>
                     </div>
                     <TransitionGroup v-else name="card" tag="div" class="overflow-x-auto">
                         <table key="checker-table" class="w-full text-left text-sm">
@@ -279,18 +333,18 @@ const openedBadge = (label) => {
                                 <tr v-for="mat in filteredMaterials" :key="mat.id"
                                     :class="['transition-colors', bulkSel[mat.id] !== undefined ? 'bg-indigo-50/70 dark:bg-indigo-950/20 hover:bg-indigo-100/60 dark:hover:bg-indigo-950/30' : 'hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10']">
                                     <td v-if="canEditChecker" class="pl-6 pr-2 py-5">
-                                        <input type="checkbox" :checked="bulkSel[mat.id] !== undefined" @change="toggleBulk(mat)" :title="`Select ${mat.name}`"
+                                        <input type="checkbox" :checked="bulkSel[mat.id] !== undefined" @change="toggleBulk(mat)" :title="`Select ${mat.display_name || mat.name}`"
                                             class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                                     </td>
                                     <td class="px-6 py-5 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">{{ mat.mat_id }}</td>
                                     <td class="px-6 py-5">
-                                        <p class="font-bold text-gray-900 dark:text-white">{{ mat.name }}</p>
+                                        <p class="font-bold text-gray-900 dark:text-white">{{ mat.display_name || mat.name }}</p>
                                         <span v-if="bulkSel[mat.id] !== undefined"
                                             class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-blue-600 text-white shadow-md shadow-blue-500/30 animate-pop">
                                             <Check class="w-3 h-3" /> Selected
                                         </span>
                                     </td>
-                                    <td class="px-6 py-5 text-slate-500 dark:text-gray-400 font-medium">{{ mat.category }}</td>
+                                    <td class="px-6 py-5 text-slate-500 dark:text-gray-400 font-medium">{{ displayCategory(mat.category) }}</td>
                                     <td class="px-6 py-5 text-center">
                                         <span :class="['inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ring-1', statusBadge(mat.status).class]">
                                             <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
@@ -340,7 +394,7 @@ const openedBadge = (label) => {
                             <div class="relative flex items-center justify-between">
                                 <div>
                                     <h3 class="text-lg font-black tracking-tight">Request Procurement</h3>
-                                    <p class="relative text-xs text-blue-100/90 mt-1">{{ singleMat.name }} · {{ singleMat.mat_id }}</p>
+                                    <p class="relative text-xs text-blue-100/90 mt-1">{{ singleMat.display_name || singleMat.name }} · {{ singleMat.mat_id }}</p>
                                 </div>
                                 <button @click="showSingleModal = false" class="p-2 rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/25 transition"><X class="w-4 h-4" /></button>
                             </div>
@@ -401,7 +455,7 @@ const openedBadge = (label) => {
                             <div v-for="line in bulkLines" :key="line.mat.id" class="p-4 rounded-2xl border border-gray-100 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-800/40 space-y-3">
                                 <div class="flex items-start gap-3">
                                     <div class="min-w-0 flex-1">
-                                        <p class="font-black text-sm text-gray-900 dark:text-white truncate">{{ line.mat.name }}</p>
+                                    <p class="font-black text-sm text-gray-900 dark:text-white truncate">{{ line.mat.display_name || line.mat.name }}</p>
                                         <p class="text-[11px] text-slate-500 dark:text-gray-400 font-mono">{{ line.mat.mat_id }} · unopened {{ Number(line.mat.total_stock ?? 0).toLocaleString() }} {{ line.mat.unit }} · reorder at {{ Number(line.mat.reorder_point ?? 0).toLocaleString() }}</p>
                                     </div>
                                     <button @click="toggleBulk(line.mat)" title="Remove" class="flex h-8 w-8 items-center justify-center rounded-xl text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition flex-shrink-0"><X class="w-4 h-4" /></button>

@@ -179,6 +179,12 @@ class InterviewController extends Controller
             'status' => 'nullable|in:Scheduled,Completed,Cancelled,No Show,Rescheduled',
             'result' => 'nullable|in:Passed,Failed,Pending',
         ]);
+        if (!in_array($data['status'] ?? null, ['Completed', 'Cancelled'], true) && !empty($data['date'])) {
+            $scheduledAt = \Illuminate\Support\Carbon::parse($data['date'].' '.($data['start_time'] ?? $interview->start_time));
+            if ($scheduledAt->lessThanOrEqualTo(now())) {
+                return back()->withErrors(['date' => 'Choose an interview date and time in the future.'])->withInput();
+            }
+        }
         if (isset($data['type'])) {
             $data['type'] = stripos($data['type'], 'final') !== false ? 'Final' : 'Initial';
         }
@@ -326,6 +332,11 @@ class InterviewController extends Controller
             'location' => 'nullable|string',
             'meeting_link' => 'nullable|string',
         ]);
+
+        $scheduledAt = \Illuminate\Support\Carbon::parse($data['date'].' '.$data['start_time']);
+        if ($scheduledAt->lessThanOrEqualTo(now())) {
+            return response()->json(['message' => 'Choose an interview date and time in the future.', 'errors' => ['date' => ['Choose an interview date and time in the future.']]], 422);
+        }
 
         $this->ensureInterviewerEligible($data['interviewer_id'] ?? null);
 

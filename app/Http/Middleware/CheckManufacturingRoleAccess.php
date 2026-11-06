@@ -38,7 +38,7 @@ class CheckManufacturingRoleAccess
      * Handle an incoming request.
      *
      * @param  string  $role  The manufacturing_role slug required for this route
-     *                        e.g. 'dyeing_color', 'dyeing_ironing', 'knitting_yarn', etc.
+     *                        e.g. 'dyeing_color', 'dyeing_bleaching', 'finishing_ironing'.
      */
     public function handle(Request $request, Closure $next, string $role): Response
     {

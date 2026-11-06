@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Plus, Wrench, Calendar, X, CheckCircle, AlertTriangle, Eye, Sparkles, Cog, ClipboardList } from 'lucide-vue-next';
+import { Wrench, Calendar, X, CheckCircle, AlertTriangle, Eye, Sparkles, Cog, ClipboardList } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
@@ -13,30 +13,14 @@ const props = defineProps({
 });
 
 // State for modals
-const showAddModal = ref(false);
 const showStatusModal = ref(false);
 const currentMachine = ref(null);
-
-// Form for adding new machine
-const addForm = useForm({
-    machine_no: '',
-    type: '',
-    remarks: '',
-});
 
 // Form for updating machine status
 const statusForm = useForm({
     status: '',
     remarks: '',
 });
-
-// Machine types
-const machineTypes = [
-    { value: 'knitting', label: 'Knitting Machine' },
-    { value: 'dyeing', label: 'Dyeing Machine' },
-    { value: 'softening', label: 'Softening Machine' },
-    { value: 'squeezer', label: 'Squeezer Machine' },
-];
 
 // Status options
 const statusOptions = [
@@ -50,27 +34,11 @@ const getStatusBadgeClass = (status) => {
     return option?.color || 'bg-gray-100 text-gray-800';
 };
 
-const openAddModal = () => {
-    addForm.reset();
-    showAddModal.value = true;
-};
-
 const openStatusModal = (machine) => {
     currentMachine.value = machine;
     statusForm.status = machine.status;
     statusForm.remarks = machine.remarks || '';
     showStatusModal.value = true;
-};
-
-const submitAddMachine = () => {
-    addForm.post(route('man.staff.maintenance-checker.store-machine'), {
-        preserveScroll: true,
-        onSuccess: () => {
-            showAddModal.value = false;
-            addForm.reset();
-            router.reload({ only: ['machines'] });
-        },
-    });
 };
 
 const submitUpdateStatus = () => {
@@ -85,7 +53,6 @@ const submitUpdateStatus = () => {
 };
 
 const closeModal = () => {
-    showAddModal.value = false;
     showStatusModal.value = false;
     currentMachine.value = null;
 };
@@ -123,15 +90,7 @@ const groupedMachines = computed(() => {
                             <span v-if="!canEditProduction" class="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">View only</span>
                             <p class="text-sm text-blue-100/90">{{ machines?.length ?? 0 }} machine{{ (machines?.length ?? 0) !== 1 ? 's' : '' }} · {{ Object.keys(groupedMachines).length }} types</p>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
-                                {{ machines?.length ?? 0 }} total
-                            </span>
-                            <button v-if="canEditProduction" @click="openAddModal"
-                                class="rounded-2xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wide text-indigo-700 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5">
-                                <Plus class="w-4 h-4" /> Add Machine
-                            </button>
-                        </div>
+                        <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">{{ machines?.length ?? 0 }} total</span>
                     </div>
                 </div>
 
@@ -168,6 +127,7 @@ const groupedMachines = computed(() => {
                                 <thead>
                                     <tr>
                                         <th class="px-6 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-400">Machine No.</th>
+                                        <th class="px-6 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-400">Power</th>
                                         <th class="px-6 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-400">Status</th>
                                         <th class="px-6 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-400">Remarks</th>
                                         <th class="px-6 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-400">Actions</th>
@@ -176,6 +136,7 @@ const groupedMachines = computed(() => {
                                 <tbody class="divide-y divide-gray-100 dark:divide-zinc-800">
                                     <tr v-for="machine in machinesList" :key="machine.id" class="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors">
                                         <td class="px-6 py-4 font-mono text-sm font-bold text-gray-900 dark:text-white">{{ machine.machine_no }}</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{{ machine.power || '—' }}</td>
                                         <td class="px-6 py-4">
                                             <span :class="getStatusBadgeClass(machine.status)"
                                                 class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1 inline-flex items-center gap-1">
@@ -201,60 +162,10 @@ const groupedMachines = computed(() => {
                         <Wrench class="h-9 w-9 text-indigo-400" />
                     </div>
                     <p class="text-sm font-black text-gray-700 dark:text-gray-200">No machines found</p>
-                    <p class="text-xs text-gray-400 mt-1">Click "Add Machine" to get started.</p>
+                                        <p class="text-xs text-gray-400 mt-1">Department supervisors register machines on their machine pages.</p>
                 </div>
             </div>
         </div>
-
-        <!-- Add Machine Modal -->
-        <Transition name="modal">
-            <div v-if="showAddModal"
-                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-                @click.self="closeModal">
-                <div class="bg-white/95 dark:bg-zinc-900/95 backdrop-blur rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-zinc-800">
-                    <div class="relative overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6">
-                        <div class="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-                        <div class="relative flex justify-between items-center">
-                            <h3 class="text-lg font-black text-white tracking-tight">Add New Machine</h3>
-                            <button @click="closeModal" class="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-white hover:bg-white/25 transition">
-                                <X class="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
-                    <form @submit.prevent="submitAddMachine" class="p-6 space-y-4">
-                        <div>
-                            <label class="block text-xs font-black uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Machine No.</label>
-                            <input type="text" v-model="addForm.machine_no" required class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                                placeholder="e.g., KN-001, DY-023" />
-                        </div>
-                        <div>
-                            <label class="block text-xs font-black uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Machine Type</label>
-                            <select v-model="addForm.type" required class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition">
-                                <option value="">Select Type</option>
-                                <option v-for="type in machineTypes" :key="type.value" :value="type.value">
-                                    {{ type.label }}
-                                </option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-black uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Remarks</label>
-                            <textarea v-model="addForm.remarks" rows="2" class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                                placeholder="Optional notes..."></textarea>
-                        </div>
-                        <div class="flex gap-3 pt-2">
-                            <button v-if="canEditProduction" type="submit" :disabled="addForm.processing || !canEditProduction"
-                                class="flex-1 rounded-2xl bg-indigo-600 text-white py-2.5 text-xs font-black uppercase tracking-wide shadow-lg shadow-indigo-500/25 hover:bg-indigo-700 transition active:scale-95 disabled:opacity-50">
-                                {{ addForm.processing ? 'Adding...' : 'Add Machine' }}
-                            </button>
-                            <button type="button" @click="closeModal"
-                                class="flex-1 rounded-2xl bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 py-2.5 text-xs font-black uppercase tracking-wide hover:bg-gray-200 dark:hover:bg-zinc-700 transition active:scale-95">
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </Transition>
 
         <!-- Update Status Modal -->
         <Transition name="modal">

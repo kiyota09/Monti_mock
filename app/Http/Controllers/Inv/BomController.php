@@ -18,10 +18,85 @@ class BomController extends Controller
      */
     public function index()
     {
-        $recipes = BomRecord::with('client', 'product')->get();
+        $recipes = BomRecord::with([
+            'client',
+            'product',
+            'fabricSampleRequest.formulations',
+            'sampleRequests.formulations',
+        ])
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->get();
         $clients = Client::all();
         $products = Product::all();
         $materials = Material::all();
+        $materialsById = $materials->keyBy('id');
+
+        $recipes->each(function (BomRecord $recipe) use ($materialsById) {
+            $sample = $recipe->fabricSampleRequest
+                ?: $recipe->sampleRequests->sortByDesc('updated_at')->first();
+            $approvedAttempt = $sample?->formulations->firstWhere('status', 'client_approved');
+            $formula = $sample?->formula ?: ($approvedAttempt?->formula ?? []);
+
+            $materialQuantities = $recipe->materials ?? [];
+            if (empty($materialQuantities) && $formula) {
+                $liquorRatio = (string) ($formula['liquor_ratio'] ?? '1:10');
+                $liquor = preg_match('/(?:^|:)\s*(\d+(?:\.\d+)?)\s*$/', $liquorRatio, $match)
+                    ? (float) $match[1]
+                    : 10.0;
+                foreach ([['dyestuffs', 'pct'], ['dye_stuffs', 'pct'], ['auxiliary_agents', 'gpl'], ['auxiliaries', 'gpl'], ['basic_chemicals', 'gpl'], ['post_treatment', 'gpl'], ['yarns', 'qty']] as [$group, $quantityKey]) {
+                    foreach ($formula[$group] ?? [] as $row) {
+                        $materialId = (int) ($row['material_id'] ?? 0);
+                        if (! $materialId) {
+                            continue;
+                        }
+
+                        $quantity = (float) ($row[$quantityKey] ?? $row['amount'] ?? 0);
+                        $perKg = $group === 'dyestuffs' || $group === 'dye_stuffs'
+                            ? $quantity / 100
+                            : (in_array($group, ['yarns'], true) ? $quantity : $quantity * $liquor / 1000);
+                        $materialQuantities[$materialId] = ($materialQuantities[$materialId] ?? 0) + $perKg;
+                    }
+                }
+            }
+
+            $recipe->setAttribute('formula_materials', collect($materialQuantities)
+                ->map(function ($quantity, $materialId) use ($materialsById) {
+                    $material = $materialsById->get((int) $materialId);
+
+                    return [
+                        'material_id' => (int) $materialId,
+                        'mat_id' => $material?->mat_id,
+                        'name' => $material?->display_name ?? $material?->name ?? 'Unknown material',
+                        'quantity' => (float) $quantity,
+                        'unit' => 'kg per kg fabric',
+                    ];
+                })
+                ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+                ->values()
+                ->all());
+
+            if ($sample) {
+                $recipe->setAttribute('sample_info', [
+                    'code' => $sample->code,
+                    'fabric_design' => $sample->fabricDesignForSample(),
+                    'gsm' => $sample->gsm,
+                    'texture' => $sample->texture,
+                    'image_path' => $sample->sample_image_path ?: $approvedAttempt?->attachment_path,
+                    'approved_at' => $approvedAttempt?->reviewed_at,
+                ]);
+                $recipe->setAttribute('approved_formula', $formula);
+                $recipe->setAttribute('yarn_type', $recipe->yarn_type ?: $sample->yarnTypeForSample());
+                $recipe->setAttribute('weave_design', $recipe->weave_design ?: ($formula['weave_design'] ?? $sample->fabricDesignForSample()));
+            } else {
+                $recipe->setAttribute('sample_info', null);
+                $recipe->setAttribute('approved_formula', null);
+            }
+
+            $recipe->unsetRelation('fabricSampleRequest');
+            $recipe->unsetRelation('sampleRequests');
+        });
+
         // Orders for per-order formula pinning (latest first).
         $orders = SalesOrder::orderBy('created_at', 'desc')
             ->take(200)

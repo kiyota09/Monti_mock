@@ -12,9 +12,9 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Restricts a MAN route to the supervisor of one production department
  * (knitting / dyeing / finishing). Used for the supervisor quality gates:
- *  - knitting supervisor  → knitting output gate (passFabric)
- *  - dyeing supervisor    → every dyeing stage gate (dye, softener, squeezer, iron)
- *  - finishing supervisor → push inspected packages to logistics
+ *  - knitting inspector   → knitting output gate (passFabric), through role routes
+ *  - dyeing supervisor    → dye and bleaching quality gates
+ *  - finishing supervisor → squeezer, ironing and logistics gates
  *
  * Elevated oversight roles (CEO, secretary, special_officer) keep access; a
  * regular department staff member never does (they work through `man.role`).

@@ -12,16 +12,17 @@ use App\Models\Man\ManufacturingSupervisorRole;
 use App\Support\ManufacturingPages;
 use App\Support\ManufacturingRoles;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 /**
  * Organization-wide access administration for the IT department.
  * - Account state: direct IT control.
- * - Position: STRICT — requires a pending President/VP command
- *   (position_change_requests) passed as request_id.
- * - Modules: root module locked; staff sees root only; elevated roles
- *   (manager/supervisor/secretary/special_officer) may hold extra modules.
+ * - Position: IT can directly promote/demote non-executive accounts.
+ * - Modules: employees retain their home module; managers, supervisors,
+ *   special officers, secretaries, the President and Vice President may
+ *   hold additional modules.
  * - Pages: explicit view/edit/disabled per page; new module grants seed
  *   every page as disabled so IT enables each page manually.
  */
@@ -49,7 +50,7 @@ class ItAccessControlController extends Controller
         'WAR', 'INV', 'PRO', 'FIN', 'PROJ', 'IT',
     ];
 
-    protected $assignablePositions = ['manager', 'staff', 'secretary', 'special_officer', 'vice_president', 'supervisor'];
+    protected $assignablePositions = ['manager', 'staff', 'secretary', 'special_officer', 'supervisor'];
 
     protected $supervisorDepartments = ['knitting', 'dyeing', 'finishing', 'maintenance', 'boiler'];
 
@@ -77,11 +78,24 @@ class ItAccessControlController extends Controller
             }
         }
 
+        // Keep the ECO RMA grant available even when a deployment is still
+        // using a cached module_pages config from before Returns was added.
+        $ordered['ECO']['returns'] ??= 'Returns & RMA Management';
+
         return $ordered;
     }
 
     protected function rootModuleFor(User $user): ?string
     {
+        if (strtoupper((string) $user->role) === 'CEO') {
+            return 'CEO';
+        }
+        if (strtoupper((string) $user->role) === 'COO' || $user->position === 'vice_president') {
+            return 'VP';
+        }
+        if ($user->position === 'secretary') {
+            return 'SEC';
+        }
         if ($user->is_manufacturing_supervisor) {
             return 'MAN';
         }
@@ -101,28 +115,21 @@ class ItAccessControlController extends Controller
     protected function isElevated(User $user): bool
     {
         return $user->is_manufacturing_supervisor
-            || in_array($user->position, ['manager', 'secretary', 'special_officer', 'vice_president'], true);
+            || in_array($user->position, ['manager', 'secretary', 'special_officer', 'vice_president', 'president'], true)
+            || in_array(strtoupper((string) $user->role), ['CEO', 'COO'], true);
     }
 
-    /**
-     * Root module whose pages can never be disabled for this account.
-     *
-     * Secretaries, special officers, managers and manufacturing supervisors
-     * are higher-ups with automatic full access on their root module by
-     * default — IT may only choose view vs edit there, never disabled.
-     * Returns the UPPERCASE module key, or null when no lock applies
-     * (staff, vice presidents, CEO-role accounts).
-     */
+    /** Root pages that should be enabled by default when first provisioned. */
     protected function lockedRootModuleFor(User $user): ?string
     {
-        if ($user->is_manufacturing_supervisor) {
-            return 'MAN';
+        if ($user->is_manufacturing_supervisor || in_array($user->position, ['manager', 'special_officer'], true)) {
+            $root = $this->rootModuleFor($user);
+            return $root ? strtoupper($root) : null;
         }
-        if (! in_array($user->position, ['manager', 'secretary', 'special_officer'], true)) {
-            return null;
-        }
-        $root = $this->rootModuleFor($user);
-        return $root ? strtoupper($root) : null;
+
+        // President/VP/Secretary workspaces are fixed and are not represented
+        // by the configurable module page catalog.
+        return null;
     }
 
     /**
@@ -163,7 +170,10 @@ class ItAccessControlController extends Controller
     {
         $users = User::with(['moduleAccess', 'pagePermissions'])
             ->withExists(['driver', 'conductor'])
-            ->whereNotIn('role', ['CEO', 'COO'])
+            ->where(function ($query) {
+                $query->whereIn('role', array_keys($this->moduleNames))
+                    ->orWhereIn('role', ['CEO', 'COO']);
+            })
             ->orderBy('role')
             ->orderBy('name')
             ->get()
@@ -189,6 +199,8 @@ class ItAccessControlController extends Controller
                 'is_manufacturing_supervisor' => (bool) $u->is_manufacturing_supervisor,
                 'root_module' => $this->rootModuleFor($u),
                 'is_elevated' => $this->isElevated($u),
+                'is_executive' => in_array(strtoupper((string) $u->role), ['CEO', 'COO'], true)
+                    || in_array($u->position, ['president', 'vice_president'], true),
             ]);
 
         $pagePerms = PagePermission::whereIn('user_id', $users->pluck('id'))->get();
@@ -201,6 +213,13 @@ class ItAccessControlController extends Controller
             ->get()
             ->groupBy('user_id')
             ->map(fn ($rows) => $rows->pluck('module')->values())
+            ->toArray();
+
+        $supervisorStaffAccess = User::where('is_manufacturing_supervisor', true)
+            ->get(['id', 'supervisor_department'])
+            ->mapWithKeys(fn (User $supervisor) => [
+                $supervisor->id => $this->supervisorStaffAccessFor($supervisor),
+            ])
             ->toArray();
 
         $pendingRequests = PositionChangeRequest::with([
@@ -245,7 +264,50 @@ class ItAccessControlController extends Controller
             // CoA, Lab Inventory, Bulk Transfer, History, Recipes).
             'manRolePages' => ManufacturingPages::ROLE_PAGES,
             'manOverviewPages' => ManufacturingPages::OVERVIEW,
+            'manSupervisorAccountPages' => collect(ManufacturingPages::SUPERVISOR_ACCOUNT_PAGES)
+                ->mapWithKeys(fn ($roles, $department) => [
+                    $department => ManufacturingPages::forSupervisorAccountDepartment($department),
+                ]),
+            'manSupervisorStaffAccess' => $supervisorStaffAccess,
         ]);
+    }
+
+    /** Build the role-by-role staff page matrix for one supervisor. */
+    protected function supervisorStaffAccessFor(User $supervisor): array
+    {
+        $roles = ManufacturingPages::rolesForDepartment($supervisor->supervisor_department);
+        $configured = DB::table('man_supervisor_staff_page_permissions')
+            ->where('supervisor_user_id', $supervisor->id)
+            ->get(['manufacturing_role', 'page', 'permission_level'])
+            ->groupBy('manufacturing_role')
+            ->map(fn ($rows) => $rows->mapWithKeys(fn ($row) => [
+                strtolower($row->page) => strtolower($row->permission_level),
+            ]));
+
+        $legacy = PagePermission::where('user_id', $supervisor->id)
+            ->where('module', 'MAN')
+            ->get(['page', 'permission_level'])
+            ->mapWithKeys(fn ($row) => [strtolower($row->page) => strtolower($row->permission_level ?? 'edit')]);
+        $legacyFallback = $legacy->get('production', 'disabled');
+
+        return [
+            'department' => $supervisor->supervisor_department,
+            'department_label' => ManufacturingRoles::departmentLabel($supervisor->supervisor_department),
+            'roles' => collect($roles)->map(function ($role) use ($configured, $legacyFallback) {
+                $pages = ManufacturingPages::ROLE_PAGES[$role] ?? [];
+                $permissions = [];
+                foreach ($pages as $page => $_label) {
+                    $permissions[$page] = $configured->get($role)?->get($page) ?? $legacyFallback;
+                }
+
+                return [
+                    'key' => $role,
+                    'label' => ManufacturingRoles::LABELS[$role] ?? ucwords(str_replace('_', ' ', $role)),
+                    'pages' => $pages,
+                    'permissions' => $permissions,
+                ];
+            })->values(),
+        ];
     }
 
     /**
@@ -260,9 +322,6 @@ class ItAccessControlController extends Controller
         ]);
 
         $user = User::findOrFail($data['user_id']);
-        if (in_array($user->role, ['CEO', 'COO'], true)) {
-            return back()->withErrors(['error' => 'Executive (CEO/COO) accounts cannot be modified here.']);
-        }
         if ($user->id === auth()->id() && in_array($data['action'], ['disable', 'suspend'], true)) {
             return back()->withErrors(['error' => 'You cannot disable or suspend your own account.']);
         }
@@ -312,10 +371,7 @@ class ItAccessControlController extends Controller
         return back()->with('success', 'Account status updated.');
     }
 
-    /**
-     * Promote / demote position — STRICT: requires a pending
-     * President/VP command (position_change_requests.request_id).
-     */
+    /** Promote or demote a non-executive employee directly from IT Access Control. */
     public function updatePosition(Request $request)
     {
         $data = $request->validate([
@@ -323,36 +379,40 @@ class ItAccessControlController extends Controller
             'position' => 'required|in:' . implode(',', $this->assignablePositions),
             'role' => 'nullable|in:' . implode(',', $this->assignableRoles),
             'supervisor_department' => 'nullable|in:' . implode(',', $this->supervisorDepartments),
-            'request_id' => 'required|exists:position_change_requests,id',
         ]);
 
         $user = User::findOrFail($data['user_id']);
-        if ($user->role === 'CEO' && $user->position !== 'vice_president') {
-            return back()->withErrors(['error' => 'CEO accounts cannot be modified here.']);
+        if (in_array(strtoupper((string) $user->role), ['CEO', 'COO'], true)
+            || in_array($user->position, ['president', 'vice_president'], true)) {
+            return back()->withErrors(['error' => 'CEO and COO accounts cannot be promoted or demoted by IT.']);
         }
 
-        $cmd = PositionChangeRequest::findOrFail($data['request_id']);
-        if ($cmd->status !== 'pending') {
-            return back()->withErrors(['error' => 'This executive command is no longer pending.']);
-        }
-        if ((int) $cmd->target_user_id !== (int) $user->id) {
-            return back()->withErrors(['error' => 'This command is for a different employee.']);
-        }
-        if ($cmd->requested_position !== $data['position']) {
-            return back()->withErrors(['error' => "Position must match the executive command ({$cmd->requested_position})."]);
-        }
-        if ($cmd->requested_role && ! empty($data['role']) && $cmd->requested_role !== $data['role']) {
-            return back()->withErrors(['error' => "Home module must match the executive command ({$cmd->requested_role})."]);
+        $newRole = strtoupper((string) ($data['role'] ?? $user->role));
+        if (in_array($newRole, ['CEO', 'COO'], true)) {
+            return back()->withErrors(['error' => 'IT cannot assign the CEO or COO role.']);
         }
 
-        // ── Manufacturing-supervisor track (replaces the removed MAN page) ──
-        if ($data['position'] === 'supervisor' || $cmd->action === 'remove_supervisor') {
-            return $this->fulfilSupervisorCommand($user, $cmd, $data);
-        }
-        // A current supervisor can only move through supervisor commands —
-        // never a plain position change (which would orphan the seat/flag).
-        if ($user->is_manufacturing_supervisor) {
-            return back()->withErrors(['error' => 'This employee holds a supervisor seat. Fulfil a supervisor assign/remove command instead.']);
+        if ($data['position'] === 'supervisor') {
+            if ($newRole !== 'MAN') {
+                return back()->withErrors(['error' => 'Manufacturing supervisor seats are MAN-only.']);
+            }
+            $department = $data['supervisor_department'] ?? null;
+            if (! $department) {
+                return back()->withErrors(['supervisor_department' => 'Choose a supervisor department.']);
+            }
+            $occupant = User::where('is_manufacturing_supervisor', true)
+                ->where('supervisor_department', $department)
+                ->where('id', '!=', $user->id)
+                ->first(['id', 'name']);
+            if ($occupant) {
+                return back()->withErrors(['supervisor_department' => "The {$department} supervisor seat is held by {$occupant->name}."]);
+            }
+        } elseif ($user->is_manufacturing_supervisor) {
+            // A direct demotion from a supervisor seat must clear the special
+            // role flag and its scoped page grants as well as the position.
+            $department = $user->supervisor_department;
+        } else {
+            $department = null;
         }
 
         if ($data['position'] === 'secretary') {
@@ -366,7 +426,7 @@ class ItAccessControlController extends Controller
         }
 
         if ($data['position'] === 'manager') {
-            $roleForCheck = $data['role'] ?? $cmd->requested_role ?? $user->role;
+            $roleForCheck = $newRole;
             $exists = User::where('position', 'manager')
                 ->where('role', $roleForCheck)
                 ->where('id', '!=', $user->id)
@@ -376,30 +436,40 @@ class ItAccessControlController extends Controller
             }
         }
 
-        if ($data['position'] === 'vice_president') {
-            $exists = User::where('position', 'vice_president')
-                ->where('id', '!=', $user->id)
-                ->first();
-            if ($exists) {
-                return back()->withErrors(['error' => "A vice president already exists ({$exists->name}). Demote them first."]);
-            }
-        }
+        $before = [
+            'position' => $user->is_manufacturing_supervisor ? 'supervisor' : $user->position,
+            'role' => $user->role,
+            'supervisor_department' => $user->supervisor_department,
+        ];
 
-        $before = ['position' => $user->position, 'role' => $user->role];
-
-        DB::transaction(function () use ($user, $data, $cmd) {
-            $newRole = $data['role'] ?? $cmd->requested_role ?? $user->role;
-            if ($data['position'] === 'vice_president') {
-                $user->role = 'COO';
-            } elseif (! empty($newRole)) {
-                $user->role = $newRole;
+        DB::transaction(function () use ($user, $data, $newRole, $department) {
+            $user->role = $newRole;
+            if ($data['position'] === 'supervisor') {
+                $user->position = 'staff';
+                $user->is_manufacturing_supervisor = true;
+                $user->supervisor_department = $department;
+            } else {
+                $user->position = $data['position'];
+                if ($user->is_manufacturing_supervisor) {
+                    $user->is_manufacturing_supervisor = false;
+                    $user->supervisor_department = null;
+                    ManufacturingSupervisorRole::where('user_id', $user->id)->delete();
+                    DB::table('man_supervisor_staff_page_permissions')
+                        ->where('supervisor_user_id', $user->id)
+                        ->delete();
+                }
             }
-            // Demoting a VP back out of the COO role restores the home module.
-            if ($user->position === 'vice_president' && $data['position'] === 'staff' && ! empty($newRole)) {
-                $user->role = $newRole;
-            }
-            $user->position = $data['position'];
             $user->save();
+
+            if ($data['position'] === 'supervisor') {
+                ManufacturingSupervisorRole::where('user_id', $user->id)->delete();
+                foreach (ManufacturingRoles::rolesForDepartment($department) as $role) {
+                    ManufacturingSupervisorRole::create([
+                        'user_id' => $user->id,
+                        'manufacturing_role' => $role,
+                    ]);
+                }
+            }
 
             if ($data['position'] === 'staff') {
                 $user->moduleAccess()->delete();
@@ -407,21 +477,19 @@ class ItAccessControlController extends Controller
             } elseif ($data['position'] === 'manager') {
                 $user->pagePermissions()->delete();
             }
-
-            $cmd->status = 'fulfilled';
-            $cmd->reviewed_by = auth()->id();
-            $cmd->reviewed_at = now();
-            $cmd->save();
         });
 
         $this->logAction($user->id, 'position.updated',
-            "Position updated for {$user->name}: {$before['position']} → {$user->position}" .
-            ($before['role'] !== $user->role ? " ({$before['role']} → {$user->role})" : '') .
-            " via executive command #{$cmd->id}.",
-            ['before' => $before, 'after' => ['position' => $user->position, 'role' => $user->role], 'request_id' => $cmd->id]
+            "Position updated for {$user->name}: {$before['position']} → " . ($user->is_manufacturing_supervisor ? 'supervisor' : $user->position) .
+            ($before['role'] !== $user->role ? " ({$before['role']} → {$user->role})" : ''),
+            ['before' => $before, 'after' => [
+                'position' => $user->is_manufacturing_supervisor ? 'supervisor' : $user->position,
+                'role' => $user->role,
+                'supervisor_department' => $user->supervisor_department,
+            ]]
         );
 
-        return back()->with('success', 'Position updated per executive command.');
+        return back()->with('success', 'Employee position updated.');
     }
 
     /**
@@ -540,28 +608,34 @@ class ItAccessControlController extends Controller
 
     /**
      * Sync module grants (user_module_access).
-     * Rules: root module always kept + locked; staff may hold ONLY root.
+     * Home workspaces are fixed; approved elevated roles may hold add-on modules.
      */
     public function updateModules(Request $request)
     {
         $data = $request->validate([
             'user_id' => 'required|exists:users,id',
             'modules' => 'array',
-            'modules.*' => 'in:' . implode(',', array_keys($this->moduleNames)),
+            'modules.*' => 'string',
         ]);
 
         $user = User::findOrFail($data['user_id']);
-        if (in_array($user->role, ['CEO', 'COO'], true)) {
-            return back()->withErrors(['error' => 'Executive (CEO/COO) accounts cannot be modified here.']);
-        }
-
         $root = $this->rootModuleFor($user);
         $elevated = $this->isElevated($user);
 
         $before = $user->moduleAccess()->pluck('module')->toArray();
-        $modules = array_values(array_unique($data['modules'] ?? []));
 
-        // Root is always granted (locked in UI, enforced here too).
+        // Only configurable module codes are stored here. Virtual roots such
+        // as SEC/VP/CEO are re-added below; sending them back from the UI used
+        // to fail validation and silently block the whole save.
+        $knownModules = array_map('strtoupper', array_keys($this->moduleNames));
+        $modules = collect($data['modules'] ?? [])
+            ->map(fn ($module) => strtoupper(trim((string) $module)))
+            ->filter(fn ($module) => in_array($module, $knownModules, true))
+            ->unique()
+            ->values()
+            ->all();
+
+        // Preserve the account's home module while allowing add-ons.
         if ($root && ! in_array($root, $modules, true)) {
             $modules[] = $root;
         }
@@ -579,7 +653,7 @@ class ItAccessControlController extends Controller
         $modules = array_values(array_unique($modules));
 
         $prunedPages = 0;
-        DB::transaction(function () use ($user, $modules, &$prunedPages) {
+        DB::transaction(function () use ($user, $request, $modules, &$prunedPages) {
             $user->moduleAccess()->delete();
             foreach ($modules as $module) {
                 UserModuleAccess::create([
@@ -602,12 +676,15 @@ class ItAccessControlController extends Controller
                 $prunedPages = $staleIds->count();
                 PagePermission::whereIn('id', $staleIds)->delete();
             }
-            // Seed every page of every granted module as disabled so IT
-            // must explicitly enable each page (view/edit) afterwards —
-            // except a higher-up's locked root, which seeds as edit
-            // (their default; it can never be disabled).
-            $lockedRoot = $this->lockedRootModuleFor($user);
-            $this->seedDisabledPages($user, $modules, $lockedRoot);
+            // Seed add-on pages disabled. Home module pages for managers and
+            // supervisors start enabled, but IT can change them like any page.
+            // A combined save skips seeding entirely: the submitted page
+            // levels are authoritative, so saving one page can never switch on
+            // (or create) every page of a home module.
+            if (! $request->boolean('skip_seed')) {
+                $lockedRoot = $this->lockedRootModuleFor($user);
+                $this->seedDisabledPages($user, $modules, $lockedRoot);
+            }
         });
 
         $this->logAction($user->id, 'modules.updated',
@@ -620,20 +697,90 @@ class ItAccessControlController extends Controller
             . ($prunedPages ? " {$prunedPages} page grant(s) of the removed module(s) were revoked too." : ''));
     }
 
+    /** Save module and page settings in one request so the page grants cannot be skipped. */
+    public function updateAccess(Request $request)
+    {
+        $data = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'modules' => 'array',
+            'modules.*' => 'string',
+            'page_grants' => 'array',
+            'page_grants.*.module' => 'required|string',
+            'page_grants.*.page' => 'required|string',
+            'page_grants.*.level' => 'required|in:view,edit,disabled',
+            'supervisor_grants' => 'array',
+            'supervisor_grants.*.role' => 'required|string',
+            'supervisor_grants.*.page' => 'required|string',
+            'supervisor_grants.*.level' => 'required|in:view,edit,disabled',
+        ]);
+
+        $user = User::findOrFail($data['user_id']);
+        $returnGrant = collect($data['page_grants'] ?? [])->first(fn ($grant) =>
+            strtoupper((string) $grant['module']) === 'ECO'
+            && strtolower((string) $grant['page']) === 'returns'
+            && in_array(strtolower((string) ($grant['level'] ?? '')), ['view', 'edit'], true)
+        );
+        if ($returnGrant) {
+            $ecoPages = $this->modulePages()['ECO'] ?? [];
+            if (! array_key_exists('returns', $ecoPages)) {
+                throw ValidationException::withMessages(['page_grants' => 'Returns & RMA Management is missing from the ECO permission catalog.']);
+            }
+
+            $hasEcoModule = in_array('ECO', array_map('strtoupper', $data['modules'] ?? []), true)
+                || strtoupper((string) $user->role) === 'ECO'
+                || $this->isElevated($user);
+            if (! $hasEcoModule) {
+                throw ValidationException::withMessages(['page_grants' => 'This employee is not eligible for ECO module access.']);
+            }
+        }
+
+        // Module, page and supervisor saves must succeed or fail together.
+        // Previously a failure in the page step left the module step committed,
+        // which made it look like "only one page saved" while silently granting
+        // (or revoking) a whole module.
+        DB::transaction(function () use ($request, $data, $user) {
+            // Use independent request bags for each legacy sync path. A PHP
+            // shallow clone shares Symfony's input bags, so replace() on one
+            // clone can overwrite the source request used by the next sync.
+            $moduleRequest = Request::createFrom($request);
+            $this->replaceRequestInput($moduleRequest, [
+                'user_id' => $user->id,
+                'modules' => $data['modules'] ?? [],
+                // Combined saves only apply the submitted page levels; no
+                // home-module page seeding, so one page cannot grant a module.
+                'skip_seed' => true,
+            ]);
+            $this->updateModules($moduleRequest);
+
+            $pageRequest = Request::createFrom($request);
+            $this->replaceRequestInput($pageRequest, ['user_id' => $user->id, 'grants' => $data['page_grants'] ?? []]);
+            $this->updatePages($pageRequest);
+
+            if ($user->is_manufacturing_supervisor) {
+                $supervisorRequest = Request::createFrom($request);
+                $this->replaceRequestInput($supervisorRequest, ['user_id' => $user->id, 'grants' => $data['supervisor_grants'] ?? []]);
+                $this->updateSupervisorStaffPages($supervisorRequest);
+            }
+        });
+
+        return back()->with('success', 'Modules and page permissions saved.');
+    }
+
+    /** Replace input on a cloned request while preserving Laravel's JSON input source. */
+    private function replaceRequestInput(Request $request, array $input): void
+    {
+        $request->replace($input);
+        if ($request->isJson()) {
+            $request->json()->replace($input);
+        }
+    }
+
     /**
      * Sync per-page view/edit/disabled grants.
      * Only the root module + granted extra modules may receive grants.
      */
     public function updatePages(Request $request)
     {
-        $map = $this->modulePages();
-        $validPairs = [];
-        foreach ($map as $module => $pages) {
-            foreach (array_keys($pages) as $page) {
-                $validPairs[] = $module . '.' . strtolower($page);
-            }
-        }
-
         $data = $request->validate([
             'user_id' => 'required|exists:users,id',
             'grants' => 'array',
@@ -643,8 +790,31 @@ class ItAccessControlController extends Controller
         ]);
 
         $user = User::findOrFail($data['user_id']);
-        if (in_array($user->role, ['CEO', 'COO'], true)) {
-            return back()->withErrors(['error' => 'Executive (CEO/COO) accounts cannot be modified here.']);
+        $map = $this->modulePages();
+        $validPairs = [];
+        foreach ($map as $module => $pages) {
+            if (strtoupper($module) === 'MAN') {
+                continue;
+            }
+            foreach (array_keys($pages) as $page) {
+                $validPairs[] = $module . '.' . strtolower($page);
+            }
+        }
+
+        // Supervisors can receive page grants only for staff workspaces in
+        // their own department. A regular MAN staff member remains scoped to
+        // their manufacturing role; elevated MAN accounts keep the full MAN
+        // catalog available to IT.
+        $manPages = $map['MAN'] ?? ManufacturingPages::OVERVIEW;
+        if ($user->is_manufacturing_supervisor) {
+            $manPages = ManufacturingPages::forSupervisorAccountDepartment($user->supervisor_department);
+        } elseif (strtoupper((string) $user->role) === 'MAN' && $user->position === 'staff' && $user->manufacturing_role) {
+            $manPages = ManufacturingPages::forUser($user);
+        } elseif (strtoupper((string) $user->role) === 'MAN' && $this->isElevated($user)) {
+            $manPages = ManufacturingPages::allPages();
+        }
+        foreach (array_keys($manPages) as $page) {
+            $validPairs[] = 'MAN.' . strtolower($page);
         }
 
         $root = $this->rootModuleFor($user);
@@ -678,22 +848,43 @@ class ItAccessControlController extends Controller
             }
         }
 
+        $submittedEcoReturns = collect($data['grants'] ?? [])->first(fn ($grant) =>
+            strtoupper((string) ($grant['module'] ?? '')) === 'ECO'
+            && strtolower((string) ($grant['page'] ?? '')) === 'returns'
+            && in_array(strtolower((string) ($grant['level'] ?? '')), ['view', 'edit'], true)
+        );
+        if ($submittedEcoReturns) {
+            if (! in_array('ECO.returns', $validPairs, true)) {
+                throw ValidationException::withMessages(['grants' => 'Returns & RMA Management is missing from the ECO permission catalog.']);
+            }
+            if (! in_array('ECO', $allowedModules, true)) {
+                throw ValidationException::withMessages(['grants' => 'This employee is not eligible for ECO module access.']);
+            }
+        }
+
         $before = PagePermission::where('user_id', $user->id)
             ->get()
             ->map(fn ($pp) => $pp->module . '.' . $pp->page . ':' . strtolower($pp->permission_level ?? 'edit'))
             ->toArray();
 
-        // Higher-up root pages can never be disabled (default full access) —
-        // a submitted 'disabled' there is coerced to the default 'edit',
-        // guarding direct POSTs as well as the UI (which hides DISABLE).
-        $lockedRoot = $this->lockedRootModuleFor($user);
-
         $summary = [];
-        $coerced = 0;
         $provisionedModules = [];
-        DB::transaction(function () use ($user, $data, $validPairs, $allowedModules, $lockedRoot, &$summary, &$coerced, &$provisionedModules) {
-            $user->pagePermissions()->delete();
-            $usableModules = [];
+        $allowedUpper = array_values(array_unique(array_map('strtoupper', $allowedModules)));
+        DB::transaction(function () use ($user, $data, $validPairs, $allowedModules, $allowedUpper, &$summary, &$provisionedModules) {
+            $existing = PagePermission::where('user_id', $user->id)->get(['id', 'module', 'page']);
+
+            // Module access was revoked: drop that module's page rows. Page
+            // rows for modules the account still holds are never wiped here —
+            // a save that only touches one page must leave every other page
+            // exactly as it was.
+            $staleIds = $existing
+                ->reject(fn ($pp) => in_array(strtoupper((string) $pp->module), $allowedUpper, true))
+                ->pluck('id');
+            if ($staleIds->isNotEmpty()) {
+                PagePermission::whereIn('id', $staleIds)->delete();
+            }
+
+            $grantMap = [];
             foreach ($data['grants'] ?? [] as $grant) {
                 $module = strtoupper($grant['module']);
                 $page = strtolower($grant['page']);
@@ -703,20 +894,28 @@ class ItAccessControlController extends Controller
                 if (! in_array($module, $allowedModules, true)) {
                     continue;
                 }
-                $level = strtolower($grant['level']);
-                if ($lockedRoot && $module === $lockedRoot && $level === 'disabled') {
-                    $level = 'edit';
-                    $coerced++;
-                }
-                PagePermission::create([
-                    'user_id' => $user->id,
-                    'module' => $module,
-                    'page' => $page,
-                    'permission_level' => $level,
-                ]);
-                $summary[] = "{$module}.{$page}:{$level}";
-                if (in_array($level, ['view', 'edit'], true)) {
-                    $usableModules[$module] = true;
+                $grantMap[$module][$page] = strtolower($grant['level']);
+            }
+
+            $usableModules = [];
+            foreach ($grantMap as $module => $pages) {
+                foreach ($pages as $page => $level) {
+                    $row = $existing->first(fn ($pp) => strtoupper((string) $pp->module) === $module
+                        && strtolower((string) $pp->page) === $page);
+                    if ($row) {
+                        PagePermission::where('id', $row->id)->update(['permission_level' => $level]);
+                    } else {
+                        PagePermission::create([
+                            'user_id' => $user->id,
+                            'module' => $module,
+                            'page' => $page,
+                            'permission_level' => $level,
+                        ]);
+                    }
+                    $summary[] = "{$module}.{$page}:{$level}";
+                    if (in_array($level, ['view', 'edit'], true)) {
+                        $usableModules[$module] = true;
+                    }
                 }
             }
             // Provision the module shell for every usable grant so the module
@@ -739,24 +938,96 @@ class ItAccessControlController extends Controller
 
         $this->logAction($user->id, 'pages.updated',
             'Page permissions updated for ' . $user->name . ' (' . count($summary) . ' grants'
-            . ($coerced ? ", {$coerced} locked-root DISABLED coerced to edit" : '')
             . ($provisionedModules ? ', module shell granted for [' . implode(', ', $provisionedModules) . ']' : '') . ').',
             ['before' => $before, 'after' => $summary, 'provisioned_modules' => $provisionedModules]
         );
 
         $notice = 'Page permissions updated.'
-            . ($coerced ? " ({$coerced} root page(s) kept enabled — higher-up default.)" : '')
             . ($provisionedModules ? ' Module access granted for [' . implode(', ', $provisionedModules) . '].' : '');
 
         return back()->with('success', $notice);
+    }
+
+    /** Save staff-workspace grants that belong to this supervisor's department. */
+    public function updateSupervisorStaffPages(Request $request)
+    {
+        $data = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'grants' => 'array',
+            'grants.*.role' => 'required|string',
+            'grants.*.page' => 'required|string',
+            'grants.*.level' => 'required|in:view,edit,disabled',
+        ]);
+
+        $supervisor = User::findOrFail($data['user_id']);
+        if (! $supervisor->is_manufacturing_supervisor || ! $supervisor->supervisor_department) {
+            throw ValidationException::withMessages(['error' => 'Department staff page grants can only be configured for a manufacturing supervisor.']);
+        }
+
+        $allowedRoles = ManufacturingPages::rolesForDepartment($supervisor->supervisor_department);
+        $validPairs = [];
+        foreach ($allowedRoles as $role) {
+            foreach (array_keys(ManufacturingPages::ROLE_PAGES[$role] ?? []) as $page) {
+                $validPairs[] = $role . '.' . strtolower($page);
+            }
+        }
+
+        $grants = collect($data['grants'] ?? [])->map(function ($grant) {
+            return [
+                'role' => strtolower(trim($grant['role'])),
+                'page' => strtolower(trim($grant['page'])),
+                'level' => strtolower($grant['level']),
+            ];
+        });
+
+        $invalid = $grants->first(fn ($grant) => ! in_array($grant['role'] . '.' . $grant['page'], $validPairs, true));
+        if ($invalid) {
+            throw ValidationException::withMessages(['error' => 'One or more staff pages are outside this supervisor department.']);
+        }
+
+        $before = DB::table('man_supervisor_staff_page_permissions')
+            ->where('supervisor_user_id', $supervisor->id)
+            ->get(['manufacturing_role', 'page', 'permission_level'])
+            ->map(fn ($row) => $row->manufacturing_role . '.' . $row->page . ':' . $row->permission_level)
+            ->all();
+
+        DB::transaction(function () use ($supervisor, $grants) {
+            DB::table('man_supervisor_staff_page_permissions')
+                ->where('supervisor_user_id', $supervisor->id)
+                ->delete();
+
+            $now = now();
+            $rows = $grants->map(fn ($grant) => [
+                'supervisor_user_id' => $supervisor->id,
+                'manufacturing_role' => $grant['role'],
+                'page' => $grant['page'],
+                'permission_level' => $grant['level'],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->all();
+
+            if ($rows) {
+                DB::table('man_supervisor_staff_page_permissions')->insert($rows);
+            }
+        });
+
+        $after = $grants->map(fn ($grant) => $grant['role'] . '.' . $grant['page'] . ':' . $grant['level'])->all();
+        $this->logAction(
+            $supervisor->id,
+            'pages.supervisor_staff_updated',
+            'Department staff page permissions updated for ' . $supervisor->name . ' (' . count($after) . ' grants).',
+            ['before' => $before, 'after' => $after]
+        );
+
+        return back()->with('success', 'Department staff page access updated.');
     }
 
     /**
      * Ensure every page of each granted module has a row — default disabled.
      * Existing view/edit choices are preserved.
      *
-     * A higher-up's locked root ($lockedRoot) instead seeds missing pages as
-     * 'edit' — their root access is default-on and can never be disabled.
+     * A home module ($lockedRoot) instead seeds missing pages as 'edit'; IT
+     * can still change those page grants afterwards.
      */
     protected function seedDisabledPages(User $user, array $modules, ?string $lockedRoot = null): void
     {
@@ -771,16 +1042,26 @@ class ItAccessControlController extends Controller
             // MAN is role-aware: seed only the pages this employee actually
             // handles instead of the whole module union.
             $modulePageKeys = $upper === 'MAN'
-                ? array_keys(ManufacturingPages::forUser($user))
+                ? array_keys($user->is_manufacturing_supervisor
+                    ? ManufacturingPages::forSupervisorAccountDepartment($user->supervisor_department)
+                    : ManufacturingPages::forUser($user))
                 : array_keys($map[$upper] ?? []);
             foreach ($modulePageKeys as $page) {
                 $key = $upper . '.' . strtolower($page);
                 if (! $existing->has($key)) {
+                    $pageDefault = $default;
+                    if ($upper === 'MAN' && $user->is_manufacturing_supervisor
+                        && ! array_key_exists($page, ManufacturingPages::OVERVIEW)) {
+                        // Preserve the supervisor's existing staff-workspace
+                        // access from the legacy Production grant. IT can now
+                        // narrow each page independently in Access Control.
+                        $pageDefault = $existing->get('MAN.production', $default);
+                    }
                     PagePermission::create([
                         'user_id' => $user->id,
                         'module' => $upper,
                         'page' => strtolower($page),
-                        'permission_level' => $default,
+                        'permission_level' => $pageDefault,
                     ]);
                 }
             }

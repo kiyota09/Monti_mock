@@ -3,349 +3,246 @@ import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import {
-    Users, Briefcase, TrendingUp, Clock, Calendar, MessageSquare,
-    CheckCircle, XCircle, AlertCircle, Building2, KanbanSquare,
-    PieChart, BarChart3, ArrowRight, Eye, Sparkles, LayoutDashboard,
-    FileText, Activity, Megaphone
+    ArrowDownRight, ArrowRight, ArrowUpRight, BriefcaseBusiness, CalendarClock,
+    CheckCircle2, CircleAlert, Clock3, Handshake, Headphones, Layers3,
+    MessageSquareText, UsersRound,
 } from 'lucide-vue-next';
 
 const page = usePage();
 const props = defineProps({
-    stats: {
-        type: Object,
-        default: () => ({
-            total_clients: 0,
-            pending_clients: 0,
-            total_leads: 0,
-            open_feedback: 0,
-        }),
-    },
+    stats: { type: Object, default: () => ({ total_clients: 0, pending_clients: 0, total_leads: 0, active_leads: 0, open_feedback: 0 }) },
     pipeline: { type: Object, default: () => ({ deals: 0, value: 0, forecast: 0 }) },
-    funnel: { type: Object, default: () => ({ leads: 0, qualified: 0, open_deals: 0, won: 0, win_rate: 0 }) },
+    funnel: { type: Object, default: () => ({ leads: 0, qualified: 0, open_deals: 0, won: 0, win_rate: 0, closed_deals: 0 }) },
     avgCycle: { type: [Number, null], default: null },
     service: { type: Object, default: () => ({ open_cases: 0, urgent_cases: 0, overdue_tasks: 0 }) },
-    recentFeedback: {
-        type: Array,
-        default: () => [],
-    },
-    permissions: {
-        type: Object,
-        default: () => ({}),
-    },
+    stageSummary: { type: Array, default: () => [] },
+    upcomingActivities: { type: Array, default: () => [] },
+    recentLeads: { type: Array, default: () => [] },
+    permissions: { type: Object, default: () => ({}) },
 });
 
-const user = computed(() => page.props.auth.user);
-const isStaff = computed(() => user.value?.position === 'staff');
-const isManager = computed(() => user.value?.position === 'manager');
-const isCeo = computed(() => user.value?.role === 'CEO');
-
-// Helper for greeting
-const getGreeting = () => {
+const user = computed(() => page.props.auth?.user);
+const canView = (key) => ['CEO', 'COO'].includes(user.value?.role)
+    || (user.value?.role === 'CRM' && user.value?.position === 'manager')
+    || props.permissions[key] !== undefined;
+const greeting = computed(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-};
-
-// Check if user has at least view permission for a page
-const canViewPage = (pageKey) => {
-    if (isCeo.value) return true;
-    if (isManager.value) return true;
-    return props.permissions[pageKey] !== undefined;
-};
-
-// Quick access links (filtered by permissions – only show if user has view access)
-const quickLinks = computed(() => {
-    const links = [];
-    if (canViewPage('leads')) {
-        links.push({ label: 'Lead Pipeline', href: route('crm.lead'), icon: Briefcase, permKey: 'leads' });
-    }
-    if (canViewPage('opportunities')) {
-        links.push({ label: 'Opportunities', href: route('crm.opportunities'), icon: KanbanSquare, permKey: 'opportunities' });
-    }
-    if (canViewPage('inquiry')) {
-        links.push({ label: 'Inquiries', href: route('crm.inquiries'), icon: MessageSquare, permKey: 'inquiry' });
-    }
-    if (canViewPage('customer_profiles')) {
-        links.push({ label: 'Accounts', href: route('crm.customerprofile.index'), icon: Building2, permKey: 'customer_profiles' });
-    }
-    if (canViewPage('quotations')) {
-        links.push({ label: 'Quotations', href: route('crm.quotations'), icon: FileText, permKey: 'quotations' });
-    }
-    if (canViewPage('activities')) {
-        links.push({ label: 'Activities', href: route('crm.activities'), icon: Activity, permKey: 'activities' });
-    }
-    if (canViewPage('cases')) {
-        links.push({ label: 'Cases', href: route('crm.cases'), icon: AlertCircle, permKey: 'cases' });
-    }
-    if (canViewPage('approvals')) {
-        links.push({ label: 'Pending Approvals', href: route('crm.approval.index'), icon: Clock, permKey: 'approvals' });
-    }
-    if (canViewPage('campaigns')) {
-        links.push({ label: 'Campaigns', href: route('crm.campaigns'), icon: Megaphone, permKey: 'campaigns' });
-        links.push({ label: 'Company Posts', href: route('crm.posts'), icon: Megaphone, permKey: 'campaigns' });
-    }
-    if (canViewPage('investigation')) {
-        links.push({ label: 'Due Diligence', href: route('crm.investigation.index'), icon: AlertCircle, permKey: 'investigation' });
-    }
-    return links;
+    return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 });
+const today = new Date().toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' });
+const peso = (value) => `₱${Number(value || 0).toLocaleString('en-PH', { maximumFractionDigits: 0 })}`;
+const dateLabel = (value) => value
+    ? new Date(value).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
+    : 'No date';
+const dateTimeLabel = (value) => value
+    ? new Date(value).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : 'No date set';
+const activityIcon = (type) => ({ call: 'Call', meeting: 'Meeting', reminder: 'Reminder', todo: 'Task', task: 'Task', email: 'Email' }[type] || 'Activity');
+const stageMaximum = computed(() => Math.max(1, ...props.stageSummary.map((stage) => Number(stage.value) || 0)));
 
-const getFeedbackIcon = (type) => {
-    return type === 'complaint' ? XCircle : MessageSquare;
-};
+const navLinks = computed(() => [
+    canView('leads') && { label: 'Leads', href: route('crm.lead'), icon: BriefcaseBusiness },
+    canView('opportunities') && { label: 'Opportunities', href: route('crm.opportunities'), icon: Layers3 },
+    canView('inquiry') && { label: 'Inquiries', href: route('crm.inquiries'), icon: MessageSquareText },
+    canView('customer_profiles') && { label: 'Accounts', href: route('crm.customerprofile.index'), icon: UsersRound },
+    canView('activities') && { label: 'Activities', href: route('crm.activities'), icon: CalendarClock },
+    canView('cases') && { label: 'Cases', href: route('crm.cases'), icon: Headphones },
+    canView('investigation') && { label: 'Feedback', href: route('crm.investigation.index'), icon: MessageSquareText },
+].filter(Boolean));
 
-const getFeedbackClass = (type) => {
-    return type === 'complaint' ? 'text-red-600 bg-red-50' : 'text-blue-600 bg-blue-50';
-};
-
-const canManageFeedback = computed(() => {
-    return isCeo.value || isManager.value || props.permissions.investigation === 'edit';
-});
-
-const peso0 = (v) => '₱' + Number(v || 0).toLocaleString('en-PH', { maximumFractionDigits: 0 });
-
-const statCards = computed(() => ([
-    { key: 'clients', label: 'Active Clients', value: props.stats.total_clients, icon: Users, foot: '+8% from last month', footIcon: TrendingUp, footClass: 'text-blue-600 dark:text-blue-400', tint: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400', bar: 'from-blue-500 to-indigo-500' },
-    { key: 'forecast', label: 'Weighted Forecast', value: peso0(props.pipeline.forecast), icon: TrendingUp, foot: `${props.pipeline.deals} open deals`, footIcon: null, footClass: 'text-emerald-600 dark:text-emerald-400', tint: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400', bar: 'from-emerald-500 to-teal-500' },
-    { key: 'winrate', label: 'Win Rate', value: `${props.funnel.win_rate}%`, icon: PieChart, foot: props.avgCycle !== null ? `Avg cycle ${props.avgCycle}d` : 'No closed deals yet', footIcon: null, footClass: 'text-purple-600 dark:text-purple-400', tint: 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400', bar: 'from-violet-500 to-fuchsia-500' },
-    { key: 'service', label: 'Open Cases', value: props.service.open_cases, icon: AlertCircle, foot: `${props.service.urgent_cases} urgent · ${props.service.overdue_tasks} overdue tasks`, footIcon: null, footClass: 'text-red-600 dark:text-red-400', tint: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400', bar: 'from-rose-500 to-red-500' },
-    { key: 'pending', label: 'Pending Approvals', value: props.stats.pending_clients, icon: Clock, foot: 'Awaiting review', footIcon: null, footClass: 'text-amber-600 dark:text-amber-400', tint: 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400', bar: 'from-amber-500 to-orange-500' },
-    { key: 'leads', label: 'Active Leads', value: props.stats.total_leads, icon: Briefcase, foot: 'In pipeline', footIcon: null, footClass: 'text-purple-600 dark:text-purple-400', tint: 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400', bar: 'from-violet-500 to-fuchsia-500' },
-]));
+const metrics = computed(() => [
+    { label: 'Open pipeline', value: peso(props.pipeline.value), detail: `${props.pipeline.deals} active deals`, icon: Layers3, tone: 'forest' },
+    { label: 'Weighted forecast', value: peso(props.pipeline.forecast), detail: 'Based on deal probability', icon: ArrowUpRight, tone: 'mint' },
+    { label: 'Active leads', value: props.stats.active_leads ?? props.stats.total_leads, detail: `${props.stats.total_leads} total leads`, icon: BriefcaseBusiness, tone: 'blue' },
+    { label: 'Win rate', value: `${Number(props.funnel.win_rate || 0).toLocaleString()}%`, detail: props.funnel.closed_deals ? `${props.funnel.closed_deals} closed opportunities` : 'No closed opportunities yet', icon: Handshake, tone: 'gold' },
+]);
 </script>
 
 <template>
     <Head title="CRM Dashboard" />
-
     <AuthenticatedLayout>
-        <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
-            <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
-
-                <!-- Hero header -->
-                <div class="animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/20">
-                    <div class="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-float" />
-                    <div class="absolute -bottom-24 -left-10 h-64 w-64 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-delayed" />
-                    <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 22px 22px;" />
-                    <div class="relative flex flex-wrap items-center gap-4">
-                        <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur ring-1 ring-white/30 shadow-lg animate-pop">
-                            <LayoutDashboard class="h-7 w-7" />
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                                <Sparkles class="h-3.5 w-3.5" /> CRM · Overview
-                            </p>
-                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">
-                                Customer Relationship Dashboard
-                            </h1>
-                            <p class="text-sm text-blue-100/90">{{ getGreeting() }}, {{ user?.name }}</p>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
-                                <Calendar class="h-3.5 w-3.5" />
-                                {{ new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) }}
-                            </span>
-                            <span v-if="permissions.dashboard === 'view' && !isCeo && !isManager" class="flex items-center gap-1.5 rounded-full bg-amber-300/90 px-3 py-1.5 text-xs font-black text-amber-950">
-                                <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> View only
-                            </span>
-                            <span v-else class="flex items-center gap-1.5 rounded-full bg-emerald-400/90 px-3 py-1.5 text-xs font-black text-emerald-950">
-                                <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> Full access
-                            </span>
-                        </div>
+        <main class="crm-dashboard min-h-screen px-4 py-5 sm:px-6 lg:px-8">
+            <div class="mx-auto max-w-7xl space-y-6 pb-12">
+                <header class="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                        <p class="crm-eyebrow">Customer relationships</p>
+                        <h1 class="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">CRM overview</h1>
+                        <p class="mt-1 text-sm crm-muted">{{ greeting }}, {{ user?.name }}. Here’s your team’s current pipeline and next actions.</p>
                     </div>
-
-                    <!-- Quick access pills inside hero -->
-                    <div v-if="quickLinks.length > 0" class="relative mt-6 flex flex-wrap gap-2">
-                        <Link v-for="link in quickLinks" :key="link.label" :href="link.href"
-                            class="flex items-center gap-1.5 rounded-2xl bg-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wide backdrop-blur transition-all duration-200 hover:bg-white hover:text-indigo-700 hover:shadow-lg hover:scale-105 active:scale-95">
-                            <component :is="link.icon" class="h-4 w-4" /> {{ link.label }}
+                    <div class="flex flex-wrap items-center gap-3">
+                        <span class="crm-date"><Clock3 class="h-4 w-4" /> {{ today }}</span>
+                        <Link v-if="canView('opportunities')" :href="route('crm.opportunities')" class="crm-primary-link">
+                            Open pipeline <ArrowRight class="h-4 w-4" />
                         </Link>
                     </div>
-                </div>
+                </header>
 
-                <!-- Stats Cards -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div v-for="(card, i) in statCards" :key="card.key"
-                        :style="{ animationDelay: `${i * 80}ms` }"
-                        class="animate-fade-up group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 hover:scale-[1.01] transition-all duration-300 p-5 overflow-hidden">
-                        <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <div :class="['absolute left-0 top-5 bottom-5 w-1 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300 bg-gradient-to-b', card.bar]" />
-                        <div class="flex items-start justify-between">
-                            <div>
-                                <p class="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">{{ card.label }}</p>
-                                <p class="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mt-1 tracking-tight">{{ card.value }}</p>
-                            </div>
-                            <div :class="['p-3 rounded-2xl group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300 shadow-sm', card.tint]">
-                                <component :is="card.icon" class="w-5 h-5" />
-                            </div>
-                        </div>
-                        <div :class="['mt-3 text-xs font-bold flex items-center gap-1', card.footClass]">
-                            <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-                            <component v-if="card.footIcon" :is="card.footIcon" class="w-3 h-3" /> {{ card.foot }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Funnel: leads → qualified → open deals → won -->
-                <div class="animate-fade-up bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-zinc-800 hover:shadow-xl transition-all duration-300">
-                    <div class="flex items-center gap-2 mb-4">
-                        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-900/20"><BarChart3 class="w-4 h-4 text-indigo-500" /></span>
-                        <h3 class="text-[11px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200">Sales Funnel</h3>
-                        <span class="ml-auto rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-black px-2.5 py-1">{{ funnel.win_rate }}% win rate</span>
-                    </div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div v-for="(s, i) in [
-                            { label: 'Leads in', value: funnel.leads, bar: 'from-blue-500 to-indigo-500', pct: 100 },
-                            { label: 'Qualified', value: funnel.qualified, bar: 'from-indigo-500 to-violet-500', pct: funnel.leads ? Math.round(funnel.qualified / funnel.leads * 100) : 0 },
-                            { label: 'Open deals', value: funnel.open_deals, bar: 'from-violet-500 to-fuchsia-500', pct: funnel.leads ? Math.round(funnel.open_deals / funnel.leads * 100) : 0 },
-                            { label: 'Won', value: funnel.won, bar: 'from-emerald-500 to-teal-500', pct: funnel.win_rate },
-                        ]" :key="i" class="rounded-2xl bg-slate-50 dark:bg-zinc-800/60 p-4">
-                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">{{ s.label }}</p>
-                            <p class="text-2xl font-black mt-1">{{ s.value }}</p>
-                            <div class="mt-2 h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                <div class="h-full rounded-full bg-gradient-to-r transition-all duration-700" :class="s.bar" :style="{ width: `${Math.min(100, s.pct)}%` }" />
-                            </div>
-                            <p class="mt-1 text-[10px] font-bold text-gray-400">{{ s.pct }}%</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Access cards -->
-                <TransitionGroup v-if="quickLinks.length > 0" name="card" tag="div" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <Link v-for="(link, i) in quickLinks" :key="link.label" :href="link.href"
-                        :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }"
-                        class="group relative flex flex-col items-center p-5 bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 hover:scale-[1.01] transition-all duration-300 overflow-hidden">
-                        <div class="pointer-events-none absolute -top-12 -right-12 h-28 w-28 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <div class="p-3 rounded-2xl bg-gray-50 dark:bg-zinc-800 group-hover:bg-indigo-600 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-                            <component :is="link.icon" class="w-6 h-6 text-gray-500 dark:text-gray-300 group-hover:text-white transition-colors" />
-                        </div>
-                        <span class="mt-2.5 text-xs font-black text-gray-700 dark:text-gray-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors text-center">{{ link.label }}</span>
-                        <ArrowRight class="w-3.5 h-3.5 text-gray-300 dark:text-zinc-600 group-hover:text-indigo-500 group-hover:translate-x-1 mt-1.5 transition-all" />
+                <nav v-if="navLinks.length" aria-label="CRM sections" class="flex flex-wrap gap-2">
+                    <Link v-for="item in navLinks" :key="item.label" :href="item.href" class="crm-nav-link">
+                        <component :is="item.icon" class="h-4 w-4" /> {{ item.label }}
                     </Link>
-                </TransitionGroup>
+                </nav>
 
-                <!-- Charts Row -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <!-- Lead Conversion Progress -->
-                    <div class="animate-fade-up bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-zinc-800 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300" style="animation-delay:80ms">
-                        <div class="flex items-center gap-2 mb-4">
-                            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20"><PieChart class="w-4 h-4 text-blue-500" /></span>
-                            <h3 class="text-[11px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200">Lead Conversion Rate</h3>
-                            <span class="ml-auto rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-black px-2.5 py-1">32%</span>
+                <section aria-label="CRM performance indicators" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <article v-for="metric in metrics" :key="metric.label" class="crm-metric-card">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="crm-label">{{ metric.label }}</p>
+                                <p class="mt-2 truncate text-2xl font-semibold tracking-tight">{{ metric.value }}</p>
+                                <p class="mt-1 text-xs crm-muted">{{ metric.detail }}</p>
+                            </div>
+                            <span class="crm-metric-icon" :class="`is-${metric.tone}`"><component :is="metric.icon" class="h-5 w-5" /></span>
                         </div>
-                        <div class="relative pt-1">
-                            <div class="flex justify-between text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">
-                                <span>Conversion</span>
-                                <span>32%</span>
-                            </div>
-                            <div class="w-full h-3 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 rounded-full transition-all duration-1000" style="width: 32%"></div>
-                            </div>
-                            <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2 font-medium">
-                                <span>Leads: {{ stats.total_leads }}</span>
-                                <span>Won: 8</span>
-                            </div>
-                        </div>
-                    </div>
+                    </article>
+                </section>
 
-                    <!-- Feedback Status Distribution -->
-                    <div class="animate-fade-up bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-zinc-800 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300" style="animation-delay:160ms">
-                        <div class="flex items-center gap-2 mb-4">
-                            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20"><BarChart3 class="w-4 h-4 text-emerald-500" /></span>
-                            <h3 class="text-[11px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200">Feedback Status</h3>
+                <section class="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+                    <article class="crm-panel">
+                        <div class="crm-panel-heading">
+                            <div>
+                                <p class="crm-eyebrow">Revenue outlook</p>
+                                <h2 class="mt-1 text-base font-semibold">Pipeline by stage</h2>
+                            </div>
+                            <Link v-if="canView('opportunities')" :href="route('crm.opportunities')" class="crm-text-link">View opportunities <ArrowRight class="h-3.5 w-3.5" /></Link>
                         </div>
-                        <div class="space-y-3">
-                            <div>
-                                <div class="flex justify-between text-xs font-bold mb-1 text-gray-600 dark:text-gray-300">
-                                    <span class="flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" /> Open</span>
-                                    <span>{{ stats.open_feedback }}</span>
+                        <div v-if="stageSummary.length" class="mt-5 space-y-4">
+                            <div v-for="stage in stageSummary" :key="stage.id" class="space-y-1.5">
+                                <div class="flex items-center justify-between gap-3 text-sm">
+                                    <span class="font-medium">{{ stage.name }} <span class="crm-muted font-normal">· {{ stage.count }}</span></span>
+                                    <span class="font-semibold tabular-nums">{{ peso(stage.value) }}</span>
                                 </div>
-                                <div class="w-full h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                    <div class="h-full bg-gradient-to-r from-rose-500 to-red-500 rounded-full transition-all duration-700" :style="{ width: `${(stats.open_feedback / (stats.open_feedback + 5)) * 100}%` }"></div>
+                                <div class="h-2 overflow-hidden rounded-full bg-emerald-50">
+                                    <div class="h-full rounded-full bg-gradient-to-r from-emerald-800 to-emerald-500 transition-all" :style="{ width: `${Math.max(stage.value > 0 ? 4 : 0, stage.value / stageMaximum * 100)}%` }" />
                                 </div>
-                            </div>
-                            <div>
-                                <div class="flex justify-between text-xs font-bold mb-1 text-gray-600 dark:text-gray-300">
-                                    <span class="flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" /> In Progress</span>
-                                    <span>3</span>
-                                </div>
-                                <div class="w-full h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                    <div class="h-full bg-gradient-to-r from-amber-400 to-yellow-500 rounded-full" style="width: 25%"></div>
-                                </div>
-                            </div>
-                            <div>
-                                <div class="flex justify-between text-xs font-bold mb-1 text-gray-600 dark:text-gray-300">
-                                    <span class="flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Resolved</span>
-                                    <span>12</span>
-                                </div>
-                                <div class="w-full h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                    <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full" style="width: 60%"></div>
-                                </div>
+                                <p class="text-right text-[11px] crm-muted">Weighted {{ peso(stage.forecast) }}</p>
                             </div>
                         </div>
-                    </div>
-                </div>
+                        <div v-else class="crm-empty-state"><Layers3 class="h-6 w-6" /><span>No open opportunities in the pipeline yet.</span></div>
+                        <div class="crm-pipeline-summary">
+                            <div><span class="crm-label">Qualified leads</span><strong>{{ funnel.qualified }}</strong></div>
+                            <div><span class="crm-label">Won deals</span><strong>{{ funnel.won }}</strong></div>
+                            <div><span class="crm-label">Average sales cycle</span><strong>{{ avgCycle !== null ? `${avgCycle} days` : '—' }}</strong></div>
+                        </div>
+                    </article>
 
-                <!-- Recent Feedback / Complaints -->
-                <div class="animate-fade-up bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden hover:shadow-xl transition-shadow duration-300" style="animation-delay:120ms">
-                    <div class="p-6 border-b border-gray-100 dark:border-zinc-800 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-900/20">
-                        <h3 class="text-[11px] font-black uppercase tracking-widest flex items-center gap-2 text-gray-700 dark:text-gray-200">
-                            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30"><MessageSquare class="w-4 h-4 text-violet-600 dark:text-violet-400" /></span>
-                            Recent Feedback & Complaints
-                        </h3>
-                        <Link v-if="canManageFeedback" :href="route('crm.investigation.index')" class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black uppercase tracking-wide text-white hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-500/30 hover:scale-105 active:scale-95 transition-all">View All</Link>
-                    </div>
-                    <TransitionGroup v-if="recentFeedback.length > 0" name="card" tag="div" class="divide-y divide-gray-100 dark:divide-zinc-800">
-                        <div v-for="(fb, i) in recentFeedback" :key="fb.id" :style="{ transitionDelay: `${Math.min(i * 50, 400)}ms` }" class="group p-5 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
-                            <div class="flex items-start gap-3">
-                                <div :class="['p-2.5 rounded-xl shadow-sm group-hover:scale-110 transition-transform', getFeedbackClass(fb.type)]">
-                                    <component :is="getFeedbackIcon(fb.type)" class="w-4 h-4" />
+                    <article class="crm-panel">
+                        <div class="crm-panel-heading">
+                            <div>
+                                <p class="crm-eyebrow">Your work queue</p>
+                                <h2 class="mt-1 text-base font-semibold">Upcoming follow-ups</h2>
+                            </div>
+                            <Link v-if="canView('activities')" :href="route('crm.activities')" class="crm-text-link">All activities <ArrowRight class="h-3.5 w-3.5" /></Link>
+                        </div>
+                        <div v-if="upcomingActivities.length" class="mt-3 divide-y divide-emerald-50">
+                            <div v-for="activity in upcomingActivities" :key="activity.id" class="flex gap-3 py-3">
+                                <span class="crm-activity-icon" :class="activity.overdue ? 'is-overdue' : ''">
+                                    <CircleAlert v-if="activity.overdue" class="h-4 w-4" />
+                                    <CalendarClock v-else class="h-4 w-4" />
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate text-sm font-medium">{{ activity.title }}</p>
+                                    <p class="mt-0.5 truncate text-xs crm-muted">{{ activity.account }}<span v-if="activity.assignee"> · {{ activity.assignee }}</span></p>
                                 </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex flex-wrap justify-between items-start gap-2">
-                                        <p class="font-black text-sm text-gray-900 dark:text-white tracking-tight">{{ fb.subject }}</p>
-                                        <span :class="fb.status === 'open' ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 ring-red-200 dark:ring-red-500/30' : fb.status === 'in_progress' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 ring-amber-200 dark:ring-amber-500/30' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-500/30'" class="text-[9px] px-2.5 py-1 rounded-full font-black uppercase ring-1 flex items-center gap-1">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ fb.status }}
-                                        </span>
-                                    </div>
-                                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">{{ fb.message }}</p>
-                                    <div class="flex justify-between items-center mt-2 text-xs text-gray-400 font-medium">
-                                        <span>{{ fb.client?.company_name || 'Client' }}</span>
-                                        <span>{{ new Date(fb.created_at).toLocaleDateString() }}</span>
+                                <span class="shrink-0 text-right text-[11px] font-medium" :class="activity.overdue ? 'text-rose-700' : 'crm-muted'">
+                                    {{ activity.overdue ? 'Overdue' : activityIcon(activity.type) }}<br />{{ dateTimeLabel(activity.due_at) }}
+                                </span>
+                            </div>
+                        </div>
+                        <div v-else class="crm-empty-state"><CheckCircle2 class="h-6 w-6" /><span>No overdue or upcoming follow-ups this week.</span></div>
+                    </article>
+                </section>
+
+                <section class="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+                    <article class="crm-panel overflow-hidden !p-0">
+                        <div class="crm-panel-heading px-5 py-4 sm:px-6">
+                            <div>
+                                <p class="crm-eyebrow">Prospecting</p>
+                                <h2 class="mt-1 text-base font-semibold">Recently added leads</h2>
+                            </div>
+                            <Link v-if="canView('leads')" :href="route('crm.lead')" class="crm-text-link">Lead list <ArrowRight class="h-3.5 w-3.5" /></Link>
+                        </div>
+                        <div v-if="recentLeads.length" class="divide-y divide-emerald-50">
+                            <div v-for="lead in recentLeads" :key="lead.id" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 sm:px-6">
+                                <div class="flex min-w-0 items-center gap-3">
+                                    <span class="crm-lead-avatar">{{ (lead.company_name || '?').slice(0, 1).toUpperCase() }}</span>
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-medium">{{ lead.company_name }}</p>
+                                        <p class="truncate text-xs crm-muted">{{ lead.contact_person || 'No contact' }}<span v-if="lead.source"> · {{ lead.source }}</span></p>
                                     </div>
                                 </div>
-                                <Link v-if="canManageFeedback" :href="route('crm.investigation.index')" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
-                                    <Eye class="w-4 h-4" />
-                                </Link>
+                                <div class="flex items-center gap-3">
+                                    <span class="crm-status-pill" :class="`status-${String(lead.status || '').toLowerCase().replace(/[^a-z]+/g, '-')}`">{{ lead.status }}</span>
+                                    <span class="hidden min-w-20 text-right text-xs crm-muted sm:inline">{{ dateLabel(lead.created_at) }}</span>
+                                </div>
                             </div>
                         </div>
-                    </TransitionGroup>
-                    <div v-else class="flex flex-col items-center justify-center py-16 text-center">
-                        <div class="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 rounded-full mb-4 animate-bounce-soft">
-                            <CheckCircle class="h-9 w-9 text-emerald-400" />
+                        <div v-else class="crm-empty-state px-5 py-8"><BriefcaseBusiness class="h-6 w-6" /><span>No leads have been added yet.</span></div>
+                    </article>
+
+                    <article class="crm-panel">
+                        <div class="crm-panel-heading">
+                            <div>
+                                <p class="crm-eyebrow">Customer health</p>
+                                <h2 class="mt-1 text-base font-semibold">Service and account pulse</h2>
+                            </div>
+                            <Link v-if="canView('cases')" :href="route('crm.cases')" class="crm-text-link">View cases <ArrowRight class="h-3.5 w-3.5" /></Link>
                         </div>
-                        <p class="text-sm font-black text-gray-700 dark:text-gray-200">All clear — no recent feedback</p>
-                        <p class="text-xs text-gray-400 mt-1">New feedback and complaints will appear here.</p>
-                    </div>
-                </div>
+                        <div class="mt-4 grid grid-cols-2 gap-3">
+                            <div class="crm-pulse-tile"><UsersRound class="h-4 w-4" /><span>Active clients</span><strong>{{ stats.total_clients }}</strong></div>
+                            <div class="crm-pulse-tile"><Headphones class="h-4 w-4" /><span>Open cases</span><strong>{{ service.open_cases }}</strong></div>
+                            <div class="crm-pulse-tile is-warning"><CircleAlert class="h-4 w-4" /><span>Urgent cases</span><strong>{{ service.urgent_cases }}</strong></div>
+                            <div class="crm-pulse-tile is-warning"><ArrowDownRight class="h-4 w-4" /><span>Overdue tasks</span><strong>{{ service.overdue_tasks }}</strong></div>
+                            <div class="crm-pulse-tile"><MessageSquareText class="h-4 w-4" /><span>Open feedback</span><strong>{{ stats.open_feedback }}</strong></div>
+                        </div>
+                        <div v-if="stats.pending_clients" class="crm-notice mt-4">
+                            <Clock3 class="h-4 w-4 shrink-0" /> {{ stats.pending_clients }} client account{{ stats.pending_clients === 1 ? '' : 's' }} awaiting approval.
+                            <Link v-if="canView('approvals')" :href="route('crm.approval.index')" class="ml-auto font-semibold">Review</Link>
+                        </div>
+                    </article>
+                </section>
             </div>
-        </div>
+        </main>
     </AuthenticatedLayout>
 </template>
 
 <style scoped>
-@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
-@keyframes pop { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-@keyframes bounceSoft { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-.animate-fade-up { animation: fadeUp 0.6s cubic-bezier(0.22,1,0.36,1) both; }
-.animate-float { animation: float 7s ease-in-out infinite; }
-.animate-float-delayed { animation: float 8s ease-in-out 1.2s infinite; }
-.animate-pop { animation: pop 0.5s cubic-bezier(0.22,1,0.36,1) both; }
-.animate-bounce-soft { animation: bounceSoft 2.4s ease-in-out infinite; }
-.card-enter-active { transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.22,1,0.36,1); }
-.card-enter-from { opacity: 0; transform: translateY(18px) scale(0.98); }
-.card-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; position: absolute; }
-.card-leave-to { opacity: 0; transform: scale(0.96); }
-.card-move { transition: transform 0.4s ease; }
+.crm-dashboard { --crm-page: #f8fafc; --crm-panel: #fff; --crm-ink: #1e293b; --crm-muted: #64748b; --crm-line: #e2e8f0; --crm-accent: #4f46e5; --crm-accent-dark: #3730a3; --crm-accent-soft: #eef2ff; --crm-accent-ink: #4338ca; --crm-soft-green: #ecfdf5; --crm-green: #047857; --crm-green-ink: #065f46; --crm-warning: #fffbeb; --crm-warning-ink: #92400e; color: var(--crm-ink); background: var(--crm-page); }
+.crm-eyebrow, .crm-label { color: var(--crm-muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+.crm-muted { color: var(--crm-muted); }
+.crm-date, .crm-nav-link, .crm-primary-link, .crm-text-link { display: inline-flex; align-items: center; gap: 0.5rem; }
+.crm-date { color: var(--crm-muted); font-size: 0.8rem; }
+.crm-primary-link { border-radius: 0.8rem; background: var(--crm-accent); color: #fff; padding: 0.65rem 0.9rem; font-size: 0.8rem; font-weight: 700; transition: background .15s ease; }
+.crm-primary-link:hover { background: var(--crm-accent-dark); }
+.crm-nav-link { border: 1px solid var(--crm-line); border-radius: 999px; background: var(--crm-panel); color: var(--crm-accent-ink); padding: 0.48rem 0.78rem; font-size: 0.75rem; font-weight: 600; transition: background .15s ease, border-color .15s ease; }
+.crm-nav-link:hover { border-color: var(--crm-accent); background: var(--crm-accent-soft); }
+.crm-metric-card, .crm-panel { border: 1px solid var(--crm-line); border-radius: 1rem; background: var(--crm-panel); box-shadow: 0 4px 14px rgba(15, 23, 42, .035); }
+.crm-metric-card { padding: 1.15rem; }
+.crm-panel { padding: 1.25rem; }
+.crm-metric-icon, .crm-activity-icon, .crm-lead-avatar { display: flex; flex: none; align-items: center; justify-content: center; }
+.crm-metric-icon { width: 2.5rem; height: 2.5rem; border-radius: .8rem; background: var(--crm-accent-soft); color: var(--crm-accent); }
+.crm-metric-icon.is-mint { background: var(--crm-soft-green); color: var(--crm-green); }
+.crm-metric-icon.is-blue { background: #eff6ff; color: #2563eb; }
+.crm-metric-icon.is-gold { background: var(--crm-warning); color: var(--crm-warning-ink); }
+.crm-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.crm-text-link { color: var(--crm-accent-ink); font-size: .75rem; font-weight: 650; white-space: nowrap; }
+.crm-text-link:hover { color: var(--crm-accent-dark); }
+.crm-empty-state { display: flex; min-height: 8rem; align-items: center; justify-content: center; gap: .7rem; color: var(--crm-muted); font-size: .8rem; }
+.crm-pipeline-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-top: 1.3rem; border-top: 1px solid var(--crm-line); padding-top: 1rem; }
+.crm-pipeline-summary > div { display: flex; flex-direction: column; gap: .35rem; }
+.crm-pipeline-summary strong { font-size: 1rem; font-weight: 650; }
+.crm-activity-icon { width: 2rem; height: 2rem; border-radius: .65rem; background: var(--crm-soft-green); color: var(--crm-green); }
+.crm-activity-icon.is-overdue { background: #fff0ed; color: #b54736; }
+.crm-lead-avatar { width: 2.3rem; height: 2.3rem; border-radius: .7rem; background: var(--crm-accent-soft); color: var(--crm-accent-ink); font-size: .85rem; font-weight: 700; }
+.crm-status-pill { border-radius: 999px; background: #f1f5f9; padding: .25rem .55rem; color: #475569; font-size: .65rem; font-weight: 650; text-transform: capitalize; }
+.crm-status-pill.status-inquiry { background: #eff6ff; color: #1d4ed8; }
+.crm-status-pill.status-negotiation, .crm-status-pill.status-approval-sent { background: var(--crm-warning); color: var(--crm-warning-ink); }
+.crm-status-pill.status-closed-won, .crm-status-pill.status-converted { background: var(--crm-soft-green); color: var(--crm-green-ink); }
+.crm-status-pill.status-lost, .crm-status-pill.status-archived { background: #fff0ed; color: #a84235; }
+.crm-pulse-tile { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .5rem .6rem; border: 1px solid var(--crm-line); border-radius: .8rem; background: var(--crm-page); padding: .8rem; color: var(--crm-muted); }
+.crm-pulse-tile span { font-size: .72rem; }
+.crm-pulse-tile strong { grid-column: 2; color: var(--crm-ink); font-size: 1.2rem; font-weight: 650; }
+.crm-pulse-tile.is-warning { border-color: #f0e5c9; background: var(--crm-warning); color: var(--crm-warning-ink); }
+.crm-pulse-tile.is-warning strong { color: var(--crm-warning-ink); }
+.crm-notice { display: flex; align-items: center; gap: .5rem; border-radius: .7rem; background: var(--crm-warning); padding: .75rem; color: var(--crm-warning-ink); font-size: .75rem; }
+@media (max-width: 639px) { .crm-pipeline-summary { grid-template-columns: 1fr; } }
 </style>

@@ -17,8 +17,24 @@ const props = defineProps({
     auth: Object,
 });
 
+const materialCategories = [
+    'Yarn',
+    'Dye Stuff',
+    'Auxillary Agent',
+    'Basic Chemicals',
+    'Boiler Chemicals',
+    'Post-Treatment',
+    'Pre-Treatment',
+    'Bio-Processing Enzymes',
+    'Care Agents',
+];
+const legacyMaterialCategories = ['Supplies', 'Packaging'];
+const yarnTiers = ['Ultra Premium', 'Premium', 'Standard', 'Economy', 'Recycled'];
+const displayMaterialCategory = (category) => category === 'Dye' ? 'Dye Stuff' : category;
+
 // UI State
 const searchQuery = ref('');
+const activeCategory = ref('All');
 const showAddModal = ref(false);
 const showViewModal = ref(false);
 const showEditModal = ref(false);
@@ -37,6 +53,7 @@ const confirmConfig = ref({
 const addForm = useForm({
     name: '',
     category: 'Yarn',
+    yarn_tier: '',
     unit: 'Kg',
     reorder_point: 0,
 });
@@ -44,6 +61,7 @@ const addForm = useForm({
 const editForm = useForm({
     name: '',
     category: 'Yarn',
+    yarn_tier: '',
     unit: 'Kg',
     reorder_point: 0,
 });
@@ -51,12 +69,36 @@ const editForm = useForm({
 // Helpers
 const formatCurrency = (val) => '₱' + Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
+const categoryTabs = computed(() => {
+    const tabs = [
+        { value: 'All', label: 'All materials', count: props.materials.length },
+        ...materialCategories.map((category) => ({
+            value: category,
+            label: category,
+            count: props.materials.filter((material) => displayMaterialCategory(material.category) === category).length,
+        })),
+    ];
+
+    legacyMaterialCategories.forEach((category) => {
+        const count = props.materials.filter((material) => material.category === category).length;
+        if (count) tabs.push({ value: category, label: `${category} (existing)`, count });
+    });
+
+    return tabs;
+});
+
 const filteredMaterials = computed(() => {
-    if (!searchQuery.value) return props.materials;
     const q = searchQuery.value.toLowerCase();
-    return props.materials.filter(mat =>
-        mat.name.toLowerCase().includes(q) || mat.mat_id.toLowerCase().includes(q)
-    );
+    return props.materials.filter((mat) => {
+        const matchesCategory = activeCategory.value === 'All'
+            || displayMaterialCategory(mat.category) === activeCategory.value;
+        const matchesSearch = !q
+            || String(mat.name || '').toLowerCase().includes(q)
+            || String(mat.yarn_tier || '').toLowerCase().includes(q)
+            || String(mat.display_name || '').toLowerCase().includes(q)
+            || String(mat.mat_id || '').toLowerCase().includes(q);
+        return matchesCategory && matchesSearch;
+    });
 });
 
 // Modal Control Helpers
@@ -97,7 +139,8 @@ const addMaterial = () => {
 const openViewModal = (material) => {
     selectedMaterial.value = material;
     editForm.name = material.name;
-    editForm.category = material.category;
+    editForm.category = displayMaterialCategory(material.category);
+    editForm.yarn_tier = material.yarn_tier || '';
     editForm.unit = material.unit;
     editForm.reorder_point = material.reorder_point;
     editForm.clearErrors();
@@ -107,7 +150,8 @@ const openViewModal = (material) => {
 const openEditModal = (material) => {
     selectedMaterial.value = material;
     editForm.name = material.name;
-    editForm.category = material.category;
+    editForm.category = displayMaterialCategory(material.category);
+    editForm.yarn_tier = material.yarn_tier || '';
     editForm.unit = material.unit;
     editForm.reorder_point = material.reorder_point;
     editForm.clearErrors();
@@ -196,6 +240,21 @@ const openedColor = (status) => {
                     </div>
                 </div>
 
+                <!-- Category tabs -->
+                <nav class="-mb-2 flex gap-2 overflow-x-auto pb-2" aria-label="Filter materials by category">
+                    <button v-for="tab in categoryTabs" :key="tab.value" type="button"
+                        :aria-pressed="activeCategory === tab.value"
+                        @click="activeCategory = tab.value"
+                        :class="activeCategory === tab.value
+                            ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                            : 'border-slate-200 bg-white/80 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:bg-indigo-950/30'"
+                        class="inline-flex shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-bold transition-all active:scale-[.98]">
+                        <span>{{ tab.label }}</span>
+                        <span :class="activeCategory === tab.value ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400'"
+                            class="min-w-6 rounded-lg px-1.5 py-0.5 text-center text-[10px] font-black">{{ tab.count }}</span>
+                    </button>
+                </nav>
+
                 <!-- Materials table card -->
                 <div class="animate-fade-up bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm overflow-hidden" style="animation-delay: 80ms">
                     <div v-if="filteredMaterials.length === 0" class="flex flex-col items-center justify-center py-20 text-center">
@@ -203,8 +262,8 @@ const openedColor = (status) => {
                             <Package class="h-9 w-9 text-indigo-400" />
                         </div>
                         <p class="text-sm font-black text-gray-700 dark:text-gray-200">No materials found</p>
-                        <p class="text-xs text-gray-400 mt-1">Try a different search.</p>
-                        <button v-if="searchQuery" @click="searchQuery=''" class="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition active:scale-95">Clear filters</button>
+                        <p class="text-xs text-gray-400 mt-1">Try a different category or search.</p>
+                        <button v-if="searchQuery || activeCategory !== 'All'" @click="searchQuery = ''; activeCategory = 'All'" class="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition active:scale-95">Clear filters</button>
                     </div>
                     <TransitionGroup v-else name="card" tag="div" class="overflow-x-auto">
                         <table key="mat-table" class="w-full text-left text-sm">
@@ -221,8 +280,11 @@ const openedColor = (status) => {
                             <tbody class="divide-y divide-gray-100 dark:divide-zinc-800">
                                 <tr v-for="mat in filteredMaterials" :key="mat.id" class="hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
                                     <td class="px-8 py-5 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">{{ mat.mat_id }}</td>
-                                    <td class="px-8 py-5 font-black text-sm text-gray-900 dark:text-white tracking-tight">{{ mat.name }}</td>
-                                    <td class="px-8 py-5 text-[11px] font-bold uppercase text-slate-500 dark:text-gray-400 tracking-wider">{{ mat.category }}</td>
+                                    <td class="px-8 py-5 font-black text-sm text-gray-900 dark:text-white tracking-tight">
+                                        {{ mat.name }}
+                                        <span v-if="mat.category === 'Yarn'" class="mt-1 block w-fit rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">{{ mat.yarn_tier || 'Tier not set' }}</span>
+                                    </td>
+                                    <td class="px-8 py-5 text-[11px] font-bold uppercase text-slate-500 dark:text-gray-400 tracking-wider">{{ displayMaterialCategory(mat.category) }}</td>
                                     <td class="px-8 py-5 text-center">
                                         <span :class="['inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ring-1', statusColor(stockStatus(mat))]">
                                             <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ stockStatus(mat) }}
@@ -273,7 +335,7 @@ const openedColor = (status) => {
                                 <div class="space-y-1">
                                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Category</label>
                                     <select v-model="addForm.category" class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none">
-                                        <option v-for="cat in ['Yarn', 'Dye', 'Supplies', 'Packaging']" :value="cat">{{ cat }}</option>
+                                        <option v-for="cat in materialCategories" :key="cat" :value="cat">{{ cat }}</option>
                                     </select>
                                 </div>
                                 <div class="space-y-1">
@@ -282,6 +344,15 @@ const openedColor = (status) => {
                                         <option v-for="u in ['Rolls', 'Kg', 'Pcs']" :value="u">{{ u }}</option>
                                     </select>
                                 </div>
+                            </div>
+                            <div v-if="addForm.category === 'Yarn'" class="space-y-1">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Yarn Tier</label>
+                                <select v-model="addForm.yarn_tier" class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none">
+                                    <option value="" disabled>Select a tier</option>
+                                    <option v-for="tier in yarnTiers" :key="tier" :value="tier">{{ tier }}</option>
+                                </select>
+                                <p class="text-[10px] text-slate-500">Each tier is a separate material with its own stock and supplier links.</p>
+                                <p v-if="addForm.errors.yarn_tier" class="text-rose-500 text-[10px] font-black">{{ addForm.errors.yarn_tier }}</p>
                             </div>
                             <div class="space-y-1">
                                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Reorder Point</label>
@@ -309,7 +380,7 @@ const openedColor = (status) => {
                                     <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30 animate-pop"><Info class="w-6 h-6" /></div>
                                     <div>
                                         <h3 class="font-black tracking-tight text-lg">Material Insight &amp; Edit</h3>
-                                        <p class="text-xs text-blue-100/90">{{ selectedMaterial.mat_id }} · {{ selectedMaterial.name }}</p>
+                                        <p class="text-xs text-blue-100/90">{{ selectedMaterial.mat_id }} · {{ selectedMaterial.display_name || selectedMaterial.name }}</p>
                                     </div>
                                 </div>
                                 <button @click="showViewModal = false" class="p-2.5 rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/25 transition"><X class="w-5 h-5" /></button>
@@ -466,7 +537,8 @@ const openedColor = (status) => {
                                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Category</label>
                                     <select v-model="editForm.category"
                                         class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none">
-                                        <option v-for="cat in ['Yarn', 'Dye', 'Supplies', 'Packaging']" :value="cat">{{ cat }}</option>
+                                        <option v-if="legacyMaterialCategories.includes(editForm.category)" :value="editForm.category">{{ editForm.category }} (existing)</option>
+                                        <option v-for="cat in materialCategories" :key="cat" :value="cat">{{ cat }}</option>
                                     </select>
                                     <p v-if="editForm.errors.category" class="text-rose-500 text-[10px] font-black uppercase tracking-tight">{{ editForm.errors.category }}</p>
                                 </div>
@@ -478,6 +550,14 @@ const openedColor = (status) => {
                                     </select>
                                     <p v-if="editForm.errors.unit" class="text-rose-500 text-[10px] font-black uppercase tracking-tight">{{ editForm.errors.unit }}</p>
                                 </div>
+                            </div>
+                            <div v-if="editForm.category === 'Yarn'" class="space-y-1">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Yarn Tier</label>
+                                <select v-model="editForm.yarn_tier" class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none">
+                                    <option value="" disabled>Select a tier</option>
+                                    <option v-for="tier in yarnTiers" :key="tier" :value="tier">{{ tier }}</option>
+                                </select>
+                                <p v-if="editForm.errors.yarn_tier" class="text-rose-500 text-[10px] font-black">{{ editForm.errors.yarn_tier }}</p>
                             </div>
                             <div class="space-y-1">
                                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Reorder Point ({{ selectedMaterial.unit }})</label>

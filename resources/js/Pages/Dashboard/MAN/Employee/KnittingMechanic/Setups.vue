@@ -11,14 +11,19 @@ const canEditProduction = computed(() => canEdit('MAN', 'knitting_mechanic'));
 const props = defineProps({
     machines: Array,
     jobOrders: Array,
+    yarnOptions: { type: Array, default: () => [] },
+    fabricDesignOptions: { type: Array, default: () => [] },
     fabrics: Array,
     myOpenSetups: Array,
 });
 
 const showForm = ref(false);
+const setupGsm = ref({});
+const setupDesign = ref({});
+const setupYarn = ref({});
 const form = useForm({
     machine_id: '', task_type: 'setup', sales_order_id: '', fabric_id: '',
-    stitch_length: '', yarn_tension: '', takeup_pressure: '', gsm_target: '',
+    stitch_length: '', yarn_tension: '', takeup_pressure: '', gsm_target: '', yarn_type: '',
     cams_config: '', pattern_ref: '', remarks: '',
 });
 
@@ -32,7 +37,13 @@ const submit = () => {
 
 const advance = (setup) => {
     const next = setup.status === 'pending' ? 'in_progress' : 'done';
-    router.patch(route('man.staff.knitting-mechanic.update-status', setup.id), { status: next }, { preserveScroll: true });
+    if (next === 'done' && setup.requested_by && (!String(setupGsm.value[setup.id] || setup.settings?.gsm_target || '').trim() || !String(setupYarn.value[setup.id] || setup.settings?.yarn_type || setup.jo_details?.yarn_type || '').trim())) return;
+    router.patch(route('man.staff.knitting-mechanic.update-status', setup.id), {
+        status: next,
+        gsm_target: setupGsm.value[setup.id] || setup.settings?.gsm_target || '',
+        pattern_ref: setupDesign.value[setup.id] || setup.settings?.pattern_ref || '',
+        yarn_type: setupYarn.value[setup.id] || setup.settings?.yarn_type || setup.jo_details?.yarn_type || '',
+    }, { preserveScroll: true });
 };
 
 const taskLabel = (t) => ({ setup: 'Setup', changeover: 'Changeover', calibration: 'Calibration', preventive: 'Preventive', repair: 'Repair' }[t] ?? t);
@@ -93,6 +104,8 @@ const badge = (s) => s === 'done'
                                     <option value="">None</option>
                                     <option v-for="f in fabrics" :key="f.id" :value="f.id">{{ f.code }} · {{ f.yarn_type }}</option>
                                 </select></div>
+                            <div><label class="block text-xs font-black uppercase tracking-wide text-gray-500 mb-1.5">Yarn Type</label>
+                                <select v-model="form.yarn_type" class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500"><option value="">Select yarn</option><option v-for="yarn in yarnOptions" :key="yarn" :value="yarn">{{ yarn }}</option></select></div>
                             <div><label class="block text-xs font-black uppercase tracking-wide text-gray-500 mb-1.5">Stitch Length</label>
                                 <input v-model="form.stitch_length" class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500" /></div>
                             <div><label class="block text-xs font-black uppercase tracking-wide text-gray-500 mb-1.5">Yarn Tension</label>
@@ -100,7 +113,7 @@ const badge = (s) => s === 'done'
                             <div><label class="block text-xs font-black uppercase tracking-wide text-gray-500 mb-1.5">Take-up Pressure</label>
                                 <input v-model="form.takeup_pressure" class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500" /></div>
                             <div><label class="block text-xs font-black uppercase tracking-wide text-gray-500 mb-1.5">GSM Target</label>
-                                <input v-model="form.gsm_target" class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                                <input v-model="form.gsm_target" type="number" min="1" step="1" class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500" /></div>
                             <div><label class="block text-xs font-black uppercase tracking-wide text-gray-500 mb-1.5">Cams / Needles / Sinkers Config</label>
                                 <input v-model="form.cams_config" class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500" /></div>
                             <div><label class="block text-xs font-black uppercase tracking-wide text-gray-500 mb-1.5">Pattern File Ref</label>
@@ -131,7 +144,7 @@ const badge = (s) => s === 'done'
                         <tbody class="divide-y divide-gray-100 dark:divide-zinc-800">
                             <tr v-for="s in myOpenSetups" :key="s.id" class="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors">
                                 <td class="px-6 py-4 font-mono text-sm font-bold">{{ s.code }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{{ taskLabel(s.task_type) }} · {{ s.machine?.machine_no }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300"><p class="font-bold">{{ taskLabel(s.task_type) }} · {{ s.machine?.machine_no }}<span v-if="s.sales_order?.jo_number"> · {{ s.sales_order.jo_number }}</span></p><p v-if="s.requester" class="mt-1 text-[11px] text-indigo-600 dark:text-indigo-300">Requested by {{ s.requester.name }}</p><div v-if="s.sales_order" class="mt-2 grid gap-x-4 gap-y-1 rounded-lg bg-slate-50 p-2 text-[11px] dark:bg-zinc-800 sm:grid-cols-2"><p v-if="s.jo_details?.client"><b>Client:</b> {{ s.jo_details.client }}</p><p v-if="s.jo_details?.product"><b>Product:</b> {{ s.jo_details.product }}</p><p><b>Fabric design:</b> {{ s.settings?.pattern_ref || s.jo_details?.fabric_design || "—" }}</p><p><b>Color:</b> {{ s.jo_details?.color || "—" }}</p><p><b>Yarn:</b> {{ s.jo_details?.yarn_type || "—" }}</p><p v-if="s.jo_details?.texture"><b>Texture:</b> {{ s.jo_details.texture }}</p><p><b>JO quantity:</b> {{ s.jo_details?.quantity || "—" }} kg</p><p><b>Requested GSM:</b> {{ s.jo_details?.requested_gsm ? s.jo_details.requested_gsm + " GSM" : "Not specified" }}</p></div><div v-if="s.requested_by && s.status === 'in_progress'" class="mt-3 grid max-w-md gap-2 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 dark:border-zinc-700 dark:bg-zinc-900/60"><label class="grid gap-1 text-[10px] font-bold text-slate-600 dark:text-zinc-300">Fabric design<select :value="setupDesign[s.id] || s.settings?.pattern_ref || s.jo_details?.fabric_design || ''" @change="setupDesign[s.id] = $event.target.value" class="w-full rounded-lg border-gray-200 text-xs dark:border-zinc-700 dark:bg-zinc-800"><option value="">Select fabric design</option><option v-if="(s.settings?.pattern_ref || s.jo_details?.fabric_design) && !fabricDesignOptions.includes(s.settings?.pattern_ref || s.jo_details?.fabric_design)" :value="s.settings?.pattern_ref || s.jo_details?.fabric_design">{{ s.settings?.pattern_ref || s.jo_details?.fabric_design }}</option><option v-for="design in fabricDesignOptions" :key="design" :value="design">{{ design }}</option></select></label><label class="grid gap-1 text-[10px] font-bold text-slate-600 dark:text-zinc-300">Yarn type<select :value="setupYarn[s.id] || s.settings?.yarn_type || s.jo_details?.yarn_type || ''" @change="setupYarn[s.id] = $event.target.value" class="w-full rounded-lg border-gray-200 text-xs dark:border-zinc-700 dark:bg-zinc-800"><option value="">Select yarn</option><option v-if="(s.settings?.yarn_type || s.jo_details?.yarn_type) && !yarnOptions.includes(s.settings?.yarn_type || s.jo_details?.yarn_type)" :value="s.settings?.yarn_type || s.jo_details?.yarn_type">{{ s.settings?.yarn_type || s.jo_details?.yarn_type }}</option><option v-for="yarn in yarnOptions" :key="yarn" :value="yarn">{{ yarn }}</option></select></label><label class="grid gap-1 text-[10px] font-bold text-slate-600 dark:text-zinc-300">Target GSM (numbers only)<input v-model="setupGsm[s.id]" type="number" min="1" step="1" placeholder="Enter target GSM" class="w-full rounded-lg border-gray-200 text-xs dark:border-zinc-700 dark:bg-zinc-800" /></label></div></td>
                                 <td class="px-6 py-4"><span :class="badge(s.status)" class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1">{{ s.status.replace('_', ' ') }}</span></td>
                                 <td class="px-6 py-4 text-right">
                                     <button v-if="canEditProduction" @click="advance(s)" class="inline-flex items-center gap-1 text-[11px] font-black text-indigo-700 hover:underline">

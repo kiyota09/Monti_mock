@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
@@ -19,8 +20,8 @@ const sendPO = (id) => {
     });
 };
 
-const returnToRequests = (id) => {
-    if (!confirm('Return this declined PO\'s material request to Material Requests for a fresh RFQ round?')) return;
+const returnToRequests = async (id) => {
+    if (!await confirmModal('Return this declined PO\'s material request to Material Requests for a fresh RFQ round?')) return;
     router.post(route('pro.manager.purchase-orders.return', id), {}, {
         preserveScroll: true,
     });

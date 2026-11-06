@@ -203,8 +203,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 import { Users, RefreshCw, Hourglass, CheckCircle2, Rocket, LayoutTemplate } from 'lucide-vue-next';
 
 const props = defineProps({

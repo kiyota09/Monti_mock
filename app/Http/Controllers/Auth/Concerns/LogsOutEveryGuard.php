@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 trait LogsOutEveryGuard
 {
     /**
-     * Log out of every session guard (web, client, supplier, applicant),
+     * Log out of every session guard (web, client, supplier, applicant, agency),
      * then destroy the session.
      *
      * Logging out a single guard leaves the other guards' remember-me
@@ -19,7 +19,7 @@ trait LogsOutEveryGuard
      */
     protected function logoutEveryGuard(Request $request): void
     {
-        foreach (['web', 'client', 'supplier', 'applicant'] as $guard) {
+        foreach (['web', 'client', 'supplier', 'applicant', 'agency'] as $guard) {
             Auth::guard($guard)->logout();
         }
 

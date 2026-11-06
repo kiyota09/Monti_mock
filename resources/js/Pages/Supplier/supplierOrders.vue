@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import SupplierPageHeader from '@/Components/SupplierPageHeader.vue';
 import {
     ShoppingCart, Package, Truck, CheckCircle,
     Clock, Receipt, DollarSign, X, Navigation,
@@ -15,6 +16,8 @@ const props = defineProps({
         default: () => []
     }
 });
+
+const supplierData = computed(() => props.auth?.supplier || props.auth?.user || {});
 
 const searchQuery = ref('');
 const statusFilter = ref('All');
@@ -117,12 +120,7 @@ const trackProgress = (order) => {
 <template>
     <Head title="Purchase Orders | Supplier Hub" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Purchase Orders</h1>
-                <p class="text-slate-500 text-sm mt-0.5">Manage production, shipping, and billing for Monti Textile.</p>
-            </div>
-        </div>
+        <SupplierPageHeader class="mb-6" :supplier-name="supplierData.business_name || 'Supplier workspace'" :icon="ShoppingCart" title="Purchase Orders" subtitle="Manage production, shipping, and billing for Monti Textile." />
 
         <div class="flex flex-col sm:flex-row gap-3 mb-6">
             <input v-model="searchQuery" type="text" placeholder="Search PO Number..."
@@ -141,14 +139,14 @@ const trackProgress = (order) => {
         </div>
 
         <div v-if="filteredOrders.length === 0"
-            class="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+            class="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
             <ShoppingCart class="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p class="text-sm font-bold text-slate-500">No purchase orders found.</p>
         </div>
 
         <div class="space-y-4">
             <div v-for="order in filteredOrders" :key="order.id"
-                class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col">
+                class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm flex flex-col">
 
                 <div class="flex flex-col md:flex-row justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4 mb-4">
                     <div>

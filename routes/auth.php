@@ -1,10 +1,8 @@
 <?php
 
-use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
-use App\Http\Controllers\Auth\EmployeeLoginController;
 use App\Http\Controllers\Auth\ForcedPasswordController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
@@ -12,27 +10,28 @@ use App\Http\Controllers\Auth\PasswordRecoveryController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\Auth\UnifiedLoginController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth; // Added for custom logout logic
 use Illuminate\Support\Facades\Route;
 
 // ✅ Updated to include both web and client guards
 // This prevents logged-in clients from being redirected to the employee login
-Route::middleware('guest:web,client')->group(function () {
-    // Existing Email/Password Login (Employees)
-    Route::get('login', [AuthenticatedSessionController::class, 'create'])
+Route::middleware('guest:web,client,supplier,applicant,agency')->group(function () {
+    Route::get('login', [UnifiedLoginController::class, 'create'])
         ->name('login');
 
-    Route::post('login', [AuthenticatedSessionController::class, 'store'])
+    Route::post('login', [UnifiedLoginController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('login.store');
+});
 
+Route::middleware('guest:web,client')->group(function () {
     // Employee ID Login
-    Route::get('employee-login', [EmployeeLoginController::class, 'create'])
+    Route::get('employee-login', fn () => redirect()->route('login'))
         ->name('employee.login');
 
-    Route::post('employee-login', [EmployeeLoginController::class, 'store'])
-        ->middleware('throttle:10,1')
+    Route::post('employee-login', fn () => redirect()->route('login'))
         ->name('employee.login.store');
 
     // Registration (Internal Employees)
@@ -63,6 +62,10 @@ Route::middleware('guest:web,client')->group(function () {
     Route::post('forgot-password/recover', [PasswordRecoveryController::class, 'employee'])
         ->middleware('throttle:6,1')
         ->name('password.recover');
+
+    Route::post('forgot-password/recover-unified', [PasswordRecoveryController::class, 'unified'])
+        ->middleware('throttle:6,1')
+        ->name('password.recover.unified');
 });
 
 // ✅ Updated to support both guards for authenticated actions
@@ -94,12 +97,12 @@ Route::middleware('auth:web,client')->group(function () {
         ->name('password.force');
 
     // ✅ Unified Logout Logic
-    // Logs out of EVERY guard (web, client, supplier, applicant). Logging
+    // Logs out of EVERY guard (web, client, supplier, applicant, agency). Logging
     // out a single guard leaves the other guards' remember-me cookies alive,
     // so the next request silently re-authenticates and the user appears to
     // still be logged in ("log out twice" bug).
     Route::post('logout', function (Request $request) {
-        foreach (['web', 'client', 'supplier', 'applicant'] as $guard) {
+        foreach (['web', 'client', 'supplier', 'applicant', 'agency'] as $guard) {
             Auth::guard($guard)->logout();
         }
 

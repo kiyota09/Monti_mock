@@ -5,16 +5,46 @@ namespace App\Http\Controllers\Inv;
 use App\Http\Controllers\Controller;
 use App\Models\Inv\Product;
 use App\Models\Inv\ProductImage;
+use App\Models\Inv\Material;
+use App\Models\Man\PantoneReference;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class ProductController extends Controller
 {
     public function product()
     {
-        $products = Product::with(['images'])
+        $yarnMaterials = Material::query()
+            ->where('category', 'Yarn')
+            ->orderBy('yarn_tier')
+            ->orderBy('name')
+            ->get(['id', 'mat_id', 'name', 'category', 'yarn_tier', 'unit'])
+            ->map(fn (Material $material) => [
+                'id' => $material->id,
+                'mat_id' => $material->mat_id,
+                'name' => $material->name,
+                'display_name' => $material->display_name,
+                'yarn_tier' => $material->yarn_tier,
+                'unit' => $material->unit,
+            ])
+            ->values()
+            ->toArray();
+
+        $pantoneColors = PantoneReference::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'hex'])
+            ->map(fn (PantoneReference $pantone) => [
+                'id' => $pantone->id,
+                'name' => $pantone->name,
+                'hex' => $pantone->hex,
+            ])
+            ->values()
+            ->toArray();
+
+        $products = Product::with(['images', 'yarnMaterials'])
             ->orderBy('id', 'desc')
             ->get()
             ->map(function (Product $p) {
@@ -33,6 +63,14 @@ class ProductController extends Controller
                     'colors' => $colorsArray,
                     'colorName' => $p->color_name ?? null,
                     'colorHex' => $p->color_hex ?? null,
+                    'yarnMaterials' => $p->yarnMaterials->map(fn (Material $material) => [
+                        'id' => $material->id,
+                        'mat_id' => $material->mat_id,
+                        'name' => $material->name,
+                        'display_name' => $material->display_name,
+                        'yarn_tier' => $material->yarn_tier,
+                        'unit' => $material->unit,
+                    ])->values()->toArray(),
                     'images' => $p->images->map(fn($img) => [
                         'id' => $img->id,
                         'url' => $img->url,
@@ -44,6 +82,8 @@ class ProductController extends Controller
 
         return Inertia::render('Dashboard/Inventory/Products', [
             'products' => $products,
+            'yarnMaterials' => $yarnMaterials,
+            'pantoneColors' => $pantoneColors,
         ]);
     }
 
@@ -80,7 +120,12 @@ class ProductController extends Controller
         try {
             $request->validate([
                 'name' => 'required|string|max:255',
-                'colors' => 'nullable|array',
+                'colors' => 'required|array|min:10',
+                'colors.*.name' => 'required|string|max:80',
+                'colors.*.hex' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+                'colors.*.pantone_id' => 'nullable|integer|exists:pantone_references,id',
+                'yarn_material_ids' => 'nullable|array',
+                'yarn_material_ids.*' => ['integer', 'distinct', Rule::exists('materials', 'id')->where(fn ($query) => $query->where('category', 'Yarn'))],
                 'category' => 'nullable|string',
                 'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
             ]);
@@ -97,6 +142,7 @@ class ProductController extends Controller
                 'product_id' => $identifiers['product_id'],
                 'sku' => $identifiers['sku'],
             ]);
+            $product->yarnMaterials()->sync($request->input('yarn_material_ids', []));
 
             // Handle images with duplicate prevention
             if ($request->hasFile('images')) {
@@ -112,6 +158,8 @@ class ProductController extends Controller
 
             return back()->with('success', 'Product created successfully!');
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Illuminate\Database\QueryException $e) {
             if (str_contains($e->getMessage(), 'Duplicate entry')) {
                 return back()->withErrors(['error' => 'Duplicate product ID or SKU generated. Please try again.']);
@@ -131,7 +179,12 @@ class ProductController extends Controller
 
             $request->validate([
                 'name' => 'required|string|max:255',
-                'colors' => 'nullable|array',
+                'colors' => 'required|array|min:10',
+                'colors.*.name' => 'required|string|max:80',
+                'colors.*.hex' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+                'colors.*.pantone_id' => 'nullable|integer|exists:pantone_references,id',
+                'yarn_material_ids' => 'nullable|array',
+                'yarn_material_ids.*' => ['integer', 'distinct', Rule::exists('materials', 'id')->where(fn ($query) => $query->where('category', 'Yarn'))],
                 'new_images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:51200',
             ]);
 
@@ -140,6 +193,7 @@ class ProductController extends Controller
                 'name' => $request->name,
                 'colors' => $request->colors ?? [],
             ]);
+            $product->yarnMaterials()->sync($request->input('yarn_material_ids', []));
 
             // Handle newly added images
             if ($request->hasFile('new_images')) {
@@ -155,6 +209,8 @@ class ProductController extends Controller
 
             return back()->with('success', 'Product updated successfully.');
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             \Log::error('Product update error: ' . $e->getMessage());
             return back()->withErrors(['error' => 'Failed to update product: ' . $e->getMessage()]);

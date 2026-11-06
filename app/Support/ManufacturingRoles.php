@@ -27,16 +27,23 @@ class ManufacturingRoles
         'knitting' => [
             'knitting_yarn',
             'knitting_mechanic',
+            'knitting_inspector',
+            'knitting_sample',
         ],
         'dyeing' => [
             'dyeing_color',
-            'dyeing_fabric_softener',
-            'dyeing_squeezer',
-            'dyeing_ironing',
+            'dyeing_bleaching',
+            'dyeing_pre_treatment',
+            'dyeing_treatment',
             'dyeing_lab_chemist',
         ],
         'finishing' => [
+            'finishing_squeezer',
+            'finishing_ironing',
+            'finishing_hydro',
+            'finishing_tubetex',
             'finishing_packaging',
+            'finishing_inspector',
             'checker_quality',
         ],
         'maintenance' => [
@@ -58,28 +65,35 @@ class ManufacturingRoles
             'knitting' => 'knitting_yarn',
         ],
         'dyeing' => [
+            'dyeing_bleaching' => 'dyeing_bleaching',
+            'dyeing_pre_treatment' => 'dyeing_pre_treatment',
             'dyeing_color' => 'dyeing_color',
-            'dyeing_fabric_softener' => 'dyeing_fabric_softener',
-            'dyeing_squeezer' => 'dyeing_squeezer',
-            'dyeing_ironing' => 'dyeing_ironing',
+            'dyeing_treatment' => 'dyeing_treatment',
         ],
         'finishing' => [
-            'finishing_packaging' => 'finishing_packaging',
+            'water_extraction_squeezer' => 'finishing_squeezer',
+            'water_extraction_hydro' => 'finishing_hydro',
+            'drying_heatsetting' => 'finishing_ironing',
+            'drying_tubetex' => 'finishing_tubetex',
+            'shrinkage_inspection' => 'finishing_inspector',
             'quality_check' => 'checker_quality',
+            'finishing_packaging' => 'finishing_packaging',
         ],
     ];
 
     /**
      * Fabric status a Job Order's fabric must have before a stage becomes
      * assignable. The dyeing department follows a strict
-     * colour → softener → squeezer → ironing sequence, so each stage only
+     * colour → bleaching → finishing squeezer → finishing ironing sequence, so each stage only
      * opens once the fabric reaches the matching status.
      */
     public const STAGE_REQUIRES_FABRIC_STATUS = [
         'dyeing_color' => 'dyeing',
-        'dyeing_fabric_softener' => 'softener',
-        'dyeing_squeezer' => 'squeezer',
-        'dyeing_ironing' => 'iron',
+        'dyeing_bleaching' => 'bleaching',
+        'dyeing_pre_treatment' => 'pre_treatment',
+        'dyeing_treatment' => 'post_treatment',
+        'finishing_squeezer' => 'squeezer',
+        'finishing_ironing' => 'iron',
     ];
 
     /**
@@ -88,13 +102,20 @@ class ManufacturingRoles
     public const LABELS = [
         'knitting_yarn' => 'Knitting Yarn Staff',
         'knitting_mechanic' => 'Knitting Mechanic Staff',
+        'knitting_inspector' => 'Knitting Inspector Staff',
+        'knitting_sample' => 'Knitting Sample Staff',
         'dyeing_color' => 'Dyeing Color Staff',
-        'dyeing_fabric_softener' => 'Dyeing Fabric Softener Staff',
-        'dyeing_squeezer' => 'Dyeing Squeezer Staff',
-        'dyeing_ironing' => 'Dyeing Ironing Staff',
+        'dyeing_bleaching' => 'Dyeing Bleaching Staff',
+        'dyeing_pre_treatment' => 'Dyeing Pre Treatment Staff',
+        'dyeing_treatment' => 'Dyeing Post Treatment Staff',
+        'finishing_squeezer' => 'Finishing Squeezer Staff',
+        'finishing_ironing' => 'Finishing Heatsetting Staff',
+        'finishing_hydro' => 'Finishing Hydro Staff',
+        'finishing_tubetex' => 'Finishing Tubetex Staff',
         'dyeing_lab_chemist' => 'Dyeing Lab Chemist',
         'finishing_packaging' => 'Finishing Packaging Staff',
-        'checker_quality' => 'Checker Quality Staff',
+        'finishing_inspector' => 'Finishing Shrinkage Inspector',
+        'checker_quality' => 'Finishing Quality Checker',
         'maintenance_checker' => 'Maintenance Checker Staff',
         'pollution_control_operator' => 'Pollution Control Operator',
         'safety_officer' => 'Safety Officer Staff',

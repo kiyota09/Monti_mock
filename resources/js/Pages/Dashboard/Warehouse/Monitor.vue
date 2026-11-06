@@ -124,7 +124,7 @@ const filteredQueue = computed(() => {
     const base = visibleQueue.value;
     if (!q) return base;
     return base.filter(i =>
-        (i.material?.name || '').toLowerCase().includes(q) ||
+        (i.material?.display_name || i.material?.name || '').toLowerCase().includes(q) ||
         (i.control_number || '').toLowerCase().includes(q)
     );
 });
@@ -355,7 +355,7 @@ const submitUse = () => {
     useFormErrors.value = {};
     triggerConfirm(
         'Release Material',
-        `Send ${materialForm.quantity} ${selectedStockItem.value?.unit} of "${selectedStockItem.value?.material?.name}" to ${materialForm.manufacturing_department}?`,
+        `Send ${materialForm.quantity} ${selectedStockItem.value?.unit} of "${selectedStockItem.value?.material?.display_name || selectedStockItem.value?.material?.name}" to ${materialForm.manufacturing_department}?`,
         'Confirm', 'green',
         () => {
             showConfirmModal.value = false;
@@ -584,7 +584,7 @@ const allowDrop = (e) => e.preventDefault();
                             :class="canEditMonitor ? 'cursor-move' : 'cursor-default'">
                             <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-700 text-white"><Box class="h-4 w-4" /></span>
                             <div class="leading-tight">
-                                <p class="text-[13px] font-bold text-slate-700 dark:text-slate-200">{{ item.material?.name }}</p>
+                                <p class="text-[13px] font-bold text-slate-700 dark:text-slate-200">{{ item.material?.display_name || item.material?.name }}</p>
                                 <p class="text-[10px] font-bold text-slate-400">{{ item.control_number }} · {{ item.quantity }}{{ item.unit }}</p>
                             </div>
                             <button @click="openDetailsModal(item)" class="text-slate-300 hover:text-indigo-600" title="Details"><Eye class="h-4 w-4" /></button>
@@ -627,7 +627,7 @@ const allowDrop = (e) => e.preventDefault();
                                             class="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-900/40 dark:bg-amber-900/10">
                                             <button @click="openDetailsModal(s)" class="flex min-w-0 items-center gap-1.5 text-left">
                                                 <Eye class="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                                                <span class="truncate text-xs font-bold text-slate-700 dark:text-slate-200">{{ s.material?.name }}</span>
+                                                <span class="truncate text-xs font-bold text-slate-700 dark:text-slate-200">{{ s.material?.display_name || s.material?.name }}</span>
                                             </button>
                                             <span class="flex shrink-0 items-center gap-1.5">
                                                 <span class="text-[11px] font-black text-amber-600">{{ s.quantity }}{{ s.unit }}</span>
@@ -647,7 +647,7 @@ const allowDrop = (e) => e.preventDefault();
                                             <div v-for="st in visibleShelfItems(shelf)" :key="st.id" :draggable="canEditMonitor" @dragstart="dragStart($event, st)"
                                                 class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm hover:border-indigo-300 dark:border-zinc-700 dark:bg-zinc-900">
                                                 <button @click="openDetailsModal(st)" class="flex min-w-0 items-center gap-1.5 text-left">
-                                                    <span class="truncate text-xs font-bold text-slate-700 dark:text-slate-200">{{ st.material?.name }}</span>
+                                                    <span class="truncate text-xs font-bold text-slate-700 dark:text-slate-200">{{ st.material?.display_name || st.material?.name }}</span>
                                                 </button>
                                                 <span class="flex shrink-0 items-center gap-1.5">
                                                     <span class="text-[11px] font-black text-indigo-600">{{ st.quantity }}{{ st.unit }}</span>
@@ -712,7 +712,7 @@ const allowDrop = (e) => e.preventDefault();
                             <div class="space-y-3 p-6">
                                 <div class="rounded-2xl border bg-slate-50 p-5 text-center dark:bg-zinc-800">
                                     <p class="mb-1 text-[9px] font-black uppercase tracking-[0.3em] text-indigo-500">Material</p>
-                                    <p class="text-sm font-black uppercase">{{ detailItem.material?.name }}</p>
+                                    <p class="text-sm font-black uppercase">{{ detailItem.material?.display_name || detailItem.material?.name }}</p>
                                     <p class="mt-1 text-[11px] font-bold text-slate-400">{{ detailItem.quantity }}{{ detailItem.unit }}</p>
                                 </div>
                                 <div class="flex items-center justify-between rounded-xl border p-4 text-xs">
@@ -741,7 +741,7 @@ const allowDrop = (e) => e.preventDefault();
                             </div>
                             <div class="p-6">
                                 <div class="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center dark:border-emerald-800 dark:bg-emerald-900/20">
-                                    <p class="text-sm font-black uppercase text-emerald-900 dark:text-emerald-200">{{ selectedStockItem?.material?.name }}</p>
+                                    <p class="text-sm font-black uppercase text-emerald-900 dark:text-emerald-200">{{ selectedStockItem?.material?.display_name || selectedStockItem?.material?.name }}</p>
                                     <p class="mt-1 text-[10px] font-bold text-emerald-600">{{ selectedStockItem?.control_number }}</p>
                                 </div>
                                 <label class="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Quantity to transfer</label>
@@ -869,7 +869,7 @@ const allowDrop = (e) => e.preventDefault();
                         <div class="w-full max-w-[400px] overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-zinc-900">
                             <div class="bg-gradient-to-br from-indigo-700 via-blue-700 to-cyan-700 px-6 py-5 text-white">
                                 <h3 class="flex items-center gap-2 text-base font-black"><ArrowRightLeft class="h-4 w-4" /> Move material</h3>
-                                <p class="mt-0.5 text-[11px] text-blue-100">{{ moveItem?.material?.name }} · {{ moveItem?.control_number }} · {{ moveItem?.quantity }}{{ moveItem?.unit }}</p>
+                                <p class="mt-0.5 text-[11px] text-blue-100">{{ moveItem?.material?.display_name || moveItem?.material?.name }} · {{ moveItem?.control_number }} · {{ moveItem?.quantity }}{{ moveItem?.unit }}</p>
                             </div>
                             <div class="space-y-3.5 p-6">
                                 <div>

@@ -8,7 +8,6 @@ use App\Models\Man\Fabric;
 use App\Models\Man\IronJob;
 use App\Models\Man\ManufacturingOrder;
 use App\Models\Man\Package;
-use App\Models\Man\SoftenerJob;
 use App\Models\Man\SqueezerJob;
 use Inertia\Inertia;
 
@@ -92,6 +91,32 @@ class CheckerQualityController extends ManufacturingStaffController
         return Inertia::render('Dashboard/MAN/Employee/CheckerQuality/Production', [
             'orders' => $orders,
             'packages' => $packages,
+        ]);
+    }
+
+    public function history()
+    {
+        $packages = Package::with(['fabric:id,code,yarn_type,weight', 'operator:id,name'])
+            ->where('checked_by', $this->staff()->id)
+            ->whereNotNull('checked_at')
+            ->latest('checked_at')->paginate(20)->withQueryString();
+
+        return Inertia::render('Dashboard/MAN/Employee/CheckerQuality/History', [
+            'packages' => $packages,
+        ]);
+    }
+
+    public function reports()
+    {
+        $packages = Package::where('checked_by', $this->staff()->id)->whereNotNull('checked_at');
+
+        return Inertia::render('Dashboard/MAN/Employee/CheckerQuality/Reports', [
+            'stats' => [
+                'checked' => (clone $packages)->count(),
+                'approved' => (clone $packages)->where('status', 'checked')->count(),
+                'rejected' => (clone $packages)->where('status', 'rejected')->count(),
+                'today' => (clone $packages)->whereDate('checked_at', today())->count(),
+            ],
         ]);
     }
 }

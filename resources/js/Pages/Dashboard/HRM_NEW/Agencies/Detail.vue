@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmModal } from '@/lib/feedback';
 // Page 3: Agency detail (header actions + Overview / Users tabs)
 import { ref, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
@@ -107,14 +108,14 @@ function submitUserCreate() {
     });
 }
 
-function resetPassword(u: any) {
-    if (!window.confirm(`Reset the password for ${u.name}? A new temporary password will be shown once.`)) return;
+async function resetPassword(u: any) {
+    if (!await confirmModal(`Reset the password for ${u.name}? A new temporary password will be shown once.`)) return;
     router.post(route('hrm.agencies.users.reset-password', { agency: props.agency.id, user: u.id }), {}, { preserveScroll: true });
 }
 
-function toggleUser(u: any) {
+async function toggleUser(u: any) {
     const verb = u.is_active ? 'deactivate' : 'reactivate';
-    if (!window.confirm(`${verb === 'deactivate' ? 'Deactivate' : 'Reactivate'} the login for ${u.name}?`)) return;
+    if (!await confirmModal(`${verb === 'deactivate' ? 'Deactivate' : 'Reactivate'} the login for ${u.name}?`)) return;
     router.post(route('hrm.agencies.users.toggle-status', { agency: props.agency.id, user: u.id }), {}, { preserveScroll: true });
 }
 

@@ -1,7 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { confirmModal } from '@/lib/feedback';
+import { ref, computed, onBeforeUnmount } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ItPager from '@/Components/it/ItPager.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
 import { Search, Plus, X, Eye, Pencil, Trash2, BookOpen } from 'lucide-vue-next';
 
@@ -51,8 +53,8 @@ const submitForm = () => {
     }
 };
 
-const removeArticle = (article) => {
-    if (!confirm(`Delete "${article.title}"?`)) return;
+const removeArticle = async (article) => {
+    if (!await confirmModal(`Delete "${article.title}"?`)) return;
     router.delete(route('it.knowledge.destroy', article.id), { preserveScroll: true });
 };
 
@@ -62,8 +64,17 @@ const openArticle = (article) => {
 };
 
 const applyFilters = (patch) => {
-    router.get(route('it.knowledge'), { ...props.filters, ...patch }, { preserveScroll: true, replace: true });
+    router.get(route('it.knowledge'), { ...props.filters, ...patch, page: 1 }, { preserveScroll: true, replace: true });
 };
+
+// Debounced search — one request per pause, not per keystroke.
+const searchBox = ref(props.filters.search || '');
+let searchTimer = null;
+const onSearchInput = () => {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => applyFilters({ search: searchBox.value }), 400);
+};
+onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer); });
 
 const rows = computed(() => props.articles.data || []);
 </script>
@@ -71,7 +82,7 @@ const rows = computed(() => props.articles.data || []);
 <template>
     <Head title="Knowledge Base | IT Department" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="it-page-hero mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     Knowledge <span class="text-blue-600">Base</span>
@@ -88,7 +99,7 @@ const rows = computed(() => props.articles.data || []);
         <div class="flex flex-col sm:flex-row gap-3 mb-6">
             <div class="relative flex-1">
                 <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input :value="filters.search || ''" @input="applyFilters({ search: $event.target.value })" type="text"
+                <input v-model="searchBox" @input="onSearchInput" type="text"
                     placeholder="Search guides..."
                     class="w-full pl-9 pr-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200 placeholder-slate-400" />
             </div>
@@ -121,6 +132,8 @@ const rows = computed(() => props.articles.data || []);
             <BookOpen class="w-12 h-12 mx-auto mb-3 text-slate-300" />
             <p class="text-sm font-bold text-slate-400">No articles found.</p>
         </div>
+        <ItPager class="mt-4 overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-700"
+            :paginator="articles" route-name="it.knowledge" :filters="filters" />
 
         <!-- Editor modal -->
         <div v-if="showForm" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

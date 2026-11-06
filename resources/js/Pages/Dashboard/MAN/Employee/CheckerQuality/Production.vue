@@ -1,4 +1,5 @@
 <script setup>
+import { requestInput, showNotice } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -55,12 +56,12 @@ const approve = (pkg) => {
     );
 };
 
-const reject = (pkg) => {
-    const reason = prompt('Please enter the reason this package failed inspection:');
+const reject = async (pkg) => {
+    const reason = await requestInput('Please enter the reason this package failed inspection:', { input: 'textarea', title: 'Rejection reason required' });
     if (reason !== null && reason.trim() !== '') {
         inspect(pkg.id, 'reject', reason.trim());
     } else if (reason !== null) {
-        alert('A rejection reason is required.');
+        showNotice('A rejection reason is required.');
     }
 };
 </script>

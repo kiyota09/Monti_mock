@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm, router, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
@@ -56,8 +57,8 @@ const submit = () => {
         });
 };
 
-const remove = (rep) => {
-    if (!confirm(`Remove ${rep.name}?`)) return;
+const remove = async (rep) => {
+    if (!await confirmModal(`Remove ${rep.name}?`)) return;
     router.delete(route('client.representatives.destroy', rep.id), { preserveScroll: true });
 };
 

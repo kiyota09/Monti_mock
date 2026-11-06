@@ -13,8 +13,8 @@ const BAR_SLOTS = MAX_BAR_ITEMS - 1
  *
  * - Executives/secretary get their workspace first (via getLeadingNav,
  *   same items as Sidebar.vue), then module pages.
- * - CEO sees Executive + CRM only; COO / vice_president sees Vice
- *   Presidency + CRM only, never HRM (overseer model).
+ * - CEO/COO see their fixed executive workspace plus only the modules/pages
+ *   explicitly granted by IT Access Control.
  * - Native managers keep full home-module access ONLY while IT has seeded
  *   zero explicit page rows; seeded rows are the exact set.
  * - Secretary / special_officer: full home (root) module, per-page filter
@@ -141,12 +141,6 @@ export function resolveNav(config, user, options = {}) {
     return { barItems: qualifyBarLabels(barItems), moreGroups, totalCount, showBar: true, showEmptyState: false }
 }
 
-function isExec(user) {
-    const role = user?.role
-    const pos = String(user?.position || '').toLowerCase()
-    return role === 'CEO' || role === 'COO' || pos === 'vice_president'
-}
-
 function isSecretaryOrGM(user) {
     const pos = String(user?.position || '').toLowerCase()
     return pos === 'secretary' || pos === 'special_officer'
@@ -169,7 +163,6 @@ function moduleVisible(mod, user, moduleList, grantedList, workforceKeys, normPe
 
     // Workforce is workforce-permission based (mirrors canAccessWorkforce).
     if (key === 'WRF') {
-        if (role === 'CEO') return false
         if (isSecretaryOrGM(user)) return grantedList.includes('WRF')
         if (user?.is_manufacturing_supervisor) return grantedList.includes('WRF')
         return workforceKeys.length > 0
@@ -180,11 +173,6 @@ function moduleVisible(mod, user, moduleList, grantedList, workforceKeys, normPe
     if (key === 'INV' && !flags.inventory) return hasPagePrefix(normPerms, key)
     if (key === 'ORD' && !flags.ord) return hasPagePrefix(normPerms, key)
     if (key === 'LOG' && !flags.logistics) return hasPagePrefix(normPerms, key)
-
-    // Overseer model: executives only ever see CRM here; VP never sees HRM.
-    if (key === 'CRM' && isExec(user)) return true
-    if (key === 'HRM' && (role === 'COO' || pos === 'vice_president')) return false
-    if (role === 'CEO') return false
 
     if (moduleList.includes(key)) return true
     if (key === 'MAN' && user?.manufacturing_role) return true
@@ -204,11 +192,6 @@ function pageVisible(mod, page, user, moduleList, grantedList, normPerms, explic
         if (user?.is_manufacturing_supervisor && grantedList.includes('WRF')) return true
         return normPerms.has(`wrf.${permKeyOf(page)}`)
     }
-
-    // Executives hold every CRM page; nothing else here (their workspace
-    // comes from the leading nav).
-    if (role === 'CEO') return mod.id === 'CRM'
-    if (role === 'COO' || pos === 'vice_president') return mod.id === 'CRM'
 
     // Native manager with no explicit IT rows keeps full home-module access;
     // seeded rows are the exact set. No MAN shortcut — there is no

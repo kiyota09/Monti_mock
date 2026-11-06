@@ -53,11 +53,11 @@ class MeetingRequestController extends Controller
         $req = $this->find($token);
 
         $data = $request->validate([
-            'preferred_at' => 'nullable|date|after_or_equal:today',
+            'preferred_at' => 'nullable|date|after:now',
             'response_place' => 'nullable|string|max:255',
             'response_message' => 'nullable|string|max:2000',
         ], [
-            'preferred_at.after_or_equal' => 'Please choose today\'s date or a future date — past dates cannot be scheduled.',
+            'preferred_at.after' => 'Please choose a future meeting time — past times cannot be scheduled.',
         ]);
 
         if (! $req->isAnswered()) {

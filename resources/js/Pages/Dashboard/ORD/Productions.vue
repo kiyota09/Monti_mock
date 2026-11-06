@@ -203,6 +203,7 @@
 </template>
 
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -220,8 +221,8 @@ defineProps({
 const { canEdit } = usePageAccess();
 const canEditProductions = computed(() => canEdit('ORD', 'productions'));
 
-const release = (job) => {
-    if (!confirm(`Release ${job.jo_number} (${job.quantity} kg) to production?`)) return;
+const release = async (job) => {
+    if (!await confirmModal(`Release ${job.jo_number} (${job.quantity} kg) to production?`)) return;
     router.post(route('ord.productions.release', { id: job.id }), {}, { preserveScroll: true });
 };
 

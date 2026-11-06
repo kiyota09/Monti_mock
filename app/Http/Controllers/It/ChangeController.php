@@ -43,8 +43,8 @@ class ChangeController extends Controller
             'description' => 'required|string|max:5000',
             'change_type' => 'required|in:standard,normal,emergency',
             'risk' => 'required|in:low,medium,high',
-            'scheduled_start' => 'nullable|date',
-            'scheduled_end' => 'nullable|date|after_or_equal:scheduled_start',
+            'scheduled_start' => 'nullable|date|after:now',
+            'scheduled_end' => 'nullable|date|after:now|after_or_equal:scheduled_start',
             'rollback_plan' => 'nullable|string|max:3000',
         ]);
 

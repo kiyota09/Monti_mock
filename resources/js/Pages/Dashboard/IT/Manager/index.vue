@@ -38,7 +38,7 @@ const cards = [
 <template>
     <Head title="IT Operations Dashboard | Monti Textile" />
     <AuthenticatedLayout>
-        <div class="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div data-erp-page-banner="fallback" class="it-page-hero mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     IT <span class="text-blue-600">Operations</span>
@@ -53,7 +53,7 @@ const cards = [
             </Link>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <Link v-for="card in cards" :key="card.title" :href="route(card.href)"
                 class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all">
                 <div class="flex items-center justify-between mb-4">

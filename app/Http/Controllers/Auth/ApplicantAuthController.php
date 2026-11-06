@@ -32,6 +32,8 @@ use Inertia\Inertia;
  */
 class ApplicantAuthController extends Controller
 {
+    use Concerns\LogsOutEveryGuard;
+
     private const OTP_TTL_MINUTES = 10;
     private const OTP_MAX_ATTEMPTS = 5;
     private const RESEND_COOLDOWN_SECONDS = 60;
@@ -517,10 +519,7 @@ class ApplicantAuthController extends Controller
 
     public function logout(Request $request)
     {
-        Auth::guard('applicant')->logout();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        $this->logoutEveryGuard($request);
 
         return redirect()->route('applicant.login');
     }

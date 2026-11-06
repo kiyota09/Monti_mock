@@ -2,19 +2,22 @@
 import { ref, computed, watch } from 'vue';
 import { useForm, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import JobOrderDetails from '@/Components/Manufacturing/JobOrderDetails.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
 const canEditProduction = computed(() => canEdit('MAN', 'dyeing_color'));
 import {
-    Droplet, X, Plus, Trash2, AlertTriangle, CheckCircle2,
-    FlaskConical, Palette, Layers, Package, Blend, Sparkles, ChevronRight,
+    Droplet, X, AlertTriangle, CheckCircle2,
+    FlaskConical, Palette, Layers, Blend, Sparkles, ChevronRight,
 } from 'lucide-vue-next';
 
 const props = defineProps({
     fabrics:  Array,   // status='dyeing', includes linked JO recipe
+    assignedOrders: { type: Array, default: () => [] },
     machines: Array,
     dyes:     Array,   // ManufacturingInventoryItem where dept=dyeing, category=Dye
+    steamReady: { type: Boolean, default: false },
 });
 
 const page = usePage();
@@ -33,7 +36,6 @@ watch(() => page.props.errors, (errs) => {
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const getDyeById   = (id) => props.dyes.find(d => d.id == id) ?? null;
 const fmtNum       = (n)  => parseFloat(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ─── Recipe Modal ─────────────────────────────────────────────────────────────
@@ -45,77 +47,127 @@ const closeRecipeModal = () => { recipeModal.value = false; recipeModalFabric.va
 // ─── Dye Modal ────────────────────────────────────────────────────────────────
 const dyeModal      = ref(false);
 const currentFabric = ref(null);
+const selectedFabricIds = ref([]);
+const currentGroup = ref(null);
+const selectedBatchId = ref('');
+const batchId = (fabric) => fabric.batch_id;
+const joGroups = computed(() => {
+    const groups = new Map();
+    for (const fabric of props.fabrics) {
+        const assignment = props.assignedOrders.find(order =>
+            (fabric.manufacturing_order_id && Number(order.manufacturing_order_id) === Number(fabric.manufacturing_order_id))
+            || (fabric.sales_order_id && Number(order.sales_order_id) === Number(fabric.sales_order_id))
+        );
+        const key = fabric.sales_order?.jo_number || assignment?.reference || (fabric.manufacturing_order_id ? `MO-${fabric.manufacturing_order_id}` : `Fabric ${fabric.code}`);
+        if (!groups.has(key)) {
+            groups.set(key, { key, reference: key, client: assignment?.client, recipe: assignment?.recipe, manufacturingOrder: assignment?.manufacturing_order, fabrics: [] });
+        }
+        groups.get(key).fabrics.push(fabric);
+    }
+    return [...groups.values()];
+});
+const batchOptions = computed(() => {
+    const batches = new Map();
+    for (const fabric of currentGroup.value?.fabrics ?? []) {
+        if (fabric.batch_id && !batches.has(fabric.batch_id)) batches.set(fabric.batch_id, { id: fabric.batch_id, machine_id: fabric.batch_machine_id, machine: fabric.machine?.machine_no, capacity: Number(fabric.batch_capacity_kg || 0) });
+    }
+    return [...batches.values()];
+});
+const selectedBatch = computed(() => batchOptions.value.find(batch => String(batch.id) === String(selectedBatchId.value)) ?? null);
+const groupedCandidates = computed(() => currentGroup.value?.fabrics.filter(f => String(batchId(f)) === String(selectedBatchId.value)) ?? []);
+const selectedFabricWeight = computed(() => groupedCandidates.value.filter(f => selectedFabricIds.value.some(id => Number(id) === Number(f.id))).reduce((sum, f) => sum + Number(f.weight || 0), 0));
+const exceedsBatchCapacity = computed(() => selectedBatch.value
+    && selectedFabricWeight.value > selectedBatch.value.capacity + 0.001);
 
-// Each dye row: { inventory_item_id, quantity_used }
-const dyeRows = ref([]);
+const dyeFormulaMaterials = computed(() =>
+    currentGroup.value?.recipe?.formula_groups?.find((group) => group.label?.toLowerCase() === 'dye stuffs')?.materials ?? [],
+);
+const autoDyeUsage = computed(() => dyeFormulaMaterials.value.map((material) => {
+    const materialId = Number(material.material_id);
+    const percentage = Number(material.lab_quantity ?? 0);
+    const quantity = selectedFabricIds.value.length > 0
+        ? Math.round((selectedFabricWeight.value * percentage / 100) * 100) / 100
+        : Number(material.quantity ?? 0);
+    const available = props.dyes
+        .filter((stock) => Number(stock.material_id) === materialId)
+        .reduce((total, stock) => total + Number(stock.remaining_quantity ?? 0), 0);
 
-const addDyeRow    = () => dyeRows.value.push({ inventory_item_id: '', quantity_used: '' });
-const removeDyeRow = (i) => dyeRows.value.splice(i, 1);
+    return { ...material, materialId, percentage, quantity, available };
+}));
+const manualDyeQuantities = ref({});
+const dyeUsageForEntry = computed(() => autoDyeUsage.value.map((item) => ({
+    ...item,
+    quantity: manualDyeQuantities.value[item.materialId] ?? item.quantity,
+})));
+const hasAutoDyeFormula = computed(() => autoDyeUsage.value.length > 0
+    && autoDyeUsage.value.every((item) => item.materialId > 0 && item.percentage > 0));
+const hasValidDyeAmounts = computed(() => hasAutoDyeFormula.value
+    && dyeUsageForEntry.value.every((item) => Number(item.quantity) >= 0.01));
+const hasEnoughDyeStock = computed(() => {
+    if (!hasAutoDyeFormula.value) return false;
+    const requiredByMaterial = new Map();
+    dyeUsageForEntry.value.forEach((item) => {
+        requiredByMaterial.set(item.materialId, (requiredByMaterial.get(item.materialId) ?? 0) + Number(item.quantity));
+    });
 
-const onDyeItemChange = (row) => {
-    row.quantity_used = '';
-};
+    return [...requiredByMaterial].every(([materialId, quantity]) => {
+        const available = props.dyes
+            .filter((stock) => Number(stock.material_id) === materialId)
+            .reduce((total, stock) => total + Number(stock.remaining_quantity ?? 0), 0);
+        return available + 0.001 >= quantity;
+    });
+});
 
 const form = useForm({
-    fabric_id:  null,
+    fabric_ids: [],
     machine_id: '',
     remarks:    '',
     dyes_used:  [],
 });
 
 const openDyeModal = (fabric) => {
-    currentFabric.value = fabric;
-    form.fabric_id  = fabric.id;
-    form.machine_id = '';
+    const group = fabric.fabrics ? fabric : joGroups.value.find(item => item.fabrics.some(row => row.id === fabric.id));
+    currentGroup.value = group ?? null;
+    currentFabric.value = group?.fabrics?.[0] ?? fabric;
+    manualDyeQuantities.value = {};
+    selectedBatchId.value = String(batchOptions.value[0]?.id ?? '');
+    selectedFabricIds.value = [];
+    form.fabric_ids = [];
+    form.machine_id = batchOptions.value[0]?.machine_id ?? '';
     form.remarks    = '';
-    dyeRows.value   = [{ inventory_item_id: '', quantity_used: '' }];   // start with one empty row
     dyeModal.value  = true;
 };
 const closeDyeModal = () => {
     dyeModal.value  = false;
     currentFabric.value = null;
-    dyeRows.value   = [];
+    currentGroup.value = null;
+    selectedBatchId.value = '';
+    selectedFabricIds.value = [];
+    manualDyeQuantities.value = {};
     form.reset();
 };
 
+watch(selectedFabricIds, () => {
+    manualDyeQuantities.value = {};
+}, { deep: true });
+
 // ─── Dye Row Validation ───────────────────────────────────────────────────────
-const dyeRowErrors = computed(() =>
-    dyeRows.value.map(row => {
-        if (!row.inventory_item_id || !row.quantity_used) return null;
-        const dye = getDyeById(row.inventory_item_id);
-        if (!dye) return null;
-        return parseFloat(row.quantity_used) > parseFloat(dye.remaining_quantity)
-            ? `Only ${fmtNum(dye.remaining_quantity)} ${dye.unit} available`
-            : null;
-    })
-);
-
-const hasInvalidDyeRows = computed(() => dyeRowErrors.value.some(e => e !== null));
-
-const totalChemicalsKg = computed(() => {
-    return dyeRows.value.reduce((sum, row) => {
-        const q = parseFloat(row.quantity_used);
-        return sum + (isNaN(q) ? 0 : q);
-    }, 0);
-});
-
 const canSubmit = computed(() =>
+    selectedFabricIds.value.length > 0 &&
+    !exceedsBatchCapacity.value &&
     form.machine_id &&
-    dyeRows.value.length > 0 &&
-    dyeRows.value.every(r => r.inventory_item_id && parseFloat(r.quantity_used) > 0) &&
-    !hasInvalidDyeRows.value &&
+    hasValidDyeAmounts.value &&
+    hasEnoughDyeStock.value &&
     !form.processing
 );
 
 // ─── Submit ───────────────────────────────────────────────────────────────────
 const submitDye = () => {
-    form.dyes_used = dyeRows.value
-        .filter(r => r.inventory_item_id && parseFloat(r.quantity_used) > 0)
-        .map(r => ({
-            inventory_item_id: parseInt(r.inventory_item_id),
-            quantity_used:     parseFloat(r.quantity_used),
-        }));
-
+    form.fabric_ids = selectedFabricIds.value;
+    form.dyes_used = dyeUsageForEntry.value.map((item) => ({
+        material_id: item.materialId,
+        quantity_used: Number(item.quantity),
+    }));
     form.post(route('man.staff.dyeing-color.store-dye'), {
         preserveScroll: true,
         onSuccess: () => {
@@ -170,94 +222,37 @@ const submitDye = () => {
                     </div>
                 </transition>
 
+                <section v-if="assignedOrders.length" class="rounded-2xl border bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <h2 class="font-black text-slate-900 dark:text-white">Job Orders assigned to you</h2>
+                    <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                        <article v-for="order in assignedOrders" :key="order.assignment_id" class="rounded-xl border p-3 dark:border-zinc-700">
+                            <div class="flex items-start justify-between gap-2"><div><p class="font-mono text-sm font-black">{{ order.reference }}</p><p v-if="order.client" class="text-xs text-slate-500">{{ order.client }}</p></div><span class="rounded-full px-2 py-1 text-[9px] font-black uppercase" :class="order.stage_state === 'ready' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300'">{{ order.stage_state === 'ready' ? `${order.ready_fabric_count} fabric(s) ready at your stage` : order.stage_state === 'awaiting_review' ? `${order.review_fabric_count} awaiting supervisor review` : order.stage_state === 'awaiting_batch' ? 'First stage · waiting for batch setup' : 'Waiting for Pre Treatment' }}</span></div>
+                            <p v-if="order.fabric_code" class="mt-1 text-xs font-bold text-cyan-800 dark:text-cyan-200">Assigned fabric: {{ order.fabric_code }}<span v-if="order.fabric_weight"> · {{ order.fabric_weight }} kg</span></p>
+                            <p v-if="order.route" class="mt-2 text-[10px] text-slate-600 dark:text-zinc-300">Route: {{ order.route }}</p>
+                            <JobOrderDetails :order="order" />
+                        </article>
+                    </div>
+                </section>
+
                 <!-- Empty state -->
                 <div v-if="!fabrics || fabrics.length === 0"
                     class="animate-fade-up flex flex-col items-center justify-center py-20 text-center bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 shadow-sm">
                     <div class="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 dark:to-violet-900/30 rounded-full mb-4 animate-bounce-soft">
                         <FlaskConical class="h-9 w-9 text-indigo-400" />
                     </div>
-                    <p class="text-sm font-black text-gray-700 dark:text-gray-200">No fabrics pending dyeing</p>
-                    <p class="text-xs text-gray-400 mt-1">Fabrics arrive here after the checker passes them from knitting.</p>
+                    <p class="text-sm font-black text-gray-700 dark:text-gray-200">{{ assignedOrders.length ? 'No fabrics pending dyeing' : 'No Job Orders are assigned to you yet' }}</p>
+                    <p class="text-xs text-gray-400 mt-1">{{ assignedOrders.length ? 'Your assigned Job Orders will appear here after the checker passes their fabrics to the dyeing stage.' : 'The dyeing supervisor will assign a Job Order and stage to you from JO Assignments.' }}</p>
                 </div>
 
-                <!-- Fabric Cards -->
-                <TransitionGroup v-else name="card" tag="div" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    <div v-for="(fabric, i) in fabrics" :key="fabric.id"
-                         :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }"
-                         class="group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 hover:scale-[1.01] transition-all duration-300 p-5 overflow-hidden">
-                        <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-indigo-500 to-fuchsia-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
-
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="flex items-center gap-3 min-w-0">
-                                <div class="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-600 to-violet-700 flex items-center justify-center text-white text-lg font-black shadow-lg uppercase flex-shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-                                    {{ (fabric.code ?? '?').charAt(0) }}
-                                </div>
-                                <div class="min-w-0">
-                                    <p class="font-mono text-sm font-black text-gray-900 dark:text-white truncate tracking-tight group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors">
-                                        {{ fabric.code }}
-                                    </p>
-                                    <p class="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase truncate">{{ fabric.yarn_type }}</p>
-                                </div>
-                            </div>
-                            <span class="text-[9px] font-black uppercase px-2.5 py-1 rounded-full ring-1 flex-shrink-0 ml-2 flex items-center gap-1 bg-yellow-100 text-yellow-700 ring-yellow-200 dark:bg-yellow-500/15 dark:text-yellow-300 dark:ring-yellow-500/30">
-                                <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> Pending
-                            </span>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mb-3">
-                            <div>
-                                <p class="text-[10px] text-gray-400 uppercase tracking-wide font-bold">Weight</p>
-                                <p class="font-black text-gray-800 dark:text-gray-100">{{ fmtNum(fabric.weight) }} kg</p>
-                            </div>
-                            <div>
-                                <p class="text-[10px] text-gray-400 uppercase tracking-wide font-bold">Machine</p>
-                                <p class="font-black text-gray-800 dark:text-gray-100">{{ fabric.machine?.machine_no ?? 'N/A' }}</p>
-                            </div>
-                            <div>
-                                <p class="text-[10px] text-gray-400 uppercase tracking-wide font-bold">Operator</p>
-                                <p class="font-black text-gray-800 dark:text-gray-100 truncate">{{ fabric.operator?.name ?? 'N/A' }}</p>
-                            </div>
-                            <div>
-                                <p class="text-[10px] text-gray-400 uppercase tracking-wide font-bold">Shift</p>
-                                <p class="font-black text-gray-800 dark:text-gray-100">{{ fabric.shift }}</p>
-                            </div>
-                        </div>
-
-                        <div v-if="fabric.sales_order" class="bg-indigo-50/70 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/40 rounded-2xl px-3 py-2 mb-2">
-                            <p class="text-[10px] text-indigo-400 font-black uppercase tracking-wide">Linked Job Order</p>
-                            <p class="text-xs font-black text-indigo-800 dark:text-indigo-200 mt-0.5 font-mono">{{ fabric.sales_order.jo_number }}</p>
-                            <p class="text-[10px] text-indigo-500 mt-0.5">
-                                Color: {{ fabric.sales_order.color }} · Qty: {{ fmtNum(fabric.sales_order.quantity) }} kg
-                            </p>
-                        </div>
-
-                        <div v-if="fabric.recipe" class="bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 rounded-2xl px-3 py-2 space-y-1 mb-2">
-                            <p class="text-[10px] text-amber-600 dark:text-amber-300 font-black uppercase tracking-wide flex items-center gap-1">
-                                <Palette class="w-3 h-3" /> Dye Color Formula
-                            </p>
-                            <p class="text-sm font-black text-amber-900 dark:text-amber-200">{{ fabric.recipe.dye_color }}</p>
-                            <p class="text-[10px] text-amber-600 dark:text-amber-400 truncate">Weave: {{ fabric.recipe.weave_design }}</p>
-                        </div>
-                        <div v-else class="bg-gray-50 dark:bg-zinc-800 border border-dashed border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2 text-center mb-2">
-                            <p class="text-[10px] text-gray-400">No recipe linked to this fabric</p>
-                        </div>
-
-                        <p v-if="fabric.remarks" class="text-[10px] text-gray-400 italic truncate mb-2">{{ fabric.remarks }}</p>
-
-                        <div class="mt-auto flex gap-2 pt-3 border-t border-gray-100 dark:border-zinc-800">
-                            <button v-if="fabric.recipe" @click="openRecipeModal(fabric)" type="button"
-                                class="flex-1 flex items-center justify-center gap-1.5 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-xs font-bold px-3 py-2.5 rounded-2xl transition active:scale-95">
-                                <Layers class="w-3.5 h-3.5" /> View Recipe
-                            </button>
-                            <button v-if="canEditProduction" @click="openDyeModal(fabric)" type="button"
-                                class="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold px-3 py-2.5 rounded-2xl shadow-lg shadow-indigo-500/20 transition active:scale-95">
-                                <Droplet class="w-3.5 h-3.5" /> Dye Fabric
-                            </button>
-                        </div>
-                        <ChevronRight class="absolute top-4 right-4 h-4 w-4 text-indigo-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                </TransitionGroup>
+                <!-- One card and one record action per JO -->
+                <section v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <article v-for="group in joGroups" :key="group.key" class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                        <div class="flex items-start justify-between gap-3"><div><p class="font-mono text-lg font-black">{{ group.reference }}</p><p v-if="group.client" class="text-xs text-slate-500">{{ group.client }}</p><p class="mt-1 text-xs text-slate-500">{{ group.fabrics.length }} fabric code(s) · {{ group.fabrics.reduce((sum,f)=>sum+Number(f.weight||0),0).toFixed(2) }} kg</p></div><span class="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-black uppercase text-amber-800">Ready for color</span></div>
+                        <details v-if="group.recipe" class="mt-3 rounded-xl bg-slate-50 p-3 dark:bg-zinc-800"><summary class="cursor-pointer text-sm font-bold">Full approved recipe</summary><p class="mt-2 text-xs"><b>Product:</b> {{ group.recipe.product||'—' }} · <b>Yarn:</b> {{ group.recipe.yarn_type||'—' }} · <b>Color:</b> {{ group.recipe.dye_color||'—' }} · <b>Design:</b> {{ group.recipe.weave_design||'—' }}</p><div class="mt-2 grid gap-2"><section v-for="section in group.recipe.material_groups||[]" :key="section.label" class="rounded-lg border bg-white p-2 text-xs dark:border-zinc-700 dark:bg-zinc-900"><p class="font-bold">{{ section.label }}</p><p v-if="!section.materials?.length" class="text-slate-500">None listed</p><p v-for="m in section.materials||[]" :key="m.material_id">{{ m.name }} · {{ m.quantity }} {{ m.unit||'' }}</p></section></div></details>
+                        <div class="mt-3 flex flex-wrap gap-2"><span v-for="fabric in group.fabrics" :key="fabric.id" class="rounded-lg bg-indigo-50 px-2.5 py-1.5 text-xs dark:bg-indigo-500/10"><b class="font-mono">{{ fabric.code }}</b> · {{ fmtNum(fabric.weight) }} kg · {{ fabric.machine?.machine_no||'Machine' }}</span></div>
+                        <button v-if="canEditProduction" @click="openDyeModal(group)" type="button" class="mt-4 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2.5 text-sm font-bold text-white">Record Dyeing for this JO</button>
+                    </article>
+                </section>
 
             </div>
         </div>
@@ -352,9 +347,9 @@ const submitDye = () => {
                                     <Droplet class="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <p class="font-mono text-xs text-blue-100">{{ currentFabric.code }}</p>
+                                    <p class="font-mono text-xs text-blue-100">{{ currentGroup?.reference }}</p>
                                     <h3 class="text-lg font-black tracking-tight mt-0.5">Record Dyeing</h3>
-                                    <p class="text-xs text-blue-100/90 mt-0.5">{{ currentFabric.yarn_type }} · {{ fmtNum(currentFabric.weight) }} kg</p>
+                                    <p class="text-xs text-blue-100/90 mt-0.5">{{ selectedFabricIds.length }} fabric code(s) selected · {{ selectedFabricWeight.toFixed(2) }} kg</p>
                                 </div>
                             </div>
                             <button @click="closeDyeModal" class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/25 transition flex-shrink-0">
@@ -380,103 +375,43 @@ const submitDye = () => {
 
                     <div class="overflow-y-auto flex-1 px-5 py-4 space-y-5">
 
-                        <div>
-                            <label class="block text-xs font-black text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5">
-                                Machine No. <span class="text-red-500">*</span>
+                        <div v-if="batchOptions.length > 1" class="space-y-2">
+                            <label class="block text-xs font-black uppercase tracking-wide text-gray-600 dark:text-gray-300">Machine batch<select v-model="selectedBatchId" @change="form.machine_id=selectedBatch?.machine_id??'';selectedFabricIds=[]" class="mt-1 w-full rounded-xl border p-3 text-sm font-normal dark:border-zinc-700 dark:bg-zinc-800"><option v-for="batch in batchOptions" :key="batch.id" :value="String(batch.id)">{{ batch.machine }} · {{ batch.capacity }} kg capacity</option></select></label>
+                        </div>
+                        <div class="space-y-2">
+                            <p class="text-xs font-black uppercase tracking-wide text-gray-600 dark:text-gray-300">Select fabric codes · {{ selectedFabricWeight.toFixed(2) }} / {{ selectedBatch?.capacity ?? 0 }} kg</p>
+                            <label v-for="fabric in groupedCandidates" :key="fabric.id" class="flex items-center justify-between rounded-xl border p-3 text-sm dark:border-zinc-700">
+                                <span class="flex items-center gap-2"><input v-model="selectedFabricIds" type="checkbox" :value="fabric.id"><span class="font-mono font-bold">{{ fabric.code }}</span></span><span>{{ fmtNum(fabric.weight) }} kg</span>
                             </label>
-                            <select v-model="form.machine_id" required
-                                class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                                <option value="">— Select Machine —</option>
-                                <option v-for="machine in machines" :key="machine.id" :value="machine.id">
-                                    {{ machine.machine_no }}
-                                </option>
-                            </select>
+                            <p v-if="form.errors.fabric_ids" class="text-xs text-red-600">{{ form.errors.fabric_ids }}</p>
+                            <p v-if="exceedsBatchCapacity" class="text-xs font-semibold text-red-600">Selected fabrics exceed this batch's {{ fmtNum(selectedBatch.capacity) }} kg capacity.</p>
+                        </div>
+
+                        <div>
+                            <p class="text-xs font-bold text-gray-600 dark:text-gray-300">Assigned machine: {{ selectedBatch?.machine || 'Select a machine batch' }}</p>
+                            <p v-if="!steamReady" class="mt-2 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">Boiler steam is not available. The Boiler Operator must record an operating boiler and mark steam available before steam powered dyeing can start.</p>
                         </div>
 
                         <div class="border border-gray-200 dark:border-zinc-700 rounded-3xl overflow-hidden">
-                            <div class="flex items-center justify-between px-4 py-3 bg-gray-50/70 dark:bg-zinc-800/60 border-b border-gray-100 dark:border-zinc-700">
-                                <div>
-                                    <p class="text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-wide">Dye Chemicals Used</p>
-                                    <p class="text-xs text-gray-400 mt-0.5">Each lot is deducted from inventory on save</p>
-                                </div>
-                                <button type="button" @click="addDyeRow"
-                                    class="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white text-xs font-bold px-3 py-2 rounded-2xl transition active:scale-95">
-                                    <Plus class="w-3.5 h-3.5" /> Add Dye
-                                </button>
+                            <div class="px-4 py-3 bg-gray-50/70 dark:bg-zinc-800/60 border-b border-gray-100 dark:border-zinc-700">
+                                <p class="text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-wide">Dye stuffs from this JO recipe</p>
+                                <p class="text-xs text-gray-400 mt-0.5">Materials and quantities are calculated from the selected fabric codes. Matching inventory lots are consumed automatically.</p>
                             </div>
-
-                            <div class="p-4 space-y-4">
-                                <div v-for="(row, index) in dyeRows" :key="index"
-                                     class="rounded-2xl border p-4 space-y-3"
-                                     :class="index === 0 ? 'border-indigo-100 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-zinc-700 bg-gray-50/40 dark:bg-zinc-800/40'">
-
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <span class="w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center"
-                                                  :class="index === 0 ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-white'">
-                                                {{ index + 1 }}
-                                            </span>
-                                            <p class="text-xs font-black uppercase tracking-wide"
-                                               :class="index === 0 ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-600 dark:text-gray-300'">
-                                                {{ index === 0 ? 'Primary Dye' : 'Additional Dye' }}
-                                            </p>
-                                        </div>
-                                        <button v-if="dyeRows.length > 1" type="button" @click="removeDyeRow(index)"
-                                            class="flex items-center gap-1 text-red-500 hover:text-red-700 text-xs font-bold">
-                                            <Trash2 class="w-3.5 h-3.5" /> Remove
-                                        </button>
-                                    </div>
-
+                            <div class="p-4 space-y-3">
+                                <p v-if="!hasAutoDyeFormula" class="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">This JO has no usable dye-stuff formula. Ask the supervisor or dyeing lab chemist to complete the recipe.</p>
+                                <div v-for="dye in dyeUsageForEntry" :key="dye.materialId" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-900 dark:bg-indigo-950/20">
                                     <div>
-                                        <label class="block text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1">
-                                            Dye Type <span class="text-red-500">*</span>
-                                        </label>
-                                        <select v-model="row.inventory_item_id" @change="onDyeItemChange(row)"
-                                            class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                                            <option value="">— Select Dye Lot —</option>
-                                            <option v-for="dye in dyes" :key="dye.id" :value="dye.id">
-                                                {{ dye.material_name }} ({{ dye.control_number }}) — {{ fmtNum(dye.remaining_quantity) }} {{ dye.unit }} left
-                                            </option>
-                                        </select>
+                                        <p class="font-bold text-slate-800 dark:text-white">{{ dye.name }}</p>
+                                        <p class="text-xs text-slate-500">{{ fmtNum(dye.percentage) }}% OWF · {{ fmtNum(dye.available) }} kg available</p>
                                     </div>
-
-                                    <div v-if="getDyeById(row.inventory_item_id)" class="flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-300">
-                                        <span class="inline-flex items-center gap-1.5 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg">
-                                            <Package class="w-3 h-3 text-gray-400" /> {{ getDyeById(row.inventory_item_id).control_number }}
-                                        </span>
-                                        <span class="inline-flex items-center gap-1.5 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 px-2.5 py-1 rounded-lg">
-                                            🧪 {{ fmtNum(getDyeById(row.inventory_item_id).remaining_quantity) }} {{ getDyeById(row.inventory_item_id).unit }} remaining
-                                        </span>
-                                    </div>
-
-                                    <div v-if="row.inventory_item_id">
-                                        <label class="block text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1">
-                                            Chemicals Used ({{ getDyeById(row.inventory_item_id)?.unit ?? 'kg' }})
-                                            <span class="text-red-500">*</span>
-                                            <span class="text-gray-400 font-normal normal-case ml-1">
-                                                max {{ fmtNum(getDyeById(row.inventory_item_id)?.remaining_quantity) }}
-                                            </span>
-                                        </label>
-                                        <input v-model.number="row.quantity_used" type="number" step="0.01" min="0.01"
-                                            :max="getDyeById(row.inventory_item_id)?.remaining_quantity"
-                                            class="w-full border rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                                            :class="dyeRowErrors[index] ? 'border-red-300' : 'border-gray-200 dark:border-zinc-700'"
-                                            placeholder="e.g. 5.00" />
-                                        <p v-if="dyeRowErrors[index]" class="text-xs text-red-500 mt-1 flex items-center gap-1">
-                                            <AlertTriangle class="w-3 h-3" /> {{ dyeRowErrors[index] }}
-                                        </p>
-                                        <p v-else-if="parseFloat(row.quantity_used) > 0" class="text-xs text-emerald-600 mt-1">
-                                            ✓ {{ fmtNum(getDyeById(row.inventory_item_id).remaining_quantity - parseFloat(row.quantity_used)) }}
-                                            {{ getDyeById(row.inventory_item_id).unit }} will remain.
-                                        </p>
-                                    </div>
+                                    <label class="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-300">Required
+                                        <input :value="dye.quantity" @input="manualDyeQuantities[dye.materialId] = $event.target.value === '' ? '' : Number($event.target.value)" type="number" min="0.01" step="0.01" class="w-28 rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-right text-sm font-black text-slate-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white" />
+                                        <span>kg</span>
+                                    </label>
                                 </div>
-
-                                <div v-if="dyeRows.length > 1 && totalChemicalsKg > 0"
-                                     class="flex items-center justify-between bg-gray-50 dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700 rounded-2xl px-4 py-2.5">
-                                    <p class="text-xs text-gray-500 font-medium">Total chemicals used</p>
-                                    <p class="text-sm font-black text-gray-900 dark:text-white">{{ fmtNum(totalChemicalsKg) }} kg</p>
-                                </div>
+                                <p v-if="selectedFabricIds.length === 0 && hasAutoDyeFormula" class="text-xs text-slate-500">Select fabric codes above to calculate dye quantities.</p>
+                                <p v-if="hasAutoDyeFormula && !hasValidDyeAmounts" class="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">Enter a dye amount of at least 0.01 kg for each listed dye.</p>
+                                <p v-else-if="hasValidDyeAmounts && !hasEnoughDyeStock" class="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">Available dye inventory does not cover these amounts. Reduce an amount or ask the supervisor to check stock.</p>
                             </div>
                         </div>
 
@@ -503,14 +438,17 @@ const submitDye = () => {
                             </button>
                         </div>
                         <div class="space-y-1 text-xs">
+                            <p v-if="!selectedFabricIds.length" class="text-amber-600 flex items-center gap-1">
+                                <AlertTriangle class="w-3 h-3" /> Select at least one fabric code.
+                            </p>
                             <p v-if="!form.machine_id" class="text-amber-600 flex items-center gap-1">
                                 <AlertTriangle class="w-3 h-3" /> Select a machine.
                             </p>
-                            <p v-if="dyeRows.some(r => !r.inventory_item_id || !parseFloat(r.quantity_used))" class="text-amber-600 flex items-center gap-1">
-                                <AlertTriangle class="w-3 h-3" /> Fill in all dye type and quantity fields.
+                            <p v-if="!hasAutoDyeFormula" class="text-amber-600 flex items-center gap-1">
+                                <AlertTriangle class="w-3 h-3" /> A dye-stuff formula is required for this JO.
                             </p>
-                            <p v-if="hasInvalidDyeRows" class="text-red-600 flex items-center gap-1">
-                                <AlertTriangle class="w-3 h-3" /> One or more dye quantities exceed available inventory.
+                            <p v-if="hasValidDyeAmounts && !hasEnoughDyeStock" class="text-red-600 flex items-center gap-1">
+                                <AlertTriangle class="w-3 h-3" /> Not enough matching dye stock for the selected fabric codes.
                             </p>
                         </div>
                     </div>

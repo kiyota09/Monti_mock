@@ -6,16 +6,65 @@ import CallCenterOverlay from '@/Components/crm/messaging/CallCenterOverlay.vue'
 import PartnerCallOverlay from '@/Components/crm/messaging/PartnerCallOverlay.vue'
 import ForcePasswordChangeModal from '@/Components/Auth/ForcePasswordChangeModal.vue'
 import { usePage } from '@inertiajs/vue3'
-import { computed, onMounted, ref, watch, onErrorCaptured } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, onErrorCaptured } from 'vue'
 import axios from 'axios'
-import Swal from 'sweetalert2'
+import { dialog } from '@/lib/feedback';
 import { useSidebarToggle } from './composables/useSidebarToggle'
 
 const page = usePage()
 const { sidebarCollapsed } = useSidebarToggle()
 const user = computed(() => page.props.auth.user)
+
+// Every module gets a full-viewport workspace: the content area fills the
+// screen below the top nav and scrolls internally instead of scrolling the
+// document. CRM pages already follow this pattern, so they only need the
+// shared padding removed (their own pages provide it).
+const isCrmPage = computed(() => (page.url || '').startsWith('/dashboard/crm'))
 const isLocating = ref(true)
 const locationReady = ref(false)
+let locationWatchId = null
+let lastLocationSyncAt = 0
+let lastSyncedCoordinates = null
+let fallbackLocationRequested = false
+let bannerObserver = null
+let bannerScanTimer = null
+
+const markThemedBanners = () => {
+    const viewport = document.querySelector('.app-viewport')
+    if (!viewport) return
+    if (page.component === 'Dashboard/Inventory/Products') return
+
+    viewport.querySelectorAll('h1').forEach((heading) => {
+        if (heading.closest('.supplier-page-header')) return
+
+        let node = heading.parentElement
+        let fallback = null
+        while (node && node !== viewport) {
+            const classes = typeof node.className === 'string' ? node.className : ''
+            const isGradientBanner = classes.includes('rounded-3xl') && classes.includes('bg-gradient')
+            const isSemanticBanner = node.tagName === 'HEADER' || classes.includes('it-page-hero')
+            if (isGradientBanner || isSemanticBanner) {
+                node.setAttribute('data-erp-page-banner', isGradientBanner ? 'surface' : 'fallback')
+                return
+            }
+            if (!fallback && classes.includes('mb-') && node.querySelectorAll('h1').length === 1 && node.textContent.length < 450) fallback = node
+            node = node.parentElement
+        }
+        fallback?.setAttribute('data-erp-page-banner', 'fallback')
+    })
+}
+
+onMounted(() => {
+    const viewport = document.querySelector('.app-viewport')
+    if (!viewport) return
+
+    markThemedBanners()
+    bannerObserver = new MutationObserver(() => {
+        window.clearTimeout(bannerScanTimer)
+        bannerScanTimer = window.setTimeout(markThemedBanners, 80)
+    })
+    bannerObserver.observe(viewport, { childList: true, subtree: true })
+})
 
 // ─── ERROR HANDLING ────────────────────────────────────────────────────────
 const hasError = ref(false)
@@ -33,7 +82,7 @@ onErrorCaptured((err, instance, info) => {
 // Monitor for security flash messages from the backend
 watch(() => page.props.flash?.geofence_error, (message) => {
     if (message) {
-        Swal.fire({
+        dialog.fire({
             title: 'Security Violation',
             text: message,
             icon: 'error',
@@ -49,7 +98,8 @@ onMounted(() => {
     if (navigator.geolocation) {
         const options = {
             enableHighAccuracy: false, 
-            maximumAge: 0 
+            maximumAge: 30000,
+            timeout: 20000,
         };
 
         const success = (pos) => {
@@ -57,6 +107,22 @@ onMounted(() => {
             const lng = pos.coords.longitude;
             isLocating.value = false;
             locationReady.value = true;
+            fallbackLocationRequested = false;
+
+            const now = Date.now();
+            if (lastSyncedCoordinates) {
+                const elapsed = now - lastLocationSyncAt;
+                const latMeters = (lat - lastSyncedCoordinates.lat) * 111320;
+                const lngMeters = (lng - lastSyncedCoordinates.lng) * 111320
+                    * Math.cos(((lat + lastSyncedCoordinates.lat) / 2) * Math.PI / 180);
+                const movedMeters = Math.hypot(latMeters, lngMeters);
+                // Ignore noisy GPS callbacks. Refresh at least every 30s, or
+                // sooner when movement is significant, without reactive churn.
+                if (elapsed < 30000 && (movedMeters < 20 || elapsed < 5000)) return;
+            }
+
+            lastLocationSyncAt = now;
+            lastSyncedCoordinates = { lat, lng };
 
             axios.defaults.headers.common['X-User-Lat'] = lat;
             axios.defaults.headers.common['X-User-Lng'] = lng;
@@ -64,14 +130,27 @@ onMounted(() => {
             console.log(`📡 GPS Synced: ${lat}, ${lng}`);
         };
 
-        const error = (err) => {
+        const error = () => {
             isLocating.value = false;
-            console.warn("GPS Warning: Retrying in standard mode...");
-            navigator.geolocation.getCurrentPosition(success, null, { enableHighAccuracy: false });
+            if (fallbackLocationRequested) return;
+            fallbackLocationRequested = true;
+            navigator.geolocation.getCurrentPosition(success, null, {
+                enableHighAccuracy: false,
+                maximumAge: 30000,
+                timeout: 20000,
+            });
         };
 
-        navigator.geolocation.watchPosition(success, error, options);
+        locationWatchId = navigator.geolocation.watchPosition(success, error, options);
     }
+});
+
+onUnmounted(() => {
+    if (locationWatchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(locationWatchId);
+    }
+    bannerObserver?.disconnect()
+    if (bannerScanTimer) window.clearTimeout(bannerScanTimer)
 });
 
 // ─── RELOAD FUNCTION ──────────────────────────────────────────────────────
@@ -108,23 +187,29 @@ const reloadPage = () => {
         <Sidebar v-if="!hasError" />
         <MobileSidebar v-if="!hasError" />
         <div :class="sidebarCollapsed ? 'md:pl-0' : 'md:pl-64'"
-            class="pt-16 md:pt-0 flex flex-col flex-1 min-h-screen transition-all duration-300">
+            class="pt-16 md:pt-0 flex flex-col flex-1 h-[100dvh] overflow-hidden transition-all duration-300">
             <TopBar v-if="!hasError" />
-            <main class="py-8 pb-24 md:pb-8 flex-1 bg-gray-50 dark:bg-zinc-900">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <!-- Location status – always visible -->
-                    <div class="mb-4 flex items-center gap-4">
-                        <div v-if="locationReady" class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 flex items-center gap-2">
+            <main class="flex-1 min-h-0 overflow-hidden bg-gray-50 dark:bg-zinc-900">
+                <div class="h-full w-full">
+                    <!-- Location status – fixed floating badge just below the
+                         top nav, upper-left. Takes no layout space. -->
+                    <div :class="sidebarCollapsed ? 'md:left-4' : 'md:left-64'"
+                        class="pointer-events-none fixed top-[4.5rem] left-4 z-30 flex items-center gap-2">
+                        <div v-if="locationReady" class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 flex items-center gap-2 shadow-sm">
                             <span class="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
                             Secure Zone Verified
                         </div>
-                        <div v-else class="text-[10px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full animate-pulse border border-blue-100">
+                        <div v-else class="text-[10px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full animate-pulse border border-blue-100 shadow-sm">
                             Searching Perimeter...
                         </div>
                     </div>
 
-                    <!-- Page Content - with fallback background -->
-                    <div class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm p-6 min-h-[400px]">
+                    <!-- Page content owns the full viewport and scrolls internally.
+                         CRM pages already provide their own padding. -->
+                    <div :class="isCrmPage
+                        ? 'pt-9'
+                        : 'px-3 pb-3 pt-9 sm:px-4 sm:pb-4 sm:pt-9 lg:px-5 lg:pb-5 lg:pt-9'"
+                        class="app-viewport h-full w-full overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950">
                         <slot />
                     </div>
                 </div>
@@ -140,3 +225,27 @@ const reloadPage = () => {
         <ForcePasswordChangeModal />
     </div>
 </template>
+
+<style>
+/* Workspace sizing: every module page fills the viewport below the top nav.
+   Page wrappers often clamp themselves with min-h-screen / max-w-* / mx-auto,
+   so neutralise those at the outer two levels only. Only centered wrappers
+   (mx-auto) are widened, and fixed/dialog elements (modals) are excluded so
+   they keep their designed width and are never stretched. */
+.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
+    min-height: 100% !important;
+}
+/* IT and supplier pages render sibling sections in the layout slot. Let each
+   section follow its content instead of assigning every sibling a viewport height. */
+html[data-module="it"] .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]),
+html[data-module="supplier"] .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]) {
+    min-height: 0 !important;
+}
+.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
+.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
+    > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"] {
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+</style>

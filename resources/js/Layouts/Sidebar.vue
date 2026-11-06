@@ -6,7 +6,7 @@ import {
     LayoutDashboard, ShoppingCart, ShoppingBag, MessageSquare,
     Receipt, HelpCircle, User, Truck, Navigation, Clock, CalendarDays,
     History, HandCoins, Building2, UserCog2, ShieldCheck,
-    FileText, Megaphone, Stamp, Bell, Printer, Target, Wrench, Repeat, ClipboardList, Zap, ScanSearch, Users, Wallet,
+    FileText, FileQuestion, Megaphone, Stamp, Bell, Printer, Target, Wrench, Repeat, ClipboardList, Zap, ScanSearch, Users, Wallet,
     Route, ClipboardCheck, AlertTriangle, PackageX, FileWarning,
 } from 'lucide-vue-next'
 
@@ -55,7 +55,7 @@ const roleDropdowns = useDynamicDropdowns('role_')
 // ─── PERMISSIONS ──────────────────────────────────────────────────────────────
 const {
     grantedModules, rootModule, canAccessModule, canAccessWorkforce, hasWorkforcePermission,
-    hasHrmPermission, hasCrmPermission, hasModulePermission, hasExplicitModuleGrants, hasAnyModuleGrant,
+    hasHrmPermission, hasCrmPermission, hasModulePermission, hasManufacturingSupervisorPagePermission, hasExplicitModuleGrants, hasAnyModuleGrant,
     hasWarehouseAccess, hasInventoryAccess, hasOrdAccess, hasLogisticsAccess,
 } = usePermissions(user, page)
 
@@ -79,6 +79,7 @@ const navItems = computed(() => {
     if (isSupplier.value) {
         return [
             { label: 'Vendor Hub', href: route('supplier.dashboard'), icon: LayoutDashboard },
+            { label: 'Requests for Quotation', href: route('supplier.rfqs'), icon: FileQuestion },
             { label: 'Messages', href: route('supplier.messages'), icon: MessageSquare },
             { label: 'Purchase Orders', href: route('supplier.orders'), icon: ShoppingCart },
             { label: 'Payments', href: route('supplier.payments'), icon: Wallet },
@@ -151,9 +152,8 @@ const navItems = computed(() => {
     if (isCEO || isCOO) {
         const isVP = isCOO || user.value?.position === 'vice_president'
         if (isVP) {
-            // Vice Presidency: execution arm (operations, directives, workforce).
-            // The full CRM module is appended below via buildNavItems — the
-            // early return was removed so executives keep CRM access.
+            // Vice Presidency workspace; any additional modules are appended
+            // below only when IT has granted module/page access.
             items.push({ label: 'VP Dashboard', href: route('vp.operations'), icon: LayoutDashboard })
             items.push({ label: 'Downtime Board', href: route('vp.downtime'), icon: Wrench })
             items.push({ label: 'Shift Handovers', href: route('vp.handovers'), icon: Repeat })
@@ -255,6 +255,7 @@ const navItems = computed(() => {
         hasExplicitModuleGrants,
         hasAnyModuleGrant,
         hasModulePermission,
+        hasManufacturingSupervisorPagePermission,
         hasHrmPermission,
         hasCrmPermission,
         hasWorkforcePermission,
@@ -319,16 +320,17 @@ const sidebarLabel = computed(() => {
 
 <template>
     <aside :class="sidebarCollapsed ? 'md:-ml-64' : ''"
+        data-erp-sidebar
         class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 z-40 transition-all duration-300 h-screen">
         <div
             class="relative flex flex-col h-full bg-white dark:bg-zinc-900 border-r border-gray-200/70 dark:border-zinc-800 text-gray-600 dark:text-gray-300 font-sans antialiased shadow-xl select-none overflow-hidden">
             <!-- slim gradient strip tying the sidebar to the module heroes -->
-            <div class="h-1 w-full bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-800 flex-shrink-0" />
+            <div data-erp-sidebar-accent class="h-1 w-full bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-800 flex-shrink-0" />
 
             <!-- BRAND / SYSTEM HEADER -->
             <div class="relative p-5 border-b border-gray-100 dark:border-zinc-800 flex items-center gap-3 flex-shrink-0">
-                <div class="animate-logo w-10 h-10 rounded-xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-1.5 flex items-center justify-center overflow-hidden shadow-lg shadow-indigo-500/30 flex-shrink-0">
-                    <img src="/images/applogo.png" alt="Logo" class="h-full w-full object-contain brightness-0 invert" />
+                <div data-erp-sidebar-logo class="animate-logo w-10 h-10 rounded-xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-1.5 flex items-center justify-center overflow-hidden shadow-lg shadow-indigo-500/30 flex-shrink-0">
+                    <img data-erp-sidebar-logo-image src="/images/applogo.png" alt="Logo" class="h-full w-full object-contain brightness-0 invert" />
                 </div>
                 <div class="flex flex-col overflow-hidden">
                     <h2 class="text-sm font-bold tracking-wide text-gray-900 dark:text-white leading-tight">

@@ -178,7 +178,7 @@ const openPipelineValue = computed(() => props.pipeline
 const stageColorMap = {
     pending: 'bg-sky-500',
     dyeing: 'bg-indigo-500',
-    softener: 'bg-violet-500',
+    bleaching: 'bg-violet-500',
     squeezer: 'bg-fuchsia-500',
     iron: 'bg-amber-500',
     forming: 'bg-teal-500',
@@ -240,7 +240,7 @@ const leadShare = computed(() => {
             <div class="mx-auto max-w-[1600px] space-y-5 p-4 pb-16 sm:p-6">
 
                 <!-- Executive header -->
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div data-erp-page-banner="fallback" class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0">
                         <div class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-indigo-600 dark:text-indigo-400">
                             <Activity class="h-3.5 w-3.5" />

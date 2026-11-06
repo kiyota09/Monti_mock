@@ -3,8 +3,7 @@
 import { ref, watch, computed } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 import { Search, Plus, Eye, Pencil } from 'lucide-vue-next';
 
 const props = defineProps<{

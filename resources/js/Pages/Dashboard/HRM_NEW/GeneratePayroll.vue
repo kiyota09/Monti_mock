@@ -1,4 +1,5 @@
 <script setup>
+import { showNotice } from '@/lib/feedback';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -64,11 +65,11 @@ const selectedEmployees = computed(() => {
 
 const openConfirm = () => {
     if (!form.employee_ids.length) {
-        alert('Please select at least one employee.');
+        showNotice('Please select at least one employee.');
         return;
     }
     if (activeMeta.value?.is_current) {
-        alert('Cannot generate payroll for the current period. Please select a past period.');
+        showNotice('Cannot generate payroll for the current period. Please select a past period.');
         return;
     }
     showConfirm.value = true;

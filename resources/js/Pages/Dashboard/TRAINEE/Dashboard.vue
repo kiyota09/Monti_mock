@@ -77,7 +77,7 @@ const statusBgClass = (status: string): string => {
 
   <Head title="Trainee Dashboard" />
   <AuthenticatedLayout>
-    <div class="mb-8">
+    <div data-erp-page-banner="fallback" class="mb-8">
       <h1 class="text-3xl font-bold text-gray-900 dark:text-zinc-100">Welcome back, {{ props.user.name }}</h1>
       <p class="text-gray-500 dark:text-zinc-400 mt-2">{{ currentDate }}</p>
     </div>

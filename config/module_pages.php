@@ -64,13 +64,17 @@ return [
         // Role workspaces (one key per manufacturing_role)
         'knitting_yarn'          => 'Knitting Yarn',
         'knitting_mechanic'      => 'Machine Setups',
+        'knitting_inspector'     => 'Knitting Inspection',
+        'knitting_sample'        => 'Knitting Sample Queue',
         'dyeing_color'           => 'Dyeing Color',
-        'dyeing_fabric_softener' => 'Fabric Softener',
-        'dyeing_squeezer'        => 'Dyeing Squeezer',
-        'dyeing_ironing'         => 'Dyeing Ironing',
+        'dyeing_bleaching'       => 'Dyeing Bleaching',
+        'dyeing_treatment'       => 'Dyeing Treatment',
+        'finishing_squeezer'     => 'Finishing Squeezer',
+        'finishing_ironing'      => 'Finishing Ironing',
         'dyeing_lab_chemist'     => 'Shade Development',
         'finishing_packaging'    => 'Finishing Packaging',
-        'checker_quality'        => 'Quality Inspection',
+        'finishing_inspector'    => 'Finishing Shrinkage Inspection',
+        'checker_quality'        => 'Finishing Quality Checker',
         'maintenance_checker'    => 'Maintenance',
         'pollution_control'      => 'Pollution Control Logs',
         'safety_officer'         => 'Safety Incidents',
@@ -111,10 +115,12 @@ return [
     'eco' => [
         'dashboard' => 'Dashboard',
         'store'     => 'Store',
+        'pricing'   => 'Pricing',
         'supplier'  => 'Suppliers',
         'client'    => 'Clients',
         'credit'    => 'Credit',
         'push'      => 'Push',
+        'returns'   => 'Returns & RMA Management',
     ],
 
     'log' => [
@@ -142,16 +148,17 @@ return [
     ],
 
     'it' => [
-        'dashboard' => 'Dashboard',
-        'tickets' => 'Service Desk',
-        'assets' => 'Assets',
-        'monitoring' => 'Monitoring',
-        'knowledge' => 'Knowledge Base',
-        'location' => 'Geolocation',
-        'changes' => 'Changes',
-        'access' => 'Access Control',
+        // Keep in sync with routes/It.php; this catalog drives IT page grants.
+        'dashboard'      => 'Dashboard',
+        'tickets'        => 'Service Desk',
+        'assets'         => 'Assets',
+        'monitoring'     => 'Monitoring',
+        'knowledge'      => 'Knowledge Base',
+        'changes'        => 'Changes',
+        'access'         => 'Access Control',
         'access_control' => 'Org Access Control',
-        'access_logs' => 'Access Logs',
+        'location'       => 'Geolocation',
+        'access_logs'    => 'Access Logs',
     ],
 
     'fin' => [

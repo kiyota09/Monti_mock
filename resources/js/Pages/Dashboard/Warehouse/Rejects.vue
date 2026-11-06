@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -51,8 +52,8 @@ const filteredRejects = computed(() => {
 });
 
 // Mark as returned (update status)
-const markReturned = (reject) => {
-    if (!confirm(`Mark this reject as returned?`)) return;
+const markReturned = async (reject) => {
+    if (!await confirmModal(`Mark this reject as returned?`)) return;
     returningId.value = reject.id;
     router.post(route('warehouse.rejects.return', reject.id), {}, {
         preserveScroll: true,

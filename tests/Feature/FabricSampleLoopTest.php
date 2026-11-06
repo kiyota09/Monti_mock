@@ -17,6 +17,9 @@ use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 use App\Models\Core\User;
+use App\Models\Core\PagePermission;
+use App\Models\Man\PantoneReference;
+use App\Models\Man\PantoneFabricFormula;
 
 class FabricSampleLoopTest extends TestCase
 {
@@ -41,6 +44,18 @@ class FabricSampleLoopTest extends TestCase
             $table->string('module');
             $table->string('page');
             $table->string('permission_level')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('notifications', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('type');
+            $table->string('title');
+            $table->text('body')->nullable();
+            $table->string('link_route')->nullable();
+            $table->unsignedBigInteger('memo_id')->nullable();
+            $table->boolean('is_read')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
             $table->timestamps();
         });
         Schema::create('user_module_access', function (Blueprint $table) {
@@ -93,6 +108,12 @@ class FabricSampleLoopTest extends TestCase
             $table->string('sku')->nullable();
             $table->timestamps();
         });
+        Schema::create('product_images', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->string('url')->nullable();
+            $table->timestamps();
+        });
         Schema::create('inquiries', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('client_id')->nullable();
@@ -141,6 +162,24 @@ class FabricSampleLoopTest extends TestCase
             $table->unsignedBigInteger('requested_by')->nullable();
             $table->unsignedBigInteger('formulated_by')->nullable();
             $table->unsignedBigInteger('parent_id')->nullable();
+            $table->string('request_method')->nullable();
+            $table->string('carrier_name')->nullable();
+            $table->string('client_reference_path')->nullable();
+            $table->string('texture')->nullable();
+            $table->integer('gsm')->nullable();
+            $table->string('color_hex')->nullable();
+            $table->string('color_image_path')->nullable();
+            $table->string('delivery_courier')->nullable();
+            $table->string('delivery_tracking_reference')->nullable();
+            $table->string('delivery_group_code')->nullable();
+            $table->text('delivery_notes')->nullable();
+            $table->timestamp('delivery_sent_at')->nullable();
+            $table->timestamp('client_noted_at')->nullable();
+            $table->timestamp('client_received_at')->nullable();
+            $table->unsignedBigInteger('delivery_message_id')->nullable();
+            $table->unsignedBigInteger('pantone_reference_id')->nullable();
+            $table->json('pantone_colors')->nullable();
+            $table->json('pantone_formula')->nullable();
             $table->timestamps();
         });
         Schema::create('bom_records', function (Blueprint $table) {
@@ -151,6 +190,7 @@ class FabricSampleLoopTest extends TestCase
             $table->string('dye_color');
             $table->string('weave_design');
             $table->json('materials')->nullable();
+            $table->unsignedBigInteger('fabric_sample_request_id')->nullable();
             $table->timestamps();
             $table->unique(['client_id', 'product_id']);
         });
@@ -174,6 +214,9 @@ class FabricSampleLoopTest extends TestCase
         Schema::create('eco_quotation_items', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('eco_quotation_id');
+            $table->unsignedBigInteger('product_id')->nullable();
+            $table->unsignedBigInteger('fabric_type_id')->nullable();
+            $table->string('fabric_type')->nullable();
             $table->string('fabric');
             $table->string('design')->nullable();
             $table->string('color');
@@ -181,6 +224,31 @@ class FabricSampleLoopTest extends TestCase
             $table->decimal('unit_price', 10, 2)->default(0);
             $table->decimal('price', 12, 2)->default(0);
             $table->timestamps();
+        });
+        Schema::create('fabric_sample_formulations', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('fabric_sample_request_id');
+            $table->unsignedSmallInteger('version');
+            $table->json('formula');
+            $table->string('attachment_path');
+            $table->string('attachment_name');
+            $table->string('attachment_mime');
+            $table->unsignedBigInteger('submitted_by')->nullable();
+            $table->string('status')->default('awaiting_crm');
+            $table->unsignedBigInteger('reviewed_by')->nullable();
+            $table->timestamp('reviewed_at')->nullable();
+            $table->text('review_notes')->nullable();
+            $table->unsignedBigInteger('conversation_message_id')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('pantone_references', function (Blueprint $table) {
+            $table->id(); $table->string('name')->unique(); $table->string('hex')->nullable();
+            $table->json('combinations')->nullable(); $table->unsignedBigInteger('created_by')->nullable(); $table->timestamps();
+        });
+        Schema::create('pantone_fabric_formulas', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('pantone_reference_id');
+            $table->unsignedBigInteger('yarn_material_id'); $table->json('combinations');
+            $table->boolean('is_demo_data')->default(false); $table->timestamps();
         });
     }
 
@@ -231,6 +299,84 @@ class FabricSampleLoopTest extends TestCase
         return $user->fresh();
     }
 
+    public function test_client_pantone_request_round_trips_through_lab_and_client_approval(): void
+    {
+        Storage::fake('public');
+        [$client, $product, $inquiry] = $this->seedConversation();
+        $crm = $this->crmStaff();
+        $chemist = User::create([
+            'name' => 'Pantone Chemist', 'email' => 'pantone.chemist@test.local',
+            'password' => Hash::make('password123'),
+        ]);
+        $chemist = $this->withRole($chemist, 'MAN', 'staff', 'dyeing_lab_chemist');
+        PagePermission::create([
+            'user_id' => $chemist->id, 'module' => 'MAN', 'page' => 'production', 'permission_level' => 'edit',
+        ]);
+
+        $yarn = $this->labMaterial('YRN-PANTONE', 'Cotton 30s', 'Yarn');
+        $dye = $this->labMaterial('DYE-PANTONE', 'Blue RR', 'Dye');
+        $reference = PantoneReference::create(['name' => '19-4052 TCX', 'hex' => '#0F4C81']);
+        PantoneFabricFormula::create([
+            'pantone_reference_id' => $reference->id, 'yarn_material_id' => $yarn,
+            'combinations' => ['dye_stuffs' => [['material_id' => $dye, 'name' => 'Blue RR', 'amount' => 2.5]]],
+        ]);
+        $quotationId = DB::table('eco_quotations')->insertGetId([
+            'inquiry_id' => $inquiry->id, 'client_id' => $client->id,
+            'quotation_number' => 'ECO-QT-PANTONE', 'status' => 'accepted',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $quotationItemId = DB::table('eco_quotation_items')->insertGetId([
+            'eco_quotation_id' => $quotationId, 'product_id' => $product->id,
+            'fabric_type_id' => $yarn, 'fabric_type' => 'Cotton 30s',
+            'fabric' => $product->name, 'design' => 'Jersey', 'color' => 'Dark Colors',
+            'kilos' => 25, 'unit_price' => 120, 'price' => 3000,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $key = InquiryHash::encode($inquiry->id);
+        $this->actingAs($client, 'client')->post(route('client.conversation.sample-request', $key), [
+            'request_method' => 'pantone',
+            'fabric_designs' => [[
+                'quotation_item_id' => $quotationItemId,
+                'colors' => [[
+                    'pantone_code' => '19-4052 TCX', 'pantone_color' => 'Classic Blue',
+                    'texture' => 'Medium', 'gsm' => 180, 'reference_type' => 'hex', 'color_hex' => '#0F4C81',
+                ]],
+            ]],
+        ])->assertRedirect();
+        $sample = FabricSampleRequest::firstOrFail();
+        $this->assertSame('client_submitted', $sample->status);
+        $this->assertSame('Classic Blue (19-4052 TCX)', $sample->color_description);
+
+        $this->actingAs($crm)->post(route('crm.inquiry.sample.pass-to-lab', [$key, $sample->id]))->assertRedirect();
+        $this->actingAs($chemist)->patch(route('man.staff.dyeing-lab-chemist.sample.start', $sample->id))->assertRedirect();
+        $this->actingAs($chemist)->patch(route('man.staff.dyeing-lab-chemist.sample.pantone', $sample->id), [
+            'pantone_reference_id' => $reference->id, 'color_index' => 0, 'yarn_material_id' => $yarn,
+        ])->assertRedirect();
+        $sample->refresh();
+        $this->assertSame($reference->id, $sample->pantone_colors[0]['pantone_reference_id']);
+
+        $this->actingAs($chemist)->post(route('man.staff.dyeing-lab-chemist.sample.formulate', $sample->id), [
+            'dyestuffs' => [['material_id' => $dye, 'name' => 'Blue RR', 'pct' => 2.5]],
+            'yarns' => [['material_id' => $yarn, 'name' => 'Cotton 30s', 'qty' => 5]],
+            'weave_design' => 'Jersey', 'sample_photo' => $this->fakeSwatchPhoto(),
+        ])->assertRedirect();
+        $sample->refresh();
+        $this->assertSame(FabricSampleRequest::STATUS_AWAITING_CRM_REVIEW, $sample->status);
+
+        $this->actingAs($crm)->post(route('crm.inquiry.sample.deliver', [$key, $sample->id]), [
+            'delivery_courier' => 'Test Courier', 'delivery_tracking_reference' => 'PANTONE-TRACK-1',
+        ])->assertRedirect();
+        $this->actingAs($client, 'client')->post(route('client.sample.noted', $sample->id))->assertRedirect();
+        $this->actingAs($client, 'client')->post(route('client.sample.received', $sample->id))->assertRedirect();
+        $this->actingAs($client, 'client')->post(route('client.sample.approve', $sample->id))->assertRedirect();
+
+        $sample->refresh();
+        $this->assertSame(FabricSampleRequest::STATUS_APPROVED, $sample->status);
+        $this->assertNotNull($sample->recipe_id);
+        $this->assertDatabaseHas('bom_records', ['fabric_sample_request_id' => $sample->id]);
+    }
+
     public function test_crm_request_stays_hidden_from_client(): void
     {
         [$client, $product, $inquiry] = $this->seedConversation();
@@ -275,6 +421,8 @@ class FabricSampleLoopTest extends TestCase
             'fabric_name' => $product->name,
             'color_description' => 'Deep royal blue',
             'status' => FabricSampleRequest::STATUS_FORWARDED,
+            'client_received_at' => now(),
+            'formula' => ['yarns' => []],
         ]);
 
         // Approve → client may now send a P.O.
@@ -364,16 +512,15 @@ class FabricSampleLoopTest extends TestCase
             ->assertStatus(302);
 
         $sample->refresh();
-        $this->assertSame(FabricSampleRequest::STATUS_FORWARDED, $sample->status);
-        $this->assertNotNull($sample->recipe_id);
+        $this->assertSame(FabricSampleRequest::STATUS_AWAITING_CRM_REVIEW, $sample->status);
+        $this->assertNull($sample->recipe_id, 'The sample recipe is committed after client approval.');
         $this->assertNotNull($sample->sample_image_path);
         Storage::disk('public')->assertExists($sample->sample_image_path);
 
-        // Formulated result goes straight to the client for decision,
-        // as a regular bubble (photo + approve/adjust buttons render there,
-        // not in the text-only system pill).
+        // The chemist submits the swatch to CRM for review; it remains hidden
+        // from the client until CRM records its courier and tracking details.
         $response = $sample->messages()->firstOrFail();
-        $this->assertTrue((bool) $response->visible_to_client);
+        $this->assertFalse((bool) $response->visible_to_client);
         $this->assertFalse((bool) $response->is_system_event);
         $this->assertDatabaseHas('eco_conversation_attachments', [
             'conversation_message_id' => $response->id,
@@ -383,7 +530,23 @@ class FabricSampleLoopTest extends TestCase
             ->getJson(route('client.conversation.feed', InquiryHash::encode($inquiry->id)) . '?after=0')
             ->assertStatus(200)
             ->json();
-        $this->assertCount(1, $feed['messages']);
+        $this->assertCount(0, $feed['messages']);
+
+        $this->actingAs($this->crmStaff())
+            ->post(route('crm.inquiry.sample.deliver', [InquiryHash::encode($inquiry->id), $sample->id]), [
+                'delivery_courier' => 'Test Courier',
+                'delivery_tracking_reference' => 'TRACK-123',
+            ])->assertRedirect();
+        $sample->refresh();
+        $this->assertSame(FabricSampleRequest::STATUS_FORWARDED, $sample->status);
+
+        $this->actingAs($client, 'client')
+            ->post(route('client.sample.noted', $sample->id))->assertSessionHasNoErrors();
+        $this->actingAs($client, 'client')
+            ->post(route('client.sample.received', $sample->id))->assertSessionHasNoErrors();
+        $this->actingAs($client, 'client')
+            ->post(route('client.sample.approve', $sample->id))->assertSessionHasNoErrors();
+        $this->assertSame(FabricSampleRequest::STATUS_APPROVED, $sample->fresh()->status);
     }
 
     public function test_chemist_can_reformulate_after_adjustment_request(): void    {
@@ -426,12 +589,11 @@ class FabricSampleLoopTest extends TestCase
             ->assertStatus(302);
 
         $sample->refresh();
-        $this->assertSame(FabricSampleRequest::STATUS_FORWARDED, $sample->status);
+        $this->assertSame(FabricSampleRequest::STATUS_AWAITING_CRM_REVIEW, $sample->status);
         $this->assertNull($sample->adjustment_notes);
-        $this->assertNotNull($sample->recipe_id);
 
-        // The new round is client-visible at once for re-decision.
-        $this->assertTrue((bool) $sample->messages()->firstOrFail()->visible_to_client);
+        // The new formulation is held for CRM review before client delivery.
+        $this->assertFalse((bool) $sample->messages()->firstOrFail()->visible_to_client);
     }
 
     public function test_meeting_cannot_be_scheduled_in_the_past(): void
@@ -490,7 +652,7 @@ class FabricSampleLoopTest extends TestCase
         // grantless portal accounts via the app's exception handler).
         $this->actingAs($client, 'client')
             ->post(route('client.quotation.trash', $sentId), ['notes' => 'changed mind'])
-            ->assertStatus(302);
+            ->assertForbidden();
         $this->assertSame(
             'sent',
             DB::table('eco_quotations')->find($sentId)->status

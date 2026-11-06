@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, onMounted } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -78,8 +79,8 @@ const statusColor = (status) => {
 };
 
 // Request procurement for a material
-const requestProcurement = (materialId) => {
-    if (confirm(`Request procurement for ${materialId}? This will create a material request in SCM.`)) {
+const requestProcurement = async (materialId) => {
+    if (await confirmModal(`Request procurement for ${materialId}? This will create a material request in SCM.`)) {
         router.post(route('inv.checker.procurement', materialId), {}, {
             preserveScroll: true,
         });
@@ -203,7 +204,7 @@ const formatCurrency = (value) => {
                                 </tr>
                                 <tr v-for="mat in filteredMaterials" :key="mat.id" class="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors">
                                     <td class="px-5 py-3 font-mono text-xs text-indigo-600 dark:text-indigo-400">{{ mat.mat_id }}</td>
-                                    <td class="px-5 py-3 font-bold text-gray-900 dark:text-white">{{ mat.name }}</td>
+                                    <td class="px-5 py-3 font-bold text-gray-900 dark:text-white">{{ mat.display_name || mat.name }}</td>
                                     <td class="px-5 py-3 text-gray-500 dark:text-gray-400">{{ mat.category }}</td>
                                     <td class="px-5 py-3 font-bold text-gray-900 dark:text-white">{{ mat.total_stock }} {{ mat.unit }}</td>
                                     <td class="px-5 py-3">
@@ -293,7 +294,7 @@ const formatCurrency = (value) => {
                         <div v-else class="divide-y divide-gray-100 dark:divide-zinc-800 max-h-72 overflow-y-auto">
                             <div v-for="alert in alertItems" :key="alert.sku" class="px-5 py-3 flex items-center justify-between gap-3 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors">
                                 <div class="min-w-0">
-                                    <p class="font-bold text-sm text-gray-900 dark:text-white truncate">{{ alert.name }}</p>
+                                    <p class="font-bold text-sm text-gray-900 dark:text-white truncate">{{ alert.display_name || alert.name }}</p>
                                     <p class="text-xs text-slate-500 dark:text-gray-400">{{ alert.sku }} · {{ alert.warehouse }}</p>
                                 </div>
                                 <div class="text-right flex-shrink-0">

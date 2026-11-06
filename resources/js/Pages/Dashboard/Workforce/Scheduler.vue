@@ -1,4 +1,5 @@
 <script setup>
+import { showNotice, confirmModal, successModal } from '@/lib/feedback';
 import { ref, computed, watch } from 'vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -142,16 +143,16 @@ const openEventModal = (date, event = null) => {
 };
 const closeEventModal = () => { isEventModalOpen.value = false; editingEvent.value = null; eventForm.reset(); };
 const submitEvent = () => {
-    if (!eventForm.title) { alert('Please enter an event title.'); return; }
+    if (!eventForm.title) { showNotice('Please enter an event title.'); return; }
     const url = editingEvent.value ? route('workforce.scheduler.planner.update', editingEvent.value.id) : route('workforce.scheduler.planner.store');
     eventForm[editingEvent.value ? 'patch' : 'post'](url, {
         preserveScroll: true,
         onSuccess: () => { closeEventModal(); fetchMonthData(); },
-        onError: (errors) => alert(Object.values(errors)[0]),
+        onError: (errors) => showNotice(Object.values(errors)[0]),
     });
 };
-const deleteEvent = (eventId, title) => {
-    if (confirm(`Delete event "${title}"?`)) {
+const deleteEvent = async (eventId, title) => {
+    if (await confirmModal(`Delete event "${title}"?`)) {
         router.delete(route('workforce.scheduler.planner.destroy', eventId), { preserveScroll: true, onSuccess: () => fetchMonthData() });
     }
 };
@@ -190,11 +191,11 @@ const openShiftModal = (date) => {
 };
 const closeShiftModal = () => { isShiftModalOpen.value = false; shiftForm.reset(); };
 const submitShift = () => {
-    if (!shiftForm.user_id || !shiftForm.shift_type) { alert('Please select an employee and shift type.'); return; }
-    shiftForm.post(route('workforce.scheduler.shift.store'), { preserveScroll: true, onSuccess: () => closeShiftModal(), onError: (errors) => alert(Object.values(errors)[0]) });
+    if (!shiftForm.user_id || !shiftForm.shift_type) { showNotice('Please select an employee and shift type.'); return; }
+    shiftForm.post(route('workforce.scheduler.shift.store'), { preserveScroll: true, onSuccess: () => closeShiftModal(), onError: (errors) => showNotice(Object.values(errors)[0]) });
 };
-const deleteShift = (id) => {
-    if (confirm('Remove this shift?')) router.delete(route('workforce.scheduler.shift.destroy', id), { preserveScroll: true });
+const deleteShift = async (id) => {
+    if (await confirmModal('Remove this shift?')) router.delete(route('workforce.scheduler.shift.destroy', id), { preserveScroll: true });
 };
 
 const handleCellClick = (date) => {
@@ -228,10 +229,10 @@ const closeBulkModal = () => { isBulkModalOpen.value = false; };
 const submitBulkAction = (actionType) => {
     bulkAssignForm.action = actionType;
     if(actionType === 'assign' && !bulkAssignForm.shift_type) {
-        alert("Please select a shift type to assign."); return;
+        showNotice("Please select a shift type to assign."); return;
     }
     if(!bulkAssignForm.user_id || !bulkAssignForm.start_date || !bulkAssignForm.end_date) {
-        alert("Please fill all required fields (Employee and Dates)."); return;
+        showNotice("Please fill all required fields (Employee and Dates)."); return;
     }
     
     if(actionType === 'assign' && !bulkAssignForm.schedule_range) {
@@ -243,9 +244,9 @@ const submitBulkAction = (actionType) => {
         onSuccess: () => {
             closeBulkModal();
             fetchMonthData();
-            alert(actionType === 'assign' ? 'Bulk shifts assigned successfully.' : 'Shifts successfully cleared.');
+            successModal(actionType === 'assign' ? 'Bulk shifts assigned successfully.' : 'Shifts successfully cleared.');
         },
-        onError: (errors) => alert(Object.values(errors)[0])
+        onError: (errors) => showNotice(Object.values(errors)[0])
     });
 };
 
@@ -259,7 +260,7 @@ const assignWeekly = (employeeId, shiftType) => {
     for (let d = new Date(firstMonday); d <= end; d.setDate(d.getDate() + 7)) {
         if (d.getMonth() === currentMonth.value) dates.push(d.toISOString().slice(0, 10));
     }
-    if (!dates.length) { alert('No full weeks in this month.'); return; }
+    if (!dates.length) { showNotice('No full weeks in this month.'); return; }
     
     bulkForm.user_id = employeeId;
     bulkForm.shift_type = shiftType;
@@ -267,7 +268,7 @@ const assignWeekly = (employeeId, shiftType) => {
     bulkForm.start_date = dates[0];
     bulkForm.end_date = dates[dates.length - 1];
     
-    bulkForm.post(route('workforce.scheduler.shift.bulk'), { preserveScroll: true, onSuccess: () => alert('Weekly shifts assigned.'), onError: (errors) => alert(Object.values(errors)[0]) });
+    bulkForm.post(route('workforce.scheduler.shift.bulk'), { preserveScroll: true, onSuccess: () => successModal('Weekly shifts assigned.'), onError: (errors) => showNotice(Object.values(errors)[0]) });
 };
 const assignMonthly = (employeeId, shiftType) => {
     const year = currentYear.value, month = currentMonth.value + 1;
@@ -279,7 +280,7 @@ const assignMonthly = (employeeId, shiftType) => {
     bulkForm.start_date = `${year}-${String(month).padStart(2,'0')}-01`;
     bulkForm.end_date = `${year}-${String(month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
     
-    bulkForm.post(route('workforce.scheduler.shift.bulk'), { preserveScroll: true, onSuccess: () => alert('Monthly shifts assigned.'), onError: (errors) => alert(Object.values(errors)[0]) });
+    bulkForm.post(route('workforce.scheduler.shift.bulk'), { preserveScroll: true, onSuccess: () => successModal('Monthly shifts assigned.'), onError: (errors) => showNotice(Object.values(errors)[0]) });
 };
 
 // ─── Holiday Management ───────────────────────────────────────────────────────
@@ -292,10 +293,10 @@ const holidayEditForm          = useForm({ id: null, holiday_date: '', holiday_n
 const openHolidayModal  = () => { holidayForm.reset(); isHolidayModalOpen.value = true; };
 const closeHolidayModal = () => { isHolidayModalOpen.value = false; holidayForm.reset(); };
 const submitHoliday = () => {
-    holidayForm.post(route('workforce.scheduler.holiday.store'), { preserveScroll: true, onSuccess: () => closeHolidayModal(), onError: (errors) => alert(Object.values(errors)[0]) });
+    holidayForm.post(route('workforce.scheduler.holiday.store'), { preserveScroll: true, onSuccess: () => closeHolidayModal(), onError: (errors) => showNotice(Object.values(errors)[0]) });
 };
-const deleteHoliday = (id, name) => {
-    if (confirm(`Delete holiday "${name}"?`)) router.delete(route('workforce.scheduler.holiday.destroy', id), { preserveScroll: true });
+const deleteHoliday = async (id, name) => {
+    if (await confirmModal(`Delete holiday "${name}"?`)) router.delete(route('workforce.scheduler.holiday.destroy', id), { preserveScroll: true });
 };
 const openManageHolidays  = () => { isManageHolidaysModalOpen.value = true; };
 const closeManageHolidays = () => { isManageHolidaysModalOpen.value = false; editingHoliday.value = null; holidayEditForm.reset(); };
@@ -307,7 +308,7 @@ const updateHoliday = () => {
     holidayEditForm.patch(route('workforce.scheduler.holiday.update', holidayEditForm.id), {
         preserveScroll: true,
         onSuccess: () => { closeManageHolidays(); fetchMonthData(); },
-        onError: (errors) => alert(Object.values(errors)[0]),
+        onError: (errors) => showNotice(Object.values(errors)[0]),
     });
 };
 
@@ -318,7 +319,7 @@ const shiftTypes = ref([
     { name: 'Graveyard', start: '00:00', end: '09:00' },
 ]);
 const isShiftConfigOpen = ref(false);
-const updateShiftTimes  = () => { isShiftConfigOpen.value = false; alert('Shift times updated locally.'); };
+const updateShiftTimes  = () => { isShiftConfigOpen.value = false; successModal('Shift times updated locally.'); };
 const getShiftRange     = (type) => { const s = shiftTypes.value.find(x => x.name === type); return s ? `${s.start} – ${s.end}` : ''; };
 
 const getShiftChipClass = (shiftType) => ({

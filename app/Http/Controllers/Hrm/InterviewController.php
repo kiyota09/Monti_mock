@@ -40,7 +40,7 @@ class InterviewController extends Controller
     public function schedule(Request $request, $id)
     {
         $request->validate([
-            'scheduled_at' => 'required|date',
+            'scheduled_at' => 'required|date|after:now',
             'interview_type' => 'required|string',
             'duration' => 'nullable|integer',
             'interviewer' => 'nullable|string',

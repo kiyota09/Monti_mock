@@ -3,10 +3,10 @@
     <div class="flex min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
 
       <div class="flex-1 p-8 text-slate-900 font-sans min-w-0 relative flex flex-col">
-        
+
         <!-- Subtle Background Pattern -->
         <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
-        
+
         <!-- Professional Header -->
         <header class="mb-6 relative shrink-0">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -24,7 +24,7 @@
 
             <!-- Quick Actions - Right Aligned -->
             <div class="flex flex-wrap items-center justify-end gap-2">
-              <button 
+              <button
                 @click="openModal('create')"
                 class="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
               >
@@ -33,8 +33,8 @@
                 </svg>
                 Create Job Posting
               </button>
-              
-              <button 
+
+              <button
                 @click="toggleArchived()"
                 class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
               >
@@ -43,8 +43,8 @@
                 </svg>
                 {{ showArchived ? 'Show Active' : 'Archived (' + archivedCount + ')' }}
               </button>
-              
-              <button 
+
+              <button
                 @click="exportReport"
                 class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
               >
@@ -59,7 +59,7 @@
 
         <!-- KPI METRICS ROW - All 7 Metrics -->
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 mb-4 shrink-0">
-          <div v-for="metric in metrics" :key="metric.label" 
+          <div v-for="metric in metrics" :key="metric.label"
                class="group bg-white rounded-xl border border-slate-200/60 p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-blue-200/60 shadow-md backdrop-blur-sm cursor-pointer"
                @click="quickFilter(metric.filter)">
             <div class="flex items-center justify-between mb-1">
@@ -90,15 +90,15 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
                 </svg>
               </span>
-              <input 
+              <input
                 v-model="filters.search"
-                type="text" 
-                placeholder="Search job postings..." 
+                type="text"
+                placeholder="Search job postings..."
                 @input="debouncedSearch"
                 class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
               />
             </div>
-            
+
             <div class="flex flex-wrap items-center gap-2">
               <select v-model="filters.status" @change="loadPostings" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 cursor-pointer">
                 <option value="">All Statuses</option>
@@ -114,7 +114,7 @@
 
         <!-- TABLE VIEW SECTION - FULL HEIGHT -->
         <div class="bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden flex-1 flex flex-col min-h-0">
-          
+
           <!-- Job Postings Table - Scrollable -->
           <div class="flex-1 overflow-auto">
             <table class="w-full text-left border-collapse">
@@ -133,9 +133,9 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                <tr 
-                  v-for="posting in filteredPostings" 
-                  :key="posting.id" 
+                <tr
+                  v-for="posting in filteredPostings"
+                  :key="posting.id"
                   class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all duration-200 group"
                 >
                   <td class="py-2.5 px-4">
@@ -193,19 +193,19 @@
                   </td>
                   <td class="py-2.5 px-4">
                     <div class="flex items-center justify-end gap-1">
-                      <button 
+                      <button
                         v-if="!posting.archived_at"
-                        @click="openModal('edit', posting)" 
-                        class="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-all" 
+                        @click="openModal('edit', posting)"
+                        class="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-all"
                         title="Edit"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                         </svg>
                       </button>
-                      <button 
+                      <button
                         v-else
-                        class="p-1.5 text-slate-300 cursor-not-allowed" 
+                        class="p-1.5 text-slate-300 cursor-not-allowed"
                         title="Cannot edit archived"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -220,7 +220,7 @@
                       </button>
                       <!-- Dropdown Menu -->
                       <div class="relative">
-                        <button 
+                        <button
                           @click.stop="togglePostingMenu(posting.id,$event)"
                           class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all"
                           title="More"
@@ -232,16 +232,16 @@
                         <!-- Dropdown (teleported to <body> so the table's
                              scroll container can never clip it) -->
                         <Teleport to="body">
-                        <div 
-                          v-if="activeMenu === posting.id" 
+                        <div
+                          v-if="activeMenu === posting.id"
                           :ref="setMenuRef"
                           :style="menuStyle"
                           class="fixed w-52 bg-white border border-slate-200 rounded-xl shadow-2xl z-[60] py-1 min-w-[180px]"
                           @click.stop
                         >
-                          <button 
-                            v-if="posting.status === 'Draft' && !posting.archived_at" 
-                            @click="publishPosting(posting.id)" 
+                          <button
+                            v-if="posting.status === 'Draft' && !posting.archived_at"
+                            @click="publishPosting(posting.id)"
                             class="w-full text-left px-4 py-2 text-xs text-emerald-600 hover:bg-emerald-50 flex items-center gap-2 transition-colors"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -249,9 +249,9 @@
                             </svg>
                             Publish
                           </button>
-                          <button 
-                            v-if="posting.status === 'Published' && !posting.archived_at" 
-                            @click="closePosting(posting.id)" 
+                          <button
+                            v-if="posting.status === 'Published' && !posting.archived_at"
+                            @click="closePosting(posting.id)"
                             class="w-full text-left px-4 py-2 text-xs text-amber-600 hover:bg-amber-50 flex items-center gap-2 transition-colors"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -259,9 +259,9 @@
                             </svg>
                             Close
                           </button>
-                          <button 
-                            v-if="posting.status === 'Closed' && !posting.archived_at" 
-                            @click="reopenPosting(posting.id)" 
+                          <button
+                            v-if="posting.status === 'Closed' && !posting.archived_at"
+                            @click="reopenPosting(posting.id)"
                             class="w-full text-left px-4 py-2 text-xs text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-colors"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -269,8 +269,8 @@
                             </svg>
                             Reopen
                           </button>
-                          <button 
-                            @click="duplicatePosting(posting)" 
+                          <button
+                            @click="duplicatePosting(posting)"
                             class="w-full text-left px-4 py-2 text-xs text-purple-600 hover:bg-purple-50 flex items-center gap-2 transition-colors"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -279,9 +279,9 @@
                             Duplicate
                           </button>
                           <hr class="my-1 border-slate-100" />
-                          <button 
-                            v-if="!posting.archived_at" 
-                            @click="archivePosting(posting.id)" 
+                          <button
+                            v-if="!posting.archived_at"
+                            @click="archivePosting(posting.id)"
                             class="w-full text-left px-4 py-2 text-xs text-slate-500 hover:bg-slate-50 flex items-center gap-2 transition-colors"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -289,9 +289,9 @@
                             </svg>
                             Archive
                           </button>
-                          <button 
-                            v-else 
-                            @click="reactivatePosting(posting.id)" 
+                          <button
+                            v-else
+                            @click="reactivatePosting(posting.id)"
                             class="w-full text-left px-4 py-2 text-xs text-emerald-600 hover:bg-emerald-50 flex items-center gap-2 transition-colors"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -300,8 +300,8 @@
                             Restore
                           </button>
                           <hr class="my-1 border-slate-100" />
-                          <button 
-                            @click="deletePosting(posting.id)" 
+                          <button
+                            @click="showDeletePostingConfirmation(posting)"
                             class="w-full text-left px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -404,8 +404,8 @@
                 <button @click="closeConfirmModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">
                   Cancel
                 </button>
-                <button 
-                  @click="executeConfirmAction" 
+                <button
+                  @click="executeConfirmAction"
                   :class="confirmModal.type === 'danger' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'"
                   class="px-5 py-2.5 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 >
@@ -419,7 +419,7 @@
         <!-- CREATE/EDIT MODAL -->
         <div v-if="activeModal" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div class="bg-white rounded-2xl border border-slate-200/60 w-full max-w-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
-            
+
             <!-- Modal Header -->
             <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-transparent shrink-0">
               <div>
@@ -437,7 +437,7 @@
 
             <!-- Modal Body -->
             <div class="flex-1 overflow-y-auto p-6 space-y-5">
-              
+
               <!-- Section 1: Position Selection -->
               <div class="bg-slate-50/50 border border-slate-200 rounded-xl p-5">
                 <div class="flex items-center gap-2 mb-4">
@@ -694,7 +694,7 @@
                 <button @click="closeModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">
                   Cancel
                 </button>
-                <button 
+                <button
                   v-if="modalType !== 'view'"
                   @click="validateAndConfirm"
                   :disabled="saving"
@@ -716,8 +716,7 @@
 import { ref, computed, reactive, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const props = defineProps({
     postingsData: { type: Object, default: () => ({ data: [] }) },
@@ -888,7 +887,7 @@ const getAvailableVacancies = () => {
     if (!form.position_id) return '—';
     const selectedPosition = props.positions.find(p => String(p.id) === String(form.position_id));
     if (!selectedPosition) return '—';
-    
+
     const approved = selectedPosition.approved_headcount || 0;
     const filled = selectedPosition.filled_positions || 0;
     const available = approved - filled;
@@ -900,11 +899,11 @@ const getPositionVacancyInfo = () => {
     if (!form.position_id) return '';
     const selectedPosition = props.positions.find(p => String(p.id) === String(form.position_id));
     if (!selectedPosition) return '';
-    
+
     const approved = selectedPosition.approved_headcount || 0;
     const filled = selectedPosition.filled_positions || 0;
     const available = approved - filled;
-    
+
     return `Approved: ${approved}, Filled: ${filled}, Available: ${available}`;
 };
 
@@ -937,13 +936,13 @@ const todayDate = (() => {
     return `${d.getFullYear()}-${m}-${day}`;
 })();
 
-const getStatusBadgeClass = (s) => ({ 
+const getStatusBadgeClass = (s) => ({
   'Draft':'bg-amber-50 text-amber-700 border-amber-200',
   'Published':'bg-emerald-50 text-emerald-700 border-emerald-200',
   'Closed':'bg-slate-50 text-slate-500 border-slate-200',
   'Filled':'bg-blue-50 text-blue-700 border-blue-200',
   'Cancelled':'bg-rose-50 text-rose-700 border-rose-200',
-  'Archived':'bg-slate-50 text-slate-400 border-slate-200' 
+  'Archived':'bg-slate-50 text-slate-400 border-slate-200'
 }[s]||'');
 
 // Initialize postings from props
@@ -1016,7 +1015,7 @@ const clearFilters = () => {
 };
 
 // Quick filter
-const quickFilter = (status) => { 
+const quickFilter = (status) => {
     if (status) {
         filters.status = status;
         loadPostings();
@@ -1083,22 +1082,22 @@ const closeValidationModal = () => {
 
 const validateAndConfirm = () => {
     validationErrors.position_id = '';
-    
+
     if (!validateForm()) {
         showValidationError('Please select a position before proceeding.');
         return;
     }
-    
+
     const isEdit = modalType.value === 'edit';
     const displayName = selectedPositionName.value || postingDisplayName(form);
     const titleText = isEdit ? 'Update Job Posting' : 'Create Job Posting';
     const subtitleText = isEdit ? 'Confirm changes to this posting' : 'Confirm new posting creation';
-    const messageText = isEdit 
-        ? `Are you sure you want to update "${displayName}"?` 
+    const messageText = isEdit
+        ? `Are you sure you want to update "${displayName}"?`
         : `Are you sure you want to create a new job posting for "${displayName}"?`;
     const confirmText = isEdit ? 'Update' : 'Create';
     const type = isEdit ? 'warning' : 'success';
-    
+
     showConfirmation({
         title: titleText,
         subtitle: subtitleText,
@@ -1124,13 +1123,24 @@ const confirmDelete = () => {
     });
 };
 
+const showDeletePostingConfirmation = (posting) => {
+    showConfirmation({
+        title: 'Delete Job Posting',
+        subtitle: 'This action cannot be undone',
+        message: `Are you sure you want to permanently delete "${posting.title || posting.position_title || 'this posting'}"?`,
+        confirmText: 'Delete Permanently',
+        type: 'danger',
+        action: () => deletePosting(posting.id),
+    });
+};
+
 // ============================================
 // POSITION CHANGE - AUTO-FILL FROM DATABASE
 // ============================================
 
 const onPositionChange = () => {
     const selectedPosition = props.positions.find(p => String(p.id) === String(form.position_id));
-    
+
     if (selectedPosition) {
         form.title = selectedPosition.name || '';
         form.department = selectedPosition.department_name || '';
@@ -1138,14 +1148,14 @@ const onPositionChange = () => {
         form.reports_to = selectedPosition.reports_to_name || '';
         form.salary_min = selectedPosition.salary_min || null;
         form.salary_max = selectedPosition.salary_max || null;
-        
+
         // Auto-fill vacancies from position's available vacancies, capped at
         // the available headcount (approved − filled).
         const approved = selectedPosition.approved_headcount || 0;
         const filled = selectedPosition.filled_positions || 0;
         const available = approved - filled;
         form.vacancies = available > 0 ? available : 1;
-        
+
         form.hiring_manager = '';
     } else {
         form.department = '';
@@ -1220,7 +1230,7 @@ const openModal = (type, data = null) => {
     activeMenu.value = null;
     validationErrors.position_id = '';
     validationMessage.value = '';
-    
+
     if (data) {
         Object.assign(form, {
             id: data.id,

@@ -1,17 +1,25 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import { usePartnerCallCenter } from '@/composables/crm/usePartnerCallCenter';
 import { createRingtone } from '@/composables/crm/useRingtone';
 import CallModal from '@/Components/crm/messaging/CallModal.vue';
 import { Phone, Video, PhoneIncoming, PhoneOff, Bell } from 'lucide-vue-next';
 
 const pc = usePartnerCallCenter();
+const page = usePage();
 const ringtone = createRingtone();
 
 const resumeAudio = () => { ringtone.resume(); };
 
 onMounted(() => {
     pc.setRingtone(ringtone.play);
+    // The overlay is global to the dashboard, but CRM incoming calls are
+    // available only to accounts with CRM Messaging page access.
+    if (window.location.pathname.includes('/dashboard')
+        && !page.props.auth?.user?.can_access_crm_messaging) {
+        return;
+    }
     pc.init();
     window.addEventListener('pointerdown', resumeAudio);
 });

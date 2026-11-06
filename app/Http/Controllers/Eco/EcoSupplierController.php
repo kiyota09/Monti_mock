@@ -210,7 +210,7 @@ class EcoSupplierController extends Controller
         }
 
         $data = $request->validate([
-            'scheduled_at' => 'required|date',
+            'scheduled_at' => 'required|date|after:now',
             'location' => 'required|string|max:255',
             'type' => 'required|string|max:50',
         ]);

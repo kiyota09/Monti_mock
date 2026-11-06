@@ -113,6 +113,8 @@ let timeInterval: number | null = null;
 onMounted(() => {
     // Stored user theme wins; otherwise fall back to the OS/browser theme.
     initTheme();
+    document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('keydown', handleKeydown);
     // Initial load
     if (props.careerJobs) {
         jobs.value = props.careerJobs;
@@ -134,6 +136,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    document.removeEventListener('click', handleDocumentClick);
+    document.removeEventListener('keydown', handleKeydown);
     if (timeInterval) {
         clearInterval(timeInterval);
     }
@@ -241,6 +245,7 @@ const closeJobDetail = () => {
 
 const switchPage = (page: string) => {
     activePage.value = page;
+    closeMenus();
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (page === 'careers') {
         showJobDetail.value = false;
@@ -350,6 +355,68 @@ const coreValues = [
     { title: 'Integrity', icon: '🤝', description: 'Honest and transparent partnerships.' },
     { title: 'Sustainability', icon: '🌱', description: 'Eco-friendly manufacturing practices.' }
 ];
+// ---------------------------------------------------------------------------
+// Login / Register dropdown menus (replaces the many separate buttons/links)
+// ---------------------------------------------------------------------------
+const openMenu = ref<string | null>(null);
+
+// Icon + accent per account type (replaces the emoji icons)
+const menuIcons: Record<string, string> = {
+    client: 'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21',
+    employee: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z',
+    supplier: 'M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12',
+    applicant: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z',
+    agency: 'M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z',
+};
+
+// Full class strings so Tailwind can detect them
+const menuTones: Record<string, string> = {
+    client: 'bg-sky-500/15 text-sky-300 ring-sky-400/25 group-hover:bg-sky-500/25',
+    employee: 'bg-indigo-500/15 text-indigo-300 ring-indigo-400/25 group-hover:bg-indigo-500/25',
+    supplier: 'bg-amber-500/15 text-amber-300 ring-amber-400/25 group-hover:bg-amber-500/25',
+    applicant: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/25 group-hover:bg-emerald-500/25',
+    agency: 'bg-fuchsia-500/15 text-fuchsia-300 ring-fuchsia-400/25 group-hover:bg-fuchsia-500/25',
+};
+
+// Trigger-button glyphs: login arrow / user-plus
+const menuGlyphs: Record<string, string> = {
+    login: 'M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75',
+    register: 'M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z',
+};
+
+const authMenus = computed(() => [
+    {
+        id: 'register',
+        label: 'Register',
+        heading: 'Create an account',
+        subheading: 'Pick the account type that fits you',
+        glyph: 'register',
+        items: [
+            ...(props.canRegister
+                ? [{ label: 'Business Client', description: 'Be our Partner', kind: 'client', href: getSafeRoute('client.register', '/register') }]
+                : []),
+            { label: 'Supplier', description: 'Register your business', kind: 'supplier', href: getSafeRoute('supplier.register', '/supplier/register') },
+            { label: 'Applicant', description: 'Apply for jobs', kind: 'applicant', href: getSafeRoute('applicant.register', '/applicant/register') },
+        ],
+    },
+]);
+
+const toggleMenu = (key: string) => {
+    openMenu.value = openMenu.value === key ? null : key;
+};
+
+const closeMenus = () => {
+    openMenu.value = null;
+};
+
+const handleDocumentClick = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (!target?.closest('.auth-menu')) closeMenus();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') closeMenus();
+};
 </script>
 
 <template>
@@ -363,8 +430,8 @@ const coreValues = [
 
         <!-- HEADER -->
         <header class="w-full border-b border-white/10 shrink-0 sticky top-0 bg-black/20 backdrop-blur-md z-20">
-            <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-4 py-3">
-                <div class="flex items-center gap-3 group cursor-pointer" @click="switchPage('home')">
+            <div class="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5 sm:py-3">
+                <div class="order-1 flex items-center gap-3 group cursor-pointer" @click="switchPage('home')">
                     <div class="p-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/20 shadow-lg group-hover:scale-105 transition-transform duration-300">
                         <img src="/images/applogo.png" alt="Logo" class="h-7 w-7 sm:h-8 sm:w-8 object-contain" />
                     </div>
@@ -378,58 +445,105 @@ const coreValues = [
                     </div>
                 </div>
 
-                <nav class="flex flex-wrap items-center gap-1.5 sm:gap-3">
-                    <button @click="switchPage('home')" class="text-[9px] sm:text-xs font-semibold px-2 py-1 rounded-lg transition-all" :class="activePage === 'home' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
+                <nav aria-label="Main navigation" class="order-3 -mx-1 flex w-full max-w-full flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain whitespace-nowrap pb-1 sm:order-2 sm:mx-0 sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0 sm:gap-2">
+                    <button @click="switchPage('home')" class="min-h-10 shrink-0 text-[11px] sm:text-xs font-semibold px-3 py-2 rounded-lg transition-all" :class="activePage === 'home' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
                         Home
                     </button>
-                    <button @click="switchPage('about')" class="text-[9px] sm:text-xs font-semibold px-2 py-1 rounded-lg transition-all" :class="activePage === 'about' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
+                    <button @click="switchPage('about')" class="min-h-10 shrink-0 text-[11px] sm:text-xs font-semibold px-3 py-2 rounded-lg transition-all" :class="activePage === 'about' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
                         About
                     </button>
-                    <button @click="switchPage('services')" class="text-[9px] sm:text-xs font-semibold px-2 py-1 rounded-lg transition-all" :class="activePage === 'services' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
+                    <button @click="switchPage('services')" class="min-h-10 shrink-0 text-[11px] sm:text-xs font-semibold px-3 py-2 rounded-lg transition-all" :class="activePage === 'services' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
                         Services
                     </button>
-                    <button @click="switchPage('careers')" class="text-[9px] sm:text-xs font-semibold px-2 py-1 rounded-lg transition-all" :class="activePage === 'careers' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
+                    <button @click="switchPage('careers')" class="min-h-10 shrink-0 text-[11px] sm:text-xs font-semibold px-3 py-2 rounded-lg transition-all" :class="activePage === 'careers' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
                         Careers
                     </button>
-                    <button @click="switchPage('contact')" class="text-[9px] sm:text-xs font-semibold px-2 py-1 rounded-lg transition-all" :class="activePage === 'contact' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
+                    <button @click="switchPage('contact')" class="min-h-10 shrink-0 text-[11px] sm:text-xs font-semibold px-3 py-2 rounded-lg transition-all" :class="activePage === 'contact' ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/5'">
                         Contact
                     </button>
-
-                    <span class="w-px h-4 bg-white/20 hidden sm:block"></span>
-
-                    <!-- Login Button -->
-                    <Link :href="getSafeRoute('client.login', '/login')"
-                        class="text-[9px] sm:text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-all shadow-lg shadow-blue-600/30 active:scale-95">
-                        Login
-                    </Link>
-
-                    <!-- Applicant Login Button -->
-                    <Link :href="getSafeRoute('applicant.login', '/applicant/login')"
-                        class="text-[9px] sm:text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg transition-all shadow-lg shadow-emerald-600/30 active:scale-95">
-                        Applicant Login
-                    </Link>
-
-                    <!-- Agency Login Button -->
-                    <Link :href="getSafeRoute('agency.login', '/agency/login')"
-                        class="text-[9px] sm:text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg transition-all shadow-lg shadow-amber-600/30 active:scale-95">
-                        Agency Login
-                    </Link>
-
-                    <!-- Be our Partner (Register) Button -->
-                    <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')"
-                        class="text-[9px] sm:text-xs font-bold bg-white/15 backdrop-blur-md border border-white/30 text-white px-3 py-1.5 rounded-lg hover:bg-white/25 transition-all shadow-lg active:scale-95">
-                        Be our Partner
-                    </Link>
                 </nav>
+
+                <!-- Direct unified login and account registration menu -->
+                    <div class="auth-menu relative order-2 sm:order-3 flex items-center gap-2 sm:gap-2.5">
+                        <Link :href="getSafeRoute('login', '/login')"
+                            class="inline-flex min-h-10 px-3 sm:px-4 text-[11px] sm:text-xs py-2 items-center gap-2 font-semibold rounded-xl text-white bg-gradient-to-b from-blue-500 to-blue-600 ring-1 ring-inset ring-white/20 shadow-lg shadow-blue-600/30 hover:from-blue-400 hover:to-blue-600 transition-all duration-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70">
+                            <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" :d="menuGlyphs.login" />
+                            </svg>
+                             Login
+                        </Link>
+                        <div v-for="menu in authMenus" :key="menu.id">
+                            <button
+                                type="button"
+                                aria-haspopup="menu"
+                                :aria-expanded="openMenu === 'header:' + menu.id"
+                                @click="toggleMenu('header:' + menu.id)"
+                                class="inline-flex min-h-10 px-3 sm:px-4 text-[11px] sm:text-xs py-2 items-center gap-2 font-semibold rounded-xl text-white bg-white/10 ring-1 ring-inset ring-white/25 backdrop-blur-md hover:bg-white/20 transition-all duration-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                            >
+                                <svg class="h-4 w-4 shrink-0 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" :d="menuGlyphs[menu.glyph]" />
+                                </svg>
+                                {{ menu.label }}
+                                <svg class="h-3 w-3 opacity-80 transition-transform duration-200" :class="openMenu === 'header:' + menu.id ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            <Transition
+                                enter-active-class="transition duration-200 ease-out"
+                                enter-from-class="opacity-0 -translate-y-2 scale-95"
+                                enter-to-class="opacity-100 translate-y-0 scale-100"
+                                leave-active-class="transition duration-150 ease-in"
+                                leave-from-class="opacity-100 translate-y-0 scale-100"
+                                leave-to-class="opacity-0 -translate-y-2 scale-95"
+                            >
+                                <div
+                                    v-if="openMenu === 'header:' + menu.id"
+                                    role="menu"
+                                    class="welcome-auth-menu absolute right-0 top-full mt-3 origin-top-right z-30 w-72 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-white/10 bg-slate-900/85 p-2 text-left shadow-[0_24px_60px_-12px_rgba(0,0,0,0.65)] ring-1 ring-inset ring-white/5 backdrop-blur-2xl"
+                                >
+                                    <div class="px-3 pb-2.5 pt-2">
+                                        <p class="welcome-auth-heading text-sm font-semibold text-white">{{ menu.heading }}</p>
+                                        <p class="welcome-auth-description mt-0.5 text-[11px] leading-snug text-slate-400">{{ menu.subheading }}</p>
+                                    </div>
+                                    <div class="welcome-auth-divider mx-3 mb-1.5 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"></div>
+                                    <Link
+                                        v-for="item in menu.items"
+                                        :key="item.label"
+                                        :href="item.href"
+                                        role="menuitem"
+                                        @click="closeMenus"
+                                        class="welcome-auth-item group flex items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors duration-150 hover:bg-white/[0.07] focus:outline-none focus-visible:bg-white/[0.07] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400/60"
+                                    >
+                                        <span
+                                            class="welcome-auth-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset transition-all duration-150 group-hover:scale-105"
+                                            :class="menuTones[item.kind]"
+                                        >
+                                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" :d="menuIcons[item.kind]" />
+                                            </svg>
+                                        </span>
+                                        <span class="min-w-0 flex-1">
+                                            <span class="welcome-auth-item-label block text-[13px] font-semibold text-white">{{ item.label }}</span>
+                                            <span class="welcome-auth-item-description block truncate text-[11px] text-slate-400">{{ item.description }}</span>
+                                        </span>
+                                        <svg class="welcome-auth-arrow h-4 w-4 shrink-0 -translate-x-1 text-slate-400 opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </Link>
+                                </div>
+                            </Transition>
+                        </div>
+                    </div>
             </div>
         </header>
 
         <!-- Main Content -->
-        <div class="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col min-h-screen">
+        <div class="relative z-10 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex flex-col min-h-screen">
 
             <!-- HOME PAGE -->
-            <div v-if="activePage === 'home'" class="flex-1 flex flex-col py-4">
-                <section class="text-center max-w-3xl mx-auto mb-8 shrink-0">
+            <div v-if="activePage === 'home'" class="flex-1 flex flex-col py-5 sm:py-8">
+                <section class="text-center max-w-3xl mx-auto mb-7 sm:mb-10 shrink-0 px-1">
                     <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/15 backdrop-blur-md border border-blue-400/20 text-blue-300 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest mb-4 shadow-lg">
                         <span class="relative flex h-1.5 w-1.5">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -437,7 +551,7 @@ const coreValues = [
                         </span>
                         Enterprise Resource Planning
                     </div>
-                    <h1 class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.1] mb-3 drop-shadow-2xl">
+                    <h1 class="text-[2.35rem] min-[390px]:text-5xl md:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.05] mb-3 drop-shadow-2xl">
                         Let's <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Weave</span><br />
                         The Future.
                     </h1>
@@ -445,11 +559,14 @@ const coreValues = [
                         Precision management for Monti Textile's manufacturing lifecycle. From raw weaving to global
                         distribution, keep every thread accounted for.
                     </p>
-                    <div class="flex flex-wrap justify-center gap-3 mt-5">
-                        <button @click="switchPage('about')" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg shadow-blue-600/30 active:scale-95">
+                    <div class="flex flex-col min-[380px]:flex-row flex-wrap justify-center gap-2.5 sm:gap-3 mt-5">
+                        <Link :href="getSafeRoute('login', '/login')" class="min-h-11 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg shadow-blue-600/30 active:scale-95 inline-flex items-center justify-center">
+                            Unified Login
+                        </Link>
+                        <button @click="switchPage('about')" class="min-h-11 px-5 py-2.5 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-lg text-xs font-bold hover:bg-white/20 transition-all">
                             Learn More
                         </button>
-                        <button @click="switchPage('contact')" class="px-5 py-2 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-lg text-xs font-bold hover:bg-white/20 transition-all">
+                        <button @click="switchPage('contact')" class="min-h-11 px-5 py-2.5 bg-white/5 backdrop-blur-md border border-white/15 text-white rounded-lg text-xs font-bold hover:bg-white/15 transition-all">
                             Contact Us
                         </button>
                     </div>
@@ -513,11 +630,11 @@ const coreValues = [
                         <h2 class="text-2xl font-bold text-white mt-1">Products We Offer</h2>
                         <p class="text-xs text-slate-400 mt-2">Catalog for browsing. Orders are available to approved business clients.</p>
                     </div>
-                    <div v-if="products?.length" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div v-if="products?.length" class="grid grid-cols-1 min-[440px]:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                         <article v-for="product in products" :key="product.id" class="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
                             <div class="relative">
-                                <img v-if="currentProductImage(product)?.url" :src="currentProductImage(product).url" :alt="product.name" class="h-36 sm:h-48 w-full object-cover" />
-                                <div v-else class="flex h-36 sm:h-48 items-center justify-center bg-white/5 text-xs text-slate-500">Product image coming soon</div>
+                                <img v-if="currentProductImage(product)?.url" :src="currentProductImage(product).url" :alt="product.name" class="h-52 min-[440px]:h-40 sm:h-48 w-full object-cover" />
+                                <div v-else class="flex h-52 min-[440px]:h-40 sm:h-48 items-center justify-center bg-white/5 text-xs text-slate-500">Product image coming soon</div>
                                 <template v-if="product.images?.length > 1">
                                     <button type="button" class="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 px-2.5 py-1.5 text-white hover:bg-black/75" :aria-label="`Previous ${product.name} image`" @click="changeProductImage(product, -1)">‹</button>
                                     <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 px-2.5 py-1.5 text-white hover:bg-black/75" :aria-label="`Next ${product.name} image`" @click="changeProductImage(product, 1)">›</button>
@@ -675,72 +792,7 @@ const coreValues = [
                     </div>
                 </section>
 
-                <!-- Footer with Access Buttons -->
-                <footer class="border-t border-white/10 py-6 mt-4 shrink-0">
-                    <!-- Quick Access Row -->
-                    <div class="flex flex-wrap justify-center gap-3 sm:gap-4 pb-4 mb-4 border-b border-white/10">
-                        <Link :href="getSafeRoute('client.login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Business Login
-                        </Link>
-                        <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Be our Partner
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Registration
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.login', '/applicant/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Login
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.register', '/supplier/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Register Business
-                        </Link>
-                        <Link :href="getSafeRoute('login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Employee Portal
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.login', '/supplier/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Supplier Portal
-                        </Link>
-                        <Link :href="getSafeRoute('agency.login', '/agency/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Agency Portal
-                        </Link>
-                    </div>
-
-                    <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Monti Textile</h5>
-                            <p class="text-xs text-slate-400 leading-relaxed">Precision management for the textile manufacturing lifecycle.</p>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Quick Links</h5>
-                            <ul class="space-y-1.5 text-xs">
-                                <li><button @click="switchPage('about')" class="text-slate-400 hover:text-white transition-colors">About Us</button></li>
-                                <li><button @click="switchPage('services')" class="text-slate-400 hover:text-white transition-colors">Services</button></li>
-                                <li><button @click="switchPage('careers')" class="text-slate-400 hover:text-white transition-colors">Careers</button></li>
-                                <li><button @click="switchPage('contact')" class="text-slate-400 hover:text-white transition-colors">Contact</button></li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Services</h5>
-                            <ul class="space-y-1.5 text-xs">
-                                <li class="text-slate-400">Software Development</li>
-                                <li class="text-slate-400">Web Development</li>
-                                <li class="text-slate-400">Cloud Solutions</li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Contact</h5>
-                            <ul class="space-y-1.5 text-xs text-slate-400">
-                                <li>📍 Makati, Philippines</li>
-                                <li>📞 +63 2 8888 7777</li>
-                                <li>📧 info@montitextile.com</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="border-t border-white/10 pt-4 text-center text-[8px] text-slate-500">
-                        © 2026 Monti Textile Manufacturing. All rights reserved.
-                    </div>
-                </footer>
-            </div>
+</div>
 
             <!-- ABOUT PAGE -->
             <div v-if="activePage === 'about'" class="flex-1 flex flex-col py-4">
@@ -811,70 +863,7 @@ const coreValues = [
                     </div>
                 </div>
 
-                <!-- Footer with Access Buttons -->
-                <footer class="border-t border-white/10 py-6 mt-4 shrink-0">
-                    <div class="flex flex-wrap justify-center gap-3 sm:gap-4 pb-4 mb-4 border-b border-white/10">
-                        <Link :href="getSafeRoute('client.login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Business Login
-                        </Link>
-                        <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Be our Partner
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Registration
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.login', '/applicant/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Login
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.register', '/supplier/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Register Business
-                        </Link>
-                        <Link :href="getSafeRoute('login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Employee Portal
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.login', '/supplier/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Supplier Portal
-                        </Link>
-                        <Link :href="getSafeRoute('agency.login', '/agency/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Agency Portal
-                        </Link>
-                    </div>
-                    <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Monti Textile</h5>
-                            <p class="text-xs text-slate-400 leading-relaxed">Precision management for the textile manufacturing lifecycle.</p>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Quick Links</h5>
-                            <ul class="space-y-1.5 text-xs">
-                                <li><button @click="switchPage('about')" class="text-slate-400 hover:text-white transition-colors">About Us</button></li>
-                                <li><button @click="switchPage('services')" class="text-slate-400 hover:text-white transition-colors">Services</button></li>
-                                <li><button @click="switchPage('careers')" class="text-slate-400 hover:text-white transition-colors">Careers</button></li>
-                                <li><button @click="switchPage('contact')" class="text-slate-400 hover:text-white transition-colors">Contact</button></li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Services</h5>
-                            <ul class="space-y-1.5 text-xs">
-                                <li class="text-slate-400">Software Development</li>
-                                <li class="text-slate-400">Web Development</li>
-                                <li class="text-slate-400">Cloud Solutions</li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Contact</h5>
-                            <ul class="space-y-1.5 text-xs text-slate-400">
-                                <li>📍 Makati, Philippines</li>
-                                <li>📞 +63 2 8888 7777</li>
-                                <li>📧 info@montitextile.com</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="border-t border-white/10 pt-4 text-center text-[8px] text-slate-500">
-                        © 2026 Monti Textile Manufacturing. All rights reserved.
-                    </div>
-                </footer>
-            </div>
+</div>
 
             <!-- SERVICES PAGE -->
             <div v-if="activePage === 'services'" class="flex-1 flex flex-col py-4">
@@ -908,70 +897,7 @@ const coreValues = [
                     </div>
                 </div>
 
-                <!-- Footer with Access Buttons -->
-                <footer class="border-t border-white/10 py-6 mt-4 shrink-0">
-                    <div class="flex flex-wrap justify-center gap-3 sm:gap-4 pb-4 mb-4 border-b border-white/10">
-                        <Link :href="getSafeRoute('client.login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Business Login
-                        </Link>
-                        <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Be our Partner
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Registration
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.login', '/applicant/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Login
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.register', '/supplier/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Register Business
-                        </Link>
-                        <Link :href="getSafeRoute('login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Employee Portal
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.login', '/supplier/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Supplier Portal
-                        </Link>
-                        <Link :href="getSafeRoute('agency.login', '/agency/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Agency Portal
-                        </Link>
-                    </div>
-                    <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Monti Textile</h5>
-                            <p class="text-xs text-slate-400 leading-relaxed">Precision management for the textile manufacturing lifecycle.</p>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Quick Links</h5>
-                            <ul class="space-y-1.5 text-xs">
-                                <li><button @click="switchPage('about')" class="text-slate-400 hover:text-white transition-colors">About Us</button></li>
-                                <li><button @click="switchPage('services')" class="text-slate-400 hover:text-white transition-colors">Services</button></li>
-                                <li><button @click="switchPage('careers')" class="text-slate-400 hover:text-white transition-colors">Careers</button></li>
-                                <li><button @click="switchPage('contact')" class="text-slate-400 hover:text-white transition-colors">Contact</button></li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Services</h5>
-                            <ul class="space-y-1.5 text-xs">
-                                <li class="text-slate-400">Software Development</li>
-                                <li class="text-slate-400">Web Development</li>
-                                <li class="text-slate-400">Cloud Solutions</li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Contact</h5>
-                            <ul class="space-y-1.5 text-xs text-slate-400">
-                                <li>📍 Makati, Philippines</li>
-                                <li>📞 +63 2 8888 7777</li>
-                                <li>📧 info@montitextile.com</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="border-t border-white/10 pt-4 text-center text-[8px] text-slate-500">
-                        © 2026 Monti Textile Manufacturing. All rights reserved.
-                    </div>
-                </footer>
-            </div>
+</div>
 
             <!-- CAREERS PAGE -->
             <div v-if="activePage === 'careers'" class="flex-1 flex flex-col py-4">
@@ -1078,70 +1004,7 @@ const coreValues = [
                     </div>
                 </div>
 
-                <!-- Footer with Access Buttons -->
-                <footer class="border-t border-white/10 py-6 mt-4 shrink-0">
-                    <div class="flex flex-wrap justify-center gap-3 sm:gap-4 pb-4 mb-4 border-b border-white/10">
-                        <Link :href="getSafeRoute('client.login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Business Login
-                        </Link>
-                        <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Be our Partner
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Registration
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.login', '/applicant/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Login
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.register', '/supplier/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Register Business
-                        </Link>
-                        <Link :href="getSafeRoute('login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Employee Portal
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.login', '/supplier/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Supplier Portal
-                        </Link>
-                        <Link :href="getSafeRoute('agency.login', '/agency/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Agency Portal
-                        </Link>
-                    </div>
-                    <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Monti Textile</h5>
-                            <p class="text-xs text-slate-400 leading-relaxed">Precision management for the textile manufacturing lifecycle.</p>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Quick Links</h5>
-                            <ul class="space-y-1.5 text-xs">
-                                <li><button @click="switchPage('about')" class="text-slate-400 hover:text-white transition-colors">About Us</button></li>
-                                <li><button @click="switchPage('services')" class="text-slate-400 hover:text-white transition-colors">Services</button></li>
-                                <li><button @click="switchPage('careers')" class="text-slate-400 hover:text-white transition-colors">Careers</button></li>
-                                <li><button @click="switchPage('contact')" class="text-slate-400 hover:text-white transition-colors">Contact</button></li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Services</h5>
-                            <ul class="space-y-1.5 text-xs">
-                                <li class="text-slate-400">Software Development</li>
-                                <li class="text-slate-400">Web Development</li>
-                                <li class="text-slate-400">Cloud Solutions</li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h5 class="text-sm font-bold text-white mb-3">Contact</h5>
-                            <ul class="space-y-1.5 text-xs text-slate-400">
-                                <li>📍 Makati, Philippines</li>
-                                <li>📞 +63 2 8888 7777</li>
-                                <li>📧 info@montitextile.com</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="border-t border-white/10 pt-4 text-center text-[8px] text-slate-500">
-                        © 2026 Monti Textile Manufacturing. All rights reserved.
-                    </div>
-                </footer>
-            </div>
+</div>
 
             <!-- CONTACT PAGE -->
             <div v-if="activePage === 'contact'" class="flex-1 flex flex-col py-4">
@@ -1226,35 +1089,87 @@ const coreValues = [
                     </div>
                 </div>
 
-                <!-- Footer with Access Buttons -->
-                <footer class="border-t border-white/10 py-6 mt-4 shrink-0">
-                    <div class="flex flex-wrap justify-center gap-3 sm:gap-4 pb-4 mb-4 border-b border-white/10">
-                        <Link :href="getSafeRoute('client.login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Business Login
+</div>
+
+            <!-- SHARED FOOTER (used by every page) -->
+            <footer class="border-t border-white/10 py-6 mt-4 shrink-0">
+                <!-- Unified login and registration options -->
+                <div class="flex flex-col items-center gap-2 pb-4 mb-4 border-b border-white/10">
+                    <span class="text-[9px] font-bold uppercase tracking-widest text-slate-400">Portal Access</span>
+                    <div class="auth-menu relative inline-flex items-center justify-center gap-2">
+                        <Link :href="getSafeRoute('login', '/login')"
+                            class="inline-flex min-h-10 px-4 text-xs py-2 items-center gap-2 font-semibold rounded-xl text-white bg-gradient-to-b from-blue-500 to-blue-600 ring-1 ring-inset ring-white/20 shadow-lg shadow-blue-600/30 hover:from-blue-400 hover:to-blue-600 transition-all duration-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70">
+                            <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" :d="menuGlyphs.login" />
+                            </svg>
+                            Unified Login
                         </Link>
-                        <Link v-if="canRegister" :href="getSafeRoute('client.register', '/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Be our Partner
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.register', '/applicant/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Registration
-                        </Link>
-                        <Link :href="getSafeRoute('applicant.login', '/applicant/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Applicant Login
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.register', '/supplier/register')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Register Business
-                        </Link>
-                        <Link :href="getSafeRoute('login', '/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Employee Portal
-                        </Link>
-                        <Link :href="getSafeRoute('supplier.login', '/supplier/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Supplier Portal
-                        </Link>
-                        <Link :href="getSafeRoute('agency.login', '/agency/login')" class="text-[10px] font-bold text-slate-300 hover:text-white transition-colors uppercase tracking-widest">
-                            Agency Portal
-                        </Link>
+                        <div v-for="menu in authMenus" :key="menu.id">
+                            <button
+                                type="button"
+                                aria-haspopup="menu"
+                                :aria-expanded="openMenu === 'footer:' + menu.id"
+                                @click="toggleMenu('footer:' + menu.id)"
+                                class="inline-flex min-h-10 px-4 text-xs py-2 items-center gap-2 font-semibold rounded-xl text-white bg-white/10 ring-1 ring-inset ring-white/25 backdrop-blur-md hover:bg-white/20 transition-all duration-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70"
+                            >
+                                <svg class="h-4 w-4 shrink-0 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" :d="menuGlyphs[menu.glyph]" />
+                                </svg>
+                                {{ menu.label }}
+                                <svg class="h-3 w-3 opacity-80 transition-transform duration-200" :class="openMenu === 'footer:' + menu.id ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            <Transition
+                                enter-active-class="transition duration-200 ease-out"
+                                enter-from-class="opacity-0 translate-y-2 scale-95"
+                                enter-to-class="opacity-100 translate-y-0 scale-100"
+                                leave-active-class="transition duration-150 ease-in"
+                                leave-from-class="opacity-100 translate-y-0 scale-100"
+                                leave-to-class="opacity-0 translate-y-2 scale-95"
+                            >
+                                <div
+                                    v-if="openMenu === 'footer:' + menu.id"
+                                    role="menu"
+                                    class="welcome-auth-menu absolute bottom-full left-1/2 -translate-x-1/2 mb-3 origin-bottom z-30 w-72 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-white/10 bg-slate-900/85 p-2 text-left shadow-[0_24px_60px_-12px_rgba(0,0,0,0.65)] ring-1 ring-inset ring-white/5 backdrop-blur-2xl"
+                                >
+                                    <div class="px-3 pb-2.5 pt-2">
+                                        <p class="welcome-auth-heading text-sm font-semibold text-white">{{ menu.heading }}</p>
+                                        <p class="welcome-auth-description mt-0.5 text-[11px] leading-snug text-slate-400">{{ menu.subheading }}</p>
+                                    </div>
+                                    <div class="welcome-auth-divider mx-3 mb-1.5 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"></div>
+                                    <Link
+                                        v-for="item in menu.items"
+                                        :key="item.label"
+                                        :href="item.href"
+                                        role="menuitem"
+                                        @click="closeMenus"
+                                        class="welcome-auth-item group flex items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors duration-150 hover:bg-white/[0.07] focus:outline-none focus-visible:bg-white/[0.07] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400/60"
+                                    >
+                                        <span
+                                            class="welcome-auth-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset transition-all duration-150 group-hover:scale-105"
+                                            :class="menuTones[item.kind]"
+                                        >
+                                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" :d="menuIcons[item.kind]" />
+                                            </svg>
+                                        </span>
+                                        <span class="min-w-0 flex-1">
+                                            <span class="welcome-auth-item-label block text-[13px] font-semibold text-white">{{ item.label }}</span>
+                                            <span class="welcome-auth-item-description block truncate text-[11px] text-slate-400">{{ item.description }}</span>
+                                        </span>
+                                        <svg class="welcome-auth-arrow h-4 w-4 shrink-0 -translate-x-1 text-slate-400 opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </Link>
+                                </div>
+                            </Transition>
+                        </div>
                     </div>
-                    <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+                </div>
+
+                <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
                         <div>
                             <h5 class="text-sm font-bold text-white mb-3">Monti Textile</h5>
                             <p class="text-xs text-slate-400 leading-relaxed">Precision management for the textile manufacturing lifecycle.</p>
@@ -1288,8 +1203,7 @@ const coreValues = [
                     <div class="border-t border-white/10 pt-4 text-center text-[8px] text-slate-500">
                         © 2026 Monti Textile Manufacturing. All rights reserved.
                     </div>
-                </footer>
-            </div>
+            </footer>
 
             <!-- JOB DETAIL MODAL -->
             <div v-if="showJobDetail && selectedJob" 
@@ -1378,7 +1292,7 @@ const coreValues = [
                         </div>
 
                         <!-- Work Details -->
-                        <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 sm:gap-4">
                             <div class="bg-white/5 rounded-xl p-4 border border-white/10">
                                 <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Work Mode</h4>
                                 <p class="text-white">{{ selectedJob.work_mode || 'On-site' }}</p>
@@ -1442,5 +1356,85 @@ html {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+}
+
+@media (max-width: 639px) {
+    .welcome-scope {
+        overflow-x: clip;
+        background-attachment: scroll !important;
+    }
+
+    .welcome-scope header {
+        padding-top: env(safe-area-inset-top);
+    }
+
+    .welcome-scope header nav {
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x;
+    }
+
+    .welcome-scope header nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .welcome-scope section,
+    .welcome-scope article,
+    .welcome-scope footer,
+    .welcome-scope form {
+        min-width: 0;
+    }
+
+    .welcome-scope .company-post-card > div:first-child {
+        padding: 1rem;
+    }
+
+    .welcome-scope .company-post-gallery {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    .welcome-scope .company-post-media {
+        min-height: 150px;
+        max-height: 65svh;
+    }
+
+    .welcome-scope .fixed.inset-0 {
+        align-items: flex-end;
+        padding: 0.5rem;
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    }
+
+    .welcome-scope .fixed.inset-0 > .max-w-3xl {
+        width: 100%;
+        max-height: 92svh;
+        border-radius: 1.25rem;
+    }
+
+    .welcome-scope .fixed.inset-0 > .max-w-3xl > div:first-child {
+        padding: 1rem;
+    }
+
+    .welcome-scope .fixed.inset-0 > .max-w-3xl > div:nth-child(2) {
+        padding: 1rem;
+    }
+
+    .welcome-scope input,
+    .welcome-scope select,
+    .welcome-scope textarea,
+    .welcome-scope button {
+        scroll-margin-top: 6rem;
+    }
+}
+
+@media (max-width: 380px) {
+    .welcome-scope h1 {
+        font-size: 2.1rem;
+    }
+
+    .welcome-scope .text-2xl {
+        font-size: 1.25rem;
+        line-height: 1.7rem;
+    }
 }
 </style>

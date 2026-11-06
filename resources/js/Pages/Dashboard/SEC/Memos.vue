@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { computed, ref, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -52,9 +53,9 @@ const submit = () => {
     });
 };
 
-const publish = (m) => { if (confirm(`Publish ${m.ref_no}? It becomes visible as an active office memo.`)) router.post(route('secretary.memos.publish', m.id), {}, { preserveScroll: true }); };
+const publish = async (m) => { if (await confirmModal(`Publish ${m.ref_no}? It becomes visible as an active office memo.`)) router.post(route('secretary.memos.publish', m.id), {}, { preserveScroll: true }); };
 const archive = (m) => router.post(route('secretary.memos.archive', m.id), {}, { preserveScroll: true });
-const removeMemo = (m) => { if (confirm(`Remove ${m.ref_no}?`)) router.delete(route('secretary.memos.destroy', m.id), { preserveScroll: true }); };
+const removeMemo = async (m) => { if (await confirmModal(`Remove ${m.ref_no}?`)) router.delete(route('secretary.memos.destroy', m.id), { preserveScroll: true }); };
 
 const badge = (s) => s === 'published' ? 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30'
     : s === 'archived' ? 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-zinc-800 dark:text-gray-400 dark:ring-zinc-700'

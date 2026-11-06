@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, watch, onMounted } from "vue";
 import { Head, router, useForm, usePage } from "@inertiajs/vue3";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
@@ -415,7 +416,7 @@ const toggleStatus = async (id) => {
 
 // Delete Position
 const deletePosition = async (id) => {
-    if (!confirm("Are you sure you want to delete this position?")) return;
+    if (!await confirmModal("Are you sure you want to delete this position?")) return;
 
     try {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;

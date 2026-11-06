@@ -25,7 +25,7 @@ const badgeText = (count) => {
 </script>
 
 <template>
-    <nav aria-label="Primary" class="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-gray-200/60 dark:border-gray-700/60 pb-[env(safe-area-inset-bottom)]">
+    <nav aria-label="Primary" class="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200/60 dark:border-gray-700/60 pb-[env(safe-area-inset-bottom)]">
         <div class="flex items-stretch justify-around h-14">
             <Link
                 v-for="item in items"

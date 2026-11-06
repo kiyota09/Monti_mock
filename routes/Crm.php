@@ -174,16 +174,32 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::post('/inquiries/{inquiry}/meeting', [CrmInquiryController::class, 'setMeeting'])
         ->middleware('page.permission:inquiry,edit')
         ->name('inquiry.meeting');
+    Route::post('/inquiries/{inquiry}/sample-requests', [CrmInquiryController::class, 'requestSample'])
+        ->middleware('page.permission:inquiry,edit')
+        ->name('inquiry.sample-request');
+    Route::post('/inquiries/{inquiry}/create-recipes', [CrmInquiryController::class, 'createSelectedRecipes'])
+        ->middleware('page.permission:inquiry,edit')
+        ->name('inquiry.create-recipes');
+    Route::post('/inquiries/{inquiry}/purchase-orders/{purchaseOrder}/recipes', [CrmInquiryController::class, 'saveClientPurchaseOrderRecipes'])
+        ->middleware('page.permission:inquiry,edit')
+        ->name('inquiry.client-po-recipes');
+    Route::post('/inquiries/{inquiry}/purchase-orders/{purchaseOrder}/push-to-eco', [CrmInquiryController::class, 'pushClientPurchaseOrderToEco'])
+        ->middleware('page.permission:inquiry,edit')
+        ->name('inquiry.push-client-po');
     Route::post('/inquiries/{inquiry}/quotation', [CrmInquiryController::class, 'issueQuotation'])
         ->middleware('page.permission:inquiry,edit')
         ->name('inquiry.quotation');
     Route::post('/inquiries/{inquiry}/reject', [CrmInquiryController::class, 'reject'])
         ->middleware('page.permission:inquiry,edit')
         ->name('inquiry.reject');
-    // Fabric sample loop: request from the lab, then forward the result.
-    Route::post('/inquiries/{inquiry}/sample-request', [CrmInquiryController::class, 'requestSample'])
-        ->middleware('page.permission:inquiry,edit')
-        ->name('inquiry.sample-request');
+    Route::post('/inquiries/{inquiry}/sample-requests/{sampleRequest}/receive', [CrmInquiryController::class, 'receiveSample'])
+        ->middleware('page.permission:inquiry,edit')->name('inquiry.sample.receive');
+    Route::post('/inquiries/{inquiry}/sample-requests/{sampleRequest}/pass-to-lab', [CrmInquiryController::class, 'passSampleToLab'])
+        ->middleware('page.permission:inquiry,edit')->name('inquiry.sample.pass-to-lab');
+    Route::post('/inquiries/{inquiry}/sample-requests/{sampleRequest}/deliver', [CrmInquiryController::class, 'deliverSampleToClient'])
+        ->middleware('page.permission:inquiry,edit')->name('inquiry.sample.deliver');
+    Route::post('/inquiries/{inquiry}/sample-requests/deliver-bulk', [CrmInquiryController::class, 'deliverSamplesToClient'])
+        ->middleware('page.permission:inquiry,edit')->name('inquiry.samples.deliver-bulk');
     // Attachment actions (previously eco.attachment.*)
     Route::post('/attachment/{attachment}/create-recipe', [CrmInquiryController::class, 'createRecipeFromAttachment'])
         ->middleware('page.permission:inquiry,edit')

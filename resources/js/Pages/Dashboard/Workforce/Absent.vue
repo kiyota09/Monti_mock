@@ -1,4 +1,5 @@
 <script setup>
+import { showNotice } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -74,7 +75,7 @@ const closeSuspendModal = () => {
 
 const suspendEmployee = () => {
     if (!suspendReason.value.trim()) {
-        alert('Please provide a reason for suspension.');
+        showNotice('Please provide a reason for suspension.');
         return;
     }
     router.post(route('workforce.absent.suspend', selectedEmployee.value.id), {

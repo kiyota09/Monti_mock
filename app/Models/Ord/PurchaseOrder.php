@@ -28,6 +28,8 @@ class PurchaseOrder extends Model
      */
     protected $fillable = [
         'client_id',
+        'inquiry_id',
+        'eco_quotation_id',
         'po_number',
         'subtotal',
         'discount_amount',
@@ -78,6 +80,16 @@ class PurchaseOrder extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function inquiry(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Eco\Inquiry::class, 'inquiry_id');
+    }
+
+    public function quotation(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Eco\EcoQuotation::class, 'eco_quotation_id');
     }
 
     /**

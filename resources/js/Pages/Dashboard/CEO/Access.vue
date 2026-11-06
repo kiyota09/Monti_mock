@@ -396,10 +396,10 @@ function saveStaffRole(userId) {
 // ─── MAN department mapping (mirrors ManAccessController::getDepartmentFromRole) ──
 
 const MAN_ROLE_DEPARTMENT = {
-    knitting_yarn: 'knitting', knitting_mechanic: 'knitting',
-    dyeing_color: 'dyeing', dyeing_fabric_softener: 'dyeing', dyeing_squeezer: 'dyeing',
-    dyeing_ironing: 'dyeing', dyeing_lab_chemist: 'dyeing',
-    finishing_packaging: 'finishing', checker_quality: 'finishing',
+    knitting_yarn: 'knitting', knitting_mechanic: 'knitting', knitting_inspector: 'knitting', knitting_sample: 'knitting',
+    dyeing_color: 'dyeing', dyeing_bleaching: 'dyeing', dyeing_pre_treatment: 'dyeing', dyeing_treatment: 'dyeing', dyeing_lab_chemist: 'dyeing',
+    finishing_squeezer: 'finishing', finishing_ironing: 'finishing', finishing_hydro: 'finishing', finishing_tubetex: 'finishing',
+    finishing_packaging: 'finishing', finishing_inspector: 'finishing', checker_quality: 'finishing',
     maintenance_checker: 'maintenance', pollution_control_operator: 'maintenance', safety_officer: 'maintenance',
     boiler_operator: 'boiler',
 };

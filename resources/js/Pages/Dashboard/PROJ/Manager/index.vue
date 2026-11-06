@@ -8,7 +8,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 <template>
     <AuthenticatedLayout>
-        <div class="flex items-center justify-center min-h-[400px]">
+        <div data-erp-page-banner="fallback" class="flex items-center justify-center min-h-[140px]">
             <h1 class="text-4xl font-black text-gray-800 dark:text-white uppercase tracking-widest">
                 Project Management Manager Department Dashboard
             </h1>

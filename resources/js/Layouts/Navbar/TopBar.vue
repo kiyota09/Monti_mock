@@ -11,6 +11,8 @@ import {
     PanelLeft, ChevronRight, LifeBuoy, Info, KeyRound, Clock, Maximize2,
 } from 'lucide-vue-next';
 import { useSidebarToggle } from '@/Layouts/composables/useSidebarToggle';
+import FabricInquiryNotice from '@/Components/FabricInquiryNotice.vue';
+import FabricModalArtwork from '@/Components/FabricModalArtwork.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -83,12 +85,16 @@ const logoutHref = computed(() => {
 // crafted from the IT-module base via data-theme CSS.
 const { currentTheme, setTheme } = useTheme();
 
-// Module marker: kept for potential per-module tweaks. The rich themes now
-// apply ERP-wide (no longer gated on this), driven via html[data-theme].
-const isITModule = computed(() => currentUrl.value.startsWith('/dashboard/it'));
+// Keep the active portal scope available for layout rules; theme colors remain
+// ERP-wide and are driven separately through html[data-theme].
+const moduleScope = computed(() => {
+    if (currentUrl.value.startsWith('/dashboard/it')) return 'it';
+    if (currentUrl.value.startsWith('/supplier')) return 'supplier';
+    return null;
+});
 const syncModuleScope = () => {
     try {
-        if (isITModule.value) document.documentElement.dataset.module = 'it';
+        if (moduleScope.value) document.documentElement.dataset.module = moduleScope.value;
         else delete document.documentElement.dataset.module;
     } catch { /* noop */ }
 };
@@ -96,17 +102,30 @@ watch(currentUrl, syncModuleScope);
 
 // ─── Logout confirmation ────────────────────────────────────────
 const showLogoutConfirm = ref(false);
+const showLogoutSuccess = ref(false);
+const logoutDestination = ref('/');
 const loggingOut = ref(false);
 const logoutForm = ref(null);
+const logoutRetryStorageKey = 'monti.logout.csrf-retry';
+const logoutRetriedStorageKey = 'monti.logout.csrf-retried';
+const readLogoutStorage = (key) => {
+    try { return sessionStorage.getItem(key); } catch { return null; }
+};
+const writeLogoutStorage = (key, value) => {
+    try { sessionStorage.setItem(key, value); } catch { /* native form remains available */ }
+};
+const clearLogoutStorage = (key) => {
+    try { sessionStorage.removeItem(key); } catch { /* storage may be disabled */ }
+};
 
 const refreshCsrfToken = () => {
     csrfToken.value = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || csrfToken.value;
 };
 
 // Logout via fetch (instead of a raw native submit) so a stale CSRF token /
-// expired session (HTTP 419) reloads into the true auth state instead of
-// stranding the user on an error page while still logged in. Falls back to
-// the native form submit if the request itself cannot be made (offline…).
+// expired CSRF token (HTTP 419) reloads once and automatically retries with
+// the refreshed token, avoiding a second manual click. Falls back to the
+// native form submit if the request itself cannot be made (offline…).
 const submitLogout = async () => {
     if (loggingOut.value) return;
     loggingOut.value = true;
@@ -119,11 +138,19 @@ const submitLogout = async () => {
             redirect: 'follow',
         });
         if (res.ok) {
+            clearLogoutStorage(logoutRetryStorageKey);
+            clearLogoutStorage(logoutRetriedStorageKey);
             showLogoutConfirm.value = false;
-            window.location.href = '/';
+            logoutDestination.value = res.url || '/';
+            showLogoutSuccess.value = true;
             return;
         }
         if (res.status === 419) {
+            if (readLogoutStorage(logoutRetriedStorageKey) === logoutHref.value) {
+                clearLogoutStorage(logoutRetriedStorageKey);
+                throw new Error('The refreshed logout request was rejected.');
+            }
+            writeLogoutStorage(logoutRetryStorageKey, logoutHref.value);
             window.location.reload();
             return;
         }
@@ -134,6 +161,10 @@ const submitLogout = async () => {
     } finally {
         loggingOut.value = false;
     }
+};
+
+const finishLogout = () => {
+    window.location.href = logoutDestination.value || '/';
 };
 
 // ─── Change password (partner portal) ───────────────────────────────
@@ -449,6 +480,7 @@ const sendMessage = async () => {
         if (attachFile.value) payload.append('file', attachFile.value);
         const { data } = await axios.post(route('topbar.threads.send', activeThread.value.id), payload, {
             headers: { 'Content-Type': 'multipart/form-data' },
+            __suppressSuccessFeedback: true,
         });
         messages.value.push(data.message);
         draft.value = '';
@@ -696,6 +728,12 @@ let msgTimer = null;
 const csrfToken = ref('');
 onMounted(() => {
     csrfToken.value = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    if (readLogoutStorage(logoutRetryStorageKey) === logoutHref.value) {
+        clearLogoutStorage(logoutRetryStorageKey);
+        writeLogoutStorage(logoutRetriedStorageKey, logoutHref.value);
+        showLogoutConfirm.value = true;
+        nextTick(() => submitLogout());
+    }
     initTheme();
     syncModuleScope();
     if (isInternal.value) {
@@ -782,10 +820,10 @@ const initialOf = (name) => ((name || '?').charAt(0) || '?').toUpperCase();
 // ─── Live clock ───────────────────────────────────────────────────
 const now = ref(new Date());
 let clockTimer = null;
-const clockTime = computed(() => now.value.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
+const clockTime = computed(() => now.value.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true }));
 const clockDate = computed(() => now.value.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }));
 onMounted(() => {
-    clockTimer = setInterval(() => { now.value = new Date(); }, 1000);
+    clockTimer = setInterval(() => { now.value = new Date(); }, 30000);
 });
 </script>
 
@@ -1349,13 +1387,11 @@ onMounted(() => {
                      the messenger panel was open) -->
                 <Teleport to="body">
                     <div v-if="showLogoutConfirm" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showLogoutConfirm = false">
-                        <div class="w-full max-w-xs overflow-hidden rounded-3xl bg-white text-center shadow-2xl dark:bg-zinc-900">
-                            <div class="px-6 pb-2 pt-6">
-                                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 dark:bg-rose-900/30">
-                                    <LogOut class="h-6 w-6 text-rose-600" />
-                                </div>
-                                <h4 class="mt-3 text-base font-black text-gray-900 dark:text-white">Log out?</h4>
-                                <p class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                        <div class="fabric-logout-confirm w-full max-w-xs overflow-hidden rounded-3xl bg-white text-center shadow-2xl dark:bg-zinc-900">
+                            <FabricModalArtwork kind="info" label="Blue fabric swatches" />
+                            <div class="px-6 pb-2 pt-4">
+                                <h4 class="text-base font-black text-gray-900 dark:text-white">Log out?</h4>
+                                <p class="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
                                     Are you sure you want to sign out of your account{{ displayName ? `, ${displayName}` : '' }}?
                                 </p>
                             </div>
@@ -1378,6 +1414,13 @@ onMounted(() => {
                         </div>
                     </div>
                 </Teleport>
+                <FabricInquiryNotice
+                    v-model="showLogoutSuccess"
+                    title="Logged out successfully"
+                    message="You have been signed out of your account."
+                    button-text="Continue"
+                    @close="finishLogout"
+                />
 
                 <!-- Change password (partner portal) -->
                 <Teleport to="body">

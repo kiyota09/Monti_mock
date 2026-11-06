@@ -22,32 +22,14 @@ class SupplierDashboardController extends Controller
     {
         $supplier = auth('supplier')->user();
         $supplierId = $supplier->id;
-
-        $allRfqs = RequestForQuotation::with(['responses' => function ($q) use ($supplierId) {
-            $q->where('supplier_id', $supplierId);
-        }])
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $rfqs = $allRfqs->filter(function ($rfq) use ($supplierId) {
-            $ids = is_string($rfq->supplier_ids) ? json_decode($rfq->supplier_ids, true) : $rfq->supplier_ids;
-            if (! is_array($ids)) return false;
-            return in_array($supplierId, $ids) || in_array((string) $supplierId, $ids);
-        })->values()->map(fn ($rfq) => [
-            'id' => $rfq->id,
-            'rfq_number' => $rfq->rfq_number,
-            'material_id' => $rfq->material_id,
-            'material_name' => $rfq->material_name,
-            'category' => $rfq->category,
-            'unit' => $rfq->unit,
-            'required_qty' => (int) $rfq->required_qty,
-            'deadline' => $rfq->deadline,
-            'delivery_address' => $rfq->delivery_address ?? 'Main Warehouse',
-            'payment_terms' => $rfq->payment_terms,
-            'notes' => $rfq->notes,
-            'status' => $rfq->status,
-            'my_response' => $rfq->responses->first(),
-        ]);
+        $rfqs = $this->supplierRfqs($supplierId);
+        $orders = ScmPurchaseOrder::where('supplier_id', $supplierId)
+            ->where('status', '!=', 'draft')
+            ->orderByDesc('created_at')
+            ->get(['id', 'po_number', 'status', 'issued_date', 'expected_delivery', 'grand_total']);
+        $recentInvoices = PurchaseInvoice::where('supplier_id', $supplierId)
+            ->orderByDesc('invoice_date')->orderByDesc('id')->limit(5)
+            ->get(['id', 'invoice_number', 'po_number', 'invoice_date', 'due_date', 'amount', 'status']);
 
         return Inertia::render('Supplier/supplierDashboard', [
             'auth' => [
@@ -56,19 +38,68 @@ class SupplierDashboardController extends Controller
             ],
             'stats' => [
                 'activeRFQs' => $rfqs->where('deadline', '>=', now()->toDateString())->count(),
-                'pendingResponses' => $rfqs->whereNull('my_response')->count(),
+                'pendingResponses' => $rfqs->filter(fn ($rfq) => ! $rfq['my_response'] && $rfq['deadline'] >= now()->toDateString())->count(),
+                'submittedQuotes' => $rfqs->whereNotNull('my_response')->count(),
+                'openOrders' => $orders->whereNotIn('status', ['delivered', 'completed'])->count(),
+                'inProduction' => $orders->where('status', 'production')->count(),
+                'shippingOrders' => $orders->where('status', 'shipping')->count(),
+                'unpaidInvoices' => PurchaseInvoice::where('supplier_id', $supplierId)->whereIn('status', ['unpaid', 'partial'])->count(),
+            ],
+            'pendingRfqs' => $rfqs->filter(fn ($rfq) => ! $rfq['my_response'] && $rfq['deadline'] >= now()->toDateString())->take(4)->values(),
+            'recentOrders' => $orders->take(5)->values(),
+            'recentInvoices' => $recentInvoices,
+        ]);
+    }
+
+    public function rfqs()
+    {
+        $supplier = auth('supplier')->user();
+        $supplierId = $supplier->id;
+        $rfqs = $this->supplierRfqs($supplierId);
+
+        return Inertia::render('Supplier/supplierRfqs', [
+            'auth' => ['user' => $supplier, 'supplier' => $supplier],
+            'rfqs' => $rfqs,
+            'stats' => [
+                'activeRFQs' => $rfqs->where('deadline', '>=', now()->toDateString())->count(),
+                'pendingResponses' => $rfqs->filter(fn ($rfq) => ! $rfq['my_response'] && $rfq['deadline'] >= now()->toDateString())->count(),
                 'submittedQuotes' => $rfqs->whereNotNull('my_response')->count(),
             ],
-            'rfqs' => $rfqs,
-            // Catalog prices keyed by material id — the quotation modal
-            // auto-fills the unit price from My Products.
+            // Catalog prices keyed by material id to prefill quote responses.
             'catalogPrices' => SupplierProduct::where('supplier_id', $supplierId)
                 ->where('is_available', true)
                 ->whereNotNull('unit_price')
                 ->pluck('unit_price', 'material_id')
-                ->map(fn ($p) => (float) $p)
+                ->map(fn ($price) => (float) $price)
                 ->toArray(),
         ]);
+    }
+
+    private function supplierRfqs(int $supplierId)
+    {
+        return RequestForQuotation::with(['material', 'responses' => fn ($q) => $q->where('supplier_id', $supplierId)])
+            ->orderByDesc('created_at')
+            ->get()
+            ->filter(function ($rfq) use ($supplierId) {
+                $ids = is_string($rfq->supplier_ids) ? json_decode($rfq->supplier_ids, true) : $rfq->supplier_ids;
+                return is_array($ids) && (in_array($supplierId, $ids) || in_array((string) $supplierId, $ids));
+            })
+            ->values()
+            ->map(fn ($rfq) => [
+                'id' => $rfq->id,
+                'rfq_number' => $rfq->rfq_number,
+                'material_id' => $rfq->material_id,
+                'material_name' => $rfq->material?->display_name ?? $rfq->material_name,
+                'category' => $rfq->category,
+                'unit' => $rfq->unit,
+                'required_qty' => (int) $rfq->required_qty,
+                'deadline' => $rfq->deadline,
+                'delivery_address' => $rfq->delivery_address ?? 'Main Warehouse',
+                'payment_terms' => $rfq->payment_terms,
+                'notes' => $rfq->notes,
+                'status' => $rfq->status,
+                'my_response' => $rfq->responses->first(),
+            ]);
     }
 
     public function submitQuotation(Request $request, $rfqId)
@@ -108,9 +139,8 @@ class SupplierDashboardController extends Controller
     }
 
     /**
-     * Product catalog: raw materials this supplier carries, grouped by
-     * Monti category (Yarn / Dye / Supplies / Packaging). Names, units
-     * and categories always come from the inventory materials table.
+     * Product catalog: raw materials this supplier carries. Material IDs
+     * keep Yarn tiers as distinct supplier listings.
      */
     public function products()
     {
@@ -122,9 +152,10 @@ class SupplierDashboardController extends Controller
             ->map(fn ($p) => [
                 'id' => $p->id,
                 'material_id' => $p->material_id,
-                'name' => $p->material?->name ?? '—',
+                'name' => $p->material?->display_name ?? '—',
                 'mat_id' => $p->material?->mat_id ?? '',
                 'category' => $p->material?->category ?? 'Supplies',
+                'yarn_tier' => $p->material?->yarn_tier,
                 'unit' => $p->material?->unit ?? 'Kg',
                 'unit_price' => $p->unit_price,
                 'is_available' => (bool) $p->is_available,
@@ -134,7 +165,7 @@ class SupplierDashboardController extends Controller
         $catalog = Material::whereNotIn('id', $listedIds ?: [0])
             ->orderBy('category')
             ->orderBy('name')
-            ->get(['id', 'mat_id', 'name', 'unit', 'category']);
+            ->get(['id', 'mat_id', 'name', 'unit', 'category', 'yarn_tier']);
 
         return Inertia::render('Supplier/supplierProducts', [
             'auth' => [

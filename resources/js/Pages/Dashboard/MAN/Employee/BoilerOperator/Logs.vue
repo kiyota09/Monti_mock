@@ -14,6 +14,7 @@ const showForm = ref(false);
 const form = useForm({
     machine_id: '', steam_pressure: '', water_level: 'normal', fuel_used: '', fuel_unit: 'L',
     blowdown_done: false, chemical_dosing: '', operating_hours: '', remarks: '',
+    steam_available: false,
 });
 const submit = () => form.post(route('man.staff.boiler-operator.store-log'), {
     preserveScroll: true,
@@ -73,6 +74,10 @@ const submit = () => form.post(route('man.staff.boiler-operator.store-log'), {
                                 <input v-model="form.blowdown_done" type="checkbox" id="blowdown" class="w-4 h-4 rounded text-indigo-600" />
                                 <label for="blowdown" class="text-sm font-bold text-gray-700 dark:text-gray-200">Blowdown performed this shift</label>
                             </div>
+                            <div class="sm:col-span-2 flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-900 dark:bg-sky-950/30">
+                                <input v-model="form.steam_available" type="checkbox" id="steam-available" class="w-4 h-4 rounded text-sky-600" />
+                                <label for="steam-available" class="text-sm font-bold text-sky-900 dark:text-sky-100">Boiler is operating and steam is available to production</label>
+                            </div>
                             <div class="sm:col-span-2"><label class="block text-xs font-black uppercase tracking-wide text-gray-500 mb-1.5">Remarks</label>
                                 <textarea v-model="form.remarks" rows="2" class="w-full rounded-2xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500"></textarea></div>
                             <div class="sm:col-span-2 flex gap-2">
@@ -95,6 +100,7 @@ const submit = () => form.post(route('man.staff.boiler-operator.store-log'), {
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Boiler</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pressure</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Water</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Steam to Production</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Blowdown</th>
                         </tr></thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-zinc-800">
@@ -103,6 +109,7 @@ const submit = () => form.post(route('man.staff.boiler-operator.store-log'), {
                                 <td class="px-6 py-3 font-mono text-sm font-bold">{{ log.machine?.machine_no }}</td>
                                 <td class="px-6 py-3 text-sm">{{ log.steam_pressure ?? '—' }}</td>
                                 <td class="px-6 py-3 text-sm uppercase">{{ log.water_level ?? '—' }}</td>
+                                <td class="px-6 py-3 text-sm font-bold" :class="log.steam_available ? 'text-emerald-700' : 'text-amber-700'">{{ log.steam_available ? 'Available' : 'Unavailable' }}</td>
                                 <td class="px-6 py-3"><span :class="log.blowdown_done ? 'bg-emerald-100 text-emerald-700 ring-emerald-200' : 'bg-gray-100 text-gray-500 ring-gray-200'" class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1">{{ log.blowdown_done ? 'Done' : 'Not done' }}</span></td>
                             </tr>
                             <tr v-if="!todayLogs?.length"><td colspan="5" class="px-6 py-8 text-center text-xs text-gray-400">No readings logged today yet.</td></tr>

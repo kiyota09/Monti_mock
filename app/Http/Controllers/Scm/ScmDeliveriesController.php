@@ -28,7 +28,7 @@ class ScmDeliveriesController extends Controller
                 'received_at' => $r->received_at,
                 'received_by' => $r->receivedByUser->name ?? '—',
                 'items' => $r->items->map(fn ($i) => [
-                    'material_name' => $i->material->name ?? '—',
+                    'material_name' => $i->material->display_name ?? '—',
                     'expected_qty' => $i->expected_qty,
                     'received_qty' => $i->received_qty,
                     'rejected_qty' => $i->rejected_qty,

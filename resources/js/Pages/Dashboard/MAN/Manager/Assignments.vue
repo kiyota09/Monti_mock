@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -19,6 +20,9 @@ const props = defineProps({
     staff: { type: Array, default: () => [] },
     orders: { type: Array, default: () => [] },
     assignments: { type: Array, default: () => [] },
+    knittingMachines: { type: Array, default: () => [] },
+    prefillOrderId: { type: [Number, String], default: null },
+    prefillStage: { type: String, default: '' },
 });
 
 const { canEdit } = usePageAccess();
@@ -35,6 +39,9 @@ const form = useForm({
     manufacturing_order_id: '',
     stage: '',
     assigned_to: '',
+    assigned_weight: '',
+    machine_ids: [],
+    fabric_ids: [],
     notes: '',
 });
 
@@ -47,6 +54,12 @@ const availableStages = computed(() => {
     const remaining = selectedOrder.value.remaining_stages ?? [];
     return stageEntries.value.filter((s) => remaining.includes(s.key));
 });
+const fabricsWaitingForSelectedStage = computed(() => (selectedOrder.value?.fabric_codes ?? []).filter((fabric) =>
+    fabric.assignment_stage === form.stage && !fabric.ready_for_assignment,
+));
+const unassignedFabricsForSelectedStage = computed(() => (selectedOrder.value?.fabric_codes ?? []).filter((fabric) =>
+    fabric.assignment_stage === form.stage && fabric.ready_for_assignment && !fabric.assigned_to,
+));
 
 const requiredRole = computed(() => props.stages[form.stage] ?? null);
 
@@ -61,6 +74,7 @@ const eligibleStaff = computed(() => {
 const selectedMember = computed(() =>
     props.staff.find((member) => member.id === form.assigned_to) ?? null,
 );
+const machinesForSelectedStaff = computed(() => props.knittingMachines.filter((machine) => Number(machine.staff_id) === Number(form.assigned_to)));
 
 const orderPicker = ref(null);
 const staffPicker = ref(null);
@@ -84,8 +98,11 @@ const toggleStaffPicker = () => {
 
 const chooseOrder = (order) => {
     form.manufacturing_order_id = order.id;
-    form.stage = '';
+    form.stage = props.department === 'knitting' && order.remaining_stages?.includes('knitting') ? 'knitting' : '';
     form.assigned_to = '';
+    form.assigned_weight = '';
+    form.machine_ids = [];
+    form.fabric_ids = [];
     form.clearErrors();
     orderOpen.value = false;
     staffOpen.value = false;
@@ -93,6 +110,7 @@ const chooseOrder = (order) => {
 
 const chooseStaff = (member) => {
     form.assigned_to = member.id;
+    form.machine_ids = [];
     form.clearErrors('assigned_to');
     staffOpen.value = false;
 };
@@ -109,6 +127,12 @@ const handleKeydown = (event) => {
 onMounted(() => {
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('keydown', handleKeydown);
+
+    const targetOrder = props.orders.find((order) => Number(order.id) === Number(props.prefillOrderId));
+    if (targetOrder) {
+        form.manufacturing_order_id = targetOrder.id;
+        form.stage = targetOrder.remaining_stages?.includes(props.prefillStage) ? props.prefillStage : '';
+    }
 });
 
 onBeforeUnmount(() => {
@@ -188,7 +212,7 @@ const submit = () => {
     closePickers();
     form.post(route('man.assignments.store'), {
         preserveScroll: true,
-        onSuccess: () => form.reset('manufacturing_order_id', 'stage', 'assigned_to', 'notes'),
+        onSuccess: () => form.reset('manufacturing_order_id', 'stage', 'assigned_to', 'assigned_weight', 'machine_ids', 'fabric_ids', 'notes'),
     });
 };
 
@@ -196,8 +220,8 @@ const setStatus = (assignment, status) => {
     router.patch(route('man.assignments.update', assignment.id), { status }, { preserveScroll: true });
 };
 
-const remove = (assignment) => {
-    if (confirm('Remove this assignment?')) {
+const remove = async (assignment) => {
+    if (await confirmModal('Remove this assignment?')) {
         router.delete(route('man.assignments.destroy', assignment.id), { preserveScroll: true });
     }
 };
@@ -207,6 +231,12 @@ const checkInventory = (order) =>
 
 const startProduction = (order) =>
     router.post(route('man.gates.knitting.start-production', order.id), {}, { preserveScroll: true });
+
+const releaseKnitting = (order) =>
+    router.post(route('man.assignments.knitting.release', order.id), {}, { preserveScroll: true });
+
+const setDyeingRoute = (order, requiresBleaching) =>
+    router.patch(route('man.assignments.dyeing-route', order.id), { requires_bleaching: requiresBleaching }, { preserveScroll: true });
 
 const statusStyle = {
     pending: 'bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30',
@@ -220,7 +250,7 @@ const statusStyle = {
     <Head title="Job Order Assignments" />
     <AuthenticatedLayout>
         <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
-            <div class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 pb-16">
+            <div class="max-w-[1600px] mx-auto p-4 sm:p-6 space-y-6 pb-16">
 
                 <!-- Hero -->
                 <div class="animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/20">
@@ -234,7 +264,7 @@ const statusStyle = {
                                 <Sparkles class="h-3.5 w-3.5" /> MAN · Job Orders
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">JO Assignment Board</h1>
-                            <p class="text-sm text-blue-100/90">{{ departmentLabel || department }} — assign each stage to one staff member.</p>
+                            <p class="text-sm text-blue-100/90">{{ department === 'knitting' ? 'Review full JO requirements and split the kg target across yarn staff and knitting machines.' : `${departmentLabel || department} — assign each stage to one staff member.` }}</p>
                         </div>
                     </div>
 
@@ -275,7 +305,7 @@ const statusStyle = {
                                         <span v-if="selectedOrder" class="min-w-0 flex-1">
                                             <span class="block truncate font-mono text-sm font-black text-gray-900 dark:text-white">{{ selectedOrder.reference }}</span>
                                             <span class="block truncate text-[11px] text-gray-500 dark:text-gray-400">
-                                                {{ selectedOrder.client }} · {{ num(selectedOrder.remaining_quantity) }} of {{ num(selectedOrder.total_quantity) }} units
+                                                {{ selectedOrder.client }} · {{ num(selectedOrder.remaining_quantity) }} of {{ num(selectedOrder.total_quantity) }} {{ department === 'knitting' ? 'kg' : 'units' }}
                                             </span>
                                         </span>
                                         <span v-else class="flex-1 text-sm font-semibold text-gray-400">Select a Job Order…</span>
@@ -383,7 +413,7 @@ const statusStyle = {
                                         </div>
                                         <div>
                                             <dt class="font-bold uppercase tracking-wide text-indigo-400">Quantity</dt>
-                                            <dd class="font-semibold text-gray-700 dark:text-gray-200">{{ num(selectedOrder.remaining_quantity) }} / {{ num(selectedOrder.total_quantity) }}</dd>
+                                        <dd class="font-semibold text-gray-700 dark:text-gray-200">{{ num(selectedOrder.remaining_quantity) }} / {{ num(selectedOrder.total_quantity) }} {{ department === 'knitting' ? 'kg' : 'units' }}</dd>
                                         </div>
                                         <div v-if="selectedOrder.color">
                                             <dt class="font-bold uppercase tracking-wide text-indigo-400">Color</dt>
@@ -444,11 +474,11 @@ const statusStyle = {
                                     </div>
                                 </div>
 
-                                <label class="block">
+                                <label v-if="department !== 'knitting'" class="block">
                                     <span class="text-xs font-bold text-gray-500 dark:text-gray-400">Stage</span>
                                     <select
                                         v-model="form.stage"
-                                        @change="form.assigned_to = ''; staffOpen = false"
+                                        @change="form.assigned_to = ''; form.fabric_ids = []; staffOpen = false"
                                         :disabled="!form.manufacturing_order_id"
                                         class="mt-1 w-full rounded-2xl border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 text-sm font-semibold disabled:opacity-50"
                                     >
@@ -458,6 +488,23 @@ const statusStyle = {
                                     <span v-if="selectedOrder && !availableStages.length" class="text-xs text-emerald-600">All stages for this Job Order are assigned.</span>
                                     <span v-if="form.errors.stage" class="text-xs text-rose-500">{{ form.errors.stage }}</span>
                                 </label>
+                                <div v-if="department === 'dyeing' && selectedOrder && form.stage" class="rounded-xl border border-cyan-100 bg-cyan-50/70 p-3 text-[11px] dark:border-cyan-500/20 dark:bg-cyan-500/10">
+                                    <p class="font-black text-cyan-950 dark:text-cyan-100">Select the fabric codes for this staff member · {{ unassignedFabricsForSelectedStage.length }} available for {{ humanize(form.stage) }}</p>
+                                    <p v-if="fabricsWaitingForSelectedStage.length" class="mt-1 text-cyan-900 dark:text-cyan-200">
+                                        {{ fabricsWaitingForSelectedStage.length }} matching code(s) are waiting for supervisor approval. They cannot be assigned to this stage yet.
+                                    </p>
+                                    <div v-if="unassignedFabricsForSelectedStage.length" class="mt-2 grid gap-1.5 sm:grid-cols-2">
+                                        <label v-for="fabric in unassignedFabricsForSelectedStage" :key="fabric.id" class="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-2.5 py-2 font-semibold text-slate-700 dark:bg-zinc-900 dark:text-slate-200">
+                                            <input v-model="form.fabric_ids" type="checkbox" :value="fabric.id" class="rounded border-cyan-300 text-cyan-700 focus:ring-cyan-600">
+                                            <span class="min-w-0 flex-1 truncate font-mono">{{ fabric.code }}</span>
+                                            <span class="shrink-0">{{ num(fabric.weight) }} kg</span>
+                                        </label>
+                                    </div>
+                                    <p v-if="!unassignedFabricsForSelectedStage.length && !fabricsWaitingForSelectedStage.length" class="mt-1 text-cyan-900 dark:text-cyan-200">
+                                        No unassigned fabric codes are currently ready for this stage.
+                                    </p>
+                                    <p v-if="form.errors.fabric_ids" class="mt-1 text-rose-600">{{ form.errors.fabric_ids }}</p>
+                                </div>
 
                                 <div ref="staffPicker" class="relative">
                                     <div class="flex items-center justify-between gap-2">
@@ -564,6 +611,13 @@ const statusStyle = {
                                     </div>
                                 </div>
 
+                                <div v-if="department === 'knitting'" class="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                                    <p class="text-xs font-black uppercase tracking-wide text-indigo-800 dark:text-indigo-200">Knitting shift allocation</p>
+                                    <label class="block"><span class="text-xs font-bold text-gray-600 dark:text-gray-300">Target weight for this staff member (kg)</span><input v-model.number="form.assigned_weight" type="number" min="0.01" step="0.01" class="mt-1 w-full rounded-xl border-gray-200 text-sm dark:border-zinc-700 dark:bg-zinc-800" placeholder="Enter target weight"/><span v-if="form.errors.assigned_weight" class="text-xs text-rose-500">{{ form.errors.assigned_weight }}</span></label>
+                                    <div><p class="mb-1 text-xs font-bold text-gray-600 dark:text-gray-300">Machines assigned to this operator</p><div v-if="!machinesForSelectedStaff.length" class="rounded-xl bg-amber-100 p-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">No unallocated machines assigned to this staff member. Set them up on the Knitting Machines page first.</div><div v-else class="grid max-h-36 grid-cols-2 gap-1 overflow-y-auto"> <label v-for="machine in machinesForSelectedStaff" :key="machine.id" class="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-xs font-semibold dark:bg-zinc-900"><input v-model="form.machine_ids" type="checkbox" :value="machine.id" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>{{ machine.machine_no }}</label></div><span v-if="form.errors.machine_ids" class="text-xs text-rose-500">{{ form.errors.machine_ids }}</span></div>
+                                    <div v-if="selectedOrder" class="rounded-xl bg-white/80 p-2 text-[11px] leading-relaxed text-indigo-900 dark:bg-zinc-900/70 dark:text-indigo-100">JO allocation remaining: <strong>{{ num(selectedOrder.remaining_assignment_weight) }} kg</strong>.</div>
+                                </div>
+
                                 <label class="block">
                                     <span class="text-xs font-bold text-gray-500 dark:text-gray-400">Notes <span class="font-normal">(optional)</span></span>
                                     <textarea
@@ -577,10 +631,10 @@ const statusStyle = {
                                     v-if="canEditProduction"
                                     type="button"
                                     @click="submit"
-                                    :disabled="form.processing || !form.manufacturing_order_id || !form.stage || !form.assigned_to"
+                                    :disabled="form.processing || !form.manufacturing_order_id || !form.stage || !form.assigned_to || (department === 'knitting' && (!form.assigned_weight || !form.machine_ids?.length)) || (department === 'dyeing' && !form.fabric_ids.length)"
                                     class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-black px-4 py-3 rounded-2xl shadow-lg shadow-indigo-500/25 transition active:scale-95"
                                 >
-                                    <UserCheck class="h-4 w-4" /> Assign Job Order
+                                    <UserCheck class="h-4 w-4" /> {{ department === 'knitting' ? 'Add Staff Allocation' : 'Assign Job Order' }}
                                 </button>
                                 <p v-else class="text-xs font-bold uppercase tracking-wide text-amber-700 bg-amber-100 rounded-2xl px-3 py-2 text-center">View only</p>
                             </div>
@@ -609,7 +663,81 @@ const statusStyle = {
                                 >
                                     <div class="min-w-0 flex-1">
                                         <p class="text-sm font-black text-gray-900 dark:text-white font-mono">{{ order.reference }}</p>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ order.client }} · {{ order.remaining_quantity ?? order.total_quantity }} units</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ order.client }} · {{ num(order.total_quantity) }} {{ department === 'knitting' ? 'kg' : 'units' }}</p>
+                                        <template v-if="department === 'dyeing'">
+                                            <div class="mt-2 rounded-xl border border-cyan-100 bg-cyan-50/70 p-3 dark:border-cyan-500/20 dark:bg-cyan-500/10">
+                                                <p class="text-[10px] font-black uppercase tracking-wider text-cyan-900 dark:text-cyan-100">Choose JO Dyeing Route</p>
+                                                <div v-if="order.dyeing_bleaching_required === null" class="mt-2 flex flex-wrap gap-2">
+                                                    <button type="button" :disabled="!canEditProduction" @click="setDyeingRoute(order, true)" class="rounded-lg bg-indigo-700 px-3 py-2 text-[10px] font-black text-white disabled:opacity-50">Bleaching → Pre Treatment → Color → Post Treatment</button>
+                                                    <button type="button" :disabled="!canEditProduction" @click="setDyeingRoute(order, false)" class="rounded-lg bg-teal-700 px-3 py-2 text-[10px] font-black text-white disabled:opacity-50">Pre Treatment → Color → Post Treatment</button>
+                                                </div>
+                                                <p v-else class="mt-1 text-xs font-bold text-cyan-950 dark:text-cyan-100">{{ order.dyeing_bleaching_required ? 'Bleaching → Pre Treatment → Color → Post Treatment' : 'Pre Treatment → Color → Post Treatment' }}<span class="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[9px] uppercase dark:bg-zinc-900">{{ order.dyeing_route_locked ? 'Batch started · locked' : 'Route selected' }}</span></p>
+                                                <p v-if="order.dyeing_bleaching_required === null" class="mt-1 text-[10px] text-cyan-800 dark:text-cyan-200">Choose the JO route before assigning Dyeing stages or queuing its batch.</p>
+                                            </div>
+                                            <div class="mt-2 flex flex-wrap gap-1.5 text-[10px] font-semibold text-gray-600 dark:text-gray-300">
+                                                <span v-if="order.control_number" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Control: {{ order.control_number }}</span>
+                                                <span v-if="order.po_number" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">PO: {{ order.po_number }}</span>
+                                                <span v-if="order.yarn_type" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Yarn: {{ order.yarn_type }}</span>
+                                                <span v-if="order.color" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Color: {{ order.color }}</span>
+                                                <span v-if="order.design" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Design: {{ order.design }}</span>
+                                                <span v-if="order.priority" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Priority: {{ humanize(order.priority) }}</span>
+                                                <span v-if="order.expected_ship_date" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Due: {{ formatDate(order.expected_ship_date) }}</span>
+                                            </div>
+                                            <div v-if="order.recipe" class="mt-2 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                                                <p class="text-[10px] font-black uppercase tracking-wider text-indigo-800 dark:text-indigo-200">JO Recipe<span v-if="order.recipe.product"> · {{ order.recipe.product }}</span></p>
+                                                <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-700 dark:text-slate-200">
+                                                    <span v-if="order.recipe.yarn_type"><b>Yarn:</b> {{ order.recipe.yarn_type }}</span>
+                                                    <span v-if="order.recipe.dye_color"><b>Dye color:</b> {{ order.recipe.dye_color }}</span>
+                                                    <span v-if="order.recipe.weave_design"><b>Weave/design:</b> {{ order.recipe.weave_design }}</span>
+                                                </div>
+                                                <div v-if="order.recipe.materials?.length" class="mt-2 border-t border-indigo-100 pt-2 dark:border-indigo-500/20">
+                                                    <p class="text-[9px] font-black uppercase text-indigo-700 dark:text-indigo-300">Recipe materials</p>
+                                                    <div class="mt-1 flex flex-wrap gap-1.5">
+                                                        <span v-for="material in order.recipe.materials" :key="material.id" class="rounded-lg bg-white px-2 py-1 text-[10px] font-semibold text-slate-700 dark:bg-zinc-900 dark:text-slate-200">
+                                                            {{ material.name }}<span v-if="material.quantity !== null"> · {{ num(material.quantity) }} {{ material.unit }}</span>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <p v-else class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">No recipe is linked to this JO.</p>
+                                            <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                                    <p class="text-[10px] font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-100">Fabric codes in this JO</p>
+                                                    <p class="text-[10px] font-black text-emerald-900 dark:text-emerald-100">{{ order.fabric_count }} codes · {{ num(order.fabric_total_weight) }} kg total</p>
+                                                </div>
+                                                <div v-if="order.fabric_codes?.length" class="mt-2 grid gap-1.5 sm:grid-cols-2">
+                                                    <div v-for="fabric in order.fabric_codes" :key="fabric.id" class="flex min-w-0 items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-2 text-[10px] dark:bg-zinc-900">
+                                                        <span class="truncate font-mono font-black text-slate-800 dark:text-slate-100">{{ fabric.code }}</span>
+                                                        <span class="shrink-0 text-right font-semibold text-slate-500 dark:text-slate-400">{{ num(fabric.weight) }} kg · {{ humanize(fabric.stage) }} · {{ fabric.assigned_staff ? `Assigned to ${fabric.assigned_staff}` : fabric.ready_for_assignment ? 'Ready for staff' : fabric.status === 'awaiting_review' ? 'Awaiting supervisor review' : humanize(fabric.status) }}</span>
+                                                    </div>
+                                                </div>
+                                                <p v-else class="mt-2 text-[10px] font-semibold text-emerald-900 dark:text-emerald-100">No fabric rolls have been produced for this JO yet.</p>
+                                            </div>
+                                            <div v-if="order.items?.length" class="mt-2 space-y-1 rounded-xl border border-gray-100 p-2 dark:border-zinc-700">
+                                                <p class="text-[9px] font-black uppercase text-gray-500">Ordered items</p>
+                                                <p v-for="(item, itemIndex) in order.items" :key="itemIndex" class="text-[10px] text-gray-600 dark:text-gray-300">{{ item.fabric || 'Fabric' }}<span v-if="item.design"> · {{ item.design }}</span><span v-if="item.color"> · {{ item.color }}</span><span v-if="item.kilos"> · {{ num(item.kilos) }} kg</span><span v-else-if="item.quantity"> · {{ num(item.quantity) }} pcs</span></p>
+                                            </div>
+                                            <p v-if="order.notes || order.order_notes" class="mt-2 text-[10px] text-gray-500 dark:text-gray-400"><b>Notes:</b> {{ [order.notes, order.order_notes].filter(Boolean).join(' · ') }}</p>
+                                        </template>
+                                        <template v-if="department === 'knitting'">
+                                            <div class="mt-2 flex flex-wrap gap-1.5 text-[10px] font-semibold text-gray-600 dark:text-gray-300">
+                                                <span v-if="order.yarn_type" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Yarn: {{ order.yarn_type }}</span>
+                                                <span v-if="order.design" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Design: {{ order.design }}</span>
+                                                <span v-if="order.color" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Color: {{ order.color }}</span>
+                                                <span v-if="order.priority" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Priority: {{ humanize(order.priority) }}</span>
+                                                <span v-if="order.expected_ship_date" class="rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">Due: {{ formatDate(order.expected_ship_date) }}</span>
+                                            </div>
+                                            <p v-if="order.control_number || order.po_number" class="mt-1.5 text-[10px] text-gray-400"><span v-if="order.control_number">Control {{ order.control_number }}</span><span v-if="order.control_number && order.po_number"> · </span><span v-if="order.po_number">PO {{ order.po_number }}</span></p>
+                                            <div v-if="order.items?.length" class="mt-1.5 space-y-0.5"><p v-for="(item, itemIndex) in order.items" :key="itemIndex" class="truncate text-[10px] text-gray-500 dark:text-gray-400">{{ item.fabric || 'Fabric' }}<span v-if="item.design"> · {{ item.design }}</span><span v-if="item.color"> · {{ item.color }}</span><span v-if="item.kilos"> · {{ num(item.kilos) }} kg</span><span v-else-if="item.quantity"> · {{ num(item.quantity) }} pcs</span></p></div>
+                                            <div class="mt-2 max-w-xl">
+                                                <div class="mb-1 flex justify-between text-[10px] font-bold"><span>Staff allocation</span><span>{{ num(order.assigned_weight) }} / {{ num(order.total_quantity) }} kg</span></div>
+                                                <div class="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-zinc-700"><div class="h-full rounded-full bg-indigo-600" :style="{ width: `${Math.min(100, order.total_quantity ? order.assigned_weight / order.total_quantity * 100 : 0)}%` }"/></div>
+                                            </div>
+                                            <p class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">Produced {{ num(order.produced_weight) }} kg · Inspector approved {{ num(order.approved_weight) }} kg</p>
+                                            <div v-if="order.knitting_allocations?.length" class="mt-2 flex flex-wrap gap-1.5">
+                                                <span v-for="allocation in order.knitting_allocations" :key="allocation.id" class="rounded-lg border border-indigo-100 bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-800 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-200">{{ allocation.staff_name }} · {{ num(allocation.assigned_weight) }} kg · {{ allocation.machine_numbers.join(', ') }}</span>
+                                            </div>
+                                        </template>
                                         <div v-if="order.remaining_stages?.length" class="mt-1.5 flex flex-wrap gap-1">
                                             <span
                                                 v-for="stage in order.remaining_stages"
@@ -635,6 +763,8 @@ const statusStyle = {
                                         >
                                             <PlayCircle class="h-3.5 w-3.5" /> Start
                                         </button>
+                                        <button v-if="order.handoff_requested && Number(order.assigned_weight) >= Number(order.total_quantity) && Number(order.approved_weight) >= Number(order.total_quantity) && Number(order.total_quantity) > 0" type="button" @click="releaseKnitting(order)" class="flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-lg transition hover:bg-emerald-700 active:scale-95"><CheckCircle2 class="h-3.5 w-3.5"/>Release to Dyeing</button>
+                                        <span v-else-if="Number(order.approved_weight) >= Number(order.total_quantity) && Number(order.total_quantity) > 0" class="self-center text-[10px] font-bold text-amber-700 dark:text-amber-300">{{ order.handoff_requested ? 'Ready for Dyeing release' : 'Waiting for Knitting Yarn staff handoff' }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -673,6 +803,8 @@ const statusStyle = {
                                         <span class="font-bold">{{ a.assignee?.name ?? 'Unassigned' }}</span>
                                         <span class="text-gray-400">· {{ humanize(a.assigned_role) }}</span>
                                     </p>
+                                    <p v-if="department === 'knitting' && a.assigned_weight" class="mt-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">{{ num(a.assigned_weight) }} kg assigned · Machines {{ a.machine_numbers?.join(', ') || '—' }}</p>
+                                    <p v-if="department === 'dyeing' && a.fabric" class="mt-1 text-[11px] font-bold text-cyan-800 dark:text-cyan-200">Fabric {{ a.fabric.code }} · {{ num(a.fabric.weight) }} kg</p>
                                     <p v-if="a.notes" class="mt-1 text-xs text-gray-400 italic">{{ a.notes }}</p>
 
                                     <div v-if="canEditProduction" class="mt-2 flex flex-wrap items-center gap-2">
@@ -683,8 +815,8 @@ const statusStyle = {
                                         >
                                             <option value="pending">Pending</option>
                                             <option value="in_progress">In Progress</option>
-                                            <option value="completed">Completed</option>
-                                            <option value="rejected">Rejected</option>
+                                            <option v-if="department !== 'knitting'" value="completed">Completed</option>
+                                            <option v-if="department !== 'knitting'" value="rejected">Rejected</option>
                                         </select>
                                         <button
                                             type="button"

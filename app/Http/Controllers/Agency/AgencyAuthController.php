@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Agency;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Auth\Concerns\LogsOutEveryGuard;
 use App\Models\Hrm\Agency;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\Request;
@@ -13,6 +14,8 @@ use Inertia\Inertia;
 
 class AgencyAuthController extends Controller
 {
+    use LogsOutEveryGuard;
+
     public function showLogin()
     {
         return Inertia::render('Auth/AgencyLogin');
@@ -67,10 +70,7 @@ class AgencyAuthController extends Controller
 
     public function logout(Request $request)
     {
-        Auth::guard('agency')->logout();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        $this->logoutEveryGuard($request);
 
         return redirect()->route('agency.login');
     }

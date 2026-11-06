@@ -12,6 +12,8 @@ use App\Support\ClientAccess;
 use App\Support\ManufacturingPages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
 
@@ -114,21 +116,43 @@ class HandleInertiaRequests extends Middleware
             // render a blank department for module-native accounts.
             $user->loadMissing('hrmDepartment:id,name');
 
+            $currentRoute = $request->route();
+            $supervisorWorkspaceRole = $user->is_manufacturing_supervisor
+                ? ManufacturingPages::roleForRouteName($currentRoute?->getName())
+                : null;
+            $supervisorWorkspacePage = null;
+            if ($supervisorWorkspaceRole) {
+                foreach ($currentRoute?->gatherMiddleware() ?? [] as $routeMiddleware) {
+                    if (preg_match('/(?:^|,)page\.permission:([^,]+)/', (string) $routeMiddleware, $matches)) {
+                        $supervisorWorkspacePage = strtolower($matches[1]);
+                        break;
+                    }
+                }
+            }
+            $supervisorStaffPagePermissions = $user->is_manufacturing_supervisor
+                ? $this->supervisorStaffPagePermissions($user, $explicitPermissions)
+                : [];
+
             // Merge user attributes with permissions
             $userData = array_merge($user->toArray(), [
                 'department_name'        => $this->resolveDepartmentName($user),
+                'can_access_crm_messaging' => $user->canAccessCrmMessaging(),
                 'permissions'            => $permissionsGrouped,
                 'workforce_permissions'  => $workforcePermissions,
                 'crmPagePermissions'     => $crmPagePermissions,
                 'granted_modules'        => $grantedModules,
                 'page_permissions'       => $pagePermissionsList, // usable (view/edit) grants only
                 'explicit_modules'       => $explicitModules, // modules with ANY row, incl. disabled
+                'manufacturing_supervisor_page_permissions' => $supervisorStaffPagePermissions,
+                'manufacturing_supervisor_current_role' => $supervisorWorkspaceRole,
+                'manufacturing_supervisor_current_page' => $supervisorWorkspacePage,
                 'root_module'            => $this->getRootModuleForUser($user), // secretary/GM home module
             ]);
         }
 
         return [
             ...parent::share($request),
+            'realtime_version' => fn () => (string) Cache::get('erp:realtime:data-version', 0),
             'auth' => [
                 'user'                => $userData,
                 'page_permissions'    => $pagePermissionsList,
@@ -148,6 +172,7 @@ class HandleInertiaRequests extends Middleware
                 'message' => fn () => $request->session()->get('message'),
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'inquiry_redirect_url' => fn () => $request->session()->get('inquiry_redirect_url'),
             ],
             // When the signed-in account still holds a system-issued password
             // (temporary / initial / recovered), the frontend shows a
@@ -270,10 +295,8 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
-     * Augment the permission list so that managers/staff of a module get
-     * full access on all pages of that module — UNLESS explicit permission
-     * rows already exist for them in that module, in which case the explicit
-     * grants are the exact access set (no auto-grant of the remaining pages).
+     * Augment the permission list so managers/staff of their own module get
+     * full access unless explicit page rows define the exact access set.
      */
     protected function augmentPermissionsForModuleUser($user, array $explicitPermissions): array
     {
@@ -285,25 +308,26 @@ class HandleInertiaRequests extends Middleware
         // mirroring the CheckPagePermission bypass. An explicit row for a
         // page (including IT's 'disabled') always wins and is never
         // overwritten; other modules are untouched (overseer model).
-        if ($user->role === 'CEO'
-            || $user->role === 'COO'
-            || ($user->position ?? '') === 'vice_president') {
-            foreach ($this->getModulePages('CRM') as $page) {
-                $hasRow = collect($result)->first(fn ($perm) =>
-                    strtoupper((string) ($perm['module'] ?? '')) === 'CRM'
-                    && strtolower((string) ($perm['page'] ?? '')) === strtolower($page));
-                if (! $hasRow) {
-                    $result[] = [
-                        'module'           => 'CRM',
-                        'page'             => $page,
-                        'permission_level' => 'edit',
-                    ];
-                }
-            }
-        }
-
         $module = strtoupper($user->role);
         $position = $user->position;
+
+        if ($module === 'IT' && in_array($position, ['manager', 'staff'], true)) {
+            $itPages = $this->getModulePages('IT');
+            $result = array_values(array_filter(
+                $result,
+                fn ($perm) => strtoupper((string) ($perm['module'] ?? '')) !== 'IT'
+            ));
+
+            foreach ($itPages as $page) {
+                $result[] = [
+                    'module' => 'IT',
+                    'page' => $page,
+                    'permission_level' => 'edit',
+                ];
+            }
+
+            return $result;
+        }
 
         if (!in_array($position, ['manager', 'staff'])) {
             return $result;
@@ -334,6 +358,38 @@ class HandleInertiaRequests extends Middleware
         }
 
         return $result;
+    }
+
+    /**
+     * Role-scoped page levels used by a manufacturing supervisor. Missing
+     * choices keep the legacy Production grant as default.
+     */
+    protected function supervisorStaffPagePermissions(User $user, array $explicitPermissions): array
+    {
+        $configured = DB::table('man_supervisor_staff_page_permissions')
+            ->where('supervisor_user_id', $user->id)
+            ->get(['manufacturing_role', 'page', 'permission_level'])
+            ->groupBy('manufacturing_role')
+            ->map(fn ($rows) => $rows->mapWithKeys(fn ($row) => [strtolower($row->page) => strtolower($row->permission_level)]))
+            ->toArray();
+
+        $production = collect($explicitPermissions)->first(fn ($permission) =>
+            strtoupper((string) ($permission['module'] ?? '')) === 'MAN'
+            && strtolower((string) ($permission['page'] ?? '')) === 'production'
+        );
+        $hasExplicitManRows = collect($explicitPermissions)->contains(fn ($permission) =>
+            strtoupper((string) ($permission['module'] ?? '')) === 'MAN'
+        );
+        $fallback = $production
+            ? strtolower((string) ($production['permission_level'] ?? 'edit'))
+            : ($hasExplicitManRows ? 'disabled' : 'edit');
+
+        foreach (ManufacturingPages::rolesForDepartment($user->supervisor_department) as $role) {
+            foreach (array_keys(ManufacturingPages::ROLE_PAGES[$role] ?? []) as $page) {
+                $configured[$role][$page] ??= $fallback;
+            }
+        }
+        return $configured;
     }
 
     /**
@@ -430,10 +486,10 @@ class HandleInertiaRequests extends Middleware
             'INV' => ['dashboard', 'materials', 'products', 'bom', 'checker'],
             'ORD' => ['dashboard', 'orders', 'productions', 'delivery', 'returns'],
             'WAR' => ['warehouse', 'receiving', 'monitor', 'packages', 'reject'],
-            'ECO' => ['dashboard', 'store', 'supplier', 'client', 'credit', 'push'],
+            'ECO' => ['dashboard', 'store', 'pricing', 'supplier', 'client', 'credit', 'push', 'returns'],
             'PRO' => ['dashboard', 'requests', 'quotations', 'receipt', 'tracking'],
             'PROJ' => ['dashboard'],
-            'IT' => ['dashboard', 'tickets', 'assets', 'monitoring', 'knowledge', 'changes', 'access', 'access_control', 'access_logs'],
+            'IT' => array_keys(config('module_pages.it', [])),
             'LOG' => ['dashboard', 'load', 'dispatch', 'fleet', 'drivers', 'routes', 'tracking', 'proof', 'reports'],
             'WRF' => ['dashboard', 'scheduler', 'leave', 'absent'],
         ];

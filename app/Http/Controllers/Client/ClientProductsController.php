@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
 use App\Models\Inv\Product;
+use App\Models\Man\PantoneReference;
 use App\Models\Eco\Inquiry;
 use App\Models\Eco\ConversationMessage;
 use Illuminate\Http\Request;
@@ -14,15 +15,21 @@ class ClientProductsController extends Controller
 {
     public function index()
     {
+        $pantoneReferences = PantoneReference::query()->get(['id', 'color_category'])->keyBy('id');
         $products = Product::where('status', 'Active')
-            ->with('images')
+            ->with(['images', 'yarnMaterials'])
             ->get()
-            ->map(function ($p) {
+            ->map(function ($p) use ($pantoneReferences) {
                 // Safely parse the colors array
                 $colorsArray = [];
                 if (!empty($p->colors)) {
                     $colorsArray = is_string($p->colors) ? json_decode($p->colors, true) : $p->colors;
                 }
+                $colorsArray = collect($colorsArray)->map(function ($color) use ($pantoneReferences) {
+                    if (! is_array($color) || empty($color['pantone_id'])) return $color;
+                    $color['color_category'] = $pantoneReferences->get((int) $color['pantone_id'])?->color_category;
+                    return $color;
+                })->values()->all();
 
                 return [
                     'id' => $p->id,
@@ -33,6 +40,14 @@ class ClientProductsController extends Controller
                     'colors' => $colorsArray,
                     'colorName' => $p->color_name ?? null,
                     'colorHex' => $p->color_hex ?? null,
+                    'yarnMaterials' => $p->yarnMaterials->map(fn ($material) => [
+                        'id' => $material->id,
+                        'mat_id' => $material->mat_id,
+                        'name' => $material->name,
+                        'display_name' => $material->display_name,
+                        'yarn_tier' => $material->yarn_tier,
+                        'unit' => $material->unit,
+                    ])->values()->toArray(),
                     'images' => $p->images->map(function ($img) {
                         $raw = $img->url ?? '';
                         if (empty($raw)) {
@@ -58,14 +73,71 @@ class ClientProductsController extends Controller
 
     public function inquire(Request $request, Product $product)
     {
-        $request->validate(['message' => 'required|string']);
+        $validated = $request->validate([
+            'message' => 'required|string|max:1000',
+            'pantone_ids' => 'required|array|min:1',
+            'pantone_ids.*' => 'required|integer|distinct|exists:pantone_references,id',
+            'yarn_material_ids' => 'required|array|min:1',
+            'yarn_material_ids.*' => ['required', 'integer', 'distinct', \Illuminate\Validation\Rule::exists('materials', 'id')->where(fn ($query) => $query->where('category', 'Yarn'))],
+            'gsm' => 'nullable|integer|min:1|max:10000',
+            'texture' => 'nullable|in:Hard,Medium,Soft',
+        ]);
+
+        $availablePantoneIds = collect($product->colors ?? [])
+            ->pluck('pantone_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $selectedPantoneIds = collect($validated['pantone_ids'])->map(fn ($id) => (int) $id);
+        if ($selectedPantoneIds->diff($availablePantoneIds)->isNotEmpty()) {
+            return back()->withErrors(['pantone_ids' => 'Choose Pantone colors available for this product.']);
+        }
+
+        $availableYarnIds = $product->yarnMaterials()->pluck('materials.id')->map(fn ($id) => (int) $id);
+        $selectedYarnIds = collect($validated['yarn_material_ids'])->map(fn ($id) => (int) $id);
+        if ($selectedYarnIds->diff($availableYarnIds)->isNotEmpty()) {
+            return back()->withErrors(['yarn_material_ids' => 'Choose yarn types available for this product.']);
+        }
+
+        $pantonesById = PantoneReference::query()
+            ->whereIn('id', $selectedPantoneIds)
+            ->get(['id', 'name', 'hex', 'color_category'])
+            ->keyBy('id');
+        $yarnsById = $product->yarnMaterials()
+            ->whereIn('materials.id', $selectedYarnIds)
+            ->get(['materials.id', 'materials.mat_id', 'materials.name', 'materials.yarn_tier'])
+            ->keyBy('id');
+
+        $productSelections = [
+            'product_id' => (int) $product->id,
+            'gsm' => $validated['gsm'] ?? null,
+            'texture' => $validated['texture'] ?? null,
+            'pantones' => $selectedPantoneIds->map(fn ($id) => $pantonesById->get($id))
+                ->filter()
+                ->map(fn (PantoneReference $pantone) => [
+                    'id' => (int) $pantone->id,
+                    'name' => $pantone->name,
+                    'hex' => $pantone->hex,
+                    'color_category' => $pantone->color_category,
+                ])->values()->all(),
+            'yarns' => $selectedYarnIds->map(fn ($id) => $yarnsById->get($id))
+                ->filter()
+                ->map(fn ($yarn) => [
+                    'id' => (int) $yarn->id,
+                    'name' => $yarn->display_name,
+                    'base_name' => $yarn->name,
+                    'mat_id' => $yarn->mat_id,
+                    'yarn_tier' => $yarn->yarn_tier,
+                ])->values()->all(),
+        ];
 
         $client = Auth::guard('client')->user();
 
         $inquiry = Inquiry::create([
             'client_id' => $client->id,
             'product_id' => $product->id,
-            'initial_message' => $request->message,
+            'initial_message' => $validated['message'],
+            'product_selections' => $productSelections,
             'status' => 'open',
             'last_message_at' => now(),
         ]);
@@ -76,8 +148,9 @@ class ClientProductsController extends Controller
             'message' => $request->message,
         ]);
 
-        return redirect()->route('client.conversation.show', $inquiry)
-            ->with('success', 'Inquiry sent. You can now continue the conversation.');
+        return redirect()->route('client.products')
+            ->with('success', 'Inquiry sent. You can now continue the conversation.')
+            ->with('inquiry_redirect_url', route('client.conversation.show', $inquiry));
     }
 
     /**
@@ -163,7 +236,8 @@ class ClientProductsController extends Controller
             'message'     => $initialMessage,
         ]);
 
-        return redirect()->route('client.conversation.show', $inquiry)
-            ->with('success', 'Bulk inquiry sent. Our team will contact you shortly.');
+        return redirect()->route('client.products')
+            ->with('success', 'Bulk inquiry sent. Our team will contact you shortly.')
+            ->with('inquiry_redirect_url', route('client.conversation.show', $inquiry));
     }
 }

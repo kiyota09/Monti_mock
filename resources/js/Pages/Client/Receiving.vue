@@ -126,6 +126,9 @@
                                         <span :class="statusBadge(delivery.status)" class="px-3 py-1 rounded-full text-[9px] font-black uppercase ring-1 ring-inset ring-black/5 inline-flex items-center gap-1.5">
                                             <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ formatStatus(delivery.status) }}
                                         </span>
+                                        <p v-if="delivery.received_by" class="mt-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                                            {{ delivery.stop_outcome === 'partial' ? 'Partially received by' : 'Received by' }} {{ delivery.received_by }}
+                                        </p>
                                     </td>
                                     <td class="px-8 py-6 text-center">
                                         <button @click="openPackagesModal(delivery)" class="text-indigo-600 dark:text-indigo-400 text-xs font-black hover:underline hover:scale-105 active:scale-95 transition">

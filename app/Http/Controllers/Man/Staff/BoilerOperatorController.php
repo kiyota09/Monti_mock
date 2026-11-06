@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Man\Staff;
 use App\Models\Man\BoilerLog;
 use App\Models\Man\Machine;
 use App\Models\Man\MachineReport;
+use App\Services\Man\BoilerSteamService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -19,6 +20,18 @@ class BoilerOperatorController extends ManufacturingStaffController
             ->latest()
             ->take(10)
             ->get();
+        $steamAvailable = app(BoilerSteamService::class)->isAvailable();
+        $steamConsumers = Machine::query()
+            ->whereIn('type', ['dyeing', 'squeezer', 'hydro', 'heatsetting', 'ironing', 'tubetex', 'tubetext'])
+            ->orderBy('type')->orderBy('machine_no')->get(['id', 'machine_no', 'type', 'power', 'status', 'load_capacity_kg'])
+            ->filter(fn (Machine $machine) => strtolower(trim((string) $machine->power)) === 'steam')
+            ->map(fn (Machine $machine) => [
+                'id' => $machine->id,
+                'machine_no' => $machine->machine_no,
+                'type' => $machine->type,
+                'status' => $machine->status,
+                'load_capacity_kg' => $machine->load_capacity_kg,
+            ])->values();
 
         return Inertia::render('Dashboard/MAN/Employee/BoilerOperator/Index', [
             'stats' => [
@@ -27,6 +40,8 @@ class BoilerOperatorController extends ManufacturingStaffController
                 'logs_today' => BoilerLog::whereDate('processed_at', today())->count(),
             ],
             'recentLogs' => $recentLogs,
+            'steamConsumers' => $steamConsumers,
+            'steamAvailable' => $steamAvailable,
             'efficiency' => array_merge(
                 $this->staffEfficiency(BoilerLog::class),
                 ['machines' => $this->machineAvailability('boiler')]
@@ -65,6 +80,7 @@ class BoilerOperatorController extends ManufacturingStaffController
             'blowdown_done' => 'nullable|boolean',
             'chemical_dosing' => 'nullable|string|max:255',
             'operating_hours' => 'nullable|numeric|min:0',
+            'steam_available' => 'nullable|boolean',
             'remarks' => 'nullable|string',
         ]);
 
@@ -77,6 +93,7 @@ class BoilerOperatorController extends ManufacturingStaffController
             ...$validated,
             'code' => $this->generateCode('BOILER', BoilerLog::class),
             'blowdown_done' => (bool) ($validated['blowdown_done'] ?? false),
+            'steam_available' => (bool) ($validated['steam_available'] ?? false),
             'operator_id' => $this->staff()->id,
             'shift' => $this->getShift(),
             'processed_at' => now(),

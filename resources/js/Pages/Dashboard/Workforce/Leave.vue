@@ -1,4 +1,5 @@
 <script setup>
+import { showNotice, confirmModal } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -74,8 +75,8 @@ const closeRejectModal = () => {
     rejectReason.value = '';
 };
 
-const approveRequest = (id) => {
-    if (confirm('Approve this leave request?')) {
+const approveRequest = async (id) => {
+    if (await confirmModal('Approve this leave request?')) {
         router.post(route('workforce.leave.approve', id), {}, {
             preserveScroll: true,
             onSuccess: () => {
@@ -90,7 +91,7 @@ const approveRequest = (id) => {
 
 const rejectRequest = () => {
     if (!rejectReason.value.trim()) {
-        alert('Please provide a reason for rejection.');
+        showNotice('Please provide a reason for rejection.');
         return;
     }
     router.post(route('workforce.leave.reject', selectedRequest.value.id), {

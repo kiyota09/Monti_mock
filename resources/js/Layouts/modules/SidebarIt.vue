@@ -26,7 +26,6 @@ export const itModule = {
         if (isCEO) {
             all.push({ label: 'Access Control', href: route('it.access'), icon: ShieldCheck, permKey: 'access' })
         }
-        if (isCEO) return all
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         if (userPosition === 'manager' && user?.role === 'IT' && !ctx.hasExplicitModuleGrants('IT')) return all

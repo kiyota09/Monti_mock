@@ -56,8 +56,8 @@
                                 <select v-model="form.truck_id"
                                     class="w-full rounded-xl border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500">
                                     <option value="">Select a truck</option>
-                                    <option v-for="truck in trucks" :key="truck.id" :value="truck.id">
-                                        {{ truck.truck_number }} - {{ truck.model }} ({{ truck.plate_number }}) · cap {{ truck.max_packages }}
+                                    <option v-for="truck in trucks" :key="truck.id" :value="truck.id" :disabled="!truck.max_load_kg">
+                                        {{ truck.truck_number }} - {{ truck.model }} ({{ truck.plate_number }}) · cap {{ truck.max_load_kg ?? 'not set' }} kg
                                     </option>
                                 </select>
                                 <div v-if="selectedTruck" class="mt-2 flex items-center gap-2">
@@ -67,7 +67,7 @@
                                             :style="{ width: capacityPct + '%' }" />
                                     </div>
                                     <span class="text-[11px] font-black" :class="overCapacity ? 'text-rose-600' : 'text-gray-500'">
-                                        {{ selectedIds.length }} / {{ selectedTruck.max_packages }} packages
+                                        {{ selectedLoadWeight.toFixed(2) }} / {{ selectedTruck.max_load_kg }} kg
                                     </span>
                                 </div>
                             </div>
@@ -87,7 +87,7 @@
                                 <!-- Scheduled -->
                                 <div>
                                     <label class="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-2">Scheduled Departure *</label>
-                                    <input type="datetime-local" v-model="form.scheduled_departure"
+                                    <input type="datetime-local" v-model="form.scheduled_departure" :min="minimumScheduleDateTime()"
                                         class="w-full rounded-xl border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500">
                                 </div>
                                 <!-- Conductor 1 -->
@@ -125,7 +125,7 @@
                                             <p class="text-sm font-black text-gray-900 dark:text-white">{{ pkg.product_name || 'Package' }} <span class="font-mono text-xs font-bold text-gray-400">· {{ pkg.package_number }}</span></p>
                                             <p class="text-xs text-gray-500 truncate">{{ pkg.client_name || 'Unassigned destination' }} <span class="text-gray-400">{{ pkg.latitude ? '· mapped' : '· no coords' }}</span></p>
                                         </div>
-                                        <span class="text-xs font-bold text-gray-500 shrink-0">{{ pkg.quantity }} pcs</span>
+                                        <span class="text-xs font-bold text-gray-500 shrink-0">{{ pkg.weight_kg == null ? 'Weight missing' : `${pkg.weight_kg} kg` }}</span>
                                     </label>
                                     <div v-if="!packages.length" class="px-4 py-10 text-center">
                                         <Package class="mx-auto h-9 w-9 text-gray-200 dark:text-zinc-700" />
@@ -157,7 +157,7 @@
                                 class="w-full py-3.5 bg-emerald-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-emerald-700 hover:shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                                 <Loader2 v-if="form.processing" class="h-4 w-4 animate-spin" />
                                 <Send v-else class="h-4 w-4" />
-                                {{ overCapacity ? 'Too many packages for truck' : `Create Load (${selectedIds.length} pkg)` }}
+                                {{ overCapacity ? 'Load exceeds truck capacity' : `Create Load (${selectedLoadWeight.toFixed(2)} kg)` }}
                             </button>
                         </div>
                     </div>
@@ -279,25 +279,38 @@ const montiLat = computed(() => Number(props.montiLocation?.lat) || 10.3157);
 const montiLng = computed(() => Number(props.montiLocation?.lng) || 123.8854);
 
 const selectedTruck = computed(() => props.trucks.find(t => t.id === form.truck_id) || null);
-const overCapacity = computed(() => selectedTruck.value && selectedIds.value.length > selectedTruck.value.max_packages);
-const capacityPct = computed(() => selectedTruck.value ? Math.min(100, (selectedIds.value.length / selectedTruck.value.max_packages) * 100) : 0);
+const overCapacity = computed(() => selectedTruck.value && (!selectedTruck.value.max_load_kg || selectedLoadWeight.value > Number(selectedTruck.value.max_load_kg) + 0.001));
+const selectedLoadWeight = computed(() => selectedRows.value.reduce((sum,pkg)=>sum+Number(pkg.weight_kg || 0),0));
+const capacityPct = computed(() => selectedTruck.value?.max_load_kg ? Math.min(100, (selectedLoadWeight.value / Number(selectedTruck.value.max_load_kg)) * 100) : 0);
 
 const canSubmit = computed(() => canEditDispatch.value
     && form.truck_id && form.driver_id && form.scheduled_departure
     && selectedIds.value.length > 0 && !overCapacity.value && !form.processing);
 
+const minimumScheduleDateTime = () => {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+};
+
 const packageRows = computed(() => props.packages);
 const selectedRows = computed(() => packageRows.value.filter(p => selectedIds.value.includes(p.id)));
 
 const isDisabled = (pkg) => {
+    if (pkg.weight_kg == null || Number(pkg.weight_kg) <= 0) return true;
     if (!selectedTruck.value) return false;
     if (selectedIds.value.includes(pkg.id)) return false;
-    return selectedIds.value.length >= selectedTruck.value.max_packages;
+    return selectedLoadWeight.value + Number(pkg.weight_kg) > Number(selectedTruck.value.max_load_kg || 0) + 0.001;
 };
 
 const selectAllForTruck = () => {
     if (!selectedTruck.value) { selectedIds.value = packageRows.value.map(p => p.id); return; }
-    selectedIds.value = packageRows.value.slice(0, selectedTruck.value.max_packages).map(p => p.id);
+    let weight=0;
+    selectedIds.value=[];
+    for (const pkg of packageRows.value) {
+        const next=Number(pkg.weight_kg || 0);
+        if(next>0 && weight+next<=Number(selectedTruck.value.max_load_kg)+0.001){selectedIds.value.push(pkg.id);weight+=next;}
+    }
 };
 
 const haversine = (lat1, lng1, lat2, lng2) => {
@@ -343,6 +356,10 @@ const refreshData = () => {
 };
 
 const submitLoad = () => {
+    if (!form.scheduled_departure || new Date(form.scheduled_departure) <= new Date()) {
+        showToast('error', 'Choose a departure date and time in the future.');
+        return;
+    }
     form.package_ids = [...selectedIds.value];
     form.post(route('logistics.dispatch.store'), {
         preserveScroll: true,
@@ -459,8 +476,13 @@ const fetchRoadGeometry = async (pts) => {
 onMounted(() => nextTick(initMap));
 watch(orderedStops, () => nextTick(drawMap));
 watch(() => form.truck_id, () => {
-    if (selectedTruck.value && selectedIds.value.length > selectedTruck.value.max_packages) {
-        selectedIds.value = selectedIds.value.slice(0, selectedTruck.value.max_packages);
+    if (selectedTruck.value) {
+        let weight=0;
+        selectedIds.value=selectedRows.value.filter(pkg=>{
+            const pkgWeight=Number(pkg.weight_kg||0);
+            if(pkgWeight<=0||weight+pkgWeight>Number(selectedTruck.value.max_load_kg||0)+0.001)return false;
+            weight+=pkgWeight;return true;
+        }).map(pkg=>pkg.id);
     }
 });
 </script>

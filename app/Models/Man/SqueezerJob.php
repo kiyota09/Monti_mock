@@ -9,6 +9,7 @@ class SqueezerJob extends Model
 {
     protected $fillable = [
         'softener_job_id',
+        'fabric_id',
         'machine_id',
         'remarks',
         'operator_id',
@@ -24,6 +25,11 @@ class SqueezerJob extends Model
     public function softenerJob()
     {
         return $this->belongsTo(SoftenerJob::class);
+    }
+
+    public function fabric()
+    {
+        return $this->belongsTo(Fabric::class);
     }
 
     public function machine()

@@ -1,7 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { confirmModal } from '@/lib/feedback';
+import { ref, computed, onBeforeUnmount } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ItPager from '@/Components/it/ItPager.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
 import { Search, Plus, X, Check, Ban, Trash2, Play, Flag } from 'lucide-vue-next';
 
@@ -21,6 +23,12 @@ const form = useForm({
     scheduled_start: '', scheduled_end: '', rollback_plan: '',
 });
 
+const minimumScheduleDateTime = () => {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+};
+
 const submitChange = () => {
     form.post(route('it.changes.store'), {
         preserveScroll: true, onSuccess: () => { showForm.value = false; form.reset(); },
@@ -28,19 +36,28 @@ const submitChange = () => {
 };
 
 const approve = (id) => router.post(route('it.changes.approve', id), {}, { preserveScroll: true });
-const reject = (id) => {
-    if (!confirm('Reject this change request?')) return;
+const reject = async (id) => {
+    if (!await confirmModal('Reject this change request?')) return;
     router.post(route('it.changes.reject', id), {}, { preserveScroll: true });
 };
 const advance = (id, status) => router.post(route('it.changes.status', id), { status }, { preserveScroll: true });
-const remove = (id) => {
-    if (!confirm('Delete this change request?')) return;
+const remove = async (id) => {
+    if (!await confirmModal('Delete this change request?')) return;
     router.delete(route('it.changes.destroy', id), { preserveScroll: true });
 };
 
 const applyFilters = (patch) => {
-    router.get(route('it.changes'), { ...props.filters, ...patch }, { preserveScroll: true, replace: true });
+    router.get(route('it.changes'), { ...props.filters, ...patch, page: 1 }, { preserveScroll: true, replace: true });
 };
+
+// Debounced search — one request per pause, not per keystroke.
+const searchBox = ref(props.filters.search || '');
+let searchTimer = null;
+const onSearchInput = () => {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => applyFilters({ search: searchBox.value }), 400);
+};
+onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer); });
 
 const rows = computed(() => props.changes.data || []);
 
@@ -62,7 +79,7 @@ const riskClass = (r) => ({
 <template>
     <Head title="Change Enablement | IT Department" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="it-page-hero mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     Change <span class="text-blue-600">Enablement</span>
@@ -80,7 +97,7 @@ const riskClass = (r) => ({
             <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col lg:flex-row gap-3 bg-slate-50/50 dark:bg-slate-800/50">
                 <div class="relative flex-1">
                     <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input :value="filters.search || ''" @input="applyFilters({ search: $event.target.value })" type="text"
+                    <input v-model="searchBox" @input="onSearchInput" type="text"
                         placeholder="Search change no or title..."
                         class="w-full pl-9 pr-4 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200 placeholder-slate-400" />
                 </div>
@@ -105,7 +122,7 @@ const riskClass = (r) => ({
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left min-w-[680px]">
+                <table class="it-responsive-table w-full text-left min-w-[680px]">
                     <thead>
                         <tr class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-700">
                             <th class="px-4 sm:px-6 py-3 sm:py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Change</th>
@@ -117,21 +134,21 @@ const riskClass = (r) => ({
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                         <tr v-for="c in rows" :key="c.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-800/60">
-                            <td class="px-4 sm:px-6 py-3 sm:py-4">
+                            <td data-label="Change" class="px-4 sm:px-6 py-3 sm:py-4">
                                 <p class="text-sm font-bold text-slate-900 dark:text-white">{{ c.change_no }} — {{ c.title }}</p>
                                 <p class="text-[11px] text-slate-400 truncate max-w-md">{{ c.description }}</p>
                             </td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                            <td data-label="Type / Risk" class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                                 <span class="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">{{ c.change_type }}</span>
                                 <span :class="['ml-2 inline-flex items-center gap-1 text-[11px] font-black uppercase', riskClass(c.risk)]">
                                     <Flag class="w-3 h-3" />{{ c.risk }}
                                 </span>
                             </td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4 text-xs text-slate-500 whitespace-nowrap">
+                            <td data-label="Window" class="px-4 sm:px-6 py-3 sm:py-4 text-xs text-slate-500 whitespace-nowrap">
                                 {{ c.scheduled_start ? new Date(c.scheduled_start).toLocaleString() : '—' }}
                             </td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4"><span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', statusClass(c.status)]">{{ c.status.replace('_', ' ') }}</span></td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4 text-right whitespace-nowrap">
+                            <td data-label="Status" class="px-4 sm:px-6 py-3 sm:py-4"><span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', statusClass(c.status)]">{{ c.status.replace('_', ' ') }}</span></td>
+                            <td data-label="Actions" class="px-4 sm:px-6 py-3 sm:py-4 text-right whitespace-nowrap">
                                 <template v-if="isManager && canEditChanges && ['draft', 'pending_approval'].includes(c.status)">
                                     <button @click="approve(c.id)" title="Approve" class="p-2.5 sm:p-1.5 text-slate-400 hover:text-emerald-600"><Check class="w-4 h-4" /></button>
                                     <button @click="reject(c.id)" title="Reject" class="p-2.5 sm:p-1.5 text-slate-400 hover:text-red-500"><Ban class="w-4 h-4" /></button>
@@ -149,6 +166,7 @@ const riskClass = (r) => ({
                 </table>
                 <div v-if="rows.length === 0" class="py-12 text-center text-sm text-slate-400 font-bold">No changes filed.</div>
             </div>
+            <ItPager :paginator="changes" route-name="it.changes" :filters="filters" />
         </div>
 
         <!-- RFC modal -->
@@ -174,9 +192,9 @@ const riskClass = (r) => ({
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div><label class="text-[11px] font-bold text-slate-400 uppercase">Window Start</label>
-                            <input v-model="form.scheduled_start" type="datetime-local" class="mt-1 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200" /></div>
+                            <input v-model="form.scheduled_start" type="datetime-local" :min="minimumScheduleDateTime()" class="mt-1 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200" /></div>
                         <div><label class="text-[11px] font-bold text-slate-400 uppercase">Window End</label>
-                            <input v-model="form.scheduled_end" type="datetime-local" class="mt-1 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200" /></div>
+                            <input v-model="form.scheduled_end" type="datetime-local" :min="form.scheduled_start || minimumScheduleDateTime()" class="mt-1 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200" /></div>
                     </div>
                     <textarea v-model="form.rollback_plan" rows="2" placeholder="Rollback plan (how to undo if it fails)..."
                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200"></textarea>

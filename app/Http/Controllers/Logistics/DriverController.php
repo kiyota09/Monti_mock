@@ -8,12 +8,14 @@ use App\Models\Logistics\Delivery;
 use App\Models\Logistics\DeliveryStop;
 use App\Models\Logistics\Driver;
 use App\Models\Logistics\Truck;
+use App\Models\Crm\CrmContact;
 use App\Models\Ceo\CeoLocation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\Rule;
 
 class DriverController extends Controller
 {
@@ -102,8 +104,24 @@ class DriverController extends Controller
 
         $activeDeliveries = Delivery::where('driver_id', $driver->id)
             ->whereIn('status', ['dispatched', 'in_transit'])
-            ->with(['packages', 'route', 'stops.client', 'truck', 'conductor1.user', 'conductor2.user'])
+            ->with(['packages', 'route', 'stops.client.contacts:id,client_id,name,title,status,is_primary', 'truck', 'conductor1.user', 'conductor2.user'])
             ->get();
+
+        $activeDeliveries->each(function (Delivery $delivery) {
+            $delivery->stops->each(function (DeliveryStop $stop) use ($delivery) {
+                $contacts = $stop->client?->contacts ?? collect();
+                $stop->setAttribute('representatives', $contacts
+                    ->map(fn ($contact) => [
+                        'id' => $contact->id,
+                        'name' => $contact->name,
+                        'title' => $contact->title,
+                        'is_primary' => (bool) $contact->is_primary,
+                    ])->values()->all() ?? []);
+                $stop->setAttribute('package_tracking_numbers', $delivery->packages
+                    ->filter(fn ($package) => (int) $package->pivot?->delivery_stop_id === (int) $stop->id)
+                    ->pluck('package_number')->values()->all());
+            });
+        });
 
         $history = Delivery::where('driver_id', $driver->id)
             ->whereIn('status', ['delivered', 'cancelled'])
@@ -457,7 +475,12 @@ class DriverController extends Controller
 
         $validated = $request->validate([
             'outcome'        => 'required|in:delivered,attempted,refused,partial',
-            'recipient_name' => 'nullable|string|max:255',
+            'recipient_id'   => [
+                'nullable',
+                'required_if:outcome,delivered,partial',
+                'integer',
+                Rule::exists('crm_contacts', 'id')->where('client_id', $stop->client_id),
+            ],
             'pod_notes'      => 'nullable|string|max:2000',
             'signature'      => 'nullable|string',
             'photo'          => 'nullable|image|max:5120',
@@ -469,10 +492,14 @@ class DriverController extends Controller
 
         $signaturePath = $this->storeSignature($validated['signature'] ?? null, 'driver/pod');
 
+        $recipientName = isset($validated['recipient_id'])
+            ? CrmContact::where('client_id', $stop->client_id)->whereKey($validated['recipient_id'])->value('name')
+            : null;
+
         $stop->update([
             'outcome' => $validated['outcome'],
             'status' => in_array($validated['outcome'], ['delivered', 'partial'], true) ? 'delivered' : 'arrived',
-            'recipient_name' => $validated['recipient_name'] ?? $stop->recipient_name,
+            'recipient_name' => $recipientName ?? $stop->recipient_name,
             'pod_notes' => $validated['pod_notes'] ?? $stop->pod_notes,
             'signature_path' => $signaturePath ?? $stop->signature_path,
             'pod_photo_path' => $photoPath ?? $stop->pod_photo_path,

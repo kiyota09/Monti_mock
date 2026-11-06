@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { showNotice, confirmModal, successModal } from '@/lib/feedback';
 // ============================================
 // FILE LOCATION: resources/js/Pages/Dashboard/APPLICANTS/Account/index.vue
 // PURPOSE: Account settings page with modern UI
@@ -63,12 +64,12 @@ function changePassword() {
             isSubmitting.value = false;
             showPasswordModal.value = false;
             passwordForm.reset();
-            alert('Password updated successfully!');
+            successModal('Password updated successfully!');
         },
         onError: (errors) => {
             isSubmitting.value = false;
             const errorMsg = Object.values(errors)[0] || 'Failed to update password. Please try again.';
-            alert(errorMsg);
+            showNotice(errorMsg);
         }
     });
 }
@@ -78,25 +79,25 @@ function sendVerification() {
         preserveScroll: true,
         onSuccess: () => {
             showVerificationModal.value = false;
-            alert('Verification email sent! Please check your inbox.');
+            successModal('Verification email sent! Please check your inbox.');
         },
         onError: (errors) => {
             const errorMsg = Object.values(errors)[0] || 'Failed to send verification email.';
-            alert(errorMsg);
+            showNotice(errorMsg);
         }
     });
 }
 
-function deactivateAccount() {
-    if (confirm('Are you sure you want to deactivate your account? This action can be reversed later.')) {
+async function deactivateAccount() {
+    if (await confirmModal('Are you sure you want to deactivate your account? This action can be reversed later.')) {
         router.post(route('applicant.account.deactivate'), {}, {
             preserveScroll: true,
             onSuccess: () => {
-                alert('Account deactivated successfully.');
+                successModal('Account deactivated successfully.');
             },
             onError: (errors) => {
                 const errorMsg = Object.values(errors)[0] || 'Failed to deactivate account.';
-                alert(errorMsg);
+                showNotice(errorMsg);
             }
         });
     }

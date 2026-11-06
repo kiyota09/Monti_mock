@@ -17,6 +17,7 @@ class LoadController extends Controller
             ->get()
             ->map(fn ($pkg) => [
                 ...$pkg->toArray(),
+                'weight_kg' => $pkg->weight_kg === null ? null : (float) $pkg->weight_kg,
                 'client_name' => $pkg->destinationClient()?->company_name,
             ]);
 
@@ -27,6 +28,7 @@ class LoadController extends Controller
             ->get()
             ->map(fn ($pkg) => [
                 ...$pkg->toArray(),
+                'weight_kg' => $pkg->weight_kg === null ? null : (float) $pkg->weight_kg,
                 'client_name' => $pkg->destinationClient()?->company_name,
             ]);
 
@@ -45,12 +47,18 @@ class LoadController extends Controller
     {
         $request->validate([
             'package_ids'   => 'required|array',
-            'package_ids.*' => 'exists:warehouse_packages,id',
+            'package_ids.*' => 'required|distinct|exists:warehouse_packages,id',
         ]);
 
         DB::transaction(function () use ($request) {
-            WarehousePackage::whereIn('id', $request->package_ids)
-                ->update(['status' => 'dispatched']);
+            $packages=WarehousePackage::whereIn('id',$request->package_ids)->where('status','pushed_to_logistics')->lockForUpdate()->get();
+            if($packages->count()!==count($request->package_ids)){
+                throw \Illuminate\Validation\ValidationException::withMessages(['package_ids'=>'Only packages passed from Finishing can be staged for Dispatch.']);
+            }
+            if($packages->contains(fn($package)=>$package->weight_kg===null||(float)$package->weight_kg<=0)){
+                throw \Illuminate\Validation\ValidationException::withMessages(['package_ids'=>'Record a package weight in kilograms before staging it for a truck.']);
+            }
+            $packages->each->update(['status'=>'dispatched']);
         });
 
         return redirect()->route('logistics.dispatch.index')

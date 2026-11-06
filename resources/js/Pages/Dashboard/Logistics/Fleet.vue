@@ -142,7 +142,7 @@
                                     <td class="px-6 py-3 text-right text-sm font-bold text-gray-900 dark:text-white">{{ truck.mileage?.toLocaleString() || 0 }}</td>
                                     <td class="px-6 py-3 text-center">
                                         <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 text-[10px] font-black text-indigo-700 dark:text-indigo-300">
-                                            <Package class="h-3 w-3" /> {{ truck.max_packages ?? 0 }} pkg
+                                            <Package class="h-3 w-3" /> {{ truck.max_load_kg ? `${truck.max_load_kg} kg` : 'Capacity not set' }}
                                         </span>
                                     </td>
                                     <td class="px-6 py-3 text-center">
@@ -176,16 +176,16 @@
         <!-- Create/Edit Modal -->
         <Teleport to="body">
             <Transition name="modal">
-                <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeModal">
-                    <div class="modal-panel bg-white dark:bg-zinc-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
-                        <div class="relative overflow-hidden px-6 py-5 bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 text-white flex justify-between items-center">
+                <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain p-4 bg-black/60 backdrop-blur-sm" @click.self="closeModal">
+                    <div class="modal-panel flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900">
+                        <div class="relative flex shrink-0 items-center justify-between overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 px-6 py-5 text-white">
                             <div class="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
                             <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 18px 18px;" />
                             <h3 class="relative font-black text-lg">{{ isEditing ? 'Edit Truck' : 'Add New Truck' }}</h3>
                             <button @click="closeModal" class="relative p-1.5 hover:bg-white/20 rounded-xl transition"><X class="h-5 w-5" /></button>
                         </div>
 
-                        <form @submit.prevent="submitForm" class="p-6 space-y-5">
+                        <form @submit.prevent="submitForm" class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-6">
                             <div>
                                 <label class="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Truck Number *</label>
                                 <input v-model="form.truck_number" type="text" required
@@ -220,10 +220,10 @@
                             </div>
 
                             <div>
-                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Package Capacity *</label>
-                                <input v-model.number="form.max_packages" type="number" required min="1" max="1000"
+                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Maximum Load Capacity (kg) *</label>
+                                <input v-model.number="form.max_load_kg" type="number" required min="0.01" step="0.01" max="99999999.99"
                                     class="w-full rounded-xl border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500"
-                                    placeholder="Max packages this truck can carry">
+                                    placeholder="Maximum combined package weight in kilograms">
                             </div>
 
                             <div>
@@ -333,7 +333,7 @@ const form = useForm({
     model: '',
     year: new Date().getFullYear(),
     mileage: 0,
-    max_packages: 20,
+    max_load_kg: '',
     status: 'available',
     remarks: ''
 });
@@ -393,7 +393,7 @@ const openCreateModal = () => {
     form.reset();
     form.year = new Date().getFullYear();
     form.status = 'available';
-    form.max_packages = 20;
+    form.max_load_kg = '';
     showModal.value = true;
 };
 
@@ -405,7 +405,7 @@ const openEditModal = (truck) => {
     form.model = truck.model;
     form.year = truck.year;
     form.mileage = truck.mileage || 0;
-    form.max_packages = truck.max_packages ?? 20;
+    form.max_load_kg = truck.max_load_kg ?? '';
     form.status = truck.status;
     form.remarks = truck.remarks || '';
     showModal.value = true;
@@ -418,7 +418,7 @@ const closeModal = () => {
 
 const submitForm = () => {
     if (isEditing.value) {
-        form.put(route('logistics.fleet.update', editingId.value), {
+        form.patch(route('logistics.fleet.update', editingId.value), {
             preserveScroll: true,
             onSuccess: () => {
                 showToast('success', 'Truck updated successfully.');

@@ -88,13 +88,22 @@
                             <div class="grid gap-3 sm:grid-cols-2">
                                 <div>
                                     <label class="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">Recipient name</label>
-                                    <input v-model="form.recipient_name" type="text" placeholder="Who received it?"
-                                        class="w-full rounded-xl border-gray-200 bg-gray-50 px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
+                                    <select v-model="form.recipient_id" :required="['delivered', 'partial'].includes(form.outcome)"
+                                        class="w-full rounded-xl border-gray-200 bg-gray-50 px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800">
+                                        <option value="">{{ representatives.length ? 'Select the recipient' : 'No representatives listed' }}</option>
+                                        <option v-for="representative in representatives" :key="representative.id" :value="representative.id">
+                                            {{ representative.name }}{{ representative.title ? ` · ${representative.title}` : '' }}{{ representative.is_primary ? ' · Primary' : '' }}
+                                        </option>
+                                    </select>
+                                    <p v-if="!representatives.length" class="mt-1 text-[10px] font-medium text-amber-600">Add a representative to this business client before recording a delivered or partial stop.</p>
+                                    <p v-if="form.errors.recipient_id" class="mt-1 text-[10px] font-bold text-rose-600">{{ form.errors.recipient_id }}</p>
                                 </div>
                                 <div>
-                                    <label class="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">Package / QR code</label>
-                                    <input v-model="form.package_code" type="text" placeholder="Scan or type code"
-                                        class="w-full rounded-xl border-gray-200 bg-gray-50 px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
+                                    <label class="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">Package Tracking Number</label>
+                                    <div class="min-h-10 space-y-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-mono font-bold text-gray-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-gray-100">
+                                        <p v-for="trackingNumber in packageTrackingNumbers" :key="trackingNumber">{{ trackingNumber }}</p>
+                                        <p v-if="!packageTrackingNumbers.length" class="font-sans text-xs font-medium text-gray-400">No package assigned to this stop</p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -159,12 +168,16 @@ const photoInput = ref(null);
 
 const form = useForm({
     outcome: 'delivered',
-    recipient_name: '',
+    recipient_id: '',
     pod_notes: '',
-    package_code: '',
     signature: '',
     photo: null,
 });
+
+const representatives = computed(() => (selected.value?.stop?.representatives || selected.value?.stop?.client?.contacts || [])
+    .filter((contact) => contact.name)
+    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.name.localeCompare(b.name)));
+const packageTrackingNumbers = computed(() => selected.value?.stop?.package_tracking_numbers || []);
 
 const pendingStops = computed(() => {
     const items = [];
@@ -215,11 +228,6 @@ const onPhoto = (event) => {
 
 const submit = () => {
     if (!selected.value) return;
-    form.transform((data) => ({
-        ...data,
-        pod_notes: [data.pod_notes, data.package_code ? `Scanned: ${data.package_code}` : ''].filter(Boolean).join(' | '),
-    }));
-
     form.post(route('logistics.driver.stop.update', [selected.value.delivery.id, selected.value.stop.id]), {
         preserveScroll: true,
         forceFormData: true,

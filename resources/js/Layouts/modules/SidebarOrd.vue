@@ -19,7 +19,6 @@ export const ordModule = {
             { label: 'Delivery', href: route('ord.delivery'), icon: Truck, permKey: 'delivery' },
             { label: 'Returns', href: route('ord.returns'), icon: Undo2, permKey: 'returns' },
         ]
-        if (isCEO) return all
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         if (userPosition === 'manager' && user?.role === 'ORD' && !ctx.hasExplicitModuleGrants('ORD')) return all

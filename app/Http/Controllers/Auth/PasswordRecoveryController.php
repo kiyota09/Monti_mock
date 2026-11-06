@@ -27,6 +27,43 @@ use Illuminate\Support\Facades\Mail;
  */
 class PasswordRecoveryController extends Controller
 {
+    public function unified(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'string', 'email', 'max:255'],
+        ]);
+        $email = mb_strtolower(trim($validated['email']));
+
+        $portals = [
+            'employee' => [User::class, 'Employee Portal'],
+            'client' => [Client::class, 'Partner Portal'],
+            'supplier' => [Supplier::class, 'Supplier Portal'],
+            'applicant' => [Applicant::class, 'Applicant Portal'],
+            'agency' => [AgencyUser::class, 'Agency Portal'],
+        ];
+
+        $matches = [];
+        foreach ($portals as $portal => [$model]) {
+            $account = $model::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+            if ($account) {
+                $matches[] = $portal;
+            }
+        }
+
+        if (count($matches) !== 1) {
+            return response()->json([
+                'status' => count($matches) ? 'ambiguous' : 'not_found',
+                'message' => count($matches)
+                    ? 'This email is linked to multiple portal accounts. Contact support to recover the correct account.'
+                    : 'Sorry, the email you entered does not exist.',
+            ], count($matches) ? 422 : 404);
+        }
+
+        $request->merge(['email' => $email]);
+
+        return $this->{$matches[0]}($request);
+    }
+
     public function employee(Request $request): JsonResponse
     {
         return $this->recover(

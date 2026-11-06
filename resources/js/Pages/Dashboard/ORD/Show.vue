@@ -54,7 +54,7 @@
                                 </tr></thead>
                                 <tbody>
                                     <tr v-for="l in lines" :key="l.id" class="border-b border-gray-50 dark:border-zinc-800/60 last:border-0">
-                                        <td class="py-2.5 font-medium">{{ l.product }}</td>
+                                        <td class="py-2.5 font-medium">{{ l.product }}<span v-if="l.yarn_type || l.color || l.design" class="mt-0.5 block text-[10px] font-normal text-gray-500">{{ [l.yarn_type, l.color, l.design].filter(Boolean).join(' · ') }}</span></td>
                                         <td class="py-2.5 text-right">{{ l.quantity }}</td>
                                         <td class="py-2.5 text-right">₱{{ Number(l.unit_price).toLocaleString() }}</td>
                                         <td class="py-2.5 text-right font-black">₱{{ Number(l.line_total).toLocaleString() }}</td>
@@ -206,11 +206,11 @@ const genForm = useForm({
         ? props.lines.map((line) => ({
             purchase_order_item_id: line.purchase_order_item_id,
             product: line.product,
-            yarn_type: '',
-            color: '',
+            yarn_type: line.yarn_type || '',
+            color: line.color || '',
             quantity: Number(line.quantity),
             unit_price: Number(line.unit_price),
-            design: '',
+            design: line.design || '',
             expected_ship_date: props.order.expected_ship_date || '',
         }))
         : [],

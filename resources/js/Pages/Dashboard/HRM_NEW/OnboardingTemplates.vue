@@ -248,9 +248,8 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Swal from 'sweetalert2';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { dialog } from '@/lib/feedback';
+import { toast } from '@/lib/feedback';
 import { Plus, Search, Copy, Trash2, PauseCircle, PlayCircle, LayoutTemplate, ClipboardList, UserCheck, ArrowRight, X } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -344,8 +343,8 @@ const submitCreate = () => {
         toast.error('Template name is required.');
         return;
     }
-    // Confirm before creating (same Swal pattern as duplicate/deactivate).
-    Swal.fire({
+    // Confirm before creating (same modal pattern as duplicate/deactivate).
+    dialog.fire({
         title: 'Create template?',
         text: `"${name}" will be created as a Draft. Checklist items are added next in the builder.`,
         icon: 'question',
@@ -361,7 +360,7 @@ const submitCreate = () => {
             onSuccess: () => {
                 // Close the modal (it previously stayed open) + confirm.
                 activeModal.value = null;
-                Swal.fire({
+                dialog.fire({
                     title: 'Template created!',
                     text: `"${name}" was created as a Draft. Open its Builder to add checklist items.`,
                     icon: 'success',
@@ -378,7 +377,7 @@ const submitCreate = () => {
 
 const duplicateTemplate = (template) => {
     if (!template?.id) return;
-    Swal.fire({
+    dialog.fire({
         title: 'Duplicate template?',
         text: template.name + ' will be copied with all its items.',
         icon: 'question',
@@ -414,7 +413,7 @@ const setStatus = (template, status) => {
         return;
     }
 
-    Swal.fire({
+    dialog.fire({
         title: 'Deactivate template?',
         text: template.name + ' will no longer be used for new hires until it is activated again.',
         icon: 'warning',
@@ -428,7 +427,7 @@ const setStatus = (template, status) => {
 
 const deleteTemplate = (template) => {
     if (!template?.id) return;
-    Swal.fire({
+    dialog.fire({
         title: 'Delete template?',
         text: template.name + ' will be permanently removed.',
         icon: 'warning',

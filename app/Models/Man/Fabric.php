@@ -16,6 +16,7 @@ class Fabric extends Model
         'manufacturing_order_id',
         'sales_order_id',
         'machine_id',
+        'dyeing_remake_request_id',
         'yarn_type',
         'weight',
         'remarks',
@@ -59,9 +60,29 @@ class Fabric extends Model
         return $this->hasMany(DyeJob::class);
     }
 
+    public function dyeingBatchFabric()
+    {
+        return $this->hasOne(DyeingBatchFabric::class);
+    }
+
+    public function finishingWorkItem()
+    {
+        return $this->hasOne(FinishingWorkItem::class);
+    }
+
     public function softenerJobs()
     {
         return $this->hasMany(SoftenerJob::class);
+    }
+
+    public function bleachingJobs()
+    {
+        return $this->hasMany(BleachingJob::class);
+    }
+
+    public function squeezerJobs()
+    {
+        return $this->hasMany(SqueezerJob::class);
     }
 
     /**
@@ -83,10 +104,10 @@ class Fabric extends Model
     }
 
     /**
-     * Scope a query to only include fabrics pending for softener.
+     * Scope a query to only include fabrics pending for bleaching.
      */
-    public function scopePendingSoftener($query)
+    public function scopePendingBleaching($query)
     {
-        return $query->where('status', 'softener');
+        return $query->where('status', 'bleaching');
     }
 }

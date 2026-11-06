@@ -39,7 +39,7 @@ const priorityClass = (p) => ({
 <template>
     <Head title="My IT Portal | Monti Textile" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="it-page-hero mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     My IT <span class="text-blue-600">Portal</span>

@@ -2,7 +2,9 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import SupplierPageHeader from '@/Components/SupplierPageHeader.vue';
 import { MessagesSquare, Send, Loader2, Paperclip, Calendar, CheckCheck } from 'lucide-vue-next';
+import { csrfHeaders } from '@/lib/http';
 
 const props = defineProps({
     auth: Object,
@@ -24,7 +26,19 @@ let pollTimer = null;
 const lastMessageId = computed(() => threadMessages.value.reduce((m, x) => Math.max(m, typeof x.id === 'number' ? x.id : 0), 0));
 const connectionLabel = computed(() => liveState.value === 'live' ? 'Live' : liveState.value === 'offline' ? 'Offline' : 'Reconnecting');
 
-const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+const fetchWithFreshCsrf = async (url, options) => {
+    const send = () => fetch(url, {
+        ...options,
+        headers: { ...options.headers, ...csrfHeaders() },
+        credentials: 'same-origin',
+    });
+
+    let response = await send();
+    // A prior request may have rotated the session token. Laravel refreshes
+    // the XSRF cookie on the 419 response, so retry once with that fresh value.
+    if (response.status === 419) response = await send();
+    return response;
+};
 
 const isNearBottom = () => {
     const el = messagesContainer.value;
@@ -84,16 +98,15 @@ const sendMessage = async () => {
     scrollToBottom(true);
     newMessage.value = '';
     try {
-        const res = await fetch(route('supplier.chat.send'), {
+        const res = await fetchWithFreshCsrf(route('supplier.chat.send'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken(),
                 'X-Requested-With': 'XMLHttpRequest',
             },
-            credentials: 'same-origin',
             body: JSON.stringify({ message: text }),
+            __suppressSuccessFeedback: true,
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -121,17 +134,19 @@ const uploadAttachment = async (e) => {
         const formData = new FormData();
         formData.append('attachment', file);
         formData.append('message', `Sent an attachment: ${file.name}`);
-        const res = await fetch(route('supplier.chat.send'), {
+        const res = await fetchWithFreshCsrf(route('supplier.chat.send'), {
             method: 'POST',
             headers: {
                 Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken(),
                 'X-Requested-With': 'XMLHttpRequest',
             },
-            credentials: 'same-origin',
             body: formData,
+            __suppressSuccessFeedback: true,
         });
-        if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message ?? `Upload failed (HTTP ${res.status})`);
+        }
         const data = await res.json();
         mergeMessages(data.message ? [data.message] : [], true);
         pollFeed();
@@ -168,40 +183,32 @@ onUnmounted(() => {
 <template>
     <Head title="Messages | Monti Textile" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                    <MessagesSquare class="w-7 h-7 text-emerald-500" /> Messages
-                </h1>
-                <p class="text-slate-500 text-sm mt-0.5">Direct line with the Monti Textile buying team — replies appear here in real time.</p>
-            </div>
-            <div class="flex items-center gap-3">
+        <div class="supplier-conversation-page flex h-full min-h-0 flex-col gap-3 overflow-hidden">
+        <SupplierPageHeader
+            class="shrink-0"
+            :supplier-name="supplierData.business_name || 'Supplier workspace'"
+            :icon="MessagesSquare"
+            title="Messages"
+            subtitle="Direct line with the Monti Textile buying team — replies appear here in real time."
+        >
+            <template #aside>
                 <span class="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border"
                     :class="liveState === 'live' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : liveState === 'offline' ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-rose-50 text-rose-600 border-rose-200'">
                     <span class="h-1.5 w-1.5 rounded-full animate-pulse"
                         :class="liveState === 'live' ? 'bg-emerald-500' : liveState === 'offline' ? 'bg-slate-400' : 'bg-rose-500'" />
                     {{ connectionLabel }}
                 </span>
-                <div class="flex items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <div class="h-10 w-10 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg flex items-center justify-center font-black text-lg">
-                        {{ (supplierData.business_name || 'S').charAt(0).toUpperCase() }}
-                    </div>
-                    <div>
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">{{ supplierData.business_name }}</p>
-                        <p class="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">Official Vendor</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+            </template>
+        </SupplierPageHeader>
 
-        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-280px)] min-h-[420px]">
-            <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center gap-2">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div class="flex shrink-0 items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-800/60 sm:px-5 sm:py-4">
                 <MessagesSquare class="w-5 h-5 text-emerald-600" />
                 <h2 class="text-sm font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">Conversation with Monti Textile</h2>
                 <span class="ml-auto rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-black px-2.5 py-1">{{ threadMessages.length }} messages</span>
             </div>
 
-            <div ref="messagesContainer" class="flex-1 overflow-y-auto p-5 space-y-3 bg-slate-50/50 dark:bg-slate-900">
+            <div ref="messagesContainer" class="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-slate-50/50 p-4 dark:bg-slate-900 sm:p-5">
                 <div v-if="threadMessages.length === 0" class="flex flex-col items-center justify-center py-14 text-center">
                     <MessagesSquare class="w-10 h-10 text-slate-300 mb-2" />
                     <p class="text-sm font-bold text-slate-500">No messages yet.</p>
@@ -255,7 +262,7 @@ onUnmounted(() => {
                 </div>
             </div>
 
-            <div class="border-t border-slate-100 dark:border-slate-800 p-4 bg-white dark:bg-slate-900">
+            <div class="shrink-0 border-t border-slate-100 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4">
                 <p v-if="sendError" class="mb-2 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 px-3 py-2 rounded-xl">{{ sendError }}</p>
                 <form @submit.prevent="sendMessage" class="flex gap-3">
                     <input v-model="newMessage" type="text" placeholder="Type your reply to Monti Textile…"
@@ -272,6 +279,7 @@ onUnmounted(() => {
                     </button>
                 </form>
             </div>
+        </div>
         </div>
     </AuthenticatedLayout>
 </template>

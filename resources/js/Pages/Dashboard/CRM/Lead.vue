@@ -1,7 +1,9 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, watch } from 'vue';
 import { useForm, router, Link } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import FabricModalArtwork from '@/Components/FabricModalArtwork.vue';
 import TemplateWidget from '@/Components/crm/TemplateWidget.vue';
 import { Head } from '@inertiajs/vue3';
 import {
@@ -196,7 +198,8 @@ const submitFiles = () => {
     });
 };
 
-const removeInvestigation = (entry) => {
+const removeInvestigation = async (entry) => {
+    if (!await confirmModal(`Remove this investigation entry?`)) return;
     router.delete(route('crm.lead.investigations.destroy', entry.id), {
         preserveScroll: true,
         preserveState: true,
@@ -360,16 +363,16 @@ const whenLabel = (v) =>
         <!-- Send to pipeline (confirmation — no deal fields) -->
         <Teleport to="body">
             <div v-if="showPipeline && current" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showPipeline = false">
-                <form @submit.prevent="submitPipeline" class="w-full max-w-sm space-y-4 rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900">
-                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
-                        <ArrowRight class="h-6 w-6" />
-                    </div>
-                    <h3 class="font-black dark:text-white">Send to Pipeline?</h3>
-                    <p class="text-xs text-gray-400">Are you sure you want to send <span class="font-black text-gray-600 dark:text-slate-200">{{ current.company_name }}</span> to the pipeline? It will appear as a <span class="font-black">New</span> deal in Opportunities.</p>
-                    <p v-if="pipeForm.errors.error" class="text-[11px] font-bold text-rose-500">{{ pipeForm.errors.error }}</p>
-                    <div class="flex gap-2">
-                        <button type="button" @click="showPipeline = false" class="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-black uppercase text-gray-500 dark:bg-zinc-800">Cancel</button>
-                        <button :disabled="pipeForm.processing" class="flex-1 rounded-xl bg-indigo-600 py-2.5 text-xs font-black uppercase text-white hover:bg-indigo-700 disabled:opacity-50">Confirm</button>
+                <form @submit.prevent="submitPipeline" class="fabric-pipeline-confirm w-full max-w-sm overflow-hidden rounded-3xl border border-sky-100 bg-white text-center shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+                    <FabricModalArtwork kind="info" label="Blue fabric swatches" />
+                    <div class="space-y-4 p-6">
+                        <h3 class="font-black dark:text-white">Send to Pipeline?</h3>
+                        <p class="text-xs leading-relaxed text-gray-500 dark:text-gray-400">Are you sure you want to send <span class="font-black text-gray-700 dark:text-slate-200">{{ current.company_name }}</span> to the pipeline? It will appear as a <span class="font-black text-sky-700 dark:text-sky-300">New</span> deal in Opportunities.</p>
+                        <p v-if="pipeForm.errors.error" class="text-[11px] font-bold text-rose-500">{{ pipeForm.errors.error }}</p>
+                        <div class="flex gap-2 border-t border-sky-100 pt-4 dark:border-zinc-800">
+                            <button type="button" @click="showPipeline = false" class="flex-1 rounded-xl border border-sky-200 bg-white py-2.5 text-xs font-black uppercase text-slate-600 hover:bg-sky-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">Cancel</button>
+                            <button :disabled="pipeForm.processing" class="flex-1 rounded-xl bg-gradient-to-r from-sky-700 to-indigo-600 py-2.5 text-xs font-black uppercase text-white shadow-lg shadow-sky-900/15 hover:brightness-105 disabled:opacity-50">Confirm</button>
+                        </div>
                     </div>
                 </form>
             </div>

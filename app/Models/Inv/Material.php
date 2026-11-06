@@ -14,6 +14,7 @@ class Material extends Model
         'mat_id',
         'name',
         'category',
+        'yarn_tier',
         'unit',
         'reorder_point',
         'unit_cost',
@@ -23,6 +24,16 @@ class Material extends Model
         'unit_cost' => 'float',
         'reorder_point' => 'integer',
     ];
+
+    protected $appends = ['display_name'];
+
+    public function getDisplayNameAttribute(): string
+    {
+        $name = (string) $this->name;
+        if ($this->category !== 'Yarn') return $name;
+
+        return trim(($this->yarn_tier ?: 'Tier not set').' '.$name);
+    }
 
     /**
      * Relationship: Get all actual receiving logs for this material.

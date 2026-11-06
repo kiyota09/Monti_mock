@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import TemplateWidget from '@/Components/crm/TemplateWidget.vue';
@@ -12,8 +13,7 @@ import ActivityDetailModal from '@/Components/crm/pipeline/ActivityDetailModal.v
 import CardDocumentsModal from '@/Components/crm/pipeline/CardDocumentsModal.vue';
 import ModalShell from '@/Components/crm/pipeline/ModalShell.vue';
 import { filterOpps, activityCounts, orderStages, canAdvanceTo, nextStageOf, peso } from '@/composables/crm/usePipeline';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const { canEdit } = usePageAccess();
 const canEditOpp = computed(() => canEdit('CRM', 'opportunities'));
@@ -127,7 +127,8 @@ const submitNote = () => {
     });
 };
 
-const deleteNote = (note) => {
+const deleteNote = async (note) => {
+    if (!await confirmModal('Delete this opportunity note?')) return;
     router.delete(route('crm.opportunities.notes.destroy', note.id), { preserveScroll: true });
 };
 
@@ -251,10 +252,10 @@ const LEGEND = [
 <template>
     <AuthenticatedLayout>
         <Head title="Pipeline" />
-        <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
+        <div class="crm-opportunities-page min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
             <div class="mx-auto max-w-[1700px] space-y-5 p-4 pb-16 sm:p-6">
                 <!-- Header -->
-                <div class="relative animate-fade-up overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 text-white shadow-xl shadow-indigo-500/20 sm:p-8">
+                <div class="crm-opportunities-hero relative animate-fade-up overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 text-white shadow-xl shadow-indigo-500/20 sm:p-8">
                     <div class="absolute -right-20 -top-20 h-64 w-64 animate-float rounded-full bg-white/10 blur-3xl" />
                     <div class="relative flex flex-wrap items-center gap-4">
                         <div class="flex h-14 w-14 animate-pop items-center justify-center rounded-2xl bg-white/15 shadow-lg ring-1 ring-white/30 backdrop-blur">
@@ -285,7 +286,7 @@ const LEGEND = [
                 </div>
 
                 <!-- Search bar: My Pipeline chip + search + legend + reset -->
-                <div class="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-100 bg-white/70 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
+                <div class="crm-opportunities-toolbar flex flex-wrap items-center gap-2 rounded-2xl border border-gray-100 bg-white/70 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
                     <button
                         v-if="myPipeline"
                         @click="myPipeline = false"
@@ -473,7 +474,7 @@ const LEGEND = [
                 <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="showNotes = false" />
                 <div class="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-2xl dark:bg-zinc-900">
                     <!-- Header -->
-                    <div class="flex items-center justify-between bg-gradient-to-r from-indigo-700 to-violet-800 px-5 py-4 text-white">
+                    <div class="crm-opportunities-notes-header flex items-center justify-between bg-gradient-to-r from-indigo-700 to-violet-800 px-5 py-4 text-white">
                         <div class="min-w-0">
                             <h3 class="flex items-center gap-2 font-black"><StickyNote class="h-4 w-4" /> Pipeline Notes</h3>
                             <p class="truncate text-xs text-indigo-100">Shared progress log for the Opportunities board</p>

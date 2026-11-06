@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Man\Concerns;
 
 use App\Models\Man\DyeJob;
 use App\Models\Man\Fabric;
+use App\Models\Man\KnittingInspection;
+use App\Models\Man\ManTaskAssignment;
 use App\Models\Man\IronJob;
 use App\Models\Man\ManufacturingOrder;
 use App\Models\Man\Package;
 use App\Models\Man\SqueezerJob;
-use App\Models\Man\SoftenerJob;
+use App\Models\Man\BleachingJob;
 use App\Models\Ord\SalesOrder;
 use App\Models\War\WarehousePackage;
 use Illuminate\Http\Request;
@@ -18,9 +20,10 @@ use Illuminate\Support\Facades\DB;
  * Shared production quality-gate actions.
  *
  * The gates are split by department ownership:
- *  - knitting output (passFabric)           → Knitting supervisor
- *  - dyeing stages (dye/softener/squeezer/iron) → Dyeing supervisor
- *  - package inspection (inspectPackage)     → Checker Quality staff
+ *  - knitting output (passFabric)           → Knitting Inspector
+ *  - dyeing stages (dye/bleaching) → Dyeing supervisor
+ *  - finishing stages (squeezer/iron) → Finishing supervisor
+ *  - package inspection (inspectPackage)     → Finishing Quality Checker
  *  - push inspected packages to logistics    → Finishing supervisor
  *
  * Used by both the staff checker controller and the supervisor gate controller
@@ -55,14 +58,14 @@ trait HandlesProductionGates
     }
 
     // ========== Knitting gate ==========
-    // Gate 1 — knitting output. Approves the fabric into dyeing (or softener
+    // Knitting Inspector gate — approves output into dyeing or returns it for remake.
     // for lots that skip dyeing) or rejects it to the rejected pile.
 
     public function passFabric(Request $request, $fabricId)
     {
         $validated = $request->validate([
             'action' => 'required|in:approve,reject',
-            // No softener skip: knitting output always enters at the dyeing
+            // Knitting output always enters at the dyeing
             // department, where the dyeing supervisor assigns the color stage.
             'destination' => 'required_if:action,approve|in:dyeing',
             'rejection_reason' => 'required_if:action,reject|string|nullable|max:500',
@@ -75,16 +78,20 @@ trait HandlesProductionGates
 
         if ($validated['action'] === 'reject') {
             $salesOrderId = $fabric->sales_order_id;
+            $plannedAssignment = $salesOrderId && ManTaskAssignment::where('department', 'knitting')
+                ->where('stage', 'knitting')->where('sales_order_id', $salesOrderId)
+                ->where('assigned_to', $fabric->operator_id)->whereNotNull('assigned_weight')->exists();
 
-            DB::transaction(function () use ($fabric, $validated, $salesOrderId) {
+            DB::transaction(function () use ($fabric, $validated, $salesOrderId, $request, $plannedAssignment) {
                 $fabric->update([
                     'status' => 'rejected',
                     'rejection_action' => null,
                     'rejection_reason' => $validated['rejection_reason']
                         ?? 'Rejected at the knitting gate — remake required.',
-                    // Detach the fabric from the JO so a fresh fabric can be
-                    // produced for it.
-                    'sales_order_id' => null,
+                    // Planned knitting output stays tied to its operator/JO so
+                    // rejected weight is removed from their completed tally and
+                    // they can remake it. Legacy unplanned output is detached.
+                    'sales_order_id' => $plannedAssignment ? $salesOrderId : null,
                 ]);
 
                 // Re-open the JO for the knitting yarn staff it is assigned to,
@@ -95,14 +102,48 @@ trait HandlesProductionGates
                         'knitting_done_by' => null,
                     ]);
                 }
+
+                KnittingInspection::create([
+                    'fabric_id' => $fabric->id,
+                    'inspector_id' => $request->user()->id,
+                    'result' => 'rejected',
+                    'rejection_reason' => $validated['rejection_reason']
+                        ?? 'Rejected at the knitting gate — remake required.',
+                ]);
+                if ($fabric->dyeing_remake_request_id) {
+                    \App\Models\Man\DyeingRemakeRequestFabric::where('dyeing_remake_request_id',$fabric->dyeing_remake_request_id)
+                        ->where('replacement_fabric_id',$fabric->id)->update(['replacement_fabric_id'=>null]);
+                    \App\Models\Man\DyeingRemakeRequest::whereKey($fabric->dyeing_remake_request_id)->update(['status'=>'knitting']);
+                }
             });
 
             return redirect()->back()->with('message', 'Fabric not approved. The Job Order was returned to the knitting yarn staff to be made again.');
         }
 
-        $fabric->update(['status' => $validated['destination']]);
+        $plannedAssignment = $fabric->sales_order_id && ManTaskAssignment::where('department', 'knitting')
+            ->where('stage', 'knitting')->where('sales_order_id', $fabric->sales_order_id)
+            ->where('assigned_to', $fabric->operator_id)->whereNotNull('assigned_weight')->exists();
 
-        return redirect()->back()->with('message', 'Knitting approved. Fabric passed to ' . $validated['destination']);
+        DB::transaction(function () use ($fabric, $validated, $request, $plannedAssignment) {
+            $fabric->update(['status' => $plannedAssignment ? 'knitting_approved' : $validated['destination']]);
+            KnittingInspection::create([
+                'fabric_id' => $fabric->id,
+                'inspector_id' => $request->user()->id,
+                'result' => 'approved',
+                'destination' => $plannedAssignment ? 'knitting_supervisor_handoff' : $validated['destination'],
+            ]);
+            if ($fabric->dyeing_remake_request_id) {
+                $remake = \App\Models\Man\DyeingRemakeRequest::with('fabrics.replacementFabric')->lockForUpdate()->findOrFail($fabric->dyeing_remake_request_id);
+                if ($remake->fabrics->isNotEmpty() && $remake->fabrics->every(fn($pair) => $pair->replacementFabric?->status === 'knitting_approved')) {
+                    $remake->update(['status'=>'ready_for_dyeing']);
+                    \App\Models\Man\ManTaskAssignment::where('dyeing_remake_request_id',$remake->id)->update(['status'=>'completed','completed_at'=>now()]);
+                }
+            }
+        });
+
+        return redirect()->back()->with('message', $plannedAssignment
+            ? 'Knitting approved. This fabric is ready for the supervisor JO handoff.'
+            : 'Knitting approved. Fabric passed to '.$validated['destination']);
     }
 
     // ========== Dyeing gates ==========
@@ -121,8 +162,8 @@ trait HandlesProductionGates
         }
 
         if ($validated['action'] === 'quality') {
-            $fabric->update(['status' => 'softener']);
-            return redirect()->back()->with('message', 'Dyeing approved. Fabric passed to softener stage.');
+            $fabric->update(['status' => 'bleaching']);
+            return redirect()->back()->with('message', 'Dyeing approved. Fabric passed to bleaching.');
         }
 
         $fabric->update([
@@ -134,27 +175,26 @@ trait HandlesProductionGates
         return redirect()->back()->with('message', 'Fabric rejected.');
     }
 
-    public function passSoftener(Request $request, $softenerId)
+    public function passBleaching(Request $request, $bleachingId)
     {
         $validated = $request->validate([
-            'action' => 'required|in:quality,resoften',
+            'action' => 'required|in:quality,rebleach',
         ]);
 
-        $softener = SoftenerJob::with('fabric')->findOrFail($softenerId);
-        $fabric = $softener->fabric;
-        if (! $fabric || $fabric->status !== 'softener') {
-            return back()->with('error', 'This softener job already left the softener gate.');
+        $bleaching = BleachingJob::with('fabric')->findOrFail($bleachingId);
+        $fabric = $bleaching->fabric;
+        if (! $fabric || $fabric->status !== 'bleaching') {
+            return back()->with('error', 'This bleaching job already left the bleaching gate.');
         }
 
         if ($validated['action'] === 'quality') {
             $fabric->update(['status' => 'squeezer']);
-            return redirect()->back()->with('message', 'Softening approved. Fabric passed to squeezer.');
+            return redirect()->back()->with('message', 'Bleaching approved. Fabric passed to Finishing Squeezer.');
         }
 
-        $fabric->update(['status' => 'softener']);
-        $softener->update(['status' => 'resoften']);
+        $bleaching->update(['status' => 'rebleach']);
 
-        return redirect()->back()->with('message', 'Softening not approved. Fabric sent back for re-softening.');
+        return redirect()->back()->with('message', 'Bleaching not approved. Fabric returned for re-bleaching.');
     }
 
     public function passSqueezer(Request $request, $squeezerId)
@@ -163,8 +203,9 @@ trait HandlesProductionGates
             'action' => 'required|in:quality,resqueeze',
         ]);
 
-        $squeezer = SqueezerJob::with('softenerJob.fabric')->findOrFail($squeezerId);
-        $fabric = $squeezer->softenerJob?->fabric;
+        $squeezer = SqueezerJob::with('fabric')->findOrFail($squeezerId);
+        $fabric = $squeezer->fabric;
+        if ($fabric?->finishingWorkItem()->exists()) return back()->with('error', 'This JO is in the supervisor-managed Finishing workflow.');
         if (! $fabric || $fabric->status !== 'squeezer') {
             return back()->with('error', 'This squeezer job already left the squeezer gate.');
         }
@@ -175,11 +216,10 @@ trait HandlesProductionGates
         if ($validated['action'] === 'quality') {
             $fabric->update(['status' => 'iron']);
 
-            return redirect()->back()->with('message', 'Squeezing approved. Fabric passed to ironing stage.');
+            return redirect()->back()->with('message', 'Squeezing approved. Fabric passed to Finishing Heatsetting.');
         }
 
         DB::transaction(function () use ($squeezer, $fabric) {
-            $squeezer->softenerJob()->update(['status' => 'softened']);
             $squeezer->delete();
         });
 
@@ -192,19 +232,15 @@ trait HandlesProductionGates
             'action' => 'required|in:pack,reiron',
         ]);
 
-        $iron = IronJob::with('squeezerJob.softenerJob.fabric')->findOrFail($ironId);
+        $iron = IronJob::with('squeezerJob.fabric')->findOrFail($ironId);
 
         $squeezerJob = $iron->squeezerJob;
         if (! $squeezerJob) {
             return back()->with('error', 'This iron job has no linked squeezer job — cannot pack.');
         }
 
-        $softenerJob = $squeezerJob->softenerJob;
-        if (! $softenerJob) {
-            return back()->with('error', 'This iron job has no linked softener job — cannot pack.');
-        }
-
-        $fabric = $softenerJob->fabric;
+        $fabric = $squeezerJob->fabric;
+        if ($fabric?->finishingWorkItem()->exists()) return back()->with('error', 'This JO is in the supervisor-managed Finishing workflow.');
         if (! $fabric) {
             return back()->with('error', 'This iron job has no linked fabric — cannot pack.');
         }
@@ -226,7 +262,7 @@ trait HandlesProductionGates
     // ========== Finishing gates ==========
 
     /**
-     * Checker Quality inspects a packaging output: good → 'checked' (ready for
+     * Finishing Quality Checker inspects a packaging output: good → 'checked' (ready for
      * the finishing supervisor to push), not good → 'rejected'.
      */
     public function inspectPackage(Request $request, $packageId)
@@ -237,6 +273,8 @@ trait HandlesProductionGates
         ]);
 
         $package = Package::findOrFail($packageId);
+
+        if ($package->fabric?->finishingWorkItem()->exists()) return back()->with('error', 'Inspect grouped JO quality before pack groups are sent to Logistics.');
 
         if ($package->status !== 'pending') {
             return back()->with('error', 'This package was already inspected.');
@@ -268,6 +306,8 @@ trait HandlesProductionGates
     {
         $package = Package::with('fabric.salesOrder.recipe.product')->findOrFail($packageId);
 
+        if ($package->fabric?->finishingWorkItem()->exists()) return back()->with('error', 'This JO uses grouped packages in the Finishing workflow.');
+
         if ($package->status === 'delivered') {
             return back()->with('error', 'Package already sent to logistics.');
         }
@@ -296,6 +336,7 @@ trait HandlesProductionGates
                 'manufacturing_order_id' => $manufacturingOrderId,
                 'product_id'             => $product->id,
                 'quantity'               => $package->quantity,
+                'weight_kg'              => $package->fabric?->weight,
                 'status'                 => 'pushed_to_logistics',
                 'pushed_at'              => now(),
                 'pushed_by'              => auth()->id(),

@@ -6,7 +6,7 @@ import {
     ShieldCheck, X, LayoutDashboard, ShoppingCart, ShoppingBag, MessageSquare,
     Receipt, HelpCircle, User, Truck, Navigation, Clock, CalendarDays,
     History, HandCoins, FileText, Bell, UserCog2, Wallet, Route, ClipboardCheck, Wrench, AlertTriangle,
-    PackageX, FileWarning,
+    PackageX, FileWarning, FileQuestion,
 } from 'lucide-vue-next'
 
 import { MODULES } from './navItems/navConfig'
@@ -68,6 +68,7 @@ const portalItems = computed(() => {
     if (isSupplier.value) {
         return [
             { id: 'supplier_hub', label: 'Vendor Hub', icon: LayoutDashboard, href: safeRoute('supplier.dashboard', '/supplier/dashboard') },
+            { id: 'supplier_rfqs', label: 'Requests for Quotation', icon: FileQuestion, href: safeRoute('supplier.rfqs', '/supplier/rfqs') },
             { id: 'supplier_messages', label: 'Messages', icon: MessageSquare, href: safeRoute('supplier.messages', '/supplier/messages') },
             { id: 'supplier_orders', label: 'Purchase Orders', icon: ShoppingCart, href: safeRoute('supplier.orders', '/supplier/orders') },
             { id: 'supplier_payments', label: 'Payments', icon: Wallet, href: safeRoute('supplier.payments', '/supplier/payments') },
@@ -370,10 +371,10 @@ watch(mobileOpen, (open) => {
 
 <template>
     <div class="md:hidden">
-        <nav class="fixed top-0 left-0 right-0 z-[60] bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 shadow-sm h-16 flex items-center justify-between px-4">
+        <nav data-erp-mobile-sidebar-nav class="fixed top-0 left-0 right-0 z-[60] bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 shadow-sm h-16 flex items-center justify-between px-4">
             <div class="flex items-center gap-3">
-                <div class="animate-logo h-8 w-8 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 shadow-indigo-500/30">
-                    <img src="/images/applogo.png" alt="Logo" class="h-5 w-5 object-contain brightness-0 invert" />
+                <div data-erp-sidebar-logo class="animate-logo h-8 w-8 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 shadow-indigo-500/30">
+                    <img data-erp-sidebar-logo-image src="/images/applogo.png" alt="Logo" class="h-5 w-5 object-contain brightness-0 invert" />
                 </div>
                 <div class="flex flex-col">
                     <span class="text-[14px] font-black tracking-tight text-gray-900 dark:text-white uppercase leading-none">
@@ -399,10 +400,10 @@ watch(mobileOpen, (open) => {
             <Transition name="drawer">
                 <div v-if="mobileOpen" class="fixed inset-0 z-[90] md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
                     <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeMobile" aria-hidden="true"></div>
-                    <aside class="absolute left-0 top-0 bottom-0 w-[85%] max-w-xs bg-white dark:bg-gray-900 shadow-2xl flex flex-col overflow-hidden">
+                    <aside data-erp-mobile-sidebar-drawer class="absolute left-0 top-0 bottom-0 w-[85%] max-w-xs bg-white dark:bg-gray-900 shadow-2xl flex flex-col overflow-hidden">
                         <div class="flex items-center gap-3 px-4 h-16 border-b border-gray-200/70 dark:border-gray-800 flex-shrink-0">
-                            <div class="h-8 w-8 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800">
-                                <img src="/images/applogo.png" alt="Logo" class="h-5 w-5 object-contain brightness-0 invert" />
+                            <div data-erp-sidebar-logo class="h-8 w-8 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800">
+                                <img data-erp-sidebar-logo-image src="/images/applogo.png" alt="Logo" class="h-5 w-5 object-contain brightness-0 invert" />
                             </div>
                             <div class="flex flex-col flex-1 min-w-0">
                                 <span class="text-[13px] font-black tracking-tight text-gray-900 dark:text-white uppercase leading-none truncate">

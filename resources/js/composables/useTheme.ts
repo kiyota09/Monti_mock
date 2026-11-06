@@ -11,7 +11,7 @@ export interface ThemeOption {
 }
 
 export const THEMES: ThemeOption[] = [
-    { key: 'light', label: 'Light', desc: 'Default light', dot: '#e2e8f0', dark: false },
+    { key: 'light', label: 'Light', desc: 'Black & white', dot: '#ffffff', dark: false },
     { key: 'dark', label: 'Dark', desc: 'Default dark', dot: '#18181b', dark: true },
     { key: 'blue', label: 'Blue', desc: 'Ice-Blue & Navy · whole ERP', dot: '#1A73E8', dark: false },
     { key: 'red', label: 'Red', desc: 'Rose & Wine · whole ERP', dot: '#E11D48', dark: false },

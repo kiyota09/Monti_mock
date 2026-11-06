@@ -277,6 +277,11 @@ class User extends Authenticatable
         return $this->hasMany(SoftenerJob::class, 'operator_id');
     }
 
+    public function bleachingJobs()
+    {
+        return $this->hasMany(\App\Models\Man\BleachingJob::class, 'operator_id');
+    }
+
     public function squeezerJobs()
     {
         return $this->hasMany(SqueezerJob::class, 'operator_id');
@@ -309,12 +314,15 @@ class User extends Authenticatable
             $requiredLevel = 'view';
         }
 
-        // Superusers (secretary, special officers) have full access.
-        // NOTE (overseer model): the President is intentionally excluded —
-        // executive oversight runs through the CEO module, not module pages.
-        if (in_array($this->position, ['secretary', 'special_officer'])) {
+        // Native IT managers and staff always have full edit access in IT.
+        // Explicit page rows are for cross-module grants and cannot restrict
+        // their own department's workspace.
+        if (strtoupper((string) $this->role) === 'IT'
+            && in_array($this->position, ['manager', 'staff'], true)
+            && strtoupper((string) $module) === 'IT') {
             return true;
         }
+
         // Module-native managers and staff have full access to their own module —
         // UNLESS explicit page_permissions rows exist for them in that module,
         // in which case the explicit grants are the exact access set.
@@ -325,6 +333,13 @@ class User extends Authenticatable
                 return true;
             }
             // Fall through to the strict row check below.
+        }
+        if (strtoupper((string) $this->role) === strtoupper((string) $module)
+            && $this->position === 'special_officer'
+            && ! PagePermission::where('user_id', $this->id)
+                ->whereIn('module', [$module, strtoupper((string) $module), strtolower((string) $module)])
+                ->exists()) {
+            return true;
         }
 
         // Otherwise check the explicit page_permissions record ('edit' implies 'view').
@@ -338,20 +353,6 @@ class User extends Authenticatable
         // An explicit 'disabled' row always wins — even for executives.
         if ($record !== null && strtolower($record->permission_level ?? 'edit') === 'disabled') {
             return false;
-        }
-
-        // Vice President: no HRM pages — the COO role is standalone.
-        if (strtoupper((string) $module) === 'HRM'
-            && (in_array($this->role, ['COO'], true)
-                || ($this->position ?? '') === 'vice_president')) {
-            return false;
-        }
-
-        // President & Vice President have full access to every CRM page.
-        if (strtoupper((string) $module) === 'CRM'
-            && (in_array($this->role, ['CEO', 'COO'], true)
-                || ($this->position ?? '') === 'vice_president')) {
-            return true;
         }
 
         if ($record === null) {
@@ -376,35 +377,12 @@ class User extends Authenticatable
     /**
      * Whether this user can reach the CRM Messaging page (and therefore be
      * called by another CRM user). Mirrors CheckPagePermission's shortcuts:
-     * executives have full CRM, module-native CRM staff with no explicit
-     * grants do too, and an explicit 'disabled' row always wins.
+     * module-native CRM staff with no explicit grants do too, and an explicit
+     * 'disabled' row always wins.
      */
     public function canAccessCrmMessaging(): bool
     {
-        $rows = $this->pagePermissions()
-            ->whereIn('module', ['CRM', 'crm', 'Crm'])
-            ->get(['page', 'permission_level']);
-
-        $messaging = $rows->first(fn ($row) => strtolower((string) $row->page) === 'messaging');
-        if ($messaging !== null) {
-            return strtolower((string) ($messaging->permission_level ?? 'edit')) !== 'disabled';
-        }
-
-        $role = strtoupper((string) $this->role);
-        if (in_array($role, ['CEO', 'COO'], true) || ($this->position ?? '') === 'vice_president') {
-            return true;
-        }
-
-        // Native CRM staff have full access unless explicit grants exist.
-        if ($role === 'CRM') {
-            return $rows->isEmpty();
-        }
-
-        if ($this->position === 'secretary' && str_contains($role, 'CRM')) {
-            return true;
-        }
-
-        return false;
+        return $this->hasPagePermission('CRM', 'messaging', 'view');
     }
 
     // HRM_NEW dynamic org links (nullable for BC rollout)
@@ -641,11 +619,22 @@ class User extends Authenticatable
             // If no modules have been explicitly granted yet,
             // fall back to the user's original role (e.g., HRM, MAN, etc.)
             if (empty($granted)) {
-                return $this->role === $module;
+                return strtoupper((string) $this->role) === strtoupper($module);
             }
 
             // Otherwise, check only the explicitly granted modules
-            return in_array($module, $granted);
+            return in_array(strtoupper($module), array_map('strtoupper', $granted), true);
+        }
+
+        if (in_array(strtoupper((string) $this->role), ['CEO', 'COO'], true)
+            || $this->position === 'vice_president') {
+            return $this->pagePermissions()
+                ->whereIn('module', [$module, strtoupper($module), strtolower($module)])
+                ->where(function ($query) {
+                    $query->whereIn('permission_level', ['view', 'edit'])
+                        ->orWhereNull('permission_level');
+                })
+                ->exists();
         }
 
         // Normal managers/staff have default access based on their role

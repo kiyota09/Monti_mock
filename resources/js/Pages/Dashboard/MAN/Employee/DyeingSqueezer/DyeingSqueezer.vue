@@ -6,25 +6,25 @@ import { Droplets, AlertCircle, X, Sparkles, ClipboardList, ChevronRight } from 
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'dyeing_squeezer'));
+const canEditProduction = computed(() => canEdit('MAN', 'finishing_squeezer'));
 
 const props = defineProps({
-    softenerJobs: Array,
+    fabrics: Array,
     machines: Array,
 });
 
 const showSqueezerModal = ref(false);
-const currentSoftenerJob = ref(null);
+const currentFabric = ref(null);
 
 const form = useForm({
-    softener_job_id: null,
+    fabric_id: null,
     machine_id: '',
     remarks: '',
 });
 
-const openSqueezerModal = (softenerJob) => {
-    currentSoftenerJob.value = softenerJob;
-    form.softener_job_id = softenerJob.id;
+const openSqueezerModal = (fabric) => {
+    currentFabric.value = fabric;
+    form.fabric_id = fabric.id;
     form.machine_id = '';
     form.remarks = '';
     showSqueezerModal.value = true;
@@ -33,22 +33,22 @@ const openSqueezerModal = (softenerJob) => {
 const closeModal = () => {
     showSqueezerModal.value = false;
     form.reset();
-    currentSoftenerJob.value = null;
+    currentFabric.value = null;
 };
 
 const submitSqueezer = () => {
-    form.post(route('man.staff.dyeing-squeezer.store-squeeze'), {
+    form.post(route('man.staff.finishing-squeezer.store-squeeze'), {
         preserveScroll: true,
         onSuccess: () => {
             closeModal();
-            router.reload({ only: ['softenerJobs'] });
+            router.reload({ only: ['fabrics'] });
         },
     });
 };
 </script>
 
 <template>
-    <AuthenticatedLayout title="Dyeing Squeezer">
+    <AuthenticatedLayout title="Finishing Squeezer">
         <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
             <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
 
@@ -63,17 +63,17 @@ const submitSqueezer = () => {
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                                <Sparkles class="h-3.5 w-3.5" /> MAN · Dyeing Squeezer
+                                <Sparkles class="h-3.5 w-3.5" /> MAN Â· Finishing Squeezer
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Squeezer Workspace</h1>
                             <span v-if="!canEditProduction" class="mt-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-800">View only</span>
-                            <p class="text-sm text-blue-100/90">{{ softenerJobs?.length ?? 0 }} job{{ (softenerJobs?.length ?? 0) !== 1 ? 's' : '' }} ready for squeezing</p>
+                            <p class="text-sm text-blue-100/90">{{ fabrics?.length ?? 0 }} job{{ (fabrics?.length ?? 0) !== 1 ? 's' : '' }} ready for squeezing</p>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
-                                {{ softenerJobs?.length ?? 0 }} ready
+                                {{ fabrics?.length ?? 0 }} ready
                             </span>
-                            <Link :href="route('man.staff.dyeing-squeezer.reports')"
+                            <Link :href="route('man.staff.finishing-squeezer.reports')"
                                 class="rounded-full bg-white px-4 py-1.5 text-xs font-black text-indigo-700 shadow-lg hover:scale-105 transition-all duration-200 active:scale-95 flex items-center gap-1.5">
                                 <ClipboardList class="h-3.5 w-3.5" /> View Reports
                             </Link>
@@ -82,18 +82,18 @@ const submitSqueezer = () => {
                 </div>
 
                 <!-- Empty state -->
-                <div v-if="!softenerJobs || softenerJobs.length === 0"
+                <div v-if="!fabrics || fabrics.length === 0"
                     class="animate-fade-up flex flex-col items-center justify-center py-20 text-center bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800 shadow-sm">
                     <div class="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 dark:to-violet-900/30 rounded-full mb-4 animate-bounce-soft">
                         <AlertCircle class="h-9 w-9 text-indigo-400" />
                     </div>
-                    <p class="text-sm font-black text-gray-700 dark:text-gray-200">No softener jobs ready</p>
-                    <p class="text-xs text-gray-400 mt-1">Jobs will appear here once softening is complete.</p>
+                    <p class="text-sm font-black text-gray-700 dark:text-gray-200">No fabrics ready</p>
+                    <p class="text-xs text-gray-400 mt-1">Fabrics appear here after bleaching is approved.</p>
                 </div>
 
                 <!-- Job grid -->
                 <TransitionGroup v-else name="card" tag="div" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div v-for="(job, i) in softenerJobs" :key="job.id"
+                    <div v-for="(job, i) in fabrics" :key="job.id"
                         :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }"
                         class="group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 hover:scale-[1.01] transition-all duration-300 p-5 overflow-hidden">
                         <!-- hover glow -->
@@ -110,7 +110,7 @@ const submitSqueezer = () => {
                                         {{ job.code }}
                                     </p>
                                     <p class="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase truncate">
-                                        Fabric: {{ job.fabric?.code || 'N/A' }}
+                                        Fabric: {{ job.code || 'N/A' }}
                                     </p>
                                 </div>
                             </div>
@@ -120,12 +120,7 @@ const submitSqueezer = () => {
                         </div>
 
                         <div class="space-y-1.5 mb-4 text-[12px]">
-                            <p class="flex items-center gap-2 text-gray-500 dark:text-gray-400"><span class="font-bold text-gray-700 dark:text-gray-200">Machine:</span> <span class="truncate font-medium">{{ job.machine?.machine_no || 'N/A' }}</span></p>
-                            <p class="flex items-center gap-2 text-gray-500 dark:text-gray-400"><span class="font-bold text-gray-700 dark:text-gray-200">Softener:</span> <span class="truncate font-medium">{{ job.softener_type }} · {{ job.softener_no }}</span></p>
-                            <p class="flex items-center gap-2 text-gray-500 dark:text-gray-400"><span class="font-bold text-gray-700 dark:text-gray-200">Operator:</span> <span class="truncate font-medium">{{ job.operator?.name }}</span></p>
-                            <p class="flex items-center gap-2 text-gray-500 dark:text-gray-400"><span class="font-bold text-gray-700 dark:text-gray-200">Shift:</span> <span class="truncate font-medium">{{ job.shift }}</span></p>
-                            <p class="flex items-center gap-2 text-gray-500 dark:text-gray-400"><span class="font-bold text-gray-700 dark:text-gray-200">Date:</span> <span class="truncate font-medium">{{ new Date(job.processed_at).toLocaleString() }}</span></p>
-                            <p v-if="job.remarks" class="flex items-center gap-2 text-gray-500 dark:text-gray-400"><span class="font-bold text-gray-700 dark:text-gray-200">Remarks:</span> <span class="truncate font-medium">{{ job.remarks }}</span></p>
+                            <p class="flex items-center gap-2 text-gray-500 dark:text-gray-400"><span class="font-bold text-gray-700 dark:text-gray-200">Yarn:</span> <span class="truncate font-medium">{{ job.yarn_type || 'N/A' }}</span></p>
                         </div>
 
                         <div class="mt-auto pt-3 border-t border-gray-100 dark:border-zinc-800">
@@ -156,7 +151,7 @@ const submitSqueezer = () => {
                                 </div>
                                 <div>
                                     <h3 class="text-lg font-black tracking-tight">Record Squeezing</h3>
-                                    <p class="font-mono text-xs text-blue-100">{{ currentSoftenerJob?.code }}</p>
+                                    <p class="font-mono text-xs text-blue-100">{{ currentFabric?.code }}</p>
                                 </div>
                             </div>
                             <button @click="closeModal" class="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/25 transition">
@@ -167,8 +162,8 @@ const submitSqueezer = () => {
 
                     <form @submit.prevent="submitSqueezer" class="p-6 space-y-4 overflow-y-auto">
                         <div class="bg-indigo-50/60 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/40 p-3 rounded-2xl">
-                            <p class="text-sm font-bold text-gray-700 dark:text-gray-200">Softener Job: <span class="font-mono">{{ currentSoftenerJob?.code }}</span></p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">Fabric: {{ currentSoftenerJob?.fabric?.code }}</p>
+                            <p class="text-sm font-bold text-gray-700 dark:text-gray-200">Fabric: <span class="font-mono">{{ currentFabric?.code }}</span></p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Yarn: {{ currentFabric?.yarn_type }}</p>
                         </div>
 
                         <div>

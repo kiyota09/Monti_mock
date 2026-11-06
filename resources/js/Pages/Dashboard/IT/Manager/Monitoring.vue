@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -37,8 +38,8 @@ const logCheck = () => {
     }, { preserveScroll: true, onSuccess: () => { checking.value = null; checkNotes.value = ''; } });
 };
 
-const removeSystem = (system) => {
-    if (!confirm(`Stop monitoring ${system.name}? History will be removed.`)) return;
+const removeSystem = async (system) => {
+    if (!await confirmModal(`Stop monitoring ${system.name}? History will be removed.`)) return;
     router.delete(route('it.monitoring.destroy', system.id), { preserveScroll: true });
 };
 
@@ -63,7 +64,7 @@ const statusPill = (s) => ({
 <template>
     <Head title="Systems Monitoring | IT Department" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="it-page-hero mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     Systems <span class="text-blue-600">Monitoring</span>

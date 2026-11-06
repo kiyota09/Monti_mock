@@ -133,7 +133,7 @@ class ChemistSampleHistoryTest extends TestCase
         ]);
         PagePermission::create([
             'user_id' => $chemist->id, 'module' => 'MAN',
-            'page' => 'production', 'permission_level' => 'edit',
+            'page' => 'history', 'permission_level' => 'view',
         ]);
 
         $client = Client::create(['company_name' => 'History Co', 'email' => 'h@test.local']);
@@ -186,7 +186,7 @@ class ChemistSampleHistoryTest extends TestCase
         ]);
         PagePermission::create([
             'user_id' => $chemist->id, 'module' => 'MAN',
-            'page' => 'production', 'permission_level' => 'edit',
+            'page' => 'history', 'permission_level' => 'view',
         ]);
 
         $client = Client::create(['company_name' => 'Other Co', 'email' => 'o@test.local']);

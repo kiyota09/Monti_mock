@@ -87,7 +87,7 @@ const refresh = () => router.reload({ preserveScroll: true });
             <div class="mx-auto max-w-7xl space-y-5 p-4 pb-16 sm:p-6">
 
                 <!-- Hero -->
-                <div class="animate-fade-up relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-white shadow-xl sm:p-7">
+                <div data-erp-page-banner="surface" class="animate-fade-up relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-white shadow-xl sm:p-7">
                     <div class="absolute inset-0 bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800" />
                     <div class="absolute -top-20 -right-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-float" />
                     <div class="absolute -bottom-24 -left-12 h-64 w-64 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-delayed" />

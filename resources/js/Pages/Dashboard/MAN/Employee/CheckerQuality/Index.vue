@@ -10,7 +10,7 @@ const props = defineProps({
 
 <template>
     <AuthenticatedLayout>
-        <Head title="Quality Checker Dashboard" />
+        <Head title="Finishing Quality Checker Dashboard" />
         <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
             <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
 
@@ -27,7 +27,7 @@ const props = defineProps({
                             <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
                                 <Sparkles class="h-3.5 w-3.5" /> MAN · Quality Control
                             </p>
-                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Finishing Quality Control</h1>
+                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Finishing Quality Checker</h1>
                             <p class="text-sm text-blue-100/90">{{ stats.packages_pending }} packages awaiting inspection</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">

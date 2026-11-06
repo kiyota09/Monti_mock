@@ -166,6 +166,10 @@ class ApplicationsController extends Controller
             'reason' => 'nullable|string|max:1000',
         ]);
 
+        if (\Illuminate\Support\Carbon::parse($data['date'].' '.$data['start_time'])->lessThanOrEqualTo(now())) {
+            return back()->withErrors(['date' => 'Choose an interview date and time in the future.'])->withInput();
+        }
+
         $interview->update([
             'reschedule_status' => 'requested',
             'reschedule_date' => $data['date'],

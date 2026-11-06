@@ -18,6 +18,7 @@ class KnittingMachineSetup extends Model
         'status',
         'remarks',
         'operator_id',
+        'requested_by',
         'shift',
         'processed_at',
     ];
@@ -35,6 +36,11 @@ class KnittingMachineSetup extends Model
     public function operator()
     {
         return $this->belongsTo(User::class, 'operator_id');
+    }
+
+    public function requester()
+    {
+        return $this->belongsTo(\App\Models\Core\User::class, 'requested_by');
     }
 
     public function salesOrder()

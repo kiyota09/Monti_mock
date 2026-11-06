@@ -1,3 +1,4 @@
+import { showNotice } from '@/lib/feedback';
 import axios from 'axios';
 import { csrfHeaders } from './http';
 
@@ -35,7 +36,7 @@ api.interceptors.response.use(
         }
         if (error.response?.status === 403) {
             // Handle forbidden
-            alert('You do not have permission to access this page.');
+            showNotice('You do not have permission to access this page.');
         }
         return Promise.reject(error);
     }

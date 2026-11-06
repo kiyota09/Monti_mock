@@ -9,7 +9,7 @@ import {
     Database, Activity, Clock, History, X, Archive,
     Pencil, Trash2, Power, LocateFixed, Building2, Warehouse
 } from 'lucide-vue-next';
-import Swal from 'sweetalert2';
+import { dialog } from '@/lib/feedback';
 
 // Leaflet imports
 import L from 'leaflet';
@@ -88,7 +88,7 @@ const openArchiveConfirm = async () => {
     errorMsg.value = null;
     if (!siteName.value.trim()) {
         errorMsg.value = 'Please name this site first (e.g. Main Warehouse, Second Branch).';
-        Swal.fire({
+        dialog.fire({
             title: 'Site name required',
             text: 'Give this location a name so staff know which site it is — e.g. "Warehouse 1" or "Second Branch".',
             icon: 'warning',
@@ -259,7 +259,7 @@ const saveToDatabase = async () => {
         }
         siteName.value = '';
 
-        Swal.fire({
+        dialog.fire({
             title: 'Site saved!',
             html: `<b>${payload.label}</b><br>(${Number(payload.latitude).toFixed(6)}, ${Number(payload.longitude).toFixed(6)}) with ${payload.range_radius}m radius is now an active work location.`,
             icon: 'success',
@@ -274,7 +274,7 @@ const saveToDatabase = async () => {
         });
     } catch (err) {
         errorMsg.value = err.response?.data?.message || err.response?.data?.errors?.label?.[0] || "Failed to save to database.";
-        Swal.fire({
+        dialog.fire({
             title: 'Save Failed',
             text: errorMsg.value,
             icon: 'error',
@@ -308,7 +308,7 @@ const openEdit = (site) => {
 const saveEdit = async () => {
     if (!editingSite.value) return;
     if (!editForm.value.label.trim()) {
-        Swal.fire({ title: 'Name required', text: 'Each site needs a name.', icon: 'warning', confirmButtonColor: '#4f46e5' });
+        dialog.fire({ title: 'Name required', text: 'Each site needs a name.', icon: 'warning', confirmButtonColor: '#4f46e5' });
         return;
     }
     isUpdating.value = true;
@@ -326,7 +326,7 @@ const saveEdit = async () => {
         showEditModal.value = false;
         statusMsg.value = res.data.message;
     } catch (err) {
-        Swal.fire({ title: 'Update failed', text: err.response?.data?.message || 'Could not update site.', icon: 'error', confirmButtonColor: '#e11d48' });
+        dialog.fire({ title: 'Update failed', text: err.response?.data?.message || 'Could not update site.', icon: 'error', confirmButtonColor: '#e11d48' });
     } finally {
         isUpdating.value = false;
     }
@@ -340,12 +340,12 @@ const toggleSite = async (site) => {
         renderSites();
         statusMsg.value = res.data.message;
     } catch (err) {
-        Swal.fire({ title: 'Toggle failed', text: err.response?.data?.message || 'Could not change site status.', icon: 'error', confirmButtonColor: '#e11d48' });
+        dialog.fire({ title: 'Toggle failed', text: err.response?.data?.message || 'Could not change site status.', icon: 'error', confirmButtonColor: '#e11d48' });
     }
 };
 
 const deleteSite = async (site) => {
-    const confirm = await Swal.fire({
+    const confirm = await dialog.fire({
         title: `Remove "${site.label || 'this site'}"?`,
         text: 'Staff will no longer be able to clock in from this location.',
         icon: 'warning',
@@ -361,7 +361,7 @@ const deleteSite = async (site) => {
         renderSites();
         statusMsg.value = res.data.message;
     } catch (err) {
-        Swal.fire({ title: 'Delete failed', text: err.response?.data?.message || 'Could not remove site.', icon: 'error', confirmButtonColor: '#e11d48' });
+        dialog.fire({ title: 'Delete failed', text: err.response?.data?.message || 'Could not remove site.', icon: 'error', confirmButtonColor: '#e11d48' });
     }
 };
 
@@ -389,7 +389,7 @@ const syncGps = () => {
             <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
 
                 <!-- Hero header -->
-                <div class="animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/20">
+                <div class="it-page-hero animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-4 sm:p-8 text-white shadow-xl shadow-indigo-500/20">
                     <div class="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-float" />
                     <div class="absolute -bottom-24 -left-10 h-64 w-64 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-delayed" />
                     <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 22px 22px;" />

@@ -8,9 +8,10 @@ use App\Http\Controllers\Man\Concerns\HandlesProductionGates;
 /**
  * Department-supervisor quality gates.
  *
- *  - knitting  : passFabric (knitting output)
- *  - dyeing    : passDye / passSoftener / passSqueezer / passIron
- *  - finishing : pushToLogistics (after Checker Quality inspects the package)
+ *  - knitting  : order intake; output approval belongs to Knitting Inspector
+ *  - dyeing    : passDye / passBleaching
+ *  - finishing : pushToLogistics
+ *  - finishing : pushToLogistics (after Finishing Quality Checker inspects the package)
  *
  * Route-level `man.department:<dept>` middleware guarantees only the owning
  * department's supervisor can reach each action.

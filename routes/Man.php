@@ -3,18 +3,28 @@
 use App\Http\Controllers\Inv\BomController;
 use App\Http\Controllers\Man\Manager\ManAssignmentController;
 use App\Http\Controllers\Man\Manager\ManSupervisorGateController;
+use App\Http\Controllers\Man\Manager\KnittingMachineController;
+use App\Http\Controllers\Man\Manager\DyeingWorkflowController;
+use App\Http\Controllers\Man\Manager\DyeingProductionRecipeController;
+use App\Http\Controllers\Man\Manager\FinishingWorkflowController;
 use App\Http\Controllers\Man\Manager\ManufacturingManagerController;
 use App\Http\Controllers\Man\ManDashboardController;
 use App\Http\Controllers\Man\ManufacturingInventoryController;
 use App\Http\Controllers\Man\Staff\CheckerQualityController;
 use App\Http\Controllers\Man\Staff\DyeingColorController;
-use App\Http\Controllers\Man\Staff\DyeingFabricSoftenerController;
+use App\Http\Controllers\Man\Staff\DyeingBleachingController;
+use App\Http\Controllers\Man\Staff\DyeingTreatmentController;
 use App\Http\Controllers\Man\Staff\DyeingIroningController;
 use App\Http\Controllers\Man\Staff\DyeingLabChemistController;
 use App\Http\Controllers\Man\Staff\FinishingPackagingController;
 use App\Http\Controllers\Man\Staff\DyeingSqueezerController;
 use App\Http\Controllers\Man\Staff\KnittingYarnController;
 use App\Http\Controllers\Man\Staff\KnittingMechanicController;
+use App\Http\Controllers\Man\Staff\KnittingInspectorController;
+use App\Http\Controllers\Man\Staff\KnittingSampleController;
+use App\Http\Controllers\Man\Staff\FinishingInspectorController;
+use App\Http\Controllers\Man\Staff\FinishingStationController;
+use App\Http\Controllers\Man\Staff\FinishingWorkflowStaffController;
 use App\Http\Controllers\Man\Staff\MaintenanceCheckerController;
 use App\Http\Controllers\Man\Staff\BoilerOperatorController;
 use App\Http\Controllers\Man\Staff\PollutionControlController;
@@ -56,6 +66,12 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
             ->middleware('page.permission:dashboard,view')->name('manager.dashboard');
         Route::get('/production', [ManufacturingManagerController::class, 'production'])
             ->middleware('page.permission:production,view')->name('manager.production');
+        Route::post('/production/dyeing-stages/{record}/review', [DyeingWorkflowController::class, 'review'])
+            ->middleware(['man.department:dyeing', 'page.permission:production,edit'])
+            ->name('manager.production.dyeing.review');
+        Route::post('/production/finishing-work-orders/{workOrder}/push-to-logistics', [FinishingWorkflowController::class, 'sendToLogistics'])
+            ->middleware(['man.department:finishing', 'page.permission:production,edit'])
+            ->name('manager.production.finishing.push-to-logistics');
         Route::get('/rejected', [ManufacturingManagerController::class, 'rejected'])
             ->middleware('page.permission:reject,view')->name('manager.rejected');
         Route::post('/rejected/{fabric}/recolor', [ManufacturingManagerController::class, 'recolorFabric'])
@@ -70,9 +86,9 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
             ->middleware('page.permission:production,edit')->name('manager.handover.store');
 
         // ── Supervisor quality gates (department-scoped) ──────────────────────
-        // Ownership: knitting output → knitting supervisor; every dyeing stage →
-        // dyeing supervisor; push-to-logistics → finishing supervisor (after
-        // Checker Quality inspects the package).
+        // Ownership: dyeing stages → dyeing supervisor; push-to-logistics →
+        // finishing supervisor (after
+        // Finishing Quality Checker inspects the package).
         Route::prefix('gates/knitting')->name('gates.knitting.')
             ->controller(ManSupervisorGateController::class)
             ->middleware('man.department:knitting')
@@ -81,8 +97,6 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                     ->middleware('page.permission:production,edit')->name('check-inventory');
                 Route::post('/order/{id}/start-production', 'startProduction')
                     ->middleware('page.permission:production,edit')->name('start-production');
-                Route::post('/fabric/{id}/pass', 'passFabric')
-                    ->middleware('page.permission:production,edit')->name('pass-fabric');
             });
 
         Route::prefix('gates/dyeing')->name('gates.dyeing.')
@@ -91,12 +105,8 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
             ->group(function () {
                 Route::post('/dye/{id}/pass', 'passDye')
                     ->middleware('page.permission:production,edit')->name('pass-dye');
-                Route::post('/softener/{id}/pass', 'passSoftener')
-                    ->middleware('page.permission:production,edit')->name('pass-softener');
-                Route::post('/squeezer/{id}/pass', 'passSqueezer')
-                    ->middleware('page.permission:production,edit')->name('pass-squeezer');
-                Route::post('/iron/{id}/pass', 'passIron')
-                    ->middleware('page.permission:production,edit')->name('pass-iron');
+                Route::post('/bleaching/{id}/pass', 'passBleaching')
+                    ->middleware('page.permission:production,edit')->name('pass-bleaching');
             });
 
         Route::prefix('gates/finishing')->name('gates.finishing.')
@@ -109,13 +119,77 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
 
         // ── Job Order assignment board ────────────────────────────────────────
         Route::get('/assignments', [ManAssignmentController::class, 'index'])
-            ->middleware('page.permission:production,view')->name('assignments.index');
+            ->middleware('page.permission:assignments,view')->name('assignments.index');
         Route::post('/assignments', [ManAssignmentController::class, 'store'])
-            ->middleware('page.permission:production,edit')->name('assignments.store');
+            ->middleware('page.permission:assignments,edit')->name('assignments.store');
+        Route::patch('/assignments/{order}/dyeing-route', [ManAssignmentController::class, 'updateDyeingRoute'])
+            ->middleware(['man.department:dyeing', 'page.permission:assignments,edit'])->name('assignments.dyeing-route');
+        Route::post('/assignments/{order}/release-knitting', [ManAssignmentController::class, 'releaseKnitting'])
+            ->middleware(['man.department:knitting', 'page.permission:assignments,edit'])->name('assignments.knitting.release');
+        Route::post('/production/orders/{order}/decline-knitting', [ManAssignmentController::class, 'declineKnittingHandoff'])
+            ->middleware(['man.department:knitting', 'page.permission:production,edit'])->name('production.knitting.decline');
+        Route::post('/production/orders/{order}/release-knitting', [ManAssignmentController::class, 'releaseKnitting'])
+            ->middleware(['man.department:knitting', 'page.permission:production,edit'])->name('production.knitting.release');
         Route::patch('/assignments/{assignment}', [ManAssignmentController::class, 'update'])
-            ->middleware('page.permission:production,edit')->name('assignments.update');
+            ->middleware('page.permission:assignments,edit')->name('assignments.update');
         Route::delete('/assignments/{assignment}', [ManAssignmentController::class, 'destroy'])
-            ->middleware('page.permission:production,edit')->name('assignments.destroy');
+            ->middleware('page.permission:assignments,edit')->name('assignments.destroy');
+        Route::get('/knitting-machines', [KnittingMachineController::class, 'index'])
+            ->middleware(['man.department:knitting', 'page.permission:knitting_machines,view'])->name('knitting-machines.index');
+        Route::put('/knitting-machines/{machine}/assign', [KnittingMachineController::class, 'assign'])
+            ->middleware(['man.department:knitting', 'page.permission:knitting_machines,edit'])->name('knitting-machines.assign');
+        Route::delete('/knitting-machines/{machine}/assign', [KnittingMachineController::class, 'unassign'])
+            ->middleware(['man.department:knitting', 'page.permission:knitting_machines,edit'])->name('knitting-machines.unassign');
+        Route::post('/knitting-machines', [KnittingMachineController::class, 'registerKnitting'])
+            ->middleware(['man.department:knitting', 'page.permission:knitting_machines,edit'])->name('knitting-machines.store');
+        Route::get('/dyeing-machines', [KnittingMachineController::class, 'dyeing'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_machines,view'])->name('dyeing-machines.index');
+        Route::put('/dyeing-machines/{machine}/assign', [KnittingMachineController::class, 'assignDyeing'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_machines,edit'])->name('dyeing-machines.assign');
+        Route::delete('/dyeing-machines/{machine}/assign', [KnittingMachineController::class, 'unassignDyeing'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_machines,edit'])->name('dyeing-machines.unassign');
+        Route::get('/dyeing-workflow', [DyeingWorkflowController::class, 'index'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,view'])->name('dyeing-workflow.index');
+        Route::get('/dyeing-production-recipes', [DyeingProductionRecipeController::class, 'index'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,view'])->name('dyeing-production-recipes.index');
+        Route::put('/dyeing-production-recipes/{order}', [DyeingProductionRecipeController::class, 'update'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-production-recipes.update');
+        Route::post('/dyeing-workflow/batches', [DyeingWorkflowController::class, 'storeBatch'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-workflow.batches.store');
+        Route::post('/dyeing-workflow/stages/{record}/review', [DyeingWorkflowController::class, 'review'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-workflow.review');
+        Route::post('/dyeing-workflow/remakes/{remake}/release', [DyeingWorkflowController::class, 'releaseRemake'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-workflow.remakes.release');
+        Route::post('/dyeing-workflow/remakes/{remake}/release', [DyeingWorkflowController::class, 'releaseRemake'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-workflow.remakes.release');
+        Route::post('/dyeing-workflow/orders/{order}/release', [DyeingWorkflowController::class, 'release'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-workflow.release');
+        Route::get('/finishing-workflow', [FinishingWorkflowController::class, 'index'])
+            ->middleware(['man.department:finishing', 'page.permission:finishing_workflow,view'])->name('finishing-workflow.index');
+        Route::post('/finishing-workflow/start', [FinishingWorkflowController::class, 'start'])
+            ->middleware(['man.department:finishing', 'page.permission:finishing_workflow,edit'])->name('finishing-workflow.start');
+        Route::post('/finishing-workflow/{workOrder}/drying', [FinishingWorkflowController::class, 'assignDrying'])
+            ->middleware(['man.department:finishing', 'page.permission:finishing_workflow,edit'])->name('finishing-workflow.drying');
+        Route::post('/finishing-workflow/{workOrder}/send-to-logistics', [FinishingWorkflowController::class, 'sendToLogistics'])
+            ->middleware(['man.department:finishing', 'page.permission:finishing_workflow,edit'])->name('finishing-workflow.logistics');
+        Route::post('/dyeing-machines', [KnittingMachineController::class, 'registerDyeing'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_machines,edit'])->name('dyeing-machines.store');
+        Route::patch('/dyeing-machines/{machine}/capacity', [KnittingMachineController::class, 'updateDyeingCapacity'])
+            ->middleware(['man.department:dyeing', 'page.permission:dyeing_machines,edit'])->name('dyeing-machines.capacity');
+        Route::get('/finishing-machines', [KnittingMachineController::class, 'finishing'])
+            ->middleware(['man.department:finishing', 'page.permission:finishing_machines,view'])->name('finishing-machines.index');
+        Route::put('/finishing-machines/{machine}/assign', [KnittingMachineController::class, 'assignFinishing'])
+            ->middleware(['man.department:finishing', 'page.permission:finishing_machines,edit'])->name('finishing-machines.assign');
+        Route::delete('/finishing-machines/{machine}/assign', [KnittingMachineController::class, 'unassignFinishing'])
+            ->middleware(['man.department:finishing', 'page.permission:finishing_machines,edit'])->name('finishing-machines.unassign');
+        Route::post('/finishing-machines', [KnittingMachineController::class, 'registerFinishing'])
+            ->middleware(['man.department:finishing', 'page.permission:finishing_machines,edit'])->name('finishing-machines.store');
+        Route::get('/boiler-machines', [KnittingMachineController::class, 'boiler'])
+            ->middleware(['man.department:boiler', 'page.permission:boiler_machines,view'])->name('boiler-machines.index');
+        Route::post('/boiler-machines', [KnittingMachineController::class, 'registerBoiler'])
+            ->middleware(['man.department:boiler', 'page.permission:boiler_machines,edit'])->name('boiler-machines.store');
+        Route::put('/boiler-machines/{machine}/steam-machines', [KnittingMachineController::class, 'syncBoilerSteamMachines'])
+            ->middleware(['man.department:boiler', 'page.permission:boiler_machines,edit'])->name('boiler-machines.steam-machines.sync');
     });
 
     // ── Recipes (moved from Inventory → Manufacturing; dyeing lab chemist owns it).
@@ -158,6 +232,10 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
 
                 Route::post('/fabric', 'storeFabric')
                     ->middleware('page.permission:knitting_yarn,edit')->name('store-fabric');
+                Route::post('/orders/{salesOrder}/request-setup', 'requestSetup')
+                    ->middleware('page.permission:knitting_yarn,edit')->name('request-setup');
+                Route::post('/orders/{salesOrder}/submit-for-supervisor', 'submitForSupervisor')
+                    ->middleware('page.permission:knitting_yarn,edit')->name('submit-for-supervisor');
                 Route::post('/machine-report', 'reportMachine')
                     ->middleware('page.permission:knitting_yarn,edit')->name('report-machine');
                 Route::post('mark-done/{id}', 'markDone')
@@ -167,6 +245,17 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                 // Flag Reports: yarn staff → knitting mechanics channel
                 Route::post('/flag-report', 'storeFlag')
                     ->middleware('page.permission:flag_reports,edit')->name('flag-report');
+            });
+
+        // Knitting Inspector (approves or returns knitting output)
+        Route::prefix('knitting-inspector')->name('staff.knitting-inspector.')->controller(KnittingInspectorController::class)
+            ->middleware('man.role:knitting_inspector')
+            ->group(function () {
+                Route::get('/', 'dashboard')->middleware('page.permission:dashboard,view')->name('dashboard');
+                Route::get('/inspection', 'inspection')->middleware('page.permission:knitting_inspector,view')->name('page');
+                Route::get('/history', 'history')->middleware('page.permission:history,view')->name('history');
+                Route::get('/reports', 'reports')->middleware('page.permission:reports,view')->name('reports');
+                Route::post('/fabric/{id}/pass', 'passFabric')->middleware('page.permission:knitting_inspector,edit')->name('pass-fabric');
             });
 
         // Knitting Mechanic (setup, changeover, calibration, preventive)
@@ -203,6 +292,18 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                     ->middleware('page.permission:dashboard,view')->name('dashboard');
                 Route::get('/shades', 'shades')
                     ->middleware('page.permission:dyeing_lab_chemist,view')->name('page');
+                Route::get('/pantones', 'pantones')
+                    ->middleware('page.permission:pantones,view')->name('pantones');
+                Route::get('/knit-fabric-requests', 'knitFabricRequests')
+                    ->middleware('page.permission:knit_fabric_requests,view')->name('knit-fabric-requests');
+                Route::get('/pantones/{pantoneReference}', 'showPantone')
+                    ->middleware('page.permission:pantones,view')->name('pantones.show');
+                Route::post('/pantones', 'storePantone')
+                    ->middleware('page.permission:dyeing_lab_chemist,edit')->name('pantones.store');
+                Route::patch('/pantones/{pantoneReference}', 'updatePantone')
+                    ->middleware('page.permission:dyeing_lab_chemist,edit')->name('pantones.update');
+                Route::patch('/pantones/{pantoneReference}/fabrics/{pantoneFabricFormula}', 'updatePantoneFabricFormula')
+                    ->middleware('page.permission:dyeing_lab_chemist,edit')->name('pantones.fabric-formula.update');
                 Route::get('/tests', 'tests')
                     ->middleware('page.permission:lab_tests,view')->name('tests');
                 Route::get('/inventory', 'inventory')
@@ -223,6 +324,12 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                     ->middleware('page.permission:dyeing_lab_chemist,edit')->name('sample.start');
                 Route::post('/sample-requests/{sampleRequest}/formulate', 'formulateSample')
                     ->middleware('page.permission:dyeing_lab_chemist,edit')->name('sample.formulate');
+                Route::patch('/sample-requests/{sampleRequest}/pantone', 'linkSamplePantone')
+                    ->middleware('page.permission:dyeing_lab_chemist,edit')->name('sample.pantone');
+                Route::delete('/sample-requests/{sampleRequest}/pantone', 'unlinkSamplePantone')
+                    ->middleware('page.permission:dyeing_lab_chemist,edit')->name('sample.pantone.unlink');
+                Route::post('/sample-requests/{sampleRequest}/request-knit-fabric', 'requestKnitFabric')
+                    ->middleware('page.permission:dyeing_lab_chemist,edit')->name('sample.request-knit-fabric');
                 Route::post('/test', 'storeTest')
                     ->middleware('page.permission:lab_tests,edit')->name('store-test');
                 Route::post('/solution', 'storeSolution')
@@ -231,6 +338,17 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                     ->middleware('page.permission:lab_tests,edit')->name('destroy-solution');
                 Route::post('/sign-off', 'signOff')
                     ->middleware('page.permission:lab_tests,edit')->name('sign-off');
+            });
+
+        // Small knit fabric samples for Dyeing Lab Chemist requests; separate from Job Order fabric.
+        Route::prefix('knitting-sample')->name('staff.knitting-sample.')->controller(KnittingSampleController::class)
+            ->middleware('man.role:knitting_sample')->group(function () {
+                Route::get('/', 'dashboard')->middleware('page.permission:dashboard,view')->name('dashboard');
+                Route::get('/queue', 'index')->middleware('page.permission:knitting_sample,view')->name('page');
+                Route::get('/history', 'history')->middleware('page.permission:history,view')->name('history');
+                Route::get('/reports', 'reports')->middleware('page.permission:reports,view')->name('reports');
+                Route::patch('/{sample}/start', 'start')->middleware('page.permission:knitting_sample,edit')->name('start');
+                Route::post('/{sample}/complete', 'complete')->middleware('page.permission:knitting_sample,edit')->name('complete');
             });
 
         // Dyeing Color
@@ -252,61 +370,116 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                     ->middleware('page.permission:dyeing_color,edit')->name('report-machine');
             });
 
-        // Dyeing Fabric Softener
-        Route::prefix('dyeing-fabric-softener')->name('staff.dyeing-fabric-softener.')->controller(DyeingFabricSoftenerController::class)
-            ->middleware('man.role:dyeing_fabric_softener')
+        // Dyeing Bleaching
+        Route::prefix('dyeing-bleaching')->name('staff.dyeing-bleaching.')->controller(DyeingBleachingController::class)
+            ->middleware('man.role:dyeing_bleaching')
             ->group(function () {
                 Route::get('/', 'index')
                     ->middleware('page.permission:dashboard,view')->name('dashboard');
-                Route::get('/dyeing-fabric-softener', 'dyeingFabricSoftener')
-                    ->middleware('page.permission:dyeing_fabric_softener,view')->name('page');
-                Route::get('/reports', 'reports')
-                    ->middleware('page.permission:reports,view')->name('reports');
+                Route::get('/bleaching', 'bleaching')
+                    ->middleware('page.permission:dyeing_bleaching,view')->name('page');
                 Route::get('/history', 'history')
                     ->middleware('page.permission:history,view')->name('history');
-
-                Route::post('/soften', 'storeSoftener')
-                    ->middleware('page.permission:dyeing_fabric_softener,edit')->name('store-soften');
-                Route::post('/machine-report', 'reportMachine')
-                    ->middleware('page.permission:dyeing_fabric_softener,edit')->name('report-machine');
+                Route::get('/reports', 'reports')
+                    ->middleware('page.permission:reports,view')->name('reports');
+                Route::post('/bleach', 'storeBleaching')
+                    ->middleware('page.permission:dyeing_bleaching,edit')->name('store-bleach');
             });
 
-        // Dyeing Squeezer
-        Route::prefix('dyeing-squeezer')->name('staff.dyeing-squeezer.')->controller(DyeingSqueezerController::class)
-            ->middleware('man.role:dyeing_squeezer')
+        // Dyeing Post Treatment staff workspace
+        Route::prefix('dyeing-treatment')->name('staff.dyeing-treatment.')->controller(DyeingTreatmentController::class)
+            ->middleware('man.role:dyeing_treatment')->group(function () {
+                Route::get('/', 'dashboard')->middleware('page.permission:dashboard,view')->name('dashboard');
+                Route::get('/work', 'work')->middleware('page.permission:dyeing_treatment,view')->name('page');
+                Route::post('/work/submit', 'submit')->middleware('page.permission:dyeing_treatment,edit')->name('submit');
+                Route::get('/history', 'history')->middleware('page.permission:history,view')->name('history');
+                Route::get('/reports', 'reports')->middleware('page.permission:reports,view')->name('reports');
+            });
+
+        // Dyeing Pre Treatment staff workspace
+        Route::prefix('dyeing-pre-treatment')->name('staff.dyeing-pre-treatment.')->controller(DyeingTreatmentController::class)
+            ->middleware('man.role:dyeing_pre_treatment')->group(function () {
+                Route::get('/', 'dashboard')->middleware('page.permission:dashboard,view')->name('dashboard');
+                Route::get('/work', 'work')->middleware('page.permission:dyeing_pre_treatment,view')->name('page');
+                Route::post('/work/submit', 'submit')->middleware('page.permission:dyeing_pre_treatment,edit')->name('submit');
+                Route::get('/history', 'history')->middleware('page.permission:history,view')->name('history');
+                Route::get('/reports', 'reports')->middleware('page.permission:reports,view')->name('reports');
+            });
+
+        // Finishing Squeezer
+        Route::prefix('finishing-squeezer')->name('staff.finishing-squeezer.')->controller(DyeingSqueezerController::class)
+            ->middleware('man.role:finishing_squeezer')
             ->group(function () {
                 Route::get('/', 'index')
                     ->middleware('page.permission:dashboard,view')->name('dashboard');
-                Route::get('/dyeing-squeezer', 'dyeingSqueezer')
-                    ->middleware('page.permission:dyeing_squeezer,view')->name('page');
+                Route::get('/squeezer', [FinishingWorkflowStaffController::class, 'work'])
+                    ->middleware('page.permission:finishing_squeezer,view')->name('page');
+                Route::post('/work/{item}/complete', [FinishingWorkflowStaffController::class, 'complete'])
+                    ->middleware('page.permission:finishing_squeezer,edit')->name('work.complete');
                 Route::get('/reports', 'reports')
                     ->middleware('page.permission:reports,view')->name('reports');
                 Route::get('/history', 'history')
                     ->middleware('page.permission:history,view')->name('history');
 
                 Route::post('/squeeze', 'storeSqueezer')
-                    ->middleware('page.permission:dyeing_squeezer,edit')->name('store-squeeze');
+                    ->middleware('page.permission:finishing_squeezer,edit')->name('store-squeeze');
                 Route::post('/machine-report', 'reportMachine')
-                    ->middleware('page.permission:dyeing_squeezer,edit')->name('report-machine');
+                    ->middleware('page.permission:finishing_squeezer,edit')->name('report-machine');
             });
 
-        // Dyeing Ironing
-        Route::prefix('dyeing-ironing')->name('staff.dyeing-ironing.')->controller(DyeingIroningController::class)
-            ->middleware('man.role:dyeing_ironing')
+        // Finishing Heatsetting
+        Route::prefix('finishing-ironing')->name('staff.finishing-ironing.')->controller(DyeingIroningController::class)
+            ->middleware('man.role:finishing_ironing')
             ->group(function () {
                 Route::get('/', 'index')
                     ->middleware('page.permission:dashboard,view')->name('dashboard');
-                Route::get('/dyeing-ironing', 'dyeingIroning')
-                    ->middleware('page.permission:dyeing_ironing,view')->name('page');
+                Route::get('/ironing', [FinishingWorkflowStaffController::class, 'work'])
+                    ->middleware('page.permission:finishing_ironing,view')->name('page');
+                Route::post('/work/{item}/complete', [FinishingWorkflowStaffController::class, 'complete'])
+                    ->middleware('page.permission:finishing_ironing,edit')->name('work.complete');
                 Route::get('/reports', 'reports')
                     ->middleware('page.permission:reports,view')->name('reports');
                 Route::get('/history', 'history')
                     ->middleware('page.permission:history,view')->name('history');
 
                 Route::post('/iron', 'storeIron')
-                    ->middleware('page.permission:dyeing_ironing,edit')->name('store-iron');
+                    ->middleware('page.permission:finishing_ironing,edit')->name('store-iron');
                 Route::post('/machine-report', 'reportMachine')
-                    ->middleware('page.permission:dyeing_ironing,edit')->name('report-machine');
+                    ->middleware('page.permission:finishing_ironing,edit')->name('report-machine');
+            });
+
+        // Finishing Hydro station workspace
+        Route::prefix('finishing-hydro')->name('staff.finishing-hydro.')->controller(FinishingStationController::class)
+            ->middleware('man.role:finishing_hydro')->group(function () {
+                Route::get('/', 'dashboard')->middleware('page.permission:dashboard,view')->name('dashboard');
+                Route::get('/work', [FinishingWorkflowStaffController::class, 'work'])->middleware('page.permission:finishing_hydro,view')->name('page');
+                Route::post('/work/{item}/complete', [FinishingWorkflowStaffController::class, 'complete'])->middleware('page.permission:finishing_hydro,edit')->name('work.complete');
+                Route::get('/history', 'history')->middleware('page.permission:history,view')->name('history');
+                Route::get('/reports', 'reports')->middleware('page.permission:reports,view')->name('reports');
+            });
+
+        // Finishing Tubetex station workspace
+        Route::prefix('finishing-tubetex')->name('staff.finishing-tubetex.')->controller(FinishingStationController::class)
+            ->middleware('man.role:finishing_tubetex')->group(function () {
+                Route::get('/', 'dashboard')->middleware('page.permission:dashboard,view')->name('dashboard');
+                Route::get('/work', [FinishingWorkflowStaffController::class, 'work'])->middleware('page.permission:finishing_tubetex,view')->name('page');
+                Route::post('/work/{item}/complete', [FinishingWorkflowStaffController::class, 'complete'])->middleware('page.permission:finishing_tubetex,edit')->name('work.complete');
+                Route::get('/history', 'history')->middleware('page.permission:history,view')->name('history');
+                Route::get('/reports', 'reports')->middleware('page.permission:reports,view')->name('reports');
+            });
+
+        // Finishing Shrinkage Inspector handles squeezer and ironing quality gates.
+        // Final package inspection remains with Finishing Quality Checker.
+        Route::prefix('finishing-inspector')->name('staff.finishing-inspector.')->controller(FinishingInspectorController::class)
+            ->middleware('man.role:finishing_inspector')
+            ->group(function () {
+                Route::get('/', 'index')->middleware('page.permission:dashboard,view')->name('dashboard');
+                Route::get('/inspection', [FinishingWorkflowStaffController::class, 'inspection'])->middleware('page.permission:finishing_inspector,view')->name('page');
+                Route::post('/work/{item}/shrinkage', [FinishingWorkflowStaffController::class, 'inspectShrinkage'])->middleware('page.permission:finishing_inspector,edit')->name('shrinkage.inspect');
+                Route::get('/history', 'history')->middleware('page.permission:history,view')->name('history');
+                Route::get('/reports', 'reports')->middleware('page.permission:reports,view')->name('reports');
+                Route::post('/squeezer/{id}/pass', 'passSqueezer')->middleware('page.permission:finishing_inspector,edit')->name('pass-squeezer');
+                Route::post('/iron/{id}/pass', 'passIron')->middleware('page.permission:finishing_inspector,edit')->name('pass-iron');
             });
 
         // Finishing Packaging (ironing flows directly here; forming stage removed)
@@ -315,8 +488,10 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
             ->group(function () {
                 Route::get('/', 'index')
                     ->middleware('page.permission:dashboard,view')->name('dashboard');
-                Route::get('/packaging', 'packaging')
+                Route::get('/packaging', [FinishingWorkflowStaffController::class, 'pack'])
                     ->middleware('page.permission:finishing_packaging,view')->name('page');
+                Route::post('/package-group/{workOrder}', [FinishingWorkflowStaffController::class, 'storePackageGroup'])
+                    ->middleware('page.permission:finishing_packaging,edit')->name('package-group.store');
                 Route::get('/reports', 'reports')
                     ->middleware('page.permission:reports,view')->name('reports');
                 Route::get('/history', 'history')
@@ -339,8 +514,6 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                 Route::get('/reports', 'reports')
                     ->middleware('page.permission:reports,view')->name('reports');
 
-                Route::post('/machine', 'storeMachine')
-                    ->middleware('page.permission:maintenance_checker,edit')->name('store-machine');
                 Route::patch('/machine/{id}', 'updateMachineStatus')
                     ->middleware('page.permission:maintenance_checker,edit')->name('update-machine');
                 Route::patch('/report/{id}', 'resolveReport')
@@ -398,19 +571,25 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                     ->middleware('page.permission:safety_officer,edit')->name('update-status');
             });
 
-        // Quality Checker (Finishing) — inspects packaging outputs only. The
+        // Finishing Quality Checker inspects packaging outputs only. The
         // knitting/dyeing gates moved to the department supervisors (man.gates.*).
         Route::prefix('checker-quality')->name('staff.checker-quality.')->controller(CheckerQualityController::class)
             ->middleware(['man.role:checker_quality'])
             ->group(function () {
                 Route::get('/', 'index')
                     ->middleware('page.permission:dashboard,view')->name('dashboard');
-                Route::get('/production', 'production')
+                Route::get('/production', [FinishingWorkflowStaffController::class, 'quality'])
                     ->middleware('page.permission:checker_quality,view')->name('production');
                 // Work page alias: every staff role exposes a `.page` route
                 // for the sidebar; checker-quality's work page is production.
-                Route::get('/work', 'production')
+                Route::get('/work', [FinishingWorkflowStaffController::class, 'quality'])
                     ->middleware('page.permission:checker_quality,view')->name('page');
+                Route::post('/finishing/{workOrder}/quality-check', [FinishingWorkflowStaffController::class, 'checkQuality'])
+                    ->middleware('page.permission:checker_quality,edit')->name('finishing.quality-check');
+                Route::get('/history', 'history')
+                    ->middleware('page.permission:history,view')->name('history');
+                Route::get('/reports', 'reports')
+                    ->middleware('page.permission:reports,view')->name('reports');
 
                 Route::post('/package/{id}/inspect', 'inspectPackage')
                     ->middleware('page.permission:checker_quality,edit')->name('inspect-package');

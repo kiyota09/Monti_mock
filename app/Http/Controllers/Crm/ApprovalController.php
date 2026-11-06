@@ -149,7 +149,7 @@ class ApprovalController extends Controller
     public function scheduleMeeting(Request $request, $id)
     {
         $validated = $request->validate([
-            'scheduled_at' => 'required|date',
+            'scheduled_at' => 'required|date|after:now',
             'meeting_type' => 'required|string',
             'location'     => 'nullable|string',
             'notes'        => 'nullable|string',

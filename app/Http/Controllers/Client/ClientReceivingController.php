@@ -42,6 +42,11 @@ class ClientReceivingController extends Controller
                     'origin'           => $delivery->origin_label ?? $delivery->route?->origin,
                     'destination'      => $delivery->route?->destination ?? $myStop?->address,
                     'stop_status'      => $myStop?->status,
+                    'stop_outcome'     => $myStop?->outcome,
+                    'received_by'      => in_array($myStop?->outcome, ['delivered', 'partial'], true)
+                        ? $myStop?->recipient_name
+                        : null,
+                    'stop_completed_at' => $myStop?->completed_at,
                     'packages'         => $delivery->packages->map(fn ($pkg) => [
                         'package_number' => $pkg->package_number,
                         'product_name'   => $pkg->product?->name,

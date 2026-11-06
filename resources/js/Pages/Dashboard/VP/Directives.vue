@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -14,7 +15,7 @@ const form = useForm({ title: '', body: '', assigned_to: '', due_date: '', prior
 const submit = () => form.post(route('vp.directives.store'), { preserveScroll: true, onSuccess: () => { showForm.value = false; form.reset(); } });
 
 const advance = (d, next, notes = '') => router.patch(route('vp.directives.update', d.id), { status: next, completion_notes: notes || undefined }, { preserveScroll: true });
-const removeDirective = (d) => { if (confirm(`Remove directive "${d.title}"?`)) router.delete(route('vp.directives.destroy', d.id), { preserveScroll: true }); };
+const removeDirective = async (d) => { if (await confirmModal(`Remove directive "${d.title}"?`)) router.delete(route('vp.directives.destroy', d.id), { preserveScroll: true }); };
 
 const badge = (s) => s === 'done'
     ? 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30'

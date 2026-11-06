@@ -343,7 +343,7 @@
                             <p class="relative text-blue-100/90 text-xs mt-1">For {{ selectedApplicant?.name }}</p>
                         </div>
                         <div class="p-6 space-y-4">
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Date & Time *</label><input type="datetime-local" v-model="scheduleForm.scheduled_at" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-800 border-none ring-1 ring-slate-200 dark:ring-zinc-700 focus:ring-2 focus:ring-indigo-500 outline-none transition" required /></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Date & Time *</label><input type="datetime-local" v-model="scheduleForm.scheduled_at" :min="minimumScheduleDateTime()" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-800 border-none ring-1 ring-slate-200 dark:ring-zinc-700 focus:ring-2 focus:ring-indigo-500 outline-none transition" required /></div>
                             <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Interview Type *</label><select v-model="scheduleForm.interview_type" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-800 border-none ring-1 ring-slate-200 dark:ring-zinc-700 focus:ring-2 focus:ring-indigo-500 outline-none transition"><option value="">Select type</option><option value="phone">Phone Screen</option><option value="technical">Technical Interview</option><option value="behavioral">Behavioral Interview</option><option value="onsite">On-site Interview</option><option value="video">Video Conference</option></select></div>
                             <div class="grid grid-cols-2 gap-4"><div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Duration (min)</label><select v-model="scheduleForm.duration" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-800 border-none ring-1 ring-slate-200 dark:ring-zinc-700 outline-none"><option value="15">15</option><option value="30">30</option><option value="45">45</option><option value="60">60</option></select></div><div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Location</label><input type="text" v-model="scheduleForm.location" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-800 border-none ring-1 ring-slate-200 dark:ring-zinc-700 outline-none" placeholder="Office/Meeting link" /></div></div>
                             <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Interviewer(s)</label><input type="text" v-model="scheduleForm.interviewer" class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-800 border-none ring-1 ring-slate-200 dark:ring-zinc-700 outline-none" placeholder="Name of interviewer(s)" /></div>
@@ -499,6 +499,12 @@ const getInterviewTypeLabel = (type) => {
     return map[type?.toLowerCase()] || type || 'Interview';
 };
 
+const minimumScheduleDateTime = () => {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+};
+
 // Open modals
 const openScheduleModal = (applicant) => {
     if (!canEdit.value) { triggerToast('No permission to schedule interviews.', 'error'); return; }
@@ -560,6 +566,10 @@ const closeDetailPanel = () => {
 const scheduleInterview = () => {
     if (!scheduleForm.value.scheduled_at || !scheduleForm.value.interview_type) {
         triggerToast('Please fill in all required fields.', 'error');
+        return;
+    }
+    if (new Date(scheduleForm.value.scheduled_at) <= new Date()) {
+        triggerToast('Choose an interview date and time in the future.', 'error');
         return;
     }
     router.post(route('logistics.interview.schedule', selectedApplicant.value.id), scheduleForm.value, {

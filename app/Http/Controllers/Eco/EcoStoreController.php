@@ -13,7 +13,7 @@ class EcoStoreController extends Controller
     {
         // Load only active products with their images
         $products = Product::where('status', 'Active')
-            ->with(['images' => function ($query) {
+            ->with(['yarnMaterials', 'images' => function ($query) {
                 // Order by ID since sort_order is gone
                 $query->orderBy('id', 'asc');
             }])
@@ -47,6 +47,17 @@ class EcoStoreController extends Controller
                     'category' => $product->category,
                     'subcategory' => $product->subcategory,
                     'description' => $product->description,
+                    'colors' => $product->colors ?? [],
+                    'colorName' => $product->color_name,
+                    'colorHex' => $product->color_hex,
+                    'yarnMaterials' => $product->yarnMaterials->map(fn ($material) => [
+                        'id' => $material->id,
+                        'mat_id' => $material->mat_id,
+                        'name' => $material->name,
+                        'display_name' => $material->display_name,
+                        'yarn_tier' => $material->yarn_tier,
+                        'unit' => $material->unit,
+                    ])->values()->toArray(),
                     'unit_cost' => $product->unit_cost, // Needed for Margin calculation in Vue
                     'selling_price' => $product->selling_price,
                     'stock_on_hand' => $product->stock_on_hand,

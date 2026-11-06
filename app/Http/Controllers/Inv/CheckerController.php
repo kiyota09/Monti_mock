@@ -60,7 +60,7 @@ class CheckerController extends Controller
         MaterialRequest::create([
             'req_number' => $reqNumber,
             'material_id' => $material->id,
-            'material_name' => $material->name,
+            'material_name' => $material->display_name,
             'category' => $material->category,
             'unit' => $material->unit,
             'current_stock' => (float) $currentStock,

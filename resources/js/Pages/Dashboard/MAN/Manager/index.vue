@@ -44,9 +44,9 @@ const DEPT_LABELS = {
     maintenance: 'Maintenance Department',
 };
 const DEPT_ROLES = {
-    knitting: ['knitting_yarn', 'knitting_mechanic'],
-    dyeing: ['dyeing_color', 'dyeing_fabric_softener', 'dyeing_squeezer', 'dyeing_ironing', 'dyeing_lab_chemist'],
-    finishing: ['finishing_packaging', 'checker_quality'],
+    knitting: ['knitting_yarn', 'knitting_mechanic', 'knitting_inspector', 'knitting_sample'],
+    dyeing: ['dyeing_color', 'dyeing_bleaching', 'dyeing_pre_treatment', 'dyeing_treatment', 'dyeing_lab_chemist'],
+    finishing: ['finishing_squeezer', 'finishing_ironing', 'finishing_hydro', 'finishing_tubetex', 'finishing_packaging', 'finishing_inspector', 'checker_quality'],
     maintenance: ['maintenance_checker', 'pollution_control_operator', 'safety_officer'],
     boiler: ['boiler_operator'],
 };
@@ -203,17 +203,24 @@ const ALL_ROLE_OPTIONS = [
     { value: '', label: 'Select Role' },
     { value: 'knitting_yarn', label: 'Knitting Yarn' },
     { value: 'knitting_mechanic', label: 'Knitting Mechanic' },
+    { value: 'knitting_inspector', label: 'Knitting Inspector' },
+    { value: 'knitting_sample', label: 'Knitting Sample Staff' },
     { value: 'dyeing_color', label: 'Dyeing Color' },
-    { value: 'dyeing_fabric_softener', label: 'Dyeing Fabric Softener' },
-    { value: 'dyeing_squeezer', label: 'Dyeing Squeezer' },
-    { value: 'dyeing_ironing', label: 'Dyeing Ironing' },
+    { value: 'dyeing_bleaching', label: 'Dyeing Bleaching' },
+    { value: 'dyeing_pre_treatment', label: 'Dyeing Pre Treatment Staff' },
+    { value: 'dyeing_treatment', label: 'Dyeing Post Treatment Staff' },
+    { value: 'finishing_squeezer', label: 'Finishing Squeezer' },
+    { value: 'finishing_ironing', label: 'Finishing Heatsetting' },
+    { value: 'finishing_hydro', label: 'Finishing Hydro' },
+    { value: 'finishing_tubetex', label: 'Finishing Tubetex' },
     { value: 'finishing_packaging', label: 'Finishing Packaging' },
+    { value: 'finishing_inspector', label: 'Finishing Shrinkage Inspector' },
     { value: 'dyeing_lab_chemist', label: 'Dyeing Lab Chemist' },
     { value: 'maintenance_checker', label: 'Maintenance Checker' },
     { value: 'pollution_control_operator', label: 'Pollution Control Operator' },
     { value: 'safety_officer', label: 'Safety Officer' },
     { value: 'boiler_operator', label: 'Boiler Operator' },
-    { value: 'checker_quality', label: 'Checker Quality' },
+    { value: 'checker_quality', label: 'Finishing Quality Checker' },
 ];
 const roleOptions = computed(() => {
     if (!props.department || !DEPT_ROLES[props.department]) return ALL_ROLE_OPTIONS;

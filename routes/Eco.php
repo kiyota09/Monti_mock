@@ -5,6 +5,8 @@ use App\Http\Controllers\Eco\EcoClientController;
 use App\Http\Controllers\Eco\EcoCreditController;
 use App\Http\Controllers\Eco\EcoDashboardController;
 use App\Http\Controllers\Eco\EcoPushController;
+use App\Http\Controllers\Eco\EcoProductPricingController;
+use App\Http\Controllers\Ord\OrdReturnsController;
 use App\Http\Controllers\Eco\EcoStoreController;
 use App\Http\Controllers\Eco\EcoSupplierController;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +27,12 @@ Route::prefix('dashboard/eco')->name('eco.')->middleware(['auth', 'verified', 'm
     // Store (product catalog)
     Route::get('/store', [EcoStoreController::class, 'index'])
         ->middleware('page.permission:store,view')->name('store');
+    Route::get('/pricing', [EcoProductPricingController::class, 'index'])
+        ->middleware('page.permission:pricing,view')->name('pricing');
+    Route::post('/pricing', [EcoProductPricingController::class, 'update'])
+        ->middleware('page.permission:pricing,edit')->name('pricing.update');
+    Route::post('/pricing/settings', [EcoProductPricingController::class, 'updateSettings'])
+        ->middleware('page.permission:pricing,edit')->name('pricing.settings');
     // NOTE: client inquiries & conversations moved to the CRM module
     // (dashboard/crm/inquiries) — highly customized orders belong with the
     // relationship workflow, not the storefront.
@@ -44,6 +52,14 @@ Route::prefix('dashboard/eco')->name('eco.')->middleware(['auth', 'verified', 'm
         ->middleware('page.permission:credit,edit')->name('credit.approve-order');
     Route::post('/credit/reject/{order}', [EcoCreditController::class, 'rejectOrder'])
         ->middleware('page.permission:credit,edit')->name('credit.reject');
+    // Returns & RMA Management shares the order return lifecycle with ORD,
+    // while access is independently controlled by the ECO returns page grant.
+    Route::get('/returns', [OrdReturnsController::class, 'index'])
+        ->middleware('page.permission:returns,view')->name('returns');
+    Route::post('/returns', [OrdReturnsController::class, 'store'])
+        ->middleware('page.permission:returns,edit')->name('returns.store');
+    Route::post('/returns/{id}/resolve', [OrdReturnsController::class, 'resolve'])
+        ->middleware('page.permission:returns,edit')->name('returns.resolve');
     // Push to SCM / Order Management
     Route::get('/push', [EcoPushController::class, 'index'])
         ->middleware('page.permission:push,view')->name('push');

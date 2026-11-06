@@ -290,8 +290,7 @@ import { ref, computed, watch } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 import {
     CheckIcon, ArrowUpTrayIcon, DocumentTextIcon, CalendarIcon, ClipboardDocumentCheckIcon,
     PaperAirplaneIcon, BellIcon, PaperClipIcon,

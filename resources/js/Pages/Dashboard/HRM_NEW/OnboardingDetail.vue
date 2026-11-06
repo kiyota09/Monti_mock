@@ -964,9 +964,8 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Swal from 'sweetalert2';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { dialog } from '@/lib/feedback';
+import { toast } from '@/lib/feedback';
 import {
     Pencil, CheckCircle2, UserPlus, User, Briefcase, ClipboardCheck, FileText,
     CalendarDays, StickyNote, Check, X, Plus, Download, Trash2,
@@ -1227,7 +1226,7 @@ const storeNote = () => {
 };
 
 const deleteNote = (note) => {
-    Swal.fire({
+    dialog.fire({
         title: 'Delete note?',
         text: 'This note will be permanently removed.',
         icon: 'warning',
@@ -1253,7 +1252,7 @@ const confirmComplete = () => {
         toast.error('Complete all required items and mandatory activities first.');
         return;
     }
-    Swal.fire({
+    dialog.fire({
         title: 'Complete Onboarding?',
         text: 'This marks the onboarding as completed. You can then create the employee record.',
         icon: 'question',
@@ -1454,7 +1453,7 @@ const confirmCreateEmployee = () => {
         toast.error('The onboarding must be completed before creating the employee record.');
         return;
     }
-    Swal.fire({
+    dialog.fire({
         title: 'Create Employee Record?',
         html: 'This will generate an employee record from the verified applicant data, update the application to <b>Hired</b>, and finalize onboarding.',
         icon: 'info',

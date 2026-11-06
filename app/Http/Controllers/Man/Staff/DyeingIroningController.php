@@ -12,141 +12,68 @@ class DyeingIroningController extends ManufacturingStaffController
 {
     public function index()
     {
-        // Checker gate: only squeezer jobs whose fabric the quality checker
-        // already approved to 'iron' may be ironed.
-        $pendingQuery = SqueezerJob::whereDoesntHave('ironJob')
-            ->whereHas('softenerJob.fabric', function ($q) {
-                $q->where('status', 'iron');
-                $this->scopeToAssignment($q);
-            });
-        $pendingCount = $pendingQuery->count();
-
-        $recentJobs = IronJob::with('squeezerJob.softenerJob.fabric')
-            ->where('operator_id', $this->staff()->id)
-            ->latest()
-            ->take(10)
-            ->get();
-
-        $nextQueueQuery = SqueezerJob::with('softenerJob.fabric')
-            ->whereDoesntHave('ironJob')
-            ->whereHas('softenerJob.fabric', function ($q) {
-                $q->where('status', 'iron');
-                $this->scopeToAssignment($q);
-            });
-        $nextQueue = $nextQueueQuery
-            ->orderBy('created_at', 'asc')
-            ->take(3)
-            ->get(['id', 'code', 'created_at']);
-
+        $ready = $this->readySqueezerJobs()->count();
         return Inertia::render('Dashboard/MAN/Employee/DyeingIroning/Index', [
-            'stats' => [
-                'pending' => $pendingCount,
-                'total_today' => IronJob::whereDate('processed_at', today())->count(),
-            ],
-            'recentJobs' => $recentJobs,
-            // Ironing has no dedicated machine type — machine context is null.
-            'efficiency' => array_merge(
-                $this->staffEfficiency(IronJob::class),
-                ['machines' => $this->machineAvailability(null)]
-            ),
-            'nextQueue' => $nextQueue,
+            'stats' => ['pending' => $ready, 'total_today' => IronJob::whereDate('processed_at', today())->count()],
+            'recentJobs' => IronJob::with('squeezerJob.fabric', 'operator')->where('operator_id', $this->staff()->id)->latest()->take(10)->get(),
+            'efficiency' => array_merge($this->staffEfficiency(IronJob::class), ['machines' => $this->machineAvailability(null)]),
+            'nextQueue' => $this->readySqueezerJobs()->with('fabric')->orderBy('created_at')->take(3)->get(),
         ]);
     }
 
-    /**
-     * Personal work log — own iron jobs only.
-     */
     public function history()
     {
         return Inertia::render('Dashboard/MAN/Employee/Common/History', [
-            'roleLabel' => 'Dyeing Ironing',
-            'historyRoute' => 'man.staff.dyeing-ironing.history',
+            'roleLabel' => 'Finishing Heatsetting', 'historyRoute' => 'man.staff.finishing-ironing.history',
             'dateColumn' => 'processed_at',
-            'jobs' => $this->staffHistory(IronJob::class, ['squeezerJob.softenerJob.fabric.machine', 'squeezerJob.softenerJob.fabric.salesOrder.client', 'squeezerJob.softenerJob.fabric.salesOrder.recipe.product', 'squeezerJob.machine', 'operator']),
+            'jobs' => $this->staffHistory(IronJob::class, ['squeezerJob.fabric.machine', 'squeezerJob.fabric.salesOrder.client', 'squeezerJob.fabric.salesOrder.recipe.product', 'operator']),
         ]);
     }
 
     public function dyeingIroning()
     {
-        // Only checker-approved work: squeezer jobs without an iron job yet
-        // whose fabric sits at 'iron'. Anything still awaiting squeezer QC
-        // is invisible here.
-        $squeezerJobsQuery = SqueezerJob::with('softenerJob.fabric')
-            ->whereDoesntHave('ironJob')
-            ->whereHas('softenerJob.fabric', function ($q) {
-                $q->where('status', 'iron');
-                $this->scopeToAssignment($q);
-            });
-        $squeezerJobs = $squeezerJobsQuery->get();
-
         return Inertia::render('Dashboard/MAN/Employee/DyeingIroning/DyeingIroning', [
-            'squeezerJobs' => $squeezerJobs,
+            'squeezerJobs' => $this->readySqueezerJobs()->with('fabric.salesOrder')->orderBy('created_at')->get(),
         ]);
     }
 
     public function storeIron(Request $request)
     {
-        $validated = $request->validate([
-            'squeezer_job_id' => 'required|exists:squeezer_jobs,id',
-            'remarks' => 'nullable|string',
-        ]);
-
-        $squeezerJob = SqueezerJob::with('softenerJob.fabric')->findOrFail($validated['squeezer_job_id']);
-
-        // Checker gate: the fabric must already sit at 'iron' (checker
-        // approved the squeezer job). Ironing unapproved work is blocked.
-        $fabric = $squeezerJob->softenerJob?->fabric;
-        if (! $fabric || $fabric->status !== 'iron') {
-            return back()->withErrors(['squeezer_job_id' => 'This fabric has not been approved to ironing yet — awaiting quality check.']);
-        }
-        if ($squeezerJob->ironJob()->exists()) {
-            return back()->withErrors(['squeezer_job_id' => 'An iron job is already recorded for this fabric — awaiting quality check.']);
-        }
-        if (! $this->isAssignedItem($fabric->manufacturing_order_id, $fabric->sales_order_id)) {
-            return back()->withErrors(['squeezer_job_id' => 'This Job Order is not assigned to you by your supervisor.']);
-        }
+        $validated = $request->validate(['squeezer_job_id' => 'required|exists:squeezer_jobs,id', 'remarks' => 'nullable|string']);
+        $squeezerJob = SqueezerJob::with('fabric')->findOrFail($validated['squeezer_job_id']);
+        $fabric = $squeezerJob->fabric;
+        return back()->withErrors(['squeezer_job_id' => 'The Finishing Supervisor assigns the Heatsetting or Tubetex route after Water Extraction.']);
+        if (! $fabric || $fabric->status !== 'iron') return back()->withErrors(['squeezer_job_id' => 'This fabric is not approved and ready for ironing.']);
+        if ($squeezerJob->ironJob()->exists()) return back()->withErrors(['squeezer_job_id' => 'An ironing job is already awaiting quality check.']);
+        if (! $this->isAssignedItem($fabric->manufacturing_order_id, $fabric->sales_order_id)) return back()->withErrors(['squeezer_job_id' => 'This Job Order is not assigned to you by your supervisor.']);
 
         IronJob::create([
-            'squeezer_job_id' => $validated['squeezer_job_id'],
-            'remarks' => $validated['remarks'],
-            'operator_id' => $this->staff()->id,
-            'shift' => $this->getShift(),
-            'code' => $this->generateCode('IRON', IronJob::class),
-            'processed_at' => now(),
+            ...$validated, 'operator_id' => $this->staff()->id, 'shift' => $this->getShift(),
+            'code' => $this->generateCode('IRON', IronJob::class), 'processed_at' => now(),
         ]);
-
-        // Checker gate: fabric stays 'iron' until the quality checker
-        // approves it (passIron → packed) or sends it back for rework.
-        // (Forming step removed: approved ironing flows directly to packaging.)
-        return redirect()->back()->with('message', 'Ironing recorded successfully. Awaiting quality check before it can move to packaging.');
+        return back()->with('message', 'Ironing recorded. Awaiting quality check before it can move to packaging.');
     }
 
     public function reports()
     {
-        $myReports = MachineReport::where('reported_by', $this->staff()->id)
-            ->with('machine')
-            ->latest()
-            ->get();
-
         return Inertia::render('Dashboard/MAN/Employee/DyeingIroning/Reports', [
-            'myReports' => $myReports,
+            'myReports' => MachineReport::where('reported_by', $this->staff()->id)->with('machine')->latest()->get(),
         ]);
     }
 
     public function reportMachine(Request $request)
     {
-        $validated = $request->validate([
-            'machine_id' => 'required|exists:machines,id',
-            'issue' => 'required|string',
-        ]);
+        $validated = $request->validate(['machine_id' => 'required|exists:machines,id', 'issue' => 'required|string']);
+        MachineReport::create(['machine_id' => $validated['machine_id'], 'reported_by' => $this->staff()->id, 'issue' => $validated['issue'], 'status' => 'pending']);
+        return back()->with('message', 'Machine issue reported.');
+    }
 
-        MachineReport::create([
-            'machine_id' => $validated['machine_id'],
-            'reported_by' => $this->staff()->id,
-            'issue' => $validated['issue'],
-            'status' => 'pending',
-        ]);
-
-        return redirect()->back()->with('message', 'Machine issue reported.');
+    private function readySqueezerJobs()
+    {
+        $query = SqueezerJob::whereDoesntHave('ironJob')->whereHas('fabric', function ($fabric) {
+            $fabric->where('status', 'iron');
+            $this->scopeToAssignment($fabric);
+        });
+        return $query;
     }
 }

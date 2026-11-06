@@ -1,4 +1,5 @@
 <script setup>
+import { showNotice } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -35,7 +36,7 @@ const openWarehouseModal = (fabric) => {
 
 const submitTotalReject = () => {
     if (!warehouseForm.value.warehouse_id) {
-        alert('Please select a warehouse.');
+        showNotice('Please select a warehouse.');
         return;
     }
     router.post(route('man.manager.rejected.total-reject', selectedFabric.value.id), warehouseForm.value, {

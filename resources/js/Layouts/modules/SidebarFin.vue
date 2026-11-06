@@ -24,7 +24,6 @@ export const finModule = {
             { label: 'Reports', href: route('fin.manager.reports'), icon: BarChart3, permKey: 'reports' },
             { label: 'PO Approvals', href: route('fin.manager.approvals'), icon: Stamp, permKey: 'approvals' },
         ]
-        if (isCEO) return all
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         if (userPosition === 'manager' && user?.role === 'FIN' && !ctx.hasExplicitModuleGrants('FIN')) return all

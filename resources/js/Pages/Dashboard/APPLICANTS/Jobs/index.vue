@@ -7,8 +7,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 import { Briefcase, Clock, FileText, Calendar, GraduationCap, Monitor, ClipboardList, Search } from 'lucide-vue-next';
 
 // ============================================

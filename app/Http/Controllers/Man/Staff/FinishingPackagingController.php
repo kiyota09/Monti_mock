@@ -7,6 +7,8 @@ use App\Models\Man\Machine;
 use App\Models\Man\MachineReport;
 use App\Models\Man\ManufacturingOrder;
 use App\Models\Man\Package;
+use App\Models\Man\FinishingPackageGroup;
+use App\Models\Man\FinishingWorkItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -15,7 +17,14 @@ class FinishingPackagingController extends ManufacturingStaffController
 {
     public function index()
     {
-        $pendingQuery = Fabric::where('status', 'packed')
+        $newFlowPending = FinishingWorkItem::where('status','packing')->count();
+        $newFlowPackages = FinishingPackageGroup::with('items.workItem.fabric')
+            ->where('packed_by',$this->staff()->id)->latest()->take(10)->get()
+            ->map(fn($group)=>[
+                'id'=>$group->id,'code'=>$group->code,'status'=>$group->status,
+                'packaged_at'=>$group->created_at,'items'=>$group->items,
+            ]);
+        $pendingQuery = Fabric::where('status', 'packed')->whereDoesntHave('finishingWorkItem')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('packages')
@@ -30,7 +39,7 @@ class FinishingPackagingController extends ManufacturingStaffController
             ->take(10)
             ->get();
 
-        $nextQueueQuery = Fabric::where('status', 'packed')
+        $nextQueueQuery = Fabric::where('status', 'packed')->whereDoesntHave('finishingWorkItem')
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('packages')
@@ -44,10 +53,11 @@ class FinishingPackagingController extends ManufacturingStaffController
 
         return Inertia::render('Dashboard/MAN/Employee/FinishingPackaging/Index', [
             'stats' => [
-                'pending' => $pendingCount,
-                'total_today' => Package::whereDate('packaged_at', today())->count(),
+                'pending' => $newFlowPending + $pendingCount,
+                'total_today' => $newFlowPackages->filter(fn($group)=>$group['packaged_at']?->isToday())->count()
+                    + Package::where('operator_id',$this->staff()->id)->whereDate('packaged_at', today())->count(),
             ],
-            'recentPackages' => $recentPackages,
+            'recentPackages' => $newFlowPackages->values()->concat($recentPackages)->take(10)->values(),
             'efficiency' => array_merge(
                 $this->staffEfficiency(Package::class, 'packaged_at'),
                 ['machines' => $this->machineAvailability(null)]
@@ -128,6 +138,7 @@ class FinishingPackagingController extends ManufacturingStaffController
         ]);
 
         $fabric = Fabric::findOrFail($validated['fabric_id']);
+        if ($fabric->finishingWorkItem()->exists()) return back()->withErrors(['fabric_id' => 'Pack this JO using grouped Finishing packages.']);
 
         // Ensure the fabric is still ready for packaging and not already packaged
         if ($fabric->status !== 'packed' || $fabric->packages()->exists()) {

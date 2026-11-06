@@ -434,8 +434,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 import {
     LayoutDashboard, Users, Settings2, Hourglass, History, BarChart3,
     Plus, Search, Eye, ArrowRight, X, Copy, Wallet, Banknote,

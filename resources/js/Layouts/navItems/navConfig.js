@@ -76,7 +76,7 @@ export const MODULES = [
             { id: 'man_recipes', label: 'Recipes', icon: Layers, route: 'man.recipes', permission: 'man.production', priority: 80 },
             { id: 'man_rejected', label: 'Rejected Items', icon: XCircle, route: 'man.manager.rejected', permission: 'man.reject', priority: 70 },
             { id: 'man_inventory', label: 'Prod. Inventory', icon: Boxes, route: 'man.inventory.index', permission: 'man.inventory', priority: 65 },
-            { id: 'man_quality_checker', label: 'Quality Checker', icon: CheckCircle2, route: '/dashboard/man/checker-quality', permission: 'man.production', priority: 60 },
+            { id: 'man_quality_checker', label: 'Finishing Quality Checker', icon: CheckCircle2, route: '/dashboard/man/checker-quality', permission: 'man.production', priority: 60 },
         ],
     },
     {

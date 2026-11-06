@@ -1,14 +1,5 @@
 import { computed } from 'vue'
 
-/**
- * Overseer model: the President (CEO role) has NO module access here,
- * EXCEPT the CRM module (shared with the Vice President: vice_president
- * position / COO role, who likewise only sees CRM and never HRM — the COO
- * role is standalone).
- * Executive oversight otherwise runs through the CEO module pages
- * (dashboard, reports, audit, approvals, access) — never these helpers.
- * (Secretary / special_officer rules below are unchanged.)
- */
 export function usePermissions(user, page) {
     const userModuleAccess = computed(() => {
         if (user.value?.position === 'secretary' || user.value?.position === 'special_officer') {
@@ -18,11 +9,13 @@ export function usePermissions(user, page) {
     })
 
     const grantedModules = computed(() => {
-        if (user.value?.is_manufacturing_supervisor) {
-            return page.props.auth.user?.granted_modules || []
-        }
-        return []
+        return (page.props.auth.user?.granted_modules || []).map(module => String(module).toUpperCase())
     })
+
+    const hasUsableModulePage = (moduleName) => {
+        const perms = user.value?.page_permissions || page.props.auth?.page_permissions || []
+        return perms.some(p => String(p.module || '').toUpperCase() === String(moduleName || '').toUpperCase())
+    }
 
     // Secretary / GM: explicit grants win; with no grants yet, fall back to
     // their home (root) module — mirrors backend User::canAccessModule().
@@ -32,15 +25,9 @@ export function usePermissions(user, page) {
     }
 
     const canAccessModule = (moduleName) => {
-        // President (CEO) & Vice President (vice_president / COO) have full
-        // access to the CRM module. Every other module keeps the overseer
-        // model: the President has no access here.
-        if (String(moduleName || '').toUpperCase() === 'CRM'
-            && (user.value?.role === 'CEO' || user.value?.role === 'COO' || user.value?.position === 'vice_president')) return true
-        // Vice President: no HRM — the COO role is standalone.
-        if (String(moduleName || '').toUpperCase() === 'HRM'
-            && (user.value?.role === 'COO' || user.value?.position === 'vice_president')) return false
-        if (user.value?.role === 'CEO') return false
+        const key = String(moduleName || '').toUpperCase()
+        const isExecutive = ['CEO', 'COO'].includes(user.value?.role) || user.value?.position === 'vice_president'
+        if (isExecutive) return grantedModules.value.includes(key) || hasUsableModulePage(key)
         if (user.value?.position === 'secretary' || user.value?.position === 'special_officer') {
             return secretaryHasModule(moduleName)
         }
@@ -53,7 +40,9 @@ export function usePermissions(user, page) {
     }
 
     const canAccessWorkforce = () => {
-        if (user.value?.role === 'CEO') return false
+        if (['CEO', 'COO'].includes(user.value?.role) || user.value?.position === 'vice_president') {
+            return canAccessModule('WRF')
+        }
         if (user.value?.position === 'secretary' || user.value?.position === 'special_officer') {
             return userModuleAccess.value.includes('WRF')
         }
@@ -65,25 +54,15 @@ export function usePermissions(user, page) {
     }
 
     const hasWorkforcePermission = (pageName) => {
-        if (user.value?.role === 'CEO') return false
+        if (['CEO', 'COO'].includes(user.value?.role) || user.value?.position === 'vice_president') {
+            return hasPagePermission('WRF', pageName)
+        }
         const perms = user.value?.workforce_permissions
         if (!perms) return false
         return perms.includes(pageName)
     }
 
     const hasPagePermission = (moduleKey, pageKey) => {
-        // President & Vice President hold every CRM page. An explicit
-        // 'disabled' row is already excluded from the shared list, and the
-        // backend still enforces it — this only grants what isn't revoked.
-        if (String(moduleKey || '').toUpperCase() === 'CRM'
-            && (user.value?.role === 'CEO' || user.value?.role === 'COO' || user.value?.position === 'vice_president')) return true
-        // Vice President: no HRM pages — the COO role is standalone.
-        if (String(moduleKey || '').toUpperCase() === 'HRM'
-            && (user.value?.role === 'COO' || user.value?.position === 'vice_president')) return false
-        if (user.value?.role === 'CEO') return false
-        // Secretary / GM always see their home module's pages (backend
-        // CheckPagePermission grants them full root-module access).
-        if ((user.value?.position === 'secretary' || user.value?.position === 'special_officer') && moduleKey === user.value?.role) return true
         const perms = user.value?.page_permissions || page.props.auth?.page_permissions || []
         // Case-tolerant like the backend (writers store UPPER modules;
         // legacy rows may differ) — a strict check hid pages whose rows
@@ -125,34 +104,46 @@ export function usePermissions(user, page) {
     }
 
     const hasModulePermission = (moduleKey, permissionKey) => {
-        if (user.value?.role === 'CEO') return false
+        const isExecutive = ['CEO', 'COO'].includes(user.value?.role) || user.value?.position === 'vice_president'
+        if (isExecutive) return hasPagePermission(moduleKey, permissionKey)
         const modulePerms = user.value?.permissions?.[moduleKey]
         return modulePerms ? modulePerms.includes(permissionKey) : false
     }
 
+    const hasManufacturingSupervisorPagePermission = (role, pageKey) => {
+        if (!user.value?.is_manufacturing_supervisor) return hasModulePermission('MAN', pageKey)
+        const byRole = user.value?.manufacturing_supervisor_page_permissions?.[role]
+        if (byRole && Object.prototype.hasOwnProperty.call(byRole, String(pageKey).toLowerCase())) {
+            return ['view', 'edit'].includes(String(byRole[String(pageKey).toLowerCase()]).toLowerCase())
+        }
+        // Preserve the legacy Production-grant behavior until IT sets a
+        // role-specific choice for this supervisor and staff role page.
+        return hasModulePermission('MAN', 'production')
+    }
+
     const hasWarehouseAccess = computed(() => {
-        if (user.value?.role === 'CEO') return false
+        if (['CEO', 'COO'].includes(user.value?.role) || user.value?.position === 'vice_president') return canAccessModule('WAR')
         if (user.value?.position === 'secretary' || user.value?.position === 'special_officer') return canAccessModule('WAR')
         if (user.value?.is_manufacturing_supervisor) return grantedModules.value.includes('WAR')
         return user.value?.has_warehouse_access === true
     })
 
     const hasInventoryAccess = computed(() => {
-        if (user.value?.role === 'CEO') return false
+        if (['CEO', 'COO'].includes(user.value?.role) || user.value?.position === 'vice_president') return canAccessModule('INV')
         if (user.value?.position === 'secretary' || user.value?.position === 'special_officer') return canAccessModule('INV')
         if (user.value?.is_manufacturing_supervisor) return grantedModules.value.includes('INV')
         return user.value?.has_inventory_access === true
     })
 
     const hasOrdAccess = computed(() => {
-        if (user.value?.role === 'CEO') return false
+        if (['CEO', 'COO'].includes(user.value?.role) || user.value?.position === 'vice_president') return canAccessModule('ORD')
         if (user.value?.position === 'secretary' || user.value?.position === 'special_officer') return canAccessModule('ORD')
         if (user.value?.is_manufacturing_supervisor) return grantedModules.value.includes('ORD')
         return user.value?.has_ord_access === true
     })
 
     const hasLogisticsAccess = computed(() => {
-        if (user.value?.role === 'CEO') return false
+        if (['CEO', 'COO'].includes(user.value?.role) || user.value?.position === 'vice_president') return canAccessModule('LOG')
         if (user.value?.position === 'secretary' || user.value?.position === 'special_officer') return canAccessModule('LOG')
         if (user.value?.is_manufacturing_supervisor) return grantedModules.value.includes('LOG')
         if (user.value?.role === 'LOG' && user.value?.position === 'manager') return true
@@ -160,8 +151,9 @@ export function usePermissions(user, page) {
     })
 
     const canAccessModuleChild = (moduleKey, childPermKey, moduleSpecificCheck = null) => {
-        if (user.value?.role === 'CEO') return false
         if (moduleSpecificCheck) return moduleSpecificCheck(childPermKey)
+        const isExecutive = ['CEO', 'COO'].includes(user.value?.role) || user.value?.position === 'vice_president'
+        if (isExecutive) return hasPagePermission(moduleKey, childPermKey)
         const granularPerms = user.value?.permissions?.[moduleKey]
         if (granularPerms && granularPerms.length) return granularPerms.includes(childPermKey)
         const isManager = user.value?.role === moduleKey && user.value?.position === 'manager'
@@ -184,6 +176,7 @@ export function usePermissions(user, page) {
         hasHrmPermission,
         hasCrmPermission,
         hasModulePermission,
+        hasManufacturingSupervisorPagePermission,
         hasWarehouseAccess,
         hasInventoryAccess,
         hasOrdAccess,

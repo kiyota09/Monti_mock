@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -18,7 +19,7 @@ const form = useForm({ direction: 'incoming', sender: '', recipient: '', subject
 const submit = () => form.post(route('secretary.documents.store'), { preserveScroll: true, forceFormData: true, onSuccess: () => { showForm.value = false; form.reset(); } });
 
 const advance = (doc, next) => router.patch(route('secretary.documents.status', doc.id), { status: next }, { preserveScroll: true });
-const removeDoc = (doc) => { if (confirm(`Remove ${doc.ref_no} from the registry?`)) router.delete(route('secretary.documents.destroy', doc.id), { preserveScroll: true }); };
+const removeDoc = async (doc) => { if (await confirmModal(`Remove ${doc.ref_no} from the registry?`)) router.delete(route('secretary.documents.destroy', doc.id), { preserveScroll: true }); };
 
 const FLOW = ['logged', 'forwarded', 'in_progress', 'filed', 'closed'];
 const nextStatus = (s) => FLOW[Math.min(FLOW.indexOf(s) + 1, FLOW.length - 1)];

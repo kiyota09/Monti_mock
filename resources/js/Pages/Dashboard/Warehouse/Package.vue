@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -49,8 +50,8 @@ const filteredPackages = computed(() => {
 });
 
 // Push to logistics
-const pushToLogistics = (pkg) => {
-    if (!confirm(`Push package ${pkg.package_number} to Logistics?`)) return;
+const pushToLogistics = async (pkg) => {
+    if (!await confirmModal(`Push package ${pkg.package_number} to Logistics?`)) return;
     pushingId.value = pkg.id;
     router.post(route('warehouse.packages.push', pkg.id), {}, {
         preserveScroll: true,

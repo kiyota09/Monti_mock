@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Eco;
 
 use App\Http\Controllers\Controller;
 use App\Models\Crm\Client;
-use App\Models\Eco\CreditAccount;
 use App\Models\Ord\PurchaseOrder;
+use App\Services\Fin\FinanceService;
 use App\Services\Ord\OrderLifecycleService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,16 +15,46 @@ use InvalidArgumentException;
 
 class EcoCreditController extends Controller
 {
-    public function index()
+    public function index(FinanceService $finance)
     {
-        // Clients with their credit accounts and order counts
-        $clients = Client::with(['creditAccount', 'purchaseOrders'])->get()->map(function ($client) {
+        // Use Finance's receivables ledger as the balance source so this page
+        // stays aligned with FIN's invoice/payment records.
+        $receivablesByClient = $finance->invoiceRows()->groupBy('client_id');
+
+        $clients = Client::with(['creditAccount', 'purchaseOrders.items'])->get()->map(function ($client) use ($receivablesByClient) {
+            $receivables = $receivablesByClient->get($client->id, collect())->map(function ($invoice) {
+                return [
+                    'id' => $invoice['id'],
+                    'invoice_no' => $invoice['invoice_no'],
+                    'amount' => $invoice['amount'],
+                    'paid' => $invoice['paid'],
+                    'balance' => round(max(0, (float) $invoice['amount'] - (float) $invoice['paid']), 2),
+                    'due_date' => $invoice['due_date'],
+                    'status' => $invoice['status'],
+                    'receipt_count' => $invoice['receipt_count'],
+                    'order_details' => $invoice['order_details'],
+                ];
+            })->values();
+            $outstanding = round((float) $receivables->sum('balance'), 2);
+            $overdueBalance = round((float) $receivables->where('status', 'overdue')->sum('balance'), 2);
+            $dueDates = $receivables->filter(fn ($invoice) => $invoice['balance'] > 0 && $invoice['due_date'])
+                ->sortBy('due_date')->map(fn ($invoice) => [
+                    'invoice_no' => $invoice['invoice_no'],
+                    'due_date' => $invoice['due_date'],
+                    'status' => $invoice['status'],
+                ])->values();
+
             return [
                 'id' => $client->id,
                 'company_name' => $client->company_name,
                 'contact_person' => $client->contact_person,
-                'outstanding_balance' => $client->creditAccount ? $client->creditAccount->outstanding_balance : 0,
-                'is_good_payer' => $client->creditAccount ? $client->creditAccount->is_good_payer : true,
+                'outstanding_balance' => $outstanding,
+                'overdue_balance' => $overdueBalance,
+                'receivables_count' => $receivables->count(),
+                'open_receivables_count' => $receivables->whereIn('status', ['unpaid', 'partial', 'overdue'])->count(),
+                'receivables' => $receivables,
+                'due_dates' => $dueDates,
+                'is_good_payer' => (bool) ($client->creditAccount?->is_good_payer ?? true) && $overdueBalance <= 0,
                 'orders_count' => $client->purchaseOrders->count(),
                 'orders' => $client->purchaseOrders->map(function ($order) {
                     return [

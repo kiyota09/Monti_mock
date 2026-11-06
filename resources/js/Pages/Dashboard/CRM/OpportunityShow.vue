@@ -9,8 +9,7 @@ import {
 import { usePageAccess } from '@/composables/usePageAccess';
 import ActivityModal from '@/Components/crm/pipeline/ActivityModal.vue';
 import { activityStateOf, orderStages, canAdvanceTo, nextStageOf } from '@/composables/crm/usePipeline';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const { canEdit } = usePageAccess();
 const canEditOpp = computed(() => canEdit('CRM', 'opportunities'));

@@ -3,8 +3,7 @@
 import { ref, watch, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 import { Search, Plus, ClipboardList } from 'lucide-vue-next';
 
 const props = defineProps<{

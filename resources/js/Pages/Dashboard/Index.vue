@@ -34,7 +34,7 @@ const filteredDepartments = departments.filter(dept => {
     <Head title="Dashboard" />
 
     <AuthenticatedLayout>
-        <div class="mb-6">
+        <div data-erp-page-banner="fallback" class="mb-6">
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Welcome, {{ user?.name || 'User' }}</h1>
             <p class="text-gray-600 dark:text-gray-300">Manage your operations efficiently</p>
         </div>

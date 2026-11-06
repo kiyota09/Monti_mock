@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -22,7 +23,7 @@ const editing = ref(null);
 const editForm = useForm({ status: '', minutes: '' });
 const openEdit = (m) => { editing.value = m; editForm.status = m.status; editForm.minutes = m.minutes ?? ''; };
 const saveEdit = () => editForm.patch(route('secretary.meetings.update', editing.value.id), { preserveScroll: true, onSuccess: () => { editing.value = null; } });
-const removeMeeting = (m) => { if (confirm(`Remove "${m.title}"?`)) router.delete(route('secretary.meetings.destroy', m.id), { preserveScroll: true }); };
+const removeMeeting = async (m) => { if (await confirmModal(`Remove "${m.title}"?`)) router.delete(route('secretary.meetings.destroy', m.id), { preserveScroll: true }); };
 
 const badge = (s) => s === 'done' ? 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30'
     : s === 'cancelled' ? 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-zinc-800 dark:text-gray-400 dark:ring-zinc-700'

@@ -9,10 +9,11 @@ use Illuminate\Database\Eloquent\Model;
 class Inquiry extends Model
 {
     protected $table = 'inquiries';
-    protected $fillable = ['client_id', 'product_id', 'initial_message', 'status', 'last_message_at'];
+    protected $fillable = ['client_id', 'product_id', 'initial_message', 'product_selections', 'status', 'last_message_at'];
 
     protected $casts = [
         'last_message_at' => 'datetime',
+        'product_selections' => 'array',
     ];
 
     protected $appends = ['hash_key'];
@@ -61,6 +62,11 @@ class Inquiry extends Model
     public function messages()
     {
         return $this->hasMany(ConversationMessage::class);
+    }
+
+    public function latestMessage()
+    {
+        return $this->hasOne(ConversationMessage::class)->latestOfMany();
     }
 
     public function sampleRequests()

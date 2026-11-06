@@ -19,6 +19,8 @@ const ChevronRightIcon = ChevronRight;
 // ─── Props ────────────────────────────────────────────────────────────────────
 const props = defineProps({
     products: { type: Array, default: () => [] },
+    yarnMaterials: { type: Array, default: () => [] },
+    pantoneColors: { type: Array, default: () => [] },
     masterMaterials: { type: Array, default: () => [] },
     warehouses: { type: Array, default: () => [] },
 });
@@ -33,9 +35,14 @@ const catFilter = ref('All');
 const selectedProduct = ref(null);
 const activeTab = ref('bom');
 const expandedMat = ref(null);
+const yarnSearch = ref('');
+const pantoneSearch = ref('');
 const showAddProduct = ref(false);
 const showEditProduct = ref(false);
 const processing = ref(false);
+
+// UI only: which image is shown in the product detail modal gallery
+const detailImg = ref(0);
 
 // ── Confirmation States ───────────────────────────────────────────────────────
 const showEditConfirm = ref(false);
@@ -100,27 +107,46 @@ onUnmounted(() => {
 watch(() => products.value, () => initAutoSlide(), { deep: true });
 
 // ── Color Management System ─────────────────────────────────────────────────
-const newColorForm = ref({
-    name: '',
-    hex: '#3b82f6'
+const emptyColorways = () => [];
+const productColors = (product) => {
+    if (Array.isArray(product?.colors)) return product.colors;
+    if (typeof product?.colors === 'string') {
+        try {
+            const parsed = JSON.parse(product.colors);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+    if (product?.colorHex) return [{ name: product.colorName || 'Default Color', hex: product.colorHex }];
+    return [];
+};
+
+const filteredPantoneColors = computed(() => {
+    const query = pantoneSearch.value.trim().toLowerCase();
+    const colors = query
+        ? props.pantoneColors.filter((color) => color.name.toLowerCase().includes(query) || color.hex.toLowerCase().includes(query))
+        : props.pantoneColors;
+    return colors.slice(0, 100);
 });
 
-const addColor = () => {
-    if (newColorForm.value.name && newColorForm.value.hex) {
-        const addedColor = { 
-            name: newColorForm.value.name, 
-            hex: newColorForm.value.hex 
-        };
-        
-        if (showAddProduct.value) {
-            newProduct.value.colors.push(addedColor);
-        } else if (showEditProduct.value) {
-            editForm.value.colors.push(addedColor);
-        }
-        
-        newColorForm.value.name = '';
-        newColorForm.value.hex = '#3b82f6';
+const hasPantoneColor = (colors, pantone) => colors.some((color) =>
+    Number(color.pantone_id) === Number(pantone.id)
+    || (color.name === pantone.name && String(color.hex).toLowerCase() === String(pantone.hex).toLowerCase())
+);
+
+const addColor = (pantone) => {
+    if (!pantone) return;
+    const colorList = showAddProduct.value ? newProduct.value.colors : editForm.value.colors;
+    if (!hasPantoneColor(colorList, pantone)) {
+        colorList.push({ pantone_id: pantone.id, name: pantone.name, hex: pantone.hex });
     }
+};
+
+const openAddModal = () => {
+    resetAddForm();
+    pantoneSearch.value = '';
+    showAddProduct.value = true;
 };
 
 const triggerDeleteColor = (index, isEdit = false) => {
@@ -151,7 +177,8 @@ const isDarkColor = (hex) => {
 // ── Add form ──────────────────────────────────────────────────────────────────
 const blankForm = () => ({
     name: '',
-    colors: [] 
+    colors: emptyColorways(),
+    yarn_material_ids: [],
 });
 
 const newProduct = ref(blankForm());
@@ -188,17 +215,19 @@ const removeAddPreview = (i) => {
 
 const resetAddForm = () => {
     newProduct.value = blankForm();
+    pantoneSearch.value = '';
     addImageFiles.value = [];
     addImagePreviews.value = [];
 };
 
 const submitProduct = () => {
-    if (!newProduct.value.name || newProduct.value.colors.length === 0) return;
+    if (!newProduct.value.name || newProduct.value.colors.length < 10) return;
     processing.value = true;
     
     router.post(route('inv.manager.product.store'), {
         name: newProduct.value.name,
         colors: newProduct.value.colors,
+        yarn_material_ids: newProduct.value.yarn_material_ids,
         category: 'Uncategorized', 
         status: 'Active',
         images: addImageFiles.value,
@@ -286,13 +315,16 @@ const openEditModal = (product, e) => {
 
     editForm.value = {
         name: product.name,
-        colors: existingColors
+        colors: existingColors,
+        yarn_material_ids: (product.yarnMaterials || []).map((material) => material.id),
     };
+    yarnSearch.value = '';
+    pantoneSearch.value = '';
     showEditProduct.value = true;
 };
 
 const triggerEditConfirm = () => {
-    if (!editForm.value.name || editForm.value.colors.length === 0) return;
+    if (!editForm.value.name || editForm.value.colors.length < 10) return;
     showEditConfirm.value = true; 
 };
 
@@ -301,6 +333,7 @@ const submitEdit = () => {
     router.post(route('inv.manager.product.update', { id: editProductId.value }), {
         name: editForm.value.name,
         colors: editForm.value.colors, 
+        yarn_material_ids: editForm.value.yarn_material_ids,
         new_images: editImageFiles.value,
     }, {
         forceFormData: true,
@@ -339,6 +372,16 @@ const confirmDeleteProduct = () => {
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const categories = computed(() => ['All', ...new Set(products.value.map(p => p.category).filter(Boolean))]);
+const activeProductCount = computed(() => products.value.filter((product) => product.status === 'Active').length);
+const totalColorways = computed(() => products.value.reduce((total, product) => total + productColors(product).length, 0));
+const filteredYarnMaterials = computed(() => {
+    const query = yarnSearch.value.trim().toLowerCase();
+    if (!query) return props.yarnMaterials;
+    return props.yarnMaterials.filter((material) =>
+        [material.display_name, material.name, material.mat_id, material.yarn_tier]
+            .some((value) => String(value || '').toLowerCase().includes(query))
+    );
+});
 
 const filtered = computed(() => {
     let list = products.value;
@@ -366,7 +409,7 @@ const margin = (product) => {
 const bomHasAlert = (product) => product.materials?.some(m => m.stockStatus !== 'In Stock') || false;
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const openProduct = (product) => { selectedProduct.value = product; activeTab.value = 'bom'; expandedMat.value = null; };
+const openProduct = (product) => { selectedProduct.value = product; activeTab.value = 'bom'; expandedMat.value = null; detailImg.value = 0; };
 const closeModal = () => { selectedProduct.value = null; };
 </script>
 
@@ -397,7 +440,7 @@ const closeModal = () => { selectedProduct.value = null; };
                     <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
                         {{ products.length }} Products
                     </span>
-                    <button v-if="canEditProducts" @click="showAddProduct = true"
+                    <button v-if="canEditProducts" @click="openAddModal"
                         class="rounded-2xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wide text-indigo-700 shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 inline-flex items-center gap-2">
                         <Plus class="w-4 h-4" /> Add Product
                     </button>
@@ -425,6 +468,36 @@ const closeModal = () => { selectedProduct.value = null; };
                 </div>
             </div>
         </div>
+
+        <section class="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Product catalog summary">
+            <article class="group rounded-2xl border border-blue-100 bg-gradient-to-br from-white to-blue-50/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-900/40 dark:from-zinc-900 dark:to-blue-950/30">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Catalog products</p>
+                        <p class="mt-1 text-2xl font-black text-slate-900 dark:text-white">{{ products.length }}</p>
+                    </div>
+                    <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 transition group-hover:scale-105 dark:bg-blue-500/15 dark:text-blue-300"><Package class="h-5 w-5" /></span>
+                </div>
+            </article>
+            <article class="group rounded-2xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-emerald-900/40 dark:from-zinc-900 dark:to-emerald-950/30">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Active products</p>
+                        <p class="mt-1 text-2xl font-black text-slate-900 dark:text-white">{{ activeProductCount }}</p>
+                    </div>
+                    <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 transition group-hover:scale-105 dark:bg-emerald-500/15 dark:text-emerald-300"><Check class="h-5 w-5" /></span>
+                </div>
+            </article>
+            <article class="group rounded-2xl border border-violet-100 bg-gradient-to-br from-white to-violet-50/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-violet-900/40 dark:from-zinc-900 dark:to-violet-950/30">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Available colorways</p>
+                        <p class="mt-1 text-2xl font-black text-slate-900 dark:text-white">{{ totalColorways }}</p>
+                    </div>
+                    <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 transition group-hover:scale-105 dark:bg-violet-500/15 dark:text-violet-300"><Palette class="h-5 w-5" /></span>
+                </div>
+            </article>
+        </section>
 
         <TransitionGroup name="card" tag="div" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <div v-for="(product, i) in filtered" :key="product.id"
@@ -469,7 +542,13 @@ const closeModal = () => { selectedProduct.value = null; };
                     </template>
 
                     <template v-else>
-                        <div class="h-2 w-full" :style="`background-color: ${(product.colors && product.colors.length > 0) ? (Array.isArray(product.colors) ? product.colors[0].hex : (JSON.parse(product.colors)[0]?.hex || '#64748b')) : (product.colorHex || '#64748b')}`" />
+                        <div class="relative grid aspect-[16/9] grid-cols-5 grid-rows-2 gap-1.5 overflow-hidden bg-slate-100 p-2.5 dark:bg-zinc-800">
+                            <span v-for="color in productColors(product)" :key="`${product.id}-${color.name}`" class="rounded-lg shadow-inner ring-1 ring-black/5 transition duration-300 group-hover:scale-[1.02]" :style="{ backgroundColor: color.hex || '#CBD5E1' }" :title="color.name" />
+                            <div class="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-slate-950/70 to-transparent px-3 pb-2 pt-8 text-white">
+                                <span class="text-[10px] font-black uppercase tracking-[0.16em]">Color palette</span>
+                                <span class="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black backdrop-blur">{{ productColors(product).length }} colors</span>
+                            </div>
+                        </div>
                     </template>
 
                     <div
@@ -509,17 +588,18 @@ const closeModal = () => { selectedProduct.value = null; };
                         </div>
                         
                         <div class="flex -space-x-2 flex-shrink-0">
-                            <template v-if="product.colors && product.colors.length > 0">
-                                <div v-for="c in (Array.isArray(product.colors) ? product.colors : JSON.parse(product.colors)).slice(0, 3)" :key="c.hex" 
+                            <template v-if="productColors(product).length > 0">
+                                <div v-for="c in productColors(product).slice(0, 3)" :key="c.hex"
                                      class="w-6 h-6 rounded-full border-2 border-white dark:border-slate-900 shadow-sm"
                                      :style="`background-color: ${c.hex}`" :title="c.name" />
-                                <div v-if="(Array.isArray(product.colors) ? product.colors : JSON.parse(product.colors)).length > 3" class="w-6 h-6 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-800 text-[9px] font-bold text-slate-600 dark:text-slate-400 flex items-center justify-center">
-                                    +{{ (Array.isArray(product.colors) ? product.colors : JSON.parse(product.colors)).length - 3 }}
+                                <div v-if="productColors(product).length > 3" class="w-6 h-6 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-800 text-[9px] font-bold text-slate-600 dark:text-slate-400 flex items-center justify-center">
+                                    +{{ productColors(product).length - 3 }}
                                 </div>
                             </template>
                             <template v-else>
                                 <div class="w-6 h-6 rounded-full border-2 border-white dark:border-slate-900 shadow-sm"
-                                     :style="`background-color: ${product.colorHex || '#64748b'}`" />
+                                     :class="product.colorHex ? '' : 'bg-slate-500'"
+                                     :style="product.colorHex ? { backgroundColor: product.colorHex } : {}" />
                             </template>
                         </div>
                     </div>
@@ -568,72 +648,236 @@ const closeModal = () => { selectedProduct.value = null; };
         <Teleport to="body">
             <Transition name="modal">
             <div v-if="selectedProduct"
-                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/70 backdrop-blur-sm overflow-y-auto"
+                class="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-900/60 p-2 backdrop-blur-sm dark:bg-black/70 sm:p-4"
                 @click.self="closeModal">
                 <div
-                    class="modal-panel relative overflow-hidden bg-white/95 dark:bg-zinc-900/95 backdrop-blur rounded-3xl shadow-2xl border border-gray-100 dark:border-zinc-800 w-full max-w-4xl">
+                    class="modal-panel relative h-[calc(100dvh-1rem)] max-h-[900px] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 dark:bg-zinc-900 dark:ring-white/10 sm:h-[calc(100dvh-2rem)] sm:rounded-[2rem]">
 
-                    <div class="h-1.5 w-full bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-800" />
+                    <!-- Close -->
+                    <button @click="closeModal" title="Close"
+                        class="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-md ring-1 ring-black/5 backdrop-blur transition hover:rotate-90 hover:bg-slate-900 hover:text-white dark:bg-zinc-800/90 dark:text-slate-300 dark:ring-white/10 dark:hover:bg-white dark:hover:text-slate-900">
+                        <X class="h-4 w-4" />
+                    </button>
 
-                    <div v-if="selectedProduct.images && selectedProduct.images.length"
-                        class="flex gap-2 p-4 border-b border-slate-100 dark:border-slate-800 overflow-x-auto">
-                        <img v-for="img in selectedProduct.images" :key="img.id" :src="img.url"
-                            :alt="selectedProduct.name"
-                            class="h-24 w-24 object-cover rounded-xl flex-shrink-0 border border-slate-200 dark:border-slate-700" />
-                    </div>
+                    <div class="grid h-full min-h-0 grid-rows-[minmax(0,0.8fr)_minmax(0,1.2fr)] md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] md:grid-rows-1">
 
-                    <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-4">
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-                                <span
-                                    class="font-mono text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-md">{{
-                                        selectedProduct.product_id }}</span>
-                                <span v-if="selectedProduct.category && selectedProduct.category !== 'Uncategorized'"
-                                    class="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{{
-                                        selectedProduct.category }}</span>
+                        <!-- ── Left: gallery ── -->
+                        <div class="relative flex min-h-0 flex-col gap-3 overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-3 sm:p-5">
+                            <div class="pointer-events-none absolute -top-16 -left-16 h-56 w-56 rounded-full bg-white/10 blur-3xl animate-float" />
+                            <div class="pointer-events-none absolute -bottom-20 -right-10 h-56 w-56 rounded-full bg-fuchsia-400/25 blur-3xl animate-float-delayed" />
+                            <div class="pointer-events-none absolute inset-0 opacity-[0.12]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 20px 20px;" />
+
+                            <!-- With photos -->
+                            <template v-if="selectedProduct.images && selectedProduct.images.length">
+                                <div class="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-black/20 shadow-2xl shadow-indigo-950/40 ring-1 ring-white/25 sm:rounded-3xl">
+                                    <Transition name="fade-img" mode="out-in">
+                                        <img :key="(selectedProduct.images[detailImg] || selectedProduct.images[0]).id"
+                                            :src="(selectedProduct.images[detailImg] || selectedProduct.images[0]).url"
+                                            :alt="selectedProduct.name"
+                                            class="absolute inset-0 h-full w-full object-cover" />
+                                    </Transition>
+
+                                    <div class="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/50 to-transparent" />
+
+                                    <template v-if="selectedProduct.images.length > 1">
+                                        <button @click="detailImg = (detailImg - 1 + selectedProduct.images.length) % selectedProduct.images.length"
+                                            class="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-lg backdrop-blur transition hover:scale-110 active:scale-95">
+                                            <ChevronLeft class="h-4 w-4" />
+                                        </button>
+                                        <button @click="detailImg = (detailImg + 1) % selectedProduct.images.length"
+                                            class="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-lg backdrop-blur transition hover:scale-110 active:scale-95">
+                                            <ChevronRightIcon class="h-4 w-4" />
+                                        </button>
+                                    </template>
+
+                                    <span class="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1 text-[11px] font-bold text-white backdrop-blur">
+                                        <ImageIcon class="h-3.5 w-3.5" />
+                                        {{ Math.min(detailImg, selectedProduct.images.length - 1) + 1 }} / {{ selectedProduct.images.length }}
+                                    </span>
+                                </div>
+
+                                <!-- Thumbnails -->
+                                <div v-if="selectedProduct.images.length > 1" class="relative flex gap-2 overflow-x-auto pb-1">
+                                    <button v-for="(img, ti) in selectedProduct.images" :key="img.id"
+                                        @click="detailImg = ti"
+                                        :class="['h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl transition-all duration-200',
+                                            ti === detailImg
+                                                ? 'ring-2 ring-white ring-offset-2 ring-offset-indigo-700 scale-100'
+                                                : 'opacity-60 ring-1 ring-white/30 hover:opacity-100 hover:scale-105']">
+                                        <img :src="img.url" :alt="selectedProduct.name" class="h-full w-full object-cover" />
+                                    </button>
+                                </div>
+                            </template>
+
+                            <!-- No photos: color mosaic -->
+                            <template v-else>
+                                <div class="relative flex min-h-0 flex-1 flex-col justify-between rounded-3xl bg-white/10 p-4 ring-1 ring-white/25 backdrop-blur">
+                                    <div class="grid grid-cols-5 gap-2">
+                                        <template v-if="productColors(selectedProduct).length > 0">
+                                            <span v-for="(c, ci) in productColors(selectedProduct)" :key="`${c.hex}-${ci}`"
+                                                class="aspect-square rounded-xl shadow-lg ring-2 ring-white/70 transition hover:scale-110"
+                                                :style="{ backgroundColor: c.hex || '#CBD5E1' }" :title="c.name" />
+                                        </template>
+                                        <span v-else class="aspect-square rounded-xl shadow-lg ring-2 ring-white/70"
+                                            :class="selectedProduct.colorHex ? '' : 'bg-slate-500'"
+                                            :style="selectedProduct.colorHex ? { backgroundColor: selectedProduct.colorHex } : {}" />
+                                    </div>
+                                    <div class="mt-6 flex items-center gap-3 text-white">
+                                        <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30">
+                                            <ImageIcon class="h-5 w-5" />
+                                        </span>
+                                        <div>
+                                            <p class="text-sm font-black">No photos yet</p>
+                                            <p class="text-xs text-blue-100/90">Showing the colorway palette instead.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- ── Right: details ── -->
+                        <div class="min-h-0 min-w-0 overflow-y-auto overscroll-contain p-4 sm:p-8">
+                            <div class="flex min-w-0 flex-col gap-6">
+
+                            <!-- Title block -->
+                            <div class="pr-10">
+                                <div class="mb-2.5 flex flex-wrap items-center gap-2">
+                                    <span class="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-500 dark:bg-zinc-800 dark:text-slate-400">{{ selectedProduct.product_id }}</span>
+                                    <span v-if="selectedProduct.category && selectedProduct.category !== 'Uncategorized'"
+                                        class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+                                        <Tag class="h-3 w-3" /> {{ selectedProduct.category }}
+                                    </span>
+                                    <span v-if="selectedProduct.status"
+                                        :class="['inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold',
+                                            selectedProduct.status === 'Active'
+                                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                                                : 'bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-slate-400']">
+                                        <span :class="['h-1.5 w-1.5 rounded-full', selectedProduct.status === 'Active' ? 'bg-emerald-500' : 'bg-slate-400']" />
+                                        {{ selectedProduct.status }}
+                                    </span>
+                                </div>
+                                <h2 class="text-2xl font-black leading-tight tracking-tight text-slate-900 dark:text-white sm:text-3xl">{{ selectedProduct.name }}</h2>
+                                <p v-if="selectedProduct.sku" class="mt-1 font-mono text-xs text-slate-400">{{ selectedProduct.sku }}</p>
                             </div>
-                            <h2 class="text-xl font-black text-slate-900 dark:text-white leading-tight">{{
-                                selectedProduct.name }}</h2>
-                            <p class="font-mono text-xs text-slate-400 mt-0.5">{{ selectedProduct.sku }}</p>
-                        </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
-                            <button v-if="canEditProducts" @click="openEditModal(selectedProduct); closeModal()"
-                                class="p-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition"
-                                title="Edit product">
-                                <Pencil class="w-4 h-4" />
-                            </button>
-                            
-                            <button v-if="canEditProducts" @click="triggerDelete(selectedProduct.id, $event)"
-                                class="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition">
-                                <Trash2 class="w-4 h-4" />
-                            </button>
-                            
-                            <button @click="closeModal"
-                                class="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                                <X class="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
 
-                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800">
-                        <div class="flex items-start gap-3">
-                            <Palette class="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+                            <!-- Stat tiles -->
+                            <div class="grid grid-cols-2 gap-3">
+                                <div v-if="selectedProduct.sellingPrice"
+                                    class="group rounded-2xl border border-blue-100 bg-gradient-to-br from-white to-blue-50/80 p-3.5 transition hover:-translate-y-0.5 hover:shadow-md dark:border-blue-900/40 dark:from-zinc-900 dark:to-blue-950/30">
+                                    <div class="flex items-center justify-between">
+                                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400">Selling price</p>
+                                        <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"><Tag class="h-4 w-4" /></span>
+                                    </div>
+                                    <p class="mt-1.5 text-xl font-black text-slate-900 dark:text-white">₱{{ fmt(selectedProduct.sellingPrice) }}</p>
+                                </div>
+
+                                <div v-if="selectedProduct.sellingPrice"
+                                    class="group rounded-2xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/80 p-3.5 transition hover:-translate-y-0.5 hover:shadow-md dark:border-emerald-900/40 dark:from-zinc-900 dark:to-emerald-950/30">
+                                    <div class="flex items-center justify-between">
+                                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400">Margin</p>
+                                        <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"><Zap class="h-4 w-4" /></span>
+                                    </div>
+                                    <p class="mt-1.5 text-xl font-black text-emerald-600 dark:text-emerald-400">{{ margin(selectedProduct) }}%</p>
+                                </div>
+
+                                <div v-if="selectedProduct.materials?.length"
+                                    class="group rounded-2xl border border-violet-100 bg-gradient-to-br from-white to-violet-50/80 p-3.5 transition hover:-translate-y-0.5 hover:shadow-md dark:border-violet-900/40 dark:from-zinc-900 dark:to-violet-950/30">
+                                    <div class="flex items-center justify-between">
+                                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400">Bill of materials</p>
+                                        <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><Layers class="h-4 w-4" /></span>
+                                    </div>
+                                    <p class="mt-1.5 text-xl font-black text-slate-900 dark:text-white">{{ selectedProduct.materials.length }} <span class="text-sm font-bold text-slate-400">materials</span></p>
+                                </div>
+
+                                <div
+                                    class="group rounded-2xl border border-fuchsia-100 bg-gradient-to-br from-white to-fuchsia-50/80 p-3.5 transition hover:-translate-y-0.5 hover:shadow-md dark:border-fuchsia-900/40 dark:from-zinc-900 dark:to-fuchsia-950/30">
+                                    <div class="flex items-center justify-between">
+                                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400">Colorways</p>
+                                        <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300"><Palette class="h-4 w-4" /></span>
+                                    </div>
+                                    <p class="mt-1.5 text-xl font-black text-slate-900 dark:text-white">{{ productColors(selectedProduct).length || 1 }} <span class="text-sm font-bold text-slate-400">available</span></p>
+                                </div>
+                            </div>
+
+                            <!-- Eligible yarn materials -->
+                            <div class="rounded-2xl border border-violet-100 bg-violet-50/40 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
+                                <div class="mb-3 flex items-center justify-between gap-3">
+                                    <div class="flex items-center gap-2">
+                                        <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><Layers class="h-4 w-4" /></span>
+                                        <div>
+                                            <h3 class="text-sm font-black text-slate-800 dark:text-slate-100">Eligible yarns</h3>
+                                            <p class="text-[10px] text-slate-500 dark:text-slate-400">Yarn options that can be used for this product</p>
+                                        </div>
+                                    </div>
+                                    <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-violet-700 shadow-sm dark:bg-zinc-900 dark:text-violet-300">{{ selectedProduct.yarnMaterials?.length || 0 }}</span>
+                                </div>
+                                <div v-if="selectedProduct.yarnMaterials?.length" class="flex flex-wrap gap-2">
+                                    <span v-for="material in selectedProduct.yarnMaterials" :key="material.id" class="inline-flex items-center gap-2 rounded-xl border border-violet-100 bg-white px-3 py-2 dark:border-violet-900/40 dark:bg-zinc-900">
+                                        <span class="h-2 w-2 rounded-full bg-violet-500" />
+                                        <span class="text-xs font-bold text-slate-700 dark:text-slate-200">{{ material.display_name || material.name }}</span>
+                                        <span v-if="material.mat_id" class="font-mono text-[9px] text-slate-400">{{ material.mat_id }}</span>
+                                    </span>
+                                </div>
+                                <p v-else class="rounded-xl border border-dashed border-violet-200 bg-white/60 px-3 py-3 text-xs text-slate-500 dark:border-violet-900/50 dark:bg-zinc-900/50 dark:text-slate-400">No yarn options assigned. Edit this product to select compatible yarns.</p>
+                            </div>
+
+                            <!-- Stock alert -->
+                            <div v-if="bomHasAlert(selectedProduct)"
+                                class="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+                                <span class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300"><AlertTriangle class="h-4 w-4" /></span>
+                                <p class="text-xs font-medium leading-relaxed text-amber-800 dark:text-amber-200">Some materials in this product's bill of materials are not fully in stock.</p>
+                            </div>
+
+                            <!-- Colorways -->
                             <div>
-                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Available Colorways</p>
-                                <div class="flex flex-wrap gap-2">
-                                    <template v-if="selectedProduct.colors && selectedProduct.colors.length > 0">
-                                        <div v-for="c in (Array.isArray(selectedProduct.colors) ? selectedProduct.colors : JSON.parse(selectedProduct.colors))" :key="c.hex" class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 pr-3 rounded-full border border-slate-200 dark:border-slate-700">
-                                            <span class="w-5 h-5 rounded-full border border-black/10 dark:border-white/10" :style="`background-color: ${c.hex}`" />
-                                            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">{{ c.name }}</span>
+                                <div class="mb-3 flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <Palette class="h-4 w-4 text-slate-400" />
+                                        <h3 class="text-sm font-black text-slate-800 dark:text-slate-100">Available colorways</h3>
+                                    </div>
+                                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-500 dark:bg-zinc-800 dark:text-slate-400">{{ productColors(selectedProduct).length || 1 }}</span>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                                    <template v-if="productColors(selectedProduct).length > 0">
+                                        <div v-for="(c, ci) in productColors(selectedProduct)" :key="`${c.hex}-${ci}`"
+                                            class="group flex items-center gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/70 p-2 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-white hover:shadow-md dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:border-indigo-700 dark:hover:bg-zinc-800">
+                                            <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl shadow-inner ring-1 ring-black/10 transition group-hover:scale-105 dark:ring-white/10"
+                                                :style="`background-color: ${c.hex}`">
+                                                <Check class="h-4 w-4 opacity-0 transition group-hover:opacity-100"
+                                                :class="isDarkColor(c.hex) ? 'text-white' : 'text-slate-900'" />
+                                            </span>
+                                            <div class="min-w-0">
+                                                <p class="truncate text-xs font-bold text-slate-800 dark:text-slate-100" :title="c.name">{{ c.name }}</p>
+                                                <p class="font-mono text-[10px] uppercase text-slate-400">{{ c.hex }}</p>
+                                            </div>
                                         </div>
                                     </template>
                                     <template v-else>
-                                        <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 pr-3 rounded-full border border-slate-200 dark:border-slate-700">
-                                            <span class="w-5 h-5 rounded-full" :style="`background-color: ${selectedProduct.colorHex || '#000000'}`" />
-                                            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">{{ selectedProduct.colorName || 'No Color' }}</span>
-                                        </div>
+                                        <p class="col-span-full rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-zinc-700 dark:text-slate-400">No Pantone colorways selected.</p>
                                     </template>
                                 </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="sticky bottom-0 z-20 -mx-4 mt-auto flex flex-wrap items-center gap-2.5 border-t border-slate-100 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:-mx-8 sm:px-8">
+                                <button v-if="canEditProducts" @click="openEditModal(selectedProduct); closeModal()"
+                                    class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-xl active:scale-95"
+                                    title="Edit product">
+                                    <Pencil class="h-4 w-4" /> Edit product
+                                </button>
+
+                                <button v-if="canEditProducts" @click="triggerDelete(selectedProduct.id, $event)"
+                                    class="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-600 hover:text-white active:scale-95 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white"
+                                    title="Delete product">
+                                    <Trash2 class="h-4 w-4" /> Delete
+                                </button>
+
+                                <button @click="closeModal"
+                                    class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 transition hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-zinc-800">
+                                    Close
+                                </button>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -670,20 +914,40 @@ const closeModal = () => { selectedProduct.value = null; };
                                 class="mt-1 w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200" />
                         </div>
 
+                        <div class="rounded-2xl border border-violet-100 bg-violet-50/50 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                                <div><p class="text-[10px] font-black uppercase tracking-widest text-violet-700 dark:text-violet-300">Compatible yarns</p><p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Choose yarn materials that can be used for this product.</p></div>
+                                <span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-violet-700 dark:bg-zinc-900 dark:text-violet-300">{{ newProduct.yarn_material_ids.length }} selected</span>
+                            </div>
+                            <input v-model="yarnSearch" type="search" placeholder="Search yarn name, tier, or material ID..." class="mb-2 w-full rounded-xl border border-violet-100 bg-white px-3 py-2 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-slate-200" />
+                            <div v-if="yarnMaterials.length" class="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-violet-100 bg-white/70 p-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                <label v-for="material in filteredYarnMaterials" :key="material.id" class="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition hover:bg-violet-50 dark:hover:bg-violet-950/40">
+                                    <input v-model="newProduct.yarn_material_ids" type="checkbox" :value="material.id" class="h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                                    <span class="min-w-0 flex-1"><span class="block truncate text-xs font-bold text-slate-700 dark:text-slate-200">{{ material.display_name || material.name }}</span><span class="block text-[10px] text-slate-400">{{ material.mat_id }}<template v-if="material.unit"> · {{ material.unit }}</template></span></span>
+                                    <span class="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-black text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">{{ material.yarn_tier || 'Tier not set' }}</span>
+                                </label>
+                                <p v-if="!filteredYarnMaterials.length" class="px-2 py-4 text-center text-xs text-slate-400">No yarn materials match your search.</p>
+                            </div>
+                            <p v-else class="rounded-xl border border-dashed border-violet-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-violet-900/50 dark:text-slate-400">Add Yarn materials in Inventory Materials before assigning them here.</p>
+                        </div>
+
                         <div class="border-t border-slate-100 dark:border-slate-800 pt-5">
                             <div class="flex items-center justify-between mb-3">
                                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Colors assigned *</p>
-                                <span class="text-xs font-bold text-slate-400">
-                                    {{ newProduct.colors.length }} added
+                                <span class="text-xs font-bold" :class="newProduct.colors.length >= 10 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
+                                    {{ newProduct.colors.length }} / 10 colors
                                 </span>
                             </div>
+                            <p v-if="newProduct.colors.length < 10" class="-mt-4 mb-4 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                Add {{ 10 - newProduct.colors.length }} more Pantone color{{ 10 - newProduct.colors.length === 1 ? '' : 's' }} to create this product.
+                            </p>
 
                             <div class="flex flex-wrap gap-4 mb-6 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 min-h-[80px] items-center">
                                 <template v-if="newProduct.colors.length > 0">
                                     <div v-for="(color, index) in newProduct.colors" :key="index"
                                         class="relative group flex flex-col items-center">
                                         <div class="w-10 h-10 rounded-full border-2 border-slate-300 dark:border-slate-600 shadow-sm flex items-center justify-center transition-transform hover:scale-105"
-                                            :style="{ backgroundColor: color.hex || '#CCCCCC' }" :title="color.name">
+                                            :style="{ backgroundColor: color.hex }" :title="color.name">
                                         </div>
                                         <span class="text-[9px] mt-1.5 font-bold text-slate-600 dark:text-slate-300 max-w-[50px] text-center truncate" :title="color.name">
                                             {{ color.name || 'Unnamed' }}
@@ -699,24 +963,19 @@ const closeModal = () => { selectedProduct.value = null; };
                                 </div>
                             </div>
 
-                            <div class="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 flex flex-col gap-3">
-                                <p class="text-[9px] font-black text-blue-400 uppercase tracking-tighter">Add New Color</p>
-                                <div class="flex items-end gap-2">
-                                    <div class="flex-1">
-                                        <input v-model="newColorForm.name" type="text" placeholder="Color Name"
-                                            class="w-full px-2 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-slate-700 dark:text-slate-200" />
-                                    </div>
-                                    <div class="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-                                        <input v-model="newColorForm.hex" type="color"
-                                            class="w-7 h-7 rounded border-none cursor-pointer bg-transparent p-0" />
-                                        <input v-model="newColorForm.hex" type="text" placeholder="#000000"
-                                            class="w-16 px-1 py-1 text-xs bg-transparent border-none focus:ring-0 text-slate-700 dark:text-slate-200 font-mono uppercase" />
-                                    </div>
+                            <div class="rounded-xl border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-900/30 dark:bg-blue-900/10">
+                                <p class="mb-2 text-[9px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Add Pantone colorway</p>
+                                <input v-model="pantoneSearch" type="search" placeholder="Search Pantone name or hex code..." class="mb-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" />
+                                <div v-if="filteredPantoneColors.length" class="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-blue-100 bg-white/70 p-2 dark:border-blue-900/30 dark:bg-zinc-900/60">
+                                    <button v-for="pantone in filteredPantoneColors" :key="pantone.id" type="button" @click="addColor(pantone)" :disabled="hasPantoneColor(newProduct.colors, pantone)" class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-blue-50 disabled:cursor-default disabled:opacity-50 dark:hover:bg-blue-950/40">
+                                        <span class="h-7 w-7 shrink-0 rounded-md border border-black/10" :style="{ backgroundColor: pantone.hex }" />
+                                        <span class="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-700 dark:text-slate-200">{{ pantone.name }}</span>
+                                        <span class="font-mono text-[9px] text-slate-400">{{ pantone.hex }}</span>
+                                        <Check v-if="hasPantoneColor(newProduct.colors, pantone)" class="h-3.5 w-3.5 text-emerald-600" />
+                                    </button>
                                 </div>
-                                <button @click="addColor" :disabled="!newColorForm.name || !newColorForm.hex"
-                                    class="w-full py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
-                                    Add Color
-                                </button>
+                                <p v-else class="rounded-lg border border-dashed border-blue-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-blue-900/50 dark:text-slate-400">{{ pantoneColors.length ? 'No Pantone colors match your search.' : 'No Pantone references are available.' }}</p>
+                                <p v-if="pantoneColors.length > 100 && !pantoneSearch" class="mt-1 text-[10px] text-slate-400">Showing the first 100 colors. Search to find other Pantone references.</p>
                             </div>
                         </div>
 
@@ -747,7 +1006,7 @@ const closeModal = () => { selectedProduct.value = null; };
                             Cancel
                         </button>
                         <button v-if="canEditProducts" @click="submitProduct"
-                            :disabled="processing || !newProduct.name || newProduct.colors.length === 0"
+                            :disabled="processing || !newProduct.name || newProduct.colors.length < 10"
                             class="flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition shadow-lg shadow-blue-500/20 disabled:opacity-30">
                             Create
                         </button>
@@ -785,13 +1044,33 @@ const closeModal = () => { selectedProduct.value = null; };
                                 class="mt-1 w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200" />
                         </div>
 
+                        <div class="rounded-2xl border border-violet-100 bg-violet-50/50 p-4 dark:border-violet-900/40 dark:bg-violet-950/20">
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                                <div><p class="text-[10px] font-black uppercase tracking-widest text-violet-700 dark:text-violet-300">Compatible yarns</p><p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Choose yarn materials that can be used for this product.</p></div>
+                                <span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-violet-700 dark:bg-zinc-900 dark:text-violet-300">{{ editForm.yarn_material_ids?.length || 0 }} selected</span>
+                            </div>
+                            <input v-model="yarnSearch" type="search" placeholder="Search yarn name, tier, or material ID..." class="mb-2 w-full rounded-xl border border-violet-100 bg-white px-3 py-2 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-slate-200" />
+                            <div v-if="yarnMaterials.length" class="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-violet-100 bg-white/70 p-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                <label v-for="material in filteredYarnMaterials" :key="material.id" class="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition hover:bg-violet-50 dark:hover:bg-violet-950/40">
+                                    <input v-model="editForm.yarn_material_ids" type="checkbox" :value="material.id" class="h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                                    <span class="min-w-0 flex-1"><span class="block truncate text-xs font-bold text-slate-700 dark:text-slate-200">{{ material.display_name || material.name }}</span><span class="block text-[10px] text-slate-400">{{ material.mat_id }}<template v-if="material.unit"> · {{ material.unit }}</template></span></span>
+                                    <span class="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-black text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">{{ material.yarn_tier || 'Tier not set' }}</span>
+                                </label>
+                                <p v-if="!filteredYarnMaterials.length" class="px-2 py-4 text-center text-xs text-slate-400">No yarn materials match your search.</p>
+                            </div>
+                            <p v-else class="rounded-xl border border-dashed border-violet-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-violet-900/50 dark:text-slate-400">Add Yarn materials in Inventory Materials before assigning them here.</p>
+                        </div>
+
                         <div class="border-t border-slate-100 dark:border-slate-800 pt-5">
                             <div class="flex items-center justify-between mb-3">
                                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Colors assigned *</p>
-                                <span class="text-xs font-bold text-slate-400">
-                                    {{ editForm.colors?.length || 0 }} added
+                                <span class="text-xs font-bold" :class="(editForm.colors?.length || 0) >= 10 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
+                                    {{ editForm.colors?.length || 0 }} / 10 colors
                                 </span>
                             </div>
+                            <p v-if="(editForm.colors?.length || 0) < 10" class="-mt-4 mb-4 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                Add {{ 10 - (editForm.colors?.length || 0) }} more Pantone color{{ 10 - (editForm.colors?.length || 0) === 1 ? '' : 's' }} before saving.
+                            </p>
 
                             <div class="flex flex-wrap gap-4 mb-6 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 min-h-[80px] items-center">
                                 
@@ -799,7 +1078,7 @@ const closeModal = () => { selectedProduct.value = null; };
                                     <div v-for="(color, index) in editForm.colors" :key="index"
                                         class="relative group flex flex-col items-center">
                                         <div class="w-10 h-10 rounded-full border-2 border-slate-300 dark:border-slate-600 shadow-sm flex items-center justify-center transition-transform hover:scale-105"
-                                            :style="{ backgroundColor: color.hex || '#CCCCCC' }" :title="color.name">
+                                            :style="{ backgroundColor: color.hex }" :title="color.name">
                                         </div>
                                         <span class="text-[9px] mt-1.5 font-bold text-slate-600 dark:text-slate-300 max-w-[50px] text-center truncate" :title="color.name">
                                             {{ color.name || 'Unnamed' }}
@@ -817,24 +1096,19 @@ const closeModal = () => { selectedProduct.value = null; };
                                 </div>
                             </div>
 
-                            <div class="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 flex flex-col gap-3">
-                                <p class="text-[9px] font-black text-blue-400 uppercase tracking-tighter">Add New Color</p>
-                                <div class="flex items-end gap-2">
-                                    <div class="flex-1">
-                                        <input v-model="newColorForm.name" type="text" placeholder="Color Name"
-                                            class="w-full px-2 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-slate-700 dark:text-slate-200" />
-                                    </div>
-                                    <div class="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-                                        <input v-model="newColorForm.hex" type="color"
-                                            class="w-7 h-7 rounded border-none cursor-pointer bg-transparent p-0" />
-                                        <input v-model="newColorForm.hex" type="text" placeholder="#000000"
-                                            class="w-16 px-1 py-1 text-xs bg-transparent border-none focus:ring-0 text-slate-700 dark:text-slate-200 font-mono uppercase" />
-                                    </div>
+                            <div class="rounded-xl border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-900/30 dark:bg-blue-900/10">
+                                <p class="mb-2 text-[9px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Add Pantone colorway</p>
+                                <input v-model="pantoneSearch" type="search" placeholder="Search Pantone name or hex code..." class="mb-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" />
+                                <div v-if="filteredPantoneColors.length" class="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-blue-100 bg-white/70 p-2 dark:border-blue-900/30 dark:bg-zinc-900/60">
+                                    <button v-for="pantone in filteredPantoneColors" :key="pantone.id" type="button" @click="addColor(pantone)" :disabled="hasPantoneColor(editForm.colors, pantone)" class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-blue-50 disabled:cursor-default disabled:opacity-50 dark:hover:bg-blue-950/40">
+                                        <span class="h-7 w-7 shrink-0 rounded-md border border-black/10" :style="{ backgroundColor: pantone.hex }" />
+                                        <span class="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-700 dark:text-slate-200">{{ pantone.name }}</span>
+                                        <span class="font-mono text-[9px] text-slate-400">{{ pantone.hex }}</span>
+                                        <Check v-if="hasPantoneColor(editForm.colors, pantone)" class="h-3.5 w-3.5 text-emerald-600" />
+                                    </button>
                                 </div>
-                                <button @click="addColor" :disabled="!newColorForm.name || !newColorForm.hex"
-                                    class="w-full py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
-                                    Add Color
-                                </button>
+                                <p v-else class="rounded-lg border border-dashed border-blue-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-blue-900/50 dark:text-slate-400">{{ pantoneColors.length ? 'No Pantone colors match your search.' : 'No Pantone references are available.' }}</p>
+                                <p v-if="pantoneColors.length > 100 && !pantoneSearch" class="mt-1 text-[10px] text-slate-400">Showing the first 100 colors. Search to find other Pantone references.</p>
                             </div>
                         </div>
 
@@ -884,7 +1158,7 @@ const closeModal = () => { selectedProduct.value = null; };
                             Cancel
                         </button>
                         
-                        <button v-if="canEditProducts" @click="triggerEditConfirm" :disabled="processing || !editForm.name || !editForm.colors || editForm.colors.length === 0"
+                        <button v-if="canEditProducts" @click="triggerEditConfirm" :disabled="processing || !editForm.name || !editForm.colors || editForm.colors.length < 10"
                             class="flex-1 py-2.5 text-sm font-bold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed">
                             Save Changes
                         </button>
@@ -1023,6 +1297,13 @@ const closeModal = () => { selectedProduct.value = null; };
 .modal-enter-active .modal-panel, .modal-leave-active .modal-panel { transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease; }
 .modal-enter-from .modal-panel { opacity: 0; transform: translateY(20px) scale(0.97); }
 .modal-leave-to .modal-panel { opacity: 0; transform: translateY(12px) scale(0.98); }
+.fade-img-enter-active, .fade-img-leave-active { transition: opacity 0.2s ease, transform 0.25s ease; }
+.fade-img-enter-from { opacity: 0; transform: scale(1.03); }
+.fade-img-leave-to { opacity: 0; transform: scale(0.99); }
+@media (prefers-reduced-motion: reduce) {
+    .animate-float, .animate-float-delayed, .animate-bounce-soft { animation: none; }
+    .fade-img-enter-active, .fade-img-leave-active { transition: none; }
+}
 .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;

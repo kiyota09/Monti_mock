@@ -244,11 +244,11 @@
 </template>
 
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed } from "vue";
 import { router } from "@inertiajs/vue3";
 import axios from "axios";
-import { toast } from "vue3-toastify";
-import "vue3-toastify/dist/index.css";
+import { toast } from '@/lib/feedback';
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { ClipboardList, Archive, Search, Briefcase, CheckCircle2, Pencil, Lock, Undo2 } from 'lucide-vue-next';
 
@@ -403,6 +403,7 @@ const submitForm = async () => {
 };
 
 const archiveType = async (id) => {
+    if (!await confirmModal('Archive this employment type? It will no longer be available for new employee records.')) return;
     try {
         const res = await axios.delete(route("hrm.workforce.employment-types.destroy", { employmentType: id }));
         toast.success(res.data?.message || "Employment type archived successfully.");

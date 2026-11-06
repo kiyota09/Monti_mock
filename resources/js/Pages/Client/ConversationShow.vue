@@ -1,342 +1,677 @@
 <template>
     <Head :title="`Conversation: ${inquiry.product?.name || 'Bulk Inquiry'}`" />
     <AuthenticatedLayout>
-        <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
-            <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
+        <div class="flex h-full w-full flex-col overflow-hidden gap-2 sm:gap-3">
 
-            <!-- ── Hero Header ─────────────────────────────────────── -->
-            <div class="animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/20">
-                <div class="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-float" />
-                <div class="absolute -bottom-24 -left-10 h-64 w-64 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-delayed" />
-                <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 22px 22px;" />
-                <div class="relative flex flex-wrap items-center gap-3">
-                    <Link :href="route('client.conversations')"
-                        class="group flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur hover:bg-white/30 hover:-translate-x-0.5 transition-all active:scale-95 flex-shrink-0">
-                        <ArrowLeft class="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+            <!-- ── Header ──────────────────────────────────────────── -->
+            <header class="flex-shrink-0 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-sm px-4 sm:px-5 py-3.5">
+                <div class="flex items-center gap-3">
+                    <Link :href="route('client.conversations')" aria-label="Back to conversations"
+                        class="p-2 rounded-xl border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-800 dark:hover:text-white transition flex-shrink-0">
+                        <ArrowLeft class="h-4 w-4" />
                     </Link>
+                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white font-semibold text-base flex-shrink-0" aria-hidden="true">
+                        {{ (inquiry.product?.name ?? 'M').charAt(0) }}
+                    </div>
                     <div class="flex-1 min-w-0">
-                        <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                            <Sparkles class="h-3.5 w-3.5" /> Client conversation
-                        </p>
-                        <h1 class="text-xl sm:text-2xl font-black tracking-tight leading-tight truncate">
-                            {{ inquiry.product?.name || 'Multiple Products' }}
-                        </h1>
-                        <p class="text-xs text-blue-100/90 font-medium uppercase tracking-wider mt-0.5 flex items-center gap-1.5">
-                            {{ inquiry.product?.sku ? `SKU: ${inquiry.product.sku} · ` : '' }}
-                            <span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ formatStatus(inquiry.status) }}</span>
+                        <div class="flex items-center gap-2 min-w-0">
+                            <h1 class="text-base font-semibold text-slate-900 dark:text-white truncate leading-tight">
+                                {{ inquiry.product?.name || 'Multiple Products' }}
+                            </h1>
+                            <span :class="statusPill(inquiry.status).pill"
+                                class="flex-shrink-0 hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border">
+                                <span class="h-1.5 w-1.5 rounded-full" :class="statusPill(inquiry.status).dot" />
+                                {{ formatStatus(inquiry.status) }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 truncate">
+                            <span v-if="inquiry.product?.sku" class="font-medium text-slate-700 dark:text-zinc-300">SKU {{ inquiry.product.sku }}</span>
+                            <span v-if="inquiry.product?.sku"> · </span>
+                            <span>Monti Textile team</span>
                         </p>
                     </div>
-                    <button
-                        @click="openPoModal"
-                        :disabled="!hasAcceptedQuotation"
-                        :class="hasAcceptedQuotation
-                            ? 'bg-amber-400 hover:bg-amber-300 text-amber-950 cursor-pointer shadow-lg hover:scale-105'
-                            : 'bg-white/15 text-white/50 cursor-not-allowed ring-1 ring-white/20'"
-                        class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex-shrink-0 backdrop-blur">
-                        <FileText class="h-3.5 w-3.5" />
-                        <span class="hidden sm:inline">Send P.O.</span>
-                        <span class="sm:hidden">P.O.</span>
-                    </button>
                 </div>
-            </div>
+            </header>
 
-            <!-- ── Mobile Tab Bar ───────────────────────────────────── -->
-            <div class="flex lg:hidden gap-2">
-                <button @click="mobilePanel = 'chat'"
-                    :class="mobilePanel === 'chat' ? 'bg-white dark:bg-zinc-900 text-indigo-700 dark:text-indigo-300 shadow-lg scale-[1.02]' : 'bg-white/60 dark:bg-zinc-900/60 text-gray-400 hover:text-gray-600'"
-                    class="flex-1 py-2.5 rounded-2xl border border-gray-100 dark:border-zinc-800 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95">
-                    Chat
+            <!-- ── Mobile tab bar ──────────────────────────────────── -->
+            <div class="flex lg:hidden rounded-xl bg-slate-200/60 dark:bg-zinc-900 p-1 flex-shrink-0" role="tablist">
+                <button @click="mobilePanel = 'chat'" role="tab" :aria-selected="mobilePanel === 'chat'" type="button"
+                    :class="mobilePanel === 'chat' ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-zinc-400'"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium transition">
+                    Conversation
                 </button>
-                <button @click="mobilePanel = 'proposals'"
-                    :class="mobilePanel === 'proposals' ? 'bg-white dark:bg-zinc-900 text-indigo-700 dark:text-indigo-300 shadow-lg scale-[1.02]' : 'bg-white/60 dark:bg-zinc-900/60 text-gray-400 hover:text-gray-600'"
-                    class="flex-1 py-2.5 rounded-2xl border border-gray-100 dark:border-zinc-800 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95">
+                <button @click="mobilePanel = 'proposals'" role="tab" :aria-selected="mobilePanel === 'proposals'" type="button"
+                    :class="mobilePanel === 'proposals' ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-zinc-400'"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium transition">
                     Proposals
+                    <span v-if="activeQuotations.length"
+                        class="ml-1 inline-flex min-w-[18px] justify-center rounded-full bg-indigo-600 text-white text-[11px] px-1.5">{{ activeQuotations.length }}</span>
                 </button>
             </div>
 
-            <!-- ── Main Layout ──────────────────────────────────────── -->
-            <div class="animate-fade-up flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-340px)] lg:min-h-[560px]" style="animation-delay:120ms">
+            <!-- ── Request fabric sample ───────────────────────────── -->
+            <details v-if="fabricOptions.length" ref="sampleRequestDetails"
+                class="group hidden flex-shrink-0 overflow-hidden rounded-2xl border border-emerald-200/70 dark:border-emerald-500/20 bg-white dark:bg-zinc-900 shadow-sm transition-shadow open:shadow-md">
 
-                <!-- Left: Messages ──────────────────────────────────── -->
-                <div :class="mobilePanel !== 'chat' ? 'hidden lg:flex' : 'flex'"
-                    class="flex-1 flex-col overflow-hidden rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur shadow-sm hover:shadow-xl transition-shadow duration-300 min-w-0 min-h-[540px] lg:min-h-0">
+                <!-- Collapsed bar -->
+                <summary class="relative cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-inset">
+                    <div class="weave absolute inset-0 opacity-70 dark:opacity-30" aria-hidden="true" />
+                    <div class="relative flex items-center gap-3.5 px-4 py-3.5">
+                        <span class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-600/30">
+                            <FlaskConical class="h-5 w-5" />
+                        </span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block text-sm font-semibold text-slate-900 dark:text-white">Request a fabric sample</span>
+                            <span class="block truncate text-xs text-slate-600 dark:text-zinc-400">Pick a design, then show us the color you want matched</span>
+                        </span>
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white transition group-open:bg-slate-100 group-open:text-slate-700 dark:group-open:bg-zinc-800 dark:group-open:text-zinc-200">
+                            <span class="group-open:hidden">Start</span>
+                            <span class="hidden group-open:inline">Close</span>
+                            <ChevronDown class="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-180" />
+                        </span>
+                    </div>
+                </summary>
 
-                    <!-- Messages area -->
-                    <div ref="messagesContainer"
-                        class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 bg-gradient-to-b from-indigo-50/40 via-transparent to-transparent dark:from-indigo-950/20">
-                        <div v-for="msg in liveMessages" :key="msg.id"
-                            class="animate-fade-up flex flex-col"
-                            :class="msg.sender_type === 'client' ? 'items-end' : 'items-start'">
+                <form @submit.prevent="submitFabricSample" class="border-t border-slate-100 dark:border-zinc-800 p-4 sm:p-5 space-y-5">
 
-                            <!-- System event pill -->
-                            <div v-if="msg.is_system_event" class="w-full flex justify-center my-3">
-                                <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 px-4 py-1.5 rounded-full max-w-[85%] shadow-sm">
-                                    <p class="text-[9px] font-black uppercase tracking-wide text-indigo-500 dark:text-indigo-300 text-center flex items-center gap-1.5 justify-center">
-                                        <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ msg.message }}
-                                    </p>
-                                </div>
+                    <!-- Each quoted fabric design has its own Pantone color list. -->
+                    <div class="space-y-3">
+                        <div v-for="(fabricSet, fabricIndex) in sampleForm.fabric_designs" :key="fabricSet.key"
+                            class="space-y-3 rounded-xl border border-slate-200 dark:border-zinc-700 p-3.5 sm:p-4">
+                            <div class="flex items-center justify-between gap-3">
+                                <label :for="`sample-fabric-${fabricSet.key}`" class="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                                    Fabric design {{ fabricIndex + 1 }}
+                                </label>
+                                <button v-if="sampleForm.fabric_designs.length > 1" type="button" @click="removeSampleFabric(fabricIndex)"
+                                    class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10">
+                                    <X class="h-3.5 w-3.5" /> Remove
+                                </button>
                             </div>
+                            <div class="relative">
+                                <Layers class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600 dark:text-emerald-400" />
+                                <select :id="`sample-fabric-${fabricSet.key}`" v-model="fabricSet.quotation_item_id" required
+                                    class="w-full appearance-none rounded-xl border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 py-2.5 pl-10 pr-10 text-sm text-slate-800 dark:text-zinc-100 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition">
+                                    <option value="" disabled>Select an approved fabric design</option>
+                                    <option v-for="fabric in fabricOptions" :key="fabric.quotation_item_id" :value="fabric.quotation_item_id"
+                                        :disabled="sampleForm.fabric_designs.some((set, index) => index !== fabricIndex && String(set.quotation_item_id) === String(fabric.quotation_item_id))">
+                                        {{ fabric.fabric_label || [fabric.yarn_type ? `Yarn: ${fabric.yarn_type}` : '', fabric.fabric, fabric.design, fabric.color].filter(Boolean).join(' · ') }}
+                                    </option>
+                                </select>
+                                <ChevronDown class="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            </div>
+                            <p v-if="sampleForm.errors[`fabric_designs.${fabricIndex}.quotation_item_id`]" class="text-xs text-rose-600">
+                                {{ sampleForm.errors[`fabric_designs.${fabricIndex}.quotation_item_id`] }}
+                            </p>
 
-                            <!-- Regular message bubble -->
-                            <div v-else
-                                :class="msg.sender_type === 'client'
-                                    ? 'bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white rounded-3xl rounded-tr-xl shadow-lg shadow-indigo-500/25'
-                                    : 'bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-zinc-700 rounded-3xl rounded-tl-xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all'"
-                                class="max-w-[80%] sm:max-w-[65%] px-4 py-3">
+                            <div v-if="sampleForm.request_method === 'pantone'" class="space-y-2 border-t border-slate-100 pt-3 dark:border-zinc-700">
+                                <p class="text-xs font-semibold text-slate-700 dark:text-zinc-300">Colors for this design</p>
+                                <div v-for="(color, colorIndex) in fabricSet.colors" :key="colorIndex" class="space-y-2 rounded-lg bg-white/70 p-2.5 dark:bg-zinc-900/60">
+                                    <div class="grid grid-cols-[1fr_1.3fr_auto] items-center gap-2">
+                                        <input v-model="color.pantone_code" required placeholder="Code, e.g. 19-4052"
+                                            class="min-w-0 rounded-xl border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-2.5 text-sm font-mono focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition" />
+                                        <input v-model="color.pantone_color" required placeholder="Name, e.g. Classic Blue"
+                                            class="min-w-0 rounded-xl border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-2.5 text-sm focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition" />
+                                        <button type="button" @click="removeSampleColor(fabricIndex, colorIndex)"
+                                            :disabled="fabricSet.colors.length === 1" aria-label="Remove color"
+                                            class="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30 dark:hover:bg-rose-500/10">
+                                            <X class="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <label class="space-y-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                                            Texture
+                                            <select v-model="color.texture" required class="block w-full rounded-xl border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-2 text-sm font-normal text-slate-800 dark:text-zinc-100 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15">
+                                                <option value="" disabled>Select texture</option>
+                                                <option value="Hard">Hard</option>
+                                                <option value="Medium">Medium</option>
+                                                <option value="Soft">Soft</option>
+                                            </select>
+                                        </label>
+                                        <label class="space-y-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                                            GSM
+                                            <input v-model.number="color.gsm" type="number" inputmode="numeric" min="1" max="10000" step="1" required placeholder="e.g. 180"
+                                                class="block w-full rounded-xl border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-2 text-sm font-normal text-slate-800 dark:text-zinc-100 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15" />
+                                        </label>
+                                    </div>
+                                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:items-end">
+                                        <label class="space-y-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                                            Color reference
+                                            <select v-model="color.reference_type" required class="block w-full rounded-xl border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-2 text-sm font-normal text-slate-800 dark:text-zinc-100 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15">
+                                                <option value="hex">Color hex</option>
+                                                <option value="image">Upload image</option>
+                                            </select>
+                                        </label>
+                                        <label v-if="color.reference_type === 'hex'" class="space-y-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                                            Color
+                                            <span class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 dark:border-zinc-700 dark:bg-zinc-800">
+                                                <input v-model="color.color_hex" type="color" required aria-label="Choose color hex"
+                                                    class="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0" />
+                                                <span class="font-mono text-xs uppercase">{{ color.color_hex }}</span>
+                                            </span>
+                                        </label>
+                                        <label v-else class="space-y-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                                            Color image
+                                            <input type="file" accept="image/*" required @change="onSampleColorImage($event, color)"
+                                                class="block w-full rounded-xl border border-slate-200 bg-white text-xs text-slate-700 file:mr-2 file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:font-semibold file:text-emerald-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:file:bg-emerald-500/10 dark:file:text-emerald-300" />
+                                            <span v-if="color.color_image" class="block truncate text-[10px] font-normal">{{ color.color_image.name }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <button type="button" @click="addSampleColor(fabricIndex)"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-emerald-300 dark:border-emerald-500/40 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-50 dark:hover:bg-emerald-500/10">
+                                    <Plus class="h-3.5 w-3.5" /> Add color to this design
+                                </button>
+                            </div>
+                        </div>
+                        <p v-if="sampleForm.errors.fabric_designs" class="text-xs text-rose-600">{{ sampleForm.errors.fabric_designs }}</p>
+                        <button type="button" @click="addSampleFabric"
+                            :disabled="sampleForm.fabric_designs.length >= fabricOptions.length"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-emerald-300 dark:border-emerald-500/40 px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-50 dark:hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40">
+                            <Plus class="h-3.5 w-3.5" /> Add another fabric design
+                        </button>
+                    </div>
 
-                                <p class="text-xs leading-relaxed whitespace-pre-wrap">{{ msg.message }}</p>
+                    <!-- Method picker -->
+                    <fieldset>
+                        <legend class="mb-1.5 text-xs font-semibold text-slate-700 dark:text-zinc-300">How will you share the color?</legend>
+                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup">
+                            <button v-for="m in sampleMethods" :key="m.value" type="button" role="radio"
+                                :aria-checked="sampleForm.request_method === m.value"
+                                @click="sampleForm.request_method = m.value"
+                                class="relative flex items-center gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 sm:flex-col sm:items-start sm:gap-2"
+                                :class="sampleForm.request_method === m.value
+                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-emerald-500'
+                                    : 'border-slate-200 dark:border-zinc-700 hover:border-emerald-300 dark:hover:border-emerald-500/40 hover:bg-slate-50 dark:hover:bg-zinc-800/60'">
+                                <span class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg transition"
+                                    :class="sampleForm.request_method === m.value
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400'">
+                                    <component :is="m.icon" class="h-5 w-5" />
+                                </span>
+                                <span class="min-w-0">
+                                    <span class="block text-sm font-semibold text-slate-900 dark:text-white">{{ m.label }}</span>
+                                    <span class="block text-xs text-slate-500 dark:text-zinc-400">{{ m.hint }}</span>
+                                </span>
+                                <Check v-if="sampleForm.request_method === m.value"
+                                    class="absolute right-2.5 top-2.5 h-4 w-4 rounded-full bg-emerald-600 p-0.5 text-white" />
+                            </button>
+                        </div>
+                    </fieldset>
 
-                                <!-- Lab sample under review: photo + decision (formula stays internal) -->
-                                <div v-if="msg.sample_request" class="mt-2 rounded-xl bg-black/10 dark:bg-white/10 p-2.5">
-                                    <p class="text-[10px] font-black uppercase tracking-widest opacity-70">
-                                        🧬 Lab sample · {{ msg.sample_request.fabric_name }}
-                                    </p>
-                                    <p class="text-[9px] font-bold opacity-50 mt-0.5">{{ msg.sample_request.code }}</p>
+                    <!-- Method details -->
+                    <div class="rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50/70 dark:bg-zinc-800/40 p-3.5 sm:p-4">
+
+                        <!-- Carrier -->
+                        <div v-if="sampleForm.request_method === 'carrier'">
+                            <label for="sample-carrier" class="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-zinc-300">Carrier or transporter</label>
+                            <div class="relative">
+                                <Truck class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <input id="sample-carrier" v-model="sampleForm.carrier_name" required
+                                    placeholder="e.g. LBC, J&T, your own driver"
+                                    class="w-full rounded-xl border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-2.5 pl-10 text-sm focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition" />
+                            </div>
+                            <p class="mt-2 text-xs text-slate-500 dark:text-zinc-400">Send your physical swatch to the Imus plant. We will match it in the lab.</p>
+                            <p v-if="sampleForm.errors.carrier_name" class="mt-1 text-xs text-rose-600">{{ sampleForm.errors.carrier_name }}</p>
+                        </div>
+
+                        <!-- Image / PDF -->
+                        <div v-else-if="sampleForm.request_method === 'image'">
+                            <input ref="sampleFileInput" type="file" accept="image/*,.pdf" class="hidden"
+                                @change="onSampleFile($event.target.files[0])" />
+
+                            <button v-if="!sampleForm.reference_file" type="button"
+                                @click="sampleFileInput.click()"
+                                @dragover.prevent="sampleDragging = true"
+                                @dragleave.prevent="sampleDragging = false"
+                                @drop.prevent="onSampleDrop"
+                                class="flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-7 text-center transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20"
+                                :class="sampleDragging
+                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10'
+                                    : 'border-slate-300 dark:border-zinc-600 hover:border-emerald-400 hover:bg-white dark:hover:bg-zinc-800'">
+                                <UploadCloud class="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                                <span class="text-sm font-semibold text-slate-800 dark:text-zinc-100">Drop your color reference here</span>
+                                <span class="text-xs text-slate-500 dark:text-zinc-400">or click to browse · image or PDF</span>
+                            </button>
+
+                            <div v-else class="flex items-center gap-3 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-white dark:bg-zinc-800 p-2.5">
+                                <img v-if="sampleFilePreview" :src="sampleFilePreview" alt="Color reference preview"
+                                    class="h-14 w-14 flex-shrink-0 rounded-lg object-cover border border-slate-200 dark:border-zinc-700" />
+                                <span v-else class="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-500/10">
+                                    <FileText class="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block truncate text-sm font-medium text-slate-900 dark:text-white">{{ sampleForm.reference_file.name }}</span>
+                                    <span class="block text-xs text-slate-500 dark:text-zinc-400">{{ formatBytes(sampleForm.reference_file.size) }}</span>
+                                </span>
+                                <button type="button" @click="clearSampleFile" aria-label="Remove file"
+                                    class="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10">
+                                    <X class="h-4 w-4" />
+                                </button>
+                            </div>
+                            <p v-if="sampleForm.errors.reference_file" class="mt-1.5 text-xs text-rose-600">{{ sampleForm.errors.reference_file }}</p>
+                        </div>
+
+                        <div v-else class="text-xs text-slate-600 dark:text-zinc-400">
+                            Add Pantone colors under each fabric design above.
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div>
+                        <label for="sample-notes" class="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                            Notes <span class="font-normal text-slate-400">(optional)</span>
+                        </label>
+                        <textarea id="sample-notes" v-model="sampleForm.notes" rows="2"
+                            placeholder="Lighting, finish, or anything we should match closely"
+                            class="w-full resize-none rounded-xl border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-sm focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition" />
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="flex flex-col-reverse items-stretch gap-3 border-t border-slate-100 dark:border-zinc-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-xs text-slate-500 dark:text-zinc-400">
+                            <template v-if="selectedSampleFabrics.length">{{ selectedSampleFabrics.length }} fabric design{{ selectedSampleFabrics.length === 1 ? '' : 's' }} selected</template>
+                            <template v-else>Choose a fabric design to continue</template>
+                        </p>
+                        <button type="submit" :disabled="!canSubmitSample"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-emerald-600/30 transition hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none">
+                            <Loader2 v-if="sampleForm.processing" class="h-4 w-4 animate-spin" />
+                            <Send v-else class="h-4 w-4" />
+                            {{ sampleForm.processing ? 'Sending…' : 'Send sample request' }}
+                        </button>
+                    </div>
+                </form>
+            </details>
+
+            <!-- ── Main layout ─────────────────────────────────────── -->
+            <div class="flex flex-1 overflow-hidden gap-4 min-h-0">
+
+                <!-- Left: conversation -->
+                <section :class="mobilePanel !== 'chat' ? 'hidden lg:flex' : 'flex'"
+                    class="flex-1 flex-col overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-sm min-w-0"
+                    aria-label="Conversation">
+
+                    <!-- Messages -->
+                    <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/70 dark:bg-zinc-950/40">
+                        <div v-if="!clientChatMessages.length" class="h-full flex flex-col items-center justify-center text-center text-slate-400 dark:text-zinc-500 gap-2">
+                            <FileText class="h-8 w-8" />
+                            <p class="text-sm font-medium">No messages yet</p>
+                            <p class="text-xs">Replies, quotations and sample updates will appear here.</p>
+                        </div>
+
+                        <TransitionGroup name="card" tag="div" class="space-y-3">
+                            <div v-for="(msg, i) in clientChatMessages" :key="msg.id" class="flex flex-col"
+                                :class="msg.sender_type === 'client' ? 'items-end' : 'items-start'">
+
+                                <!-- Day divider -->
+                                <div v-if="isNewDay(i)" class="w-full flex items-center gap-3 my-3">
+                                    <span class="flex-1 h-px bg-slate-200 dark:bg-zinc-800" />
+                                    <span class="text-[11px] font-medium text-slate-400 dark:text-zinc-500">{{ dayLabel(msg.created_at) }}</span>
+                                    <span class="flex-1 h-px bg-slate-200 dark:bg-zinc-800" />
                                 </div>
 
-                                <!-- Attachments -->
-                                <div v-if="msg.attachments && msg.attachments.length" class="mt-2 space-y-2">
-                                    <div v-for="file in msg.attachments" :key="file.id">
-                                        <!-- Image -->
-                                        <div v-if="file.file_type?.startsWith('image/')"
-                                            class="rounded-xl overflow-hidden border border-black/10 relative">
-                                            <img :src="getFullUrl(file.file_path)"
-                                                class="max-w-full h-auto cursor-pointer"
+                                <!-- System event -->
+                                <div v-if="msg.is_system_event" class="w-full flex justify-center my-1">
+                                    <div class="bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-500/20 border-l-4 border-l-indigo-500 px-4 py-3 rounded-xl max-w-[92%] sm:max-w-[80%] shadow-sm">
+                                        <template v-if="msg.sample_request && (msg.message.startsWith('Fabric sample request submitted') || msg.message.includes('received the fabric sample request'))">
+                                            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">{{ msg.message.startsWith('Fabric sample request submitted') ? 'Fabric sample request submitted' : 'Fabric sample received' }}</h3>
+                                            <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">{{ msg.sample_request.code }}</p>
+                                            <div v-if="msg.message.startsWith('Fabric sample request submitted')" class="mt-3 space-y-2">
+                                                <article v-for="design in (msg.sample_request.submitted_designs || [msg.sample_request])" :key="design.id" class="rounded-lg border border-slate-200 p-3 dark:border-zinc-700">
+                                                    <p class="text-xs font-semibold text-slate-800 dark:text-zinc-100">{{ design.fabric_name }}</p>
+                                                    <p class="mt-1 text-xs text-slate-500 dark:text-zinc-400">Method: {{ design.request_method || 'client request' }}<span v-if="design.carrier_name"> · Carrier: {{ design.carrier_name }}</span></p>
+                                                    <p v-if="design.color_description" class="mt-1 text-xs text-slate-600 dark:text-zinc-300">{{ design.color_description }}</p>
+                                                    <p v-if="design.texture || design.gsm" class="mt-1 text-xs text-slate-600 dark:text-zinc-300">{{ design.texture || 'Texture not specified' }}<span v-if="design.gsm"> · {{ design.gsm }} GSM</span></p>
+                                                    <div v-if="design.color_hex" class="mt-2 flex items-center gap-2 text-xs text-slate-600 dark:text-zinc-300"><span class="h-5 w-5 rounded border border-black/10" :style="{ backgroundColor: design.color_hex }" />{{ design.color_hex }}</div>
+                                                    <img v-if="design.client_reference_path" :src="getFullUrl(design.client_reference_path)" alt="Uploaded fabric sample reference" class="mt-2 max-h-56 w-full rounded-lg border border-slate-200 bg-slate-50 object-contain dark:border-zinc-700 dark:bg-zinc-950" />
+                                                    <img v-if="design.color_image_path" :src="getFullUrl(design.color_image_path)" alt="Uploaded color reference" class="mt-2 max-h-40 rounded-lg border border-slate-200 object-contain dark:border-zinc-700" />
+                                                </article>
+                                            </div>
+                                            <div v-else class="mt-3 space-y-2">
+                                                <p class="text-xs text-slate-600 dark:text-zinc-300">Monti Textile recorded {{ msg.sample_request.rounds?.length || 0 }} Pantone color(s).</p>
+                                                <article v-for="color in msg.sample_request.rounds" :key="color.id" class="flex items-center gap-3 rounded-lg border border-slate-200 p-2.5 dark:border-zinc-700">
+                                                    <span v-if="color.color_hex" class="h-8 w-8 shrink-0 rounded border border-black/10" :style="{ backgroundColor: color.color_hex }" />
+                                                    <img v-else-if="color.color_image_path" :src="getFullUrl(color.color_image_path)" alt="Recorded color reference" class="h-9 w-9 shrink-0 rounded border border-slate-200 object-cover dark:border-zinc-700" />
+                                                    <span class="min-w-0"><span class="block text-xs font-semibold text-slate-800 dark:text-zinc-100">{{ color.fabric_name }} · {{ color.color_description }}</span><span class="block text-xs text-slate-500 dark:text-zinc-400">{{ color.texture }} · {{ color.gsm }} GSM<span v-if="color.color_hex"> · {{ color.color_hex }}</span></span></span>
+                                                </article>
+                                            </div>
+                                        </template>
+                                        <p v-else class="text-xs font-medium text-slate-700 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">{{ msg.message }}</p>
+                                        <div v-if="msg.attachments?.length" class="mt-2.5 space-y-2">
+                                            <div v-for="file in msg.attachments" :key="file.id">
+                                                <img v-if="file.file_type?.startsWith('image/')"
+                                                    :src="getFullUrl(file.file_path)" :alt="file.file_name || 'Attachment'"
+                                                    class="max-w-full rounded-xl cursor-zoom-in border border-slate-200 dark:border-zinc-700 hover:opacity-90 transition"
+                                                    @click="openPreview(file)" />
+                                                <a v-else :href="getFullUrl(file.file_path)" target="_blank" rel="noopener"
+                                                    class="flex items-center gap-2 p-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs font-medium hover:bg-slate-100 dark:hover:bg-zinc-700 transition">
+                                                    <FileText class="h-4 w-4 text-indigo-500 flex-shrink-0" />
+                                                    <span class="truncate text-slate-700 dark:text-zinc-200">{{ file.file_name }}</span>
+                                                </a>
+                                                <div v-if="!file.approved_by_client && !msg.sample_request" class="mt-1.5 flex justify-end">
+                                                    <button type="button" @click.stop="approveAttachment(file)"
+                                                        class="px-2.5 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600 transition active:scale-95">
+                                                        Approve
+                                                    </button>
+                                                </div>
+                                                <div v-else-if="file.approved_by_client" class="mt-1.5 flex justify-end">
+                                                    <span class="px-2.5 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-medium">
+                                                        Approved
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Regular message -->
+                                <div v-else
+                                    :class="msg.sender_type === 'client'
+                                        ? 'bg-indigo-600 text-white rounded-2xl rounded-br-md shadow-sm'
+                                        : 'bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100 border border-slate-200 dark:border-zinc-700 rounded-2xl rounded-bl-md shadow-sm'"
+                                    class="max-w-[85%] sm:max-w-[70%] px-4 py-3">
+                                    <p class="text-xs font-medium opacity-70 mb-1">
+                                        {{ msg.sender_type === 'client' ? 'You' : 'Monti Textile team' }}
+                                    </p>
+                                    <p class="text-sm whitespace-pre-wrap leading-relaxed">{{ msg.message }}</p>
+
+                                    <div v-if="msg.attachments?.length" class="mt-2.5 space-y-2">
+                                        <div v-for="file in msg.attachments" :key="file.id">
+                                            <img v-if="file.file_type?.startsWith('image/')"
+                                                :src="getFullUrl(file.file_path)" :alt="file.file_name || 'Attachment'"
+                                                class="max-w-full rounded-xl cursor-zoom-in border border-black/10 dark:border-white/10 hover:opacity-90 transition"
                                                 @click="openPreview(file)" />
-                                            <div class="absolute bottom-2 right-2">
-                                                <button v-if="!file.approved_by_client && !msg.sample_request"
-                                                    @click.stop="approveAttachment(file)"
-                                                    class="px-2.5 py-1 bg-amber-400 text-amber-900 rounded-lg text-[9px] font-bold uppercase shadow-sm hover:bg-amber-500 transition">
+                                            <a v-else :href="getFullUrl(file.file_path)" target="_blank" rel="noopener"
+                                                class="flex items-center gap-2 p-2.5 rounded-xl text-xs font-medium transition"
+                                                :class="msg.sender_type === 'client' ? 'bg-white/15 hover:bg-white/25' : 'bg-slate-50 dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700'">
+                                                <FileText class="h-4 w-4 flex-shrink-0" />
+                                                <span class="truncate">{{ file.file_name }}</span>
+                                            </a>
+                                            <div v-if="!file.approved_by_client && !msg.sample_request" class="mt-1.5 flex justify-end">
+                                                <button type="button" @click.stop="approveAttachment(file)"
+                                                    class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition active:scale-95"
+                                                    :class="msg.sender_type === 'client' ? 'bg-white text-indigo-700 hover:bg-indigo-50' : 'bg-amber-500 text-white hover:bg-amber-600'">
                                                     Approve
                                                 </button>
-                                                <span v-else-if="file.approved_by_client"
-                                                    class="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[9px] font-bold uppercase">
-                                                    Approved ✓
+                                            </div>
+                                            <div v-else-if="file.approved_by_client" class="mt-1.5 flex justify-end">
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium"
+                                                    :class="msg.sender_type === 'client' ? 'bg-white/15' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'">
+                                                    Approved
                                                 </span>
                                             </div>
                                         </div>
-                                        <!-- Non-image -->
-                                        <div v-else
-                                            class="flex items-center gap-2 px-3 py-2 bg-black/10 rounded-xl text-[10px] font-medium">
-                                            <FileText class="h-3.5 w-3.5 flex-shrink-0" />
-                                            <a :href="getFullUrl(file.file_path)" target="_blank"
-                                                class="truncate hover:underline flex-1">{{ file.file_name }}</a>
-                                            <button v-if="!file.approved_by_client && !msg.sample_request"
-                                                @click.stop="approveAttachment(file)"
-                                                class="ml-1 px-2 py-1 bg-amber-400 text-amber-900 rounded-lg text-[8px] font-bold uppercase hover:bg-amber-500 transition flex-shrink-0">
-                                                Approve
-                                            </button>
-                                            <span v-else-if="file.approved_by_client"
-                                                class="ml-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[8px] font-bold uppercase flex-shrink-0">
-                                                Approved ✓
-                                            </span>
-                                        </div>
                                     </div>
-                                </div>
 
-                                <p class="text-[9px] opacity-50 mt-1.5 text-right">{{ formatTime(msg.created_at) }}</p>
-
-                                <!-- Fabric sample decision (forwarded lab result) -->
-                                <div v-if="msg.sample_request" class="mt-2">
-                                    <div class="flex flex-wrap items-center gap-1.5">
-                                        <span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-black/10 dark:bg-white/10">
-                                            {{ msg.sample_request.code }} · {{ sampleStatusLabel(msg.sample_request.status) }}
+                                    <!-- Fabric swatch delivery and client decision -->
+                                    <div v-if="msg.sample_request" class="mt-2.5">
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
+                                            :class="msg.sender_type === 'client' ? 'bg-white/15' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'">
+                                            <FlaskConical class="h-3 w-3" />
+                                            {{ msg.sample_request.sample_fabric_design || msg.sample_request.fabric_name }} · {{ msg.sample_request.code }} · {{ sampleStatusLabel(msg.sample_request.status) }}
                                         </span>
+                                        <section v-if="msg.sample_request.status === 'forwarded' && Number(msg.id) === Number(msg.sample_request.delivery_message_id)" class="mt-3 space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 dark:border-indigo-900/50 dark:bg-indigo-950/30">
+                                            <div class="grid gap-1 text-xs text-slate-700 dark:text-zinc-200">
+                                                <p><span class="font-semibold">Fabric design:</span> {{ msg.sample_request.sample_fabric_design || msg.sample_request.fabric_name }}</p>
+                                                <p v-if="msg.sample_request.sample_yarn_type"><span class="font-semibold">Yarn type:</span> {{ msg.sample_request.sample_yarn_type }}</p>
+                                                <p v-if="msg.sample_request.gsm"><span class="font-semibold">GSM:</span> {{ msg.sample_request.gsm }}</p>
+                                                <p><span class="font-semibold">Courier:</span> {{ msg.sample_request.delivery_courier }} · <span class="font-semibold">Tracking:</span> {{ msg.sample_request.delivery_tracking_reference }}</p>
+                                            </div>
+                                            <p v-if="msg.sample_request.delivery_notes" class="rounded-lg bg-white/80 p-2 text-xs text-slate-600 dark:bg-zinc-900/80 dark:text-zinc-300">{{ msg.sample_request.delivery_notes }}</p>
+                                            <a v-if="msg.sample_request.sample_image_path" :href="`/storage/${msg.sample_request.sample_image_path}`" target="_blank" class="inline-flex items-center gap-2 text-xs font-semibold text-indigo-700 underline dark:text-indigo-300">
+                                                <img v-if="!String(msg.sample_request.sample_image_path).toLowerCase().endsWith('.pdf')" :src="`/storage/${msg.sample_request.sample_image_path}`" alt="Fabric swatch sample" class="h-12 w-12 rounded-lg border border-slate-200 object-cover dark:border-zinc-700" />
+                                                {{ String(msg.sample_request.sample_image_path).toLowerCase().endsWith('.pdf') ? 'Open sample PDF' : 'View sample image' }}
+                                            </a>
+                                            <div v-if="!msg.sample_request.client_noted_at" class="flex flex-wrap gap-1.5">
+                                                <button type="button" @click="noteSampleDelivery(msg.sample_request.id)" class="rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-zinc-900 dark:text-indigo-300">Noted</button>
+                                            </div>
+                                            <div v-else-if="!msg.sample_request.client_received_at" class="space-y-2">
+                                                <p class="text-xs font-medium text-indigo-700 dark:text-indigo-300">Delivery details noted. Confirm once the physical swatch has arrived.</p>
+                                                <button type="button" @click="receiveSampleDelivery(msg.sample_request.id)" class="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700">Received</button>
+                                            </div>
+                                            <div v-else class="flex flex-wrap gap-1.5">
+                                            <button type="button" @click="approveSample(msg.sample_request.id)"
+                                                class="px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition active:scale-95">
+                                                Approved
+                                            </button>
+                                            <button type="button" @click="openAdjustModal(msg.sample_request)"
+                                                class="px-2.5 py-1.5 bg-amber-400 text-amber-950 rounded-lg text-xs font-medium hover:bg-amber-500 transition active:scale-95">
+                                                Request for Adjustment
+                                            </button>
+                                            </div>
+                                        </section>
+                                        <p v-else-if="msg.sample_request.status === 'approved' && Number(msg.id) === Number(msg.sample_request.delivery_message_id)" class="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                            Sample approved — you may now send your P.O.
+                                        </p>
+                                        <p v-else-if="msg.sample_request.status === 'adjustment_requested' && Number(msg.id) === Number(msg.sample_request.delivery_message_id)" class="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">
+                                            Adjustment requested — the Dyeing Lab is preparing a revised swatch.
+                                        </p>
                                     </div>
-                                    <div v-if="msg.sample_request.status === 'forwarded'" class="mt-1.5 flex flex-wrap gap-1.5">
-                                        <button @click="approveSample(msg.sample_request.id)"
-                                            class="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase shadow-sm hover:bg-emerald-600 hover:scale-105 active:scale-95 transition">
-                                            Approve Sample
-                                        </button>
-                                        <button @click="openAdjustModal(msg.sample_request)"
-                                            class="px-3 py-1.5 bg-amber-400 text-amber-900 rounded-lg text-[9px] font-black uppercase shadow-sm hover:bg-amber-500 hover:scale-105 active:scale-95 transition">
-                                            Request Adjustment
-                                        </button>
-                                    </div>
-                                    <p v-else-if="msg.sample_request.status === 'approved'" class="mt-1.5 text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400">
-                                        ✓ Sample approved — you may now send your P.O.
-                                    </p>
-                                    <p v-else-if="msg.sample_request.status === 'adjustment_requested'" class="mt-1.5 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400">
-                                        Adjustment requested — CRM is preparing a new round.
-                                    </p>
+
+                                    <p class="text-[11px] opacity-60 mt-1.5 text-right">{{ formatTime(msg.created_at) }}</p>
                                 </div>
                             </div>
-                        </div>
-                        <!-- Typing indicator (real-time, no reload) -->
-                        <div v-if="otherTyping" class="animate-fade-up flex flex-col items-start mt-1">
-                            <div class="bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-zinc-700 rounded-3xl rounded-tl-xl shadow-sm px-4 py-3 flex items-center gap-2">
-                                <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">ECO Team is typing</span>
+                        </TransitionGroup>
+
+                        <!-- Typing indicator -->
+                        <div v-if="otherTyping" class="flex items-start mt-3" aria-live="polite">
+                            <div class="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl rounded-bl-md shadow-sm px-4 py-2.5 flex items-center gap-2.5">
                                 <span class="flex gap-1">
                                     <span class="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style="animation-delay:0ms" />
                                     <span class="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style="animation-delay:150ms" />
                                     <span class="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style="animation-delay:300ms" />
                                 </span>
+                                <span class="text-xs text-slate-500 dark:text-zinc-400">Monti Textile team is typing…</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Reply box -->
-                    <div class="flex-shrink-0 border-t border-gray-100 dark:border-zinc-800 p-3 sm:p-4 bg-white/70 dark:bg-zinc-900/70 backdrop-blur rounded-b-3xl">
-                        <!-- File previews -->
-                        <div v-if="selectedFiles.length" class="flex gap-2 mb-3 overflow-x-auto pb-1">
+                    <div class="flex-shrink-0 border-t border-slate-200 dark:border-zinc-800 p-3 sm:p-4 bg-white dark:bg-zinc-900">
+                        <div v-if="selectedFiles.length" class="flex gap-2 mb-3 overflow-x-auto pb-1 scrollbar-hide">
                             <div v-for="(file, i) in selectedFiles" :key="i"
-                                class="relative h-12 w-12 flex-shrink-0 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden">
-                                <img v-if="file.type.startsWith('image/')" :src="getFilePreview(file)"
-                                    class="h-full w-full object-cover" />
-                                <div v-else class="h-full w-full flex items-center justify-center">
-                                    <FileText class="h-5 w-5 text-gray-400" />
+                                class="relative h-14 w-14 flex-shrink-0 bg-slate-100 dark:bg-zinc-800 rounded-xl border border-slate-200 dark:border-zinc-700 overflow-hidden">
+                                <img v-if="file.type.startsWith('image/')" :src="getFilePreview(file)" :alt="file.name" class="h-full w-full object-cover" />
+                                <div v-else class="h-full w-full flex flex-col items-center justify-center px-1">
+                                    <FileText class="h-5 w-5 text-slate-400" />
+                                    <span class="text-[9px] text-slate-500 truncate w-full text-center">{{ file.name }}</span>
                                 </div>
-                                <button @click="confirmRemoveFile(i)"
-                                    class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow">
-                                    <X class="h-2.5 w-2.5" />
+                                <button @click="confirmRemoveFile(i)" type="button" :aria-label="`Remove ${file.name}`"
+                                    class="absolute top-0.5 right-0.5 bg-slate-900/80 text-white rounded-full p-0.5 hover:bg-red-500 transition">
+                                    <X class="h-3 w-3" />
                                 </button>
                             </div>
                         </div>
-                        <!-- Input row -->
-                        <div class="flex items-center gap-2 bg-gray-50 dark:bg-zinc-800 rounded-2xl px-3 py-2 border border-transparent focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-200 dark:focus-within:ring-indigo-900 transition">
-                            <input v-model="newMessage" type="text"
-                                placeholder="Type a message…"
-                                class="flex-1 bg-transparent border-none focus:ring-0 text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400"
+
+                        <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-zinc-800 rounded-2xl pl-4 pr-1.5 py-1.5 border border-slate-200 dark:border-zinc-700 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-500/10 transition">
+                            <input v-model="newMessage" type="text" aria-label="Reply to Monti Textile"
+                                placeholder="Write a message…"
+                                class="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-sm text-slate-800 dark:text-zinc-100 placeholder:text-slate-400 py-2"
                                 @input="notifyTyping"
                                 @keydown.enter.prevent="handleSend" />
-                            <button type="button" @click="triggerFileUpload"
-                                class="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-xl transition text-gray-400 hover:text-indigo-600">
+                            <button type="button" @click="triggerFileUpload" aria-label="Attach files"
+                                class="p-2 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-xl transition text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200">
                                 <Paperclip class="h-4 w-4" />
                             </button>
                             <input ref="fileInput" type="file" class="hidden" multiple @change="onFilesSelected" />
-                            <button type="button" @click="handleSend"
+                            <button type="button" @click="handleSend" aria-label="Send message"
                                 :disabled="sending || (!newMessage.trim() && !selectedFiles.length)"
-                                class="p-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 transition-all">
+                                class="p-2.5 bg-indigo-600 text-white rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 transition active:scale-95">
                                 <Send v-if="!sending" class="h-4 w-4" />
                                 <Loader2 v-else class="h-4 w-4 animate-spin" />
                             </button>
                         </div>
                     </div>
-                </div>
+                </section>
 
-                <!-- Right: Proposals ────────────────────────────────── -->
-                <div :class="mobilePanel !== 'proposals' ? 'hidden lg:block' : 'block'"
-                    class="w-full lg:w-80 xl:w-96 flex-shrink-0 overflow-y-auto rounded-3xl border border-gray-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur shadow-sm p-4 space-y-3 min-h-[300px]">
+                <!-- Right: actions + proposals -->
+                <aside :class="mobilePanel !== 'proposals' ? 'hidden lg:block' : 'block'"
+                    class="w-full lg:w-[360px] xl:w-[420px] flex-shrink-0 overflow-y-auto space-y-5 pr-0.5 pb-2"
+                    aria-label="Actions and proposals">
 
-                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 px-1 pt-1 flex items-center gap-1.5">
-                        <Sparkles class="h-3.5 w-3.5 text-indigo-400" /> Proposals
-                        <span class="ml-auto rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[11px] font-black px-2.5 py-0.5">{{ quotations.length }}</span>
-                    </p>
-
-                    <!-- Active / Trash tabs -->
-                    <div class="flex gap-1.5 px-1">
-                        <button @click="quotationTab = 'active'"
-                            :class="quotationTab === 'active' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:text-indigo-600'"
-                            class="flex-1 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition active:scale-95">
-                            Active ({{ activeQuotations.length }})
-                        </button>
-                        <button @click="quotationTab = 'trash'"
-                            :class="quotationTab === 'trash' ? 'bg-slate-600 text-white shadow-md' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:text-slate-600'"
-                            class="flex-1 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition active:scale-95">
-                            Trash ({{ trashedQuotations.length }})
-                        </button>
+                    <!-- Actions -->
+                    <div class="rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                        <div class="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 dark:border-zinc-800">
+                            <ClipboardList class="h-4 w-4 text-indigo-500" />
+                            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Actions</h2>
+                        </div>
+                        <div class="p-3 space-y-1.5">
+                            <button v-if="fabricOptions.length" type="button" @click="openSampleRequest"
+                                class="group flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left transition hover:bg-emerald-50 active:scale-[0.99] dark:hover:bg-emerald-500/10">
+                                <span class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+                                    <FlaskConical class="h-4 w-4" />
+                                </span>
+                                <span class="min-w-0 flex-1 text-sm font-semibold text-slate-900 dark:text-white">Request fabric sample</span>
+                                <ChevronDown class="h-4 w-4 -rotate-90 text-slate-400 transition group-hover:translate-x-0.5" />
+                            </button>
+                            <button @click="openPoModal" type="button" :disabled="!canSendPurchaseOrder"
+                                class="group w-full flex items-center gap-3 p-3 rounded-xl text-left transition active:scale-[0.99]"
+                                :class="canSendPurchaseOrder ? 'hover:bg-amber-50 dark:hover:bg-amber-500/10' : 'opacity-50 cursor-not-allowed'">
+                                <span class="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
+                                    :class="canSendPurchaseOrder ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500'">
+                                    <FileText class="h-5 w-5" />
+                                </span>
+                                <span class="min-w-0">
+                                    <span class="block text-sm font-semibold text-slate-900 dark:text-white">Send purchase order</span>
+                                    <span class="block text-xs text-slate-500 dark:text-zinc-400">
+                                        {{ canSendPurchaseOrder ? 'Enter kg by product, yarn, and color' : (!allRequestedColorwaysApproved ? 'Approve all requested color swatches first' : 'A quotation must be sent first') }}
+                                    </span>
+                                </span>
+                            </button>
+                            <p v-if="!canSendPurchaseOrder" class="text-xs text-slate-500 dark:text-zinc-400 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 px-3 py-2.5 rounded-xl text-center">
+                                {{ !allRequestedColorwaysApproved ? 'Every requested Pantone and yarn swatch must be approved first.' : 'Available once a quotation has been sent.' }}
+                            </p>
+                            <p v-if="!canSendPurchaseOrder && hasRequestedColorways" class="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-900 px-3 py-2.5 rounded-xl text-center">Approve every Pantone and yarn swatch before sending a purchase order.</p>
+                        </div>
                     </div>
 
-                    <div v-for="(quotation, qi) in visibleQuotations" :key="quotation.id"
-                        :style="{ animationDelay: `${Math.min(qi * 70, 350)}ms` }"
-                        class="group animate-fade-up relative bg-white dark:bg-zinc-900 rounded-3xl border border-gray-100 dark:border-zinc-800 overflow-hidden shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all duration-300">
-                        <div class="pointer-events-none absolute -top-12 -right-12 h-32 w-32 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <section v-if="clientSampleRequests.length" aria-label="Color swatches and deliveries" class="rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                        <div class="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 dark:border-zinc-800"><FlaskConical class="h-4 w-4 text-emerald-600"/><h2 class="text-sm font-semibold text-slate-900 dark:text-white">Color swatches</h2></div>
+                        <div class="p-3 space-y-2">
+                            <article v-for="sample in clientSampleRequests" :key="sample.id" class="rounded-xl border border-slate-200 dark:border-zinc-700 p-3 space-y-2">
+                                <div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="text-sm font-semibold text-slate-900 dark:text-white">{{ sample.sample_fabric_design || sample.fabric_name }}</p><p class="text-xs text-slate-500 dark:text-zinc-400">{{ sample.sample_yarn_type }} · {{ sample.color_description }} · {{ sample.code }}</p></div><span class="shrink-0 rounded-full bg-slate-100 dark:bg-zinc-800 px-2 py-1 text-[10px] font-semibold">{{ sampleStatusLabel(sample.status) }}</span></div>
+                                <p v-if="sample.delivery_courier" class="text-xs text-slate-600 dark:text-zinc-300">{{ sample.delivery_courier }} · Tracking {{ sample.delivery_tracking_reference }}</p>
+                                <p v-if="sample.delivery_notes" class="rounded-lg bg-slate-50 dark:bg-zinc-800 p-2 text-xs text-slate-600 dark:text-zinc-300">{{ sample.delivery_notes }}</p>
+                                <a v-if="sample.sample_image_path" :href="getFullUrl(sample.sample_image_path)" target="_blank" class="inline-flex items-center gap-2 text-xs font-semibold text-indigo-600 underline dark:text-indigo-300"><img v-if="!String(sample.sample_image_path).toLowerCase().endsWith('.pdf')" :src="getFullUrl(sample.sample_image_path)" alt="Swatch" class="h-10 w-10 rounded border object-cover"/>{{ String(sample.sample_image_path).toLowerCase().endsWith('.pdf') ? 'View swatch PDF' : 'View swatch' }}</a>
+                                <div v-if="sample.status === 'forwarded' && !sample.client_noted_at" class="flex gap-2"><button type="button" @click="noteSampleDelivery(sample.id)" class="rounded-lg border px-3 py-1.5 text-xs font-semibold">Noted</button></div>
+                                <div v-else-if="sample.status === 'forwarded' && !sample.client_received_at" class="flex items-center justify-between gap-2"><span class="text-xs text-slate-500">Confirm the physical swatch arrived.</span><button type="button" @click="receiveSampleDelivery(sample.id)" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white">Received</button></div>
+                                <div v-else-if="sample.status === 'forwarded' && sample.client_received_at" class="flex flex-wrap gap-2"><button type="button" @click="approveSample(sample.id)" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">Approve swatch</button><button type="button" @click="openAdjustModal(sample)" class="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">Request new formulation</button></div>
+                                <p v-else-if="sample.status === 'adjustment_requested'" class="text-xs text-amber-700 dark:text-amber-300">Reformulation requested: {{ sample.adjustment_notes }}</p>
+                            </article>
+                        </div>
+                    </section>
 
-                        <!-- Status bar -->
-                        <div class="relative flex items-center justify-between px-4 py-2.5"
-                            :class="quotation.status === 'accepted' ? 'bg-gradient-to-r from-emerald-500 to-teal-600'
-                                : quotation.status === 'rejected' ? 'bg-gradient-to-r from-rose-500 to-red-600'
-                                : quotation.status === 'trashed' ? 'bg-gradient-to-r from-slate-500 to-gray-600'
-                                : 'bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700'">
-                            <span class="font-mono text-[10px] font-bold text-white">
-                                {{ quotation.quotation_number }}
-                            </span>
-                            <span class="text-[9px] font-black uppercase text-white/90 bg-black/15 px-2 py-0.5 rounded-full ring-1 ring-white/25 flex items-center gap-1">
-                                <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ quotation.status }}
-                            </span>
+                    <!-- Proposals -->
+                    <section v-if="quotations.length > 0" aria-label="Proposals">
+                        <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white px-1 mb-2">
+                            Proposals
+                            <span class="text-xs font-medium text-slate-500 dark:text-zinc-400 bg-slate-200/70 dark:bg-zinc-800 rounded-full px-2 py-0.5">{{ quotations.length }}</span>
+                        </h2>
+
+                        <div class="flex rounded-xl bg-slate-200/60 dark:bg-zinc-900 p-1 mb-3" role="tablist">
+                            <button @click="quotationTab = 'active'" type="button" role="tab" :aria-selected="quotationTab === 'active'"
+                                :class="quotationTab === 'active' ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700'"
+                                class="flex-1 py-1.5 rounded-lg text-xs font-medium transition">
+                                Active ({{ activeQuotations.length }})
+                            </button>
+                            <button @click="quotationTab = 'trash'" type="button" role="tab" :aria-selected="quotationTab === 'trash'"
+                                :class="quotationTab === 'trash' ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700'"
+                                class="flex-1 py-1.5 rounded-lg text-xs font-medium transition">
+                                Trash ({{ trashedQuotations.length }})
+                            </button>
                         </div>
 
-                        <div class="p-3 space-y-2.5">
-                            <!-- VAT badge -->
-                            <div class="relative flex items-center gap-2 flex-wrap">
-                                <span class="text-[9px] font-black rounded-full px-2 py-0.5 ring-1"
-                                    :class="quotation.vat_type === 'inclusive'
-                                        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800'
-                                        : 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400'">
-                                    {{ quotation.vat_type === 'inclusive' ? 'VAT Incl. +12%' : 'VAT Excl.' }}
-                                </span>
-                            </div>
+                        <p v-if="!visibleQuotations.length"
+                            class="text-xs text-slate-500 dark:text-zinc-400 text-center py-6 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700">
+                            {{ quotationTab === 'trash' ? 'Nothing in the trash.' : 'No active proposals yet.' }}
+                        </p>
 
-                            <!-- Fabric groups -->
-                            <div v-for="(group, fabric) in groupItemsByFabric(quotation.items)" :key="fabric"
-                                class="relative border border-gray-100 dark:border-zinc-800 rounded-2xl overflow-hidden">
-                                <div class="bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-900/20 px-3 py-2 flex items-center gap-1.5">
-                                    <Package class="h-3 w-3 text-indigo-500 flex-shrink-0" />
-                                    <span class="text-[10px] font-black text-indigo-700 dark:text-indigo-300 uppercase truncate flex-1">
-                                        {{ fabric }}
-                                    </span>
-                                    <span class="text-[9px] text-gray-400 font-medium">{{ group[0]?.kilos }}kg</span>
+                        <TransitionGroup name="card" tag="div" class="space-y-3">
+                            <article v-for="q in visibleQuotations" :key="q.id"
+                                class="bg-white dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-zinc-800 border-l-4 overflow-hidden shadow-sm"
+                                :class="quoteTone(q.status).border">
+                                <div class="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-slate-100 dark:border-zinc-800">
+                                    <span class="font-mono text-xs font-semibold text-slate-800 dark:text-zinc-100">{{ q.quotation_number }}</span>
+                                    <span class="text-xs font-medium px-2 py-0.5 rounded-full capitalize" :class="quoteTone(q.status).badge">{{ q.status }}</span>
                                 </div>
-                                <div class="divide-y divide-gray-50">
-                                    <div v-for="item in group" :key="item.id"
-                                        class="px-3 py-2 flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 border"
-                                                :style="colorDotStyle(item.color)"></div>
-                                            <span class="text-[9px] font-semibold text-gray-600 uppercase">
-                                                {{ item.color }}
-                                            </span>
+                                <div class="p-4 space-y-3">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-xs font-medium rounded-full px-2 py-0.5"
+                                            :class="q.vat_type === 'inclusive'
+                                                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300'
+                                                : 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300'">
+                                            {{ q.vat_type === 'inclusive' ? 'VAT inclusive (+12%)' : 'VAT exclusive' }}
+                                        </span>
+                                        <span v-if="q.payment_terms" class="text-xs text-slate-500 dark:text-zinc-400">{{ q.payment_terms }}</span>
+                                    </div>
+
+                                    <div v-for="(group, fabric) in groupItemsByFabric(q.items)" :key="fabric"
+                                        class="border border-slate-100 dark:border-zinc-800 rounded-xl overflow-hidden">
+                                        <div class="bg-slate-50 dark:bg-zinc-800/60 px-3 py-2 flex items-center gap-2">
+                                            <Package class="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
+                                            <p class="text-xs font-semibold text-slate-800 dark:text-zinc-100 truncate flex-1">{{ fabric }}</p>
+                                            <span class="text-xs text-slate-500 dark:text-zinc-400">MOQ {{ group[0]?.kilos }} kg</span>
                                         </div>
-                                        <div class="text-right">
-                                            <p class="text-[10px] font-bold text-blue-600">
-                                                ₱{{ formatPrice(item.unit_price) }}/kg
-                                                <span v-if="quotation.vat_type === 'inclusive'"
-                                                    class="text-[8px] text-gray-400 ml-1">inc. VAT</span>
-                                            </p>
+                                        <div class="divide-y divide-slate-100 dark:divide-zinc-800">
+                                            <div v-for="item in group" :key="item.id" class="px-3 py-2 flex items-center justify-between">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="w-3 h-3 rounded-full border flex-shrink-0" :style="colorDotStyle(item.color)" />
+                                                    <span class="text-xs text-slate-700 dark:text-zinc-300">{{ item.color }}</span>
+                                                    <span class="truncate text-[10px] text-slate-500 dark:text-zinc-400">{{ item.fabric }}<span v-if="item.design"> · {{ item.design }}</span></span>
+                                                </div>
+                                                <p class="text-sm font-semibold text-slate-900 dark:text-white tabular-nums">
+                                                    ₱{{ formatPrice(item.unit_price) }}<span class="text-xs font-normal text-slate-500">/kg</span>
+                                                    <span v-if="q.vat_type === 'inclusive'" class="text-[11px] font-normal text-slate-400 ml-1">incl. VAT</span>
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
 
-                            <!-- Sent: View document first, then Accept / Reject -->
-                            <div v-if="quotation.status === 'sent'" class="relative pt-1 space-y-2">
-                                <button @click="openQuotationPreview(quotation)"
-                                    class="w-full py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 rounded-xl text-[9px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:scale-[1.01] active:scale-95 transition-all">
-                                    <Eye class="h-3 w-3" /> View Quotation
-                                </button>
-                                <div class="flex gap-2">
-                                    <button @click="openRejectModal(quotation)"
-                                        class="flex-1 py-2 border border-red-200 dark:border-red-900 text-red-500 rounded-xl text-[9px] font-black uppercase hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition">
-                                        Reject
-                                    </button>
-                                    <button @click="openAcceptModal(quotation)"
-                                        class="flex-1 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl text-[9px] font-black uppercase shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
-                                        Accept
-                                    </button>
-                                </div>
-                            </div>
+                                    <p v-if="q.notes" class="text-xs text-slate-500 dark:text-zinc-400 italic border-t border-slate-100 dark:border-zinc-800 pt-2.5">
+                                        {{ q.notes }}
+                                    </p>
 
-                            <!-- Accepted: Preview / Download + Trash -->
-                            <div v-if="quotation.status === 'accepted'" class="relative pt-1 space-y-2">
-                                <button @click="openQuotationPreview(quotation)"
-                                    class="w-full py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 rounded-xl text-[9px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:scale-[1.01] active:scale-95 transition-all">
-                                    <Download class="h-3 w-3" /> Preview & Download
-                                </button>
-                                <button @click="openTrashModal(quotation)"
-                                    class="w-full py-2 bg-gray-50 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-zinc-700 rounded-xl text-[9px] font-black uppercase flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 hover:border-red-200 active:scale-95 transition-all">
-                                    <Trash2 class="h-3 w-3" /> Trash & Request New
-                                </button>
-                            </div>
-                            <!-- Trashed: terminal, waiting on a fresh quotation -->
-                            <div v-if="quotation.status === 'trashed'" class="relative pt-1">
-                                <p class="text-center text-[9px] font-bold uppercase text-gray-400">
-                                    Trashed — CRM will issue a new quotation.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                                    <!-- Sent: view, then accept / reject -->
+                                    <div v-if="q.status === 'sent'" class="space-y-2 border-t border-slate-100 dark:border-zinc-800 pt-3">
+                                        <button @click="openQuotationPreview(q)" type="button"
+                                            class="w-full py-2 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 rounded-lg text-xs font-medium flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-zinc-800 transition">
+                                            <Eye class="h-3.5 w-3.5" /> View quotation
+                                        </button>
+                                        <div class="flex gap-2">
+                                            <button @click="openRejectModal(q)" type="button"
+                                                class="flex-1 py-2 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 rounded-lg text-xs font-medium hover:bg-red-50 dark:hover:bg-red-500/10 transition active:scale-95">
+                                                Reject
+                                            </button>
+                                            <button @click="openAcceptModal(q)" type="button"
+                                                class="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition active:scale-95">
+                                                Accept
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Accepted: preview / download + trash -->
+                                    <div v-if="q.status === 'accepted'" class="space-y-2 border-t border-slate-100 dark:border-zinc-800 pt-3">
+                                        <button @click="openQuotationPreview(q)" type="button"
+                                            class="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-2 hover:bg-indigo-700 transition active:scale-95">
+                                            <Download class="h-3.5 w-3.5" /> Preview & download
+                                        </button>
+                                        <button @click="openTrashModal(q)" type="button"
+                                            class="w-full py-2 border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 rounded-lg text-xs font-medium flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 hover:border-red-200 transition active:scale-95">
+                                            <Trash2 class="h-3.5 w-3.5" /> Trash & request new
+                                        </button>
+                                    </div>
+
+                                    <!-- Trashed: terminal -->
+                                    <p v-if="q.status === 'trashed'" class="text-xs text-slate-500 dark:text-zinc-400 text-center border-t border-slate-100 dark:border-zinc-800 pt-3">
+                                        Trashed — CRM will issue a new quotation.
+                                    </p>
+                                    <p v-if="q.status === 'rejected'" class="text-xs text-slate-500 dark:text-zinc-400 text-center border-t border-slate-100 dark:border-zinc-800 pt-3">
+                                        Rejected — CRM may send an updated quotation.
+                                    </p>
+                                </div>
+                            </article>
+                        </TransitionGroup>
+                    </section>
+                </aside>
             </div>
         </div>
 
@@ -348,13 +683,13 @@
             <div v-if="poModal.show"
                 class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
                 @click.self="poModal.show = false">
-                <div class="bg-white dark:bg-zinc-900 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
+                <div class="bg-white dark:bg-zinc-900 w-full sm:max-w-3xl rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
                     <!-- Header -->
                     <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-800 px-5 py-4 flex items-center justify-between relative overflow-hidden">
                         <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15 blur-2xl animate-float" />
                         <div class="relative">
                             <h3 class="text-sm font-black text-white tracking-tight">Send Purchase Order</h3>
-                            <p class="text-xs text-blue-100/90 mt-0.5">Attach your PO files below</p>
+                            <p class="text-xs text-blue-100/90 mt-0.5">Choose quantities from your quotation lines</p>
                         </div>
                         <button @click="poModal.show = false"
                             class="relative flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 text-white hover:bg-white/35 hover:rotate-90 transition-all">
@@ -362,43 +697,51 @@
                         </button>
                     </div>
                     <!-- Body -->
-                    <form @submit.prevent="submitPo" class="p-5 space-y-4">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">
-                                PO Files (PDF / Images) *
-                            </label>
-                            <label class="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition">
-                                <Paperclip class="h-5 w-5 text-gray-400 mb-1" />
-                                <span class="text-xs text-gray-400">Click to upload files</span>
-                                <span class="text-[10px] text-gray-300 mt-0.5">PDF, JPG, PNG · Max 10MB each</span>
-                                <input type="file" ref="poFileInput" @change="onPoFilesSelected" accept=".pdf,image/*" multiple class="hidden" />
-                            </label>
-                        </div>
-                        <!-- File list -->
-                        <div v-if="poModal.files.length > 0" class="flex gap-2 flex-wrap">
-                            <div v-for="(file, idx) in poModal.files" :key="idx"
-                                class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-2.5 py-1.5 text-xs">
-                                <FileText class="h-3 w-3 text-gray-500" />
-                                <span class="truncate max-w-[120px] text-gray-700">{{ file.name }}</span>
-                                <button type="button" @click="removePoFile(idx)"
-                                    class="text-gray-400 hover:text-red-500 transition ml-0.5">
-                                    <X class="h-3 w-3" />
-                                </button>
+                    <form @submit.prevent="submitPo" class="flex min-h-0 flex-1 flex-col">
+                        <div class="space-y-4 overflow-y-auto p-5">
+                            <div v-if="availablePoQuotations.length > 1">
+                                <label for="po-quotation" class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Quotation</label>
+                                <select id="po-quotation" :value="poModal.quotationId" @change="selectPoQuotation($event.target.value)" class="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white">
+                                    <option v-for="quote in availablePoQuotations" :key="quote.id" :value="quote.id">{{ quote.quotation_number }} · {{ quote.status }}</option>
+                                </select>
+                            </div>
+                            <div v-if="selectedPoQuotation" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-xs dark:border-indigo-900/50 dark:bg-indigo-950/30">
+                                <div><p class="font-black text-indigo-900 dark:text-indigo-100">{{ selectedPoQuotation.quotation_number }}</p><p class="mt-0.5 text-indigo-700 dark:text-indigo-300">Payment: {{ selectedPoQuotation.payment_terms }}</p></div>
+                                <p class="text-right text-indigo-700 dark:text-indigo-300">Enter kg for the lines you want to order.<br />Sending a PO accepts this quotation.</p>
+                            </div>
+                            <div v-if="selectedPoQuotation?.items?.length" class="space-y-3">
+                                <article v-for="(line, index) in selectedPoQuotation.items" :key="line.id" class="rounded-2xl border border-slate-200 p-4 dark:border-zinc-700">
+                                    <div class="flex flex-wrap items-start justify-between gap-3">
+                                        <div class="min-w-0 flex-1">
+                                            <p class="font-bold text-slate-900 dark:text-white">{{ line.product?.name || line.fabric || 'Product' }}</p>
+                                            <p class="mt-1 text-xs text-slate-600 dark:text-zinc-300">{{ line.fabric_type || 'Yarn not specified' }} <span class="text-slate-400">·</span> {{ line.color || 'Color not specified' }}<span v-if="line.design"> <span class="text-slate-400">·</span> {{ line.design }}</span></p>
+                                            <p class="mt-1 text-[11px] text-slate-500">Quoted at {{ formatPrice(line.unit_price) }}/kg<span v-if="poMinimum(line) > 0"> · Minimum {{ poMinimum(line).toLocaleString() }} kg; enter 0 to skip</span></p>
+                                        </div>
+                                        <label class="w-36 shrink-0 text-xs font-bold text-slate-600 dark:text-zinc-300">Order kg
+                                            <input v-model.number="poModal.items[index].kilos" type="number" min="0" step="0.01" inputmode="decimal" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right text-sm font-black text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" placeholder="0.00" />
+                                        </label>
+                                    </div>
+                                    <p v-if="Number(poModal.items[index]?.kilos || 0) > 0 && !isPoLineQuantityValid(line, poModal.items[index].kilos)" class="mt-2 text-xs font-semibold text-rose-600">This line must meet its minimum of {{ poMinimum(line).toLocaleString() }} kg.</p>
+                                    <p v-else-if="Number(poModal.items[index]?.kilos || 0) > 0" class="mt-2 text-right text-xs font-semibold text-slate-600 dark:text-zinc-300">Line estimate: ₱{{ (Number(poModal.items[index].kilos) * Number(line.unit_price) * (selectedPoQuotation.vat_type === 'inclusive' ? 1.12 : 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
+                                </article>
+                            </div>
+                            <p v-else class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">This quotation has no orderable product lines. Please contact CRM.</p>
+                            <div class="rounded-2xl bg-slate-50 p-4 dark:bg-zinc-800/70">
+                                <div class="flex justify-between text-xs text-slate-600 dark:text-zinc-300"><span>Total quantity</span><strong>{{ Number(poTotalKilos).toLocaleString() }} kg</strong></div>
+                                <div class="mt-2 flex justify-between text-base font-black text-slate-900 dark:text-white"><span>Estimated total</span><span>₱{{ Number(poEstimatedTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500">Notes (optional)</label>
+                                <textarea v-model="poModal.notes" rows="2" class="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" placeholder="Add any order remarks"></textarea>
                             </div>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Notes (Optional)</label>
-                            <textarea v-model="poModal.notes" rows="2"
-                                class="w-full rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition resize-none"
-                                placeholder="Add any remarks…"></textarea>
+                        <div class="flex gap-3 border-t border-slate-100 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                            <button type="button" @click="poModal.show = false" class="rounded-xl border border-slate-200 px-4 py-3 text-xs font-bold text-slate-600 dark:border-zinc-700 dark:text-zinc-300">Cancel</button>
+                            <button type="submit" :disabled="!canSubmitPo" class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 py-3 text-xs font-black uppercase tracking-wide text-amber-950 shadow-lg transition-all hover:shadow-xl disabled:opacity-40">
+                                <Loader2 v-if="poModal.submitting" class="h-4 w-4 animate-spin" /><Send v-else class="h-4 w-4" />
+                                Place Purchase Order
+                            </button>
                         </div>
-                        <button type="submit"
-                            :disabled="poModal.submitting || poModal.files.length === 0"
-                            class="w-full py-3 bg-gradient-to-r from-amber-400 to-orange-500 text-amber-950 rounded-xl font-black text-xs uppercase tracking-wide flex justify-center items-center gap-2 hover:shadow-xl hover:scale-[1.01] active:scale-95 disabled:opacity-40 transition-all shadow-lg">
-                            <Loader2 v-if="poModal.submitting" class="h-4 w-4 animate-spin" />
-                            <Send v-else class="h-4 w-4" />
-                            Send Purchase Order
-                        </button>
                     </form>
                 </div>
             </div>
@@ -526,7 +869,8 @@
                                     <div class="flex items-center gap-2">
                                         <div class="w-2.5 h-2.5 rounded-full border flex-shrink-0"
                                             :style="colorDotStyle(item.color)"></div>
-                                        <span class="text-xs text-gray-700 uppercase font-medium">{{ item.fabric }}</span>
+                                        <span class="text-xs text-gray-700 uppercase font-medium">{{ item.fabric_type || item.fabric }}</span>
+                                        <span class="text-[10px] text-gray-500">{{ item.fabric }}<span v-if="item.design"> · {{ item.design }}</span></span>
                                         <span class="text-[9px] text-gray-400">({{ item.color }})</span>
                                     </div>
                                     <span class="text-xs font-bold text-blue-600">₱{{ formatPrice(item.unit_price) }}/kg</span>
@@ -756,29 +1100,29 @@
                             <div style="font-size:10px;font-style:italic;font-weight:700;font-family:Arial,sans-serif;margin-bottom:6px;color:#1a1a2e;">
                                 Fabric Pricelist
                             </div>
-                            <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:9px;margin-bottom:16px;">
-                                <thead>
-                                    <tr style="background:#f5f5f5;">
-                                        <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;font-weight:700;width:32%;">Product Name</th>
-                                        <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;font-weight:700;width:18%;">Color</th>
-                                        <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;font-weight:700;width:12%;">MOQ (kg)</th>
-                                        <th style="border:1px solid #ccc;padding:6px 8px;text-align:right;font-weight:700;width:19%;">Original Price/kg</th>
-                                        <th v-if="quotationPreviewModal.quotation.vat_type === 'inclusive'" style="border:1px solid #ccc;padding:6px 8px;text-align:right;font-weight:700;width:19%;">Price + 12% VAT/kg</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template v-for="(group, fabric) in groupItemsByFabric(quotationPreviewModal.quotation.items)" :key="fabric">
-                                        <tr v-for="(item, idx) in group" :key="item.id"
-                                            :style="idx % 2 === 0 ? 'background:#fff;' : 'background:#fafafa;'">
-                                            <td style="border:1px solid #ddd;padding:5px 10px;">{{ idx === 0 ? fabric : '' }}</td>
+                            <section v-for="(group, fabricType) in groupItemsByFabricType(quotationPreviewModal.quotation.items)" :key="fabricType" style="margin-bottom:14px;">
+                                <div style="font-size:9px;font-weight:700;font-family:Arial,sans-serif;margin:0 0 5px;color:#1a1a2e;">{{ fabricType }}</div>
+                                <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:9px;">
+                                    <thead>
+                                        <tr style="background:#f5f5f5;">
+                                            <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;font-weight:700;width:34%;">Product / Design</th>
+                                            <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;font-weight:700;width:14%;">Color</th>
+                                            <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;font-weight:700;width:12%;">MOQ (kg)</th>
+                                            <th style="border:1px solid #ccc;padding:6px 8px;text-align:right;font-weight:700;">Original Price/kg</th>
+                                            <th v-if="quotationPreviewModal.quotation.vat_type === 'inclusive'" style="border:1px solid #ccc;padding:6px 8px;text-align:right;font-weight:700;">Price + 12% VAT/kg</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(item, idx) in group" :key="item.id" :style="idx % 2 === 0 ? 'background:#fff;' : 'background:#fafafa;'">
+                                            <td style="border:1px solid #ddd;padding:5px 10px;">{{ item.fabric }}<span v-if="item.design"> · {{ item.design }}</span></td>
                                             <td style="border:1px solid #ddd;padding:5px 10px;text-align:center;">{{ item.color }}</td>
                                             <td style="border:1px solid #ddd;padding:5px 10px;text-align:center;">{{ item.kilos }}</td>
                                             <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;">&#8369;{{ formatPrice(item.unit_price) }}</td>
                                             <td v-if="quotationPreviewModal.quotation.vat_type === 'inclusive'" style="border:1px solid #ddd;padding:5px 8px;text-align:right;">&#8369;{{ formatPrice(Number(item.unit_price) * 1.12) }}</td>
                                         </tr>
-                                    </template>
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            </section>
 
                             <!-- VAT note -->
                             <div v-if="quotationPreviewModal.quotation.vat_type === 'inclusive'"
@@ -808,17 +1152,102 @@
             </Transition>
         </Teleport>
 
+        <FabricInquiryNotice
+            v-model="showQuotationAccepted"
+            title="Quotation accepted!"
+            message="The quotation has been accepted successfully. You can continue with your purchase order."
+        />
+
     </AuthenticatedLayout>
 </template>
 
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import FabricInquiryNotice from '@/Components/FabricInquiryNotice.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { useForm } from '@inertiajs/vue3';
 import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import { useRealtimeConversation } from '@/composables/useRealtimeConversation';
-import { ArrowLeft, Paperclip, Send, Loader2, FileText, X, Eye, Trash2, Layers, Package, Download, Sparkles } from 'lucide-vue-next';
+import { ArrowLeft, Paperclip, Send, Loader2, FileText, X, Eye, Trash2, Package, Download, FlaskConical, ClipboardList, ChevronDown, Layers, Truck, ImagePlus, Palette, UploadCloud, Plus, Check } from 'lucide-vue-next';
 
-const props = defineProps({ inquiry: Object, quotations: Array });
+const props = defineProps({ inquiry: Object, quotations: Array, fabricOptions: { type: Array, default: () => [] }, sampleRequests: { type: Array, default: () => [] } });
+
+// ── Fabric sample request ───────────────────────────────────────
+let sampleFabricSetId = 0;
+const makeSampleFabricSet = () => ({
+    key: ++sampleFabricSetId,
+    quotation_item_id: '',
+    colors: [{ pantone_code: '', pantone_color: '', texture: '', gsm: '', reference_type: 'hex', color_hex: '#808080', color_image: null }],
+});
+const sampleForm = useForm({ fabric_designs: [makeSampleFabricSet()], request_method: 'carrier', carrier_name: '', reference_file: null, notes: '' });
+const sampleRequestDetails = ref(null);
+const openSampleRequest = () => {
+    if (sampleRequestDetails.value) sampleRequestDetails.value.open = true;
+};
+
+const sampleMethods = [
+    { value: 'carrier', label: 'Send by carrier', hint: 'Ship a physical swatch', icon: Truck },
+    { value: 'image',   label: 'Upload a file',   hint: 'Image or PDF reference', icon: ImagePlus },
+    { value: 'pantone', label: 'Pantone codes',   hint: 'Type the exact colors',  icon: Palette },
+];
+
+const sampleFileInput = ref(null);
+const sampleDragging = ref(false);
+
+const selectedSampleFabrics = computed(() => sampleForm.fabric_designs
+    .map((set) => props.fabricOptions.find((fabric) => String(fabric.quotation_item_id) === String(set.quotation_item_id)))
+    .filter(Boolean));
+
+const sampleFilePreview = computed(() => {
+    const f = sampleForm.reference_file;
+    return f && f.type?.startsWith('image/') ? URL.createObjectURL(f) : null;
+});
+
+const canSubmitSample = computed(() => {
+    if (sampleForm.processing || !sampleForm.fabric_designs.length) return false;
+    const selectedIds = sampleForm.fabric_designs.map((set) => String(set.quotation_item_id));
+    if (selectedIds.some((id) => !id) || new Set(selectedIds).size !== selectedIds.length) return false;
+    if (sampleForm.request_method === 'carrier') return !!sampleForm.carrier_name.trim();
+    if (sampleForm.request_method === 'image') return !!sampleForm.reference_file;
+    return sampleForm.fabric_designs.every((set) => set.colors.length > 0
+        && set.colors.every((color) => color.pantone_code.trim()
+            && color.pantone_color.trim()
+            && color.texture
+            && Number.isInteger(Number(color.gsm))
+            && Number(color.gsm) > 0
+            && Number(color.gsm) <= 10000
+            && (color.reference_type === 'hex'
+                ? /^#[0-9a-f]{6}$/i.test(color.color_hex)
+                : color.reference_type === 'image' && !!color.color_image)));
+});
+
+const onSampleFile = (file) => { if (file) sampleForm.reference_file = file; };
+const onSampleColorImage = (event, color) => { color.color_image = event.target.files?.[0] ?? null; };
+const onSampleDrop = (e) => { sampleDragging.value = false; onSampleFile(e.dataTransfer.files?.[0]); };
+const clearSampleFile = () => { sampleForm.reference_file = null; if (sampleFileInput.value) sampleFileInput.value.value = ''; };
+const formatBytes = (n) => (n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`);
+
+const addSampleFabric = () => {
+    if (sampleForm.fabric_designs.length < props.fabricOptions.length) sampleForm.fabric_designs.push(makeSampleFabricSet());
+};
+const removeSampleFabric = (index) => {
+    if (sampleForm.fabric_designs.length > 1) sampleForm.fabric_designs.splice(index, 1);
+};
+const addSampleColor = (fabricIndex) => sampleForm.fabric_designs[fabricIndex].colors.push({ pantone_code: '', pantone_color: '', texture: '', gsm: '', reference_type: 'hex', color_hex: '#808080', color_image: null });
+const removeSampleColor = (fabricIndex, colorIndex) => {
+    const colors = sampleForm.fabric_designs[fabricIndex].colors;
+    if (colors.length > 1) colors.splice(colorIndex, 1);
+};
+const submitFabricSample = () => sampleForm.post(route('client.conversation.sample-request', props.inquiry.hash_key), {
+    preserveScroll: true,
+    forceFormData: true,
+    onSuccess: () => {
+        sampleForm.reset();
+        clearSampleFile();
+        if (sampleRequestDetails.value) sampleRequestDetails.value.open = false;
+    },
+});
+
 const messagesContainer = ref(null);
 const newMessage = ref('');
 const fileInput = ref(null);
@@ -826,6 +1255,9 @@ const selectedFiles = ref([]);
 
 // ── Real-time conversation (no reload) ──────────────────────────
 const liveMessages = ref([...(props.inquiry?.messages ?? [])]);
+const clientSampleRequests = ref([...(props.sampleRequests ?? [])]);
+watch(() => props.sampleRequests, (samples) => { clientSampleRequests.value = [...(samples ?? [])]; }, { deep: true });
+const clientChatMessages = computed(() => liveMessages.value.filter((message) => !message.sample_request));
 
 const scrollToBottom = () => {
     // Force to latest chat on open + after images/files load (layout shift).
@@ -870,18 +1302,19 @@ const {
     feedUrl: route('client.conversation.feed', props.inquiry.hash_key),
     typingUrl: route('client.conversation.typing', props.inquiry.hash_key),
     sendUrl: route('client.conversation.message', props.inquiry.hash_key),
+    suppressSuccessFeedback: true,
     onNewMessages: () => scrollToBottom(),
 });
 
 // Mobile panel toggle
 const mobilePanel = ref('chat');
 
-// PO Modal state (multiple files)
-const poModal = ref({ show: false, files: [], notes: '', submitting: false });
-const poFileInput = ref(null);
+// Structured order submission based on quotation lines.
+const poModal = ref({ show: false, quotationId: null, items: [], notes: '', submitting: false });
 
 const rejectModal = ref({ show: false, quotation: null, reason: '', requestNew: false, submitting: false });
 const acceptModal = ref({ show: false, quotation: null, notes: '', submitting: false });
+const showQuotationAccepted = ref(false);
 const trashModal = ref({ show: false, quotation: null, notes: '', submitting: false });
 const previewModal = ref({ show: false, title: '', files: [], activeFile: null });
 
@@ -893,9 +1326,38 @@ const dialog = ref({ show: false, type: 'info', title: '', message: '', onConfir
 const showDialog = (type, title, message, onConfirm = null) => { dialog.value = { show: true, type, title, message, onConfirm }; };
 const handleDialogAction = () => { if (dialog.value.onConfirm) dialog.value.onConfirm(); dialog.value.show = false; };
 
-// Computed: check if any quotation is accepted
-const hasAcceptedQuotation = computed(() => {
-    return props.quotations.some(q => q.status === 'accepted');
+// A sent quote can be accepted by submitting the PO; accepted quotes can be ordered too.
+const hasRequestedColorways = computed(() => Boolean(props.inquiry?.product_selections?.pantones?.length && props.inquiry?.product_selections?.yarns?.length));
+const allRequestedColorwaysApproved = computed(() => {
+    if (!hasRequestedColorways.value) return true;
+    const approved = clientSampleRequests.value.filter((sample) => sample.status === 'approved').flatMap((sample) => (sample.pantone_colors ?? []).map((color) => `${Number(color.pantone_reference_id)}:${Number(color.yarn_material_id)}`));
+    return props.inquiry.product_selections.pantones.every((pantone) => props.inquiry.product_selections.yarns.every((yarn) => approved.includes(`${Number(pantone.id)}:${Number(yarn.id)}`)));
+});
+const canSendPurchaseOrder = computed(() =>
+    allRequestedColorwaysApproved.value && (props.quotations ?? []).some(q => ['sent', 'accepted'].includes(q.status) && q.items?.length)
+);
+const availablePoQuotations = computed(() =>
+    (props.quotations ?? []).filter(q => ['sent', 'accepted'].includes(q.status) && q.items?.length)
+);
+const selectedPoQuotation = computed(() =>
+    availablePoQuotations.value.find(q => Number(q.id) === Number(poModal.value.quotationId)) || null
+);
+const poMinimum = (line) => Number(line.product?.minimum_order_quantity ?? props.inquiry.product?.minimum_order_quantity ?? 0);
+const isPoLineQuantityValid = (line, kilos) => {
+    const quantity = Number(kilos || 0);
+    return quantity === 0 || quantity >= poMinimum(line);
+};
+const poTotalKilos = computed(() => poModal.value.items.reduce((sum, item) => sum + (Number(item.kilos) || 0), 0));
+const poSubtotal = computed(() => {
+    const quote = selectedPoQuotation.value;
+    if (!quote) return 0;
+    return quote.items.reduce((sum, line, index) => sum + (Number(poModal.value.items[index]?.kilos) || 0) * (Number(line.unit_price) || 0), 0);
+});
+const poEstimatedTotal = computed(() => poSubtotal.value * (selectedPoQuotation.value?.vat_type === 'inclusive' ? 1.12 : 1));
+const canSubmitPo = computed(() => {
+    const quote = selectedPoQuotation.value;
+    if (!quote || poModal.value.submitting || poTotalKilos.value <= 0) return false;
+    return quote.items.every((line, index) => isPoLineQuantityValid(line, poModal.value.items[index]?.kilos));
 });
 
 // Active vs trash tabs (trash = rejected + trashed)
@@ -974,7 +1436,15 @@ const approveAttachment = (file) => {
 // Fabric sample decisions (lab result forwarded by CRM)
 const adjustModal = ref({ show: false, sample: null, notes: '', submitting: false });
 
-const sampleStatusLabel = (s) => (s ? String(s).replace(/_/g, ' ') : '');
+const sampleStatusLabel = (s) => ({
+    requested: 'Waiting for the Dyeing Lab',
+    in_progress: 'Sample preparation in progress',
+    awaiting_crm_review: 'Sample preparation in progress',
+    forwarded: 'Delivery update sent',
+    adjustment_requested: 'Reformulation in progress',
+    crm_adjustment_review: 'Reformulation in progress',
+    approved: 'Approved',
+}[s] || (s ? String(s).replace(/_/g, ' ') : ''));
 
 const approveSample = (sampleId) => {
     router.post(route('client.sample.approve', sampleId), {}, {
@@ -989,6 +1459,9 @@ const approveSample = (sampleId) => {
     });
 };
 
+const noteSampleDelivery = (sampleId) => router.post(route('client.sample.noted', sampleId), {}, { preserveScroll: true });
+const receiveSampleDelivery = (sampleId) => router.post(route('client.sample.received', sampleId), {}, { preserveScroll: true });
+
 const openAdjustModal = (sample) => {
     adjustModal.value = { show: true, sample, notes: '', submitting: false };
 };
@@ -1001,7 +1474,7 @@ const submitAdjust = () => {
         onSuccess: () => {
             adjustModal.value = { show: false, sample: null, notes: '', submitting: false };
             router.reload({ only: ['inquiry'] });
-            showDialog('success', 'Sent', 'Adjustment requested. CRM will prepare a new sample round.');
+            showDialog('success', 'Sent', 'Adjustment requested. The Dyeing Lab will prepare a revised swatch.');
         },
         onError: (errors) => {
             adjustModal.value.submitting = false;
@@ -1010,45 +1483,42 @@ const submitAdjust = () => {
     });
 };
 
-// PO Modal functions (multiple files)
+// PO Modal functions
 const openPoModal = () => {
-    if (!hasAcceptedQuotation.value) return;
-    poModal.value = { show: true, files: [], notes: '', submitting: false };
-    if (poFileInput.value) poFileInput.value.value = '';
+    const quotation = availablePoQuotations.value.find(q => q.status === 'accepted') || availablePoQuotations.value[0];
+    if (!quotation) return;
+    poModal.value = {
+        show: true,
+        quotationId: quotation.id,
+        items: quotation.items.map(item => ({ quotation_item_id: item.id, kilos: 0 })),
+        notes: '',
+        submitting: false,
+    };
 };
 
-const onPoFilesSelected = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-    poModal.value.files.push(...files);
-    e.target.value = '';
+const selectPoQuotation = (quotationId) => {
+    const quotation = availablePoQuotations.value.find(q => Number(q.id) === Number(quotationId));
+    if (!quotation) return;
+    poModal.value.quotationId = quotation.id;
+    poModal.value.items = quotation.items.map(item => ({ quotation_item_id: item.id, kilos: 0 }));
 };
 
-const removePoFile = (index) => {
-    poModal.value.files.splice(index, 1);
-};
-
-const submitPo = async () => {
-    if (poModal.value.files.length === 0) {
-        showDialog('error', 'No Files', 'Please select at least one file.');
-        return;
-    }
+const submitPo = () => {
+    if (!canSubmitPo.value || !selectedPoQuotation.value) return;
     poModal.value.submitting = true;
-    const formData = new FormData();
-    poModal.value.files.forEach((file) => {
-        formData.append('po_files[]', file);
-    });
-    formData.append('notes', poModal.value.notes || '');
-
-    router.post(route('client.conversation.send-po', props.inquiry.hash_key), formData, {
-        forceFormData: true,
+    router.post(route('client.conversation.send-po', props.inquiry.hash_key), {
+        quotation_id: poModal.value.quotationId,
+        items: poModal.value.items,
+        notes: poModal.value.notes || '',
+    }, {
+        preserveScroll: true,
         onSuccess: () => {
-            poModal.value.show = false;
-            showDialog('success', 'PO Sent', 'Your Purchase Order(s) have been sent to our team.');
+            poModal.value = { show: false, quotationId: null, items: [], notes: '', submitting: false };
+            showDialog('success', 'Order submitted', 'Your purchase order has been sent to the team for review.');
             scrollToBottom();
         },
         onError: (errors) => {
-            showDialog('error', 'Upload Failed', errors.message || 'Failed to send Purchase Order.');
+            showDialog('error', 'Order could not be submitted', errors.message || Object.values(errors)[0] || 'Please check the quantities and try again.');
         },
         onFinish: () => { poModal.value.submitting = false; }
     });
@@ -1080,7 +1550,10 @@ const submitAccept = () => {
     showDialog('confirm', 'Accept Quotation', 'Do you confirm that you accept this quotation? You will be able to send your Purchase Order afterwards.', () => {
         acceptModal.value.submitting = true;
         router.post(route('client.quotation.accept', acceptModal.value.quotation.id), { notes: acceptModal.value.notes }, {
-            onSuccess: () => { acceptModal.value.show = false; },
+            onSuccess: () => {
+                acceptModal.value.show = false;
+                showQuotationAccepted.value = true;
+            },
             onFinish: () => { acceptModal.value.submitting = false; }
         });
     });
@@ -1251,51 +1724,45 @@ const downloadQuotationPDF = async (quotation) => {
         doc.text('Fabric Pricelist', marginL, y);
         y += 4;
 
-        const groups    = groupItemsByFabric(quotation.items);
-        const tableBody = [];
+        const fabricGroups = groupItemsByFabricType(quotation.items);
+        Object.entries(fabricGroups).forEach(([fabricType, items]) => {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8.5);
+            doc.setTextColor(26, 26, 46);
+            doc.text(fabricType, marginL, y);
+            y += 2;
 
-        Object.entries(groups).forEach(([fabric, items]) => {
-            items.forEach((item, idx) => {
-                tableBody.push([
-                    idx === 0 ? fabric : '',
-                    item.color,
-                    `${parseFloat(item.kilos).toFixed(2)}`,
-                    `PHP ${formatPrice(item.unit_price)}`,
-                    ...(quotation.vat_type === 'inclusive' ? [`PHP ${formatPrice(Number(item.unit_price) * 1.12)}`] : []),
-                ]);
+            const tableBody = items.map((item) => [
+                `${item.fabric || ''}${item.design ? ` — ${item.design}` : ''}`,
+                item.color,
+                `${parseFloat(item.kilos).toFixed(2)}`,
+                `PHP ${formatPrice(item.unit_price)}`,
+                ...(quotation.vat_type === 'inclusive' ? [`PHP ${formatPrice(Number(item.unit_price) * 1.12)}`] : []),
+            ]);
+
+            doc.autoTable({
+                startY: y,
+                head: [quotation.vat_type === 'inclusive'
+                    ? ['Product / Design', 'Color', 'MOQ (kg)', 'Original Price/kg', 'Price + 12% VAT/kg']
+                    : ['Product / Design', 'Color', 'MOQ (kg)', 'Price/kg']],
+                body: tableBody,
+                theme: 'grid',
+                headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+                bodyStyles: { fontSize: 8, textColor: [30, 30, 30] },
+                alternateRowStyles: { fillColor: [250, 250, 250] },
+                margin: { left: marginL, right: marginR },
+                columnStyles: quotation.vat_type === 'inclusive'
+                    ? { 0: { cellWidth: 52, halign: 'left' }, 1: { cellWidth: 30, halign: 'center' }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 35, halign: 'right' }, 4: { cellWidth: 35, halign: 'right' } }
+                    : { 0: { cellWidth: 74, halign: 'left' }, 1: { cellWidth: 42, halign: 'center' }, 2: { cellWidth: 22, halign: 'center' }, 3: { cellWidth: 32, halign: 'right' } },
             });
+
+            y = doc.lastAutoTable.finalY + 6;
         });
 
-        doc.autoTable({
-            startY: y,
-            head: [quotation.vat_type === 'inclusive'
-                ? ['Product Name', 'Color', 'MOQ (kg)', 'Original Price/kg', 'Price + 12% VAT/kg']
-                : ['Product Name', 'Color', 'MOQ (kg)', 'Price/kg']],
-            body: tableBody,
-            theme: 'grid',
-            headStyles: {
-                fillColor: [240, 240, 240],
-                textColor: [0, 0, 0],
-                fontStyle: 'bold',
-                fontSize: 8,
-                halign: 'center',
-            },
-            bodyStyles: {
-                fontSize: 8,
-                textColor: [30, 30, 30],
-            },
-            alternateRowStyles: { fillColor: [250, 250, 250] },
-            margin: { left: marginL, right: marginR },
-            columnStyles: {
-                0: { cellWidth: quotation.vat_type === 'inclusive' ? 58 : 78, halign: 'left' },
-                1: { cellWidth: quotation.vat_type === 'inclusive' ? 35 : 46, halign: 'center' },
-                2: { cellWidth: quotation.vat_type === 'inclusive' ? 18 : 22, halign: 'center' },
-                3: { cellWidth: quotation.vat_type === 'inclusive' ? 34 : 24, halign: 'right' },
-                ...(quotation.vat_type === 'inclusive' ? { 4: { cellWidth: 34, halign: 'right' } } : {}),
-            },
-        });
-
-        y = doc.lastAutoTable.finalY + 6;
+        if (y > pageH - 65) {
+            doc.addPage();
+            y = 24;
+        }
 
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(7);
@@ -1342,12 +1809,63 @@ const downloadQuotationPDF = async (quotation) => {
 
 const formatPrice  = (v) => Number(v).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const formatTime   = (d) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-const formatStatus = (s) => s ? s.replace(/_/g, ' ').toUpperCase() : 'OPEN';
+const formatStatus = (s) => {
+    if (!s) return 'Open';
+    const t = String(s).replace(/_/g, ' ').toLowerCase();
+    return t.charAt(0).toUpperCase() + t.slice(1);
+};
 const openUrl      = (url) => window.open(url, '_blank');
+
+// Header status pill (light + dark)
+const statusPill = (s) => {
+    const map = {
+        open:           { pill: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20', dot: 'bg-blue-500' },
+        quotation_sent: { pill: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20', dot: 'bg-indigo-500' },
+        converted:      { pill: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20', dot: 'bg-emerald-500' },
+        rejected:       { pill: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20', dot: 'bg-red-500' },
+    };
+    return map[s] || { pill: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700', dot: 'bg-slate-400' };
+};
+
+// Quotation card accent by status
+const quoteTone = (s) => {
+    const map = {
+        accepted: { border: 'border-l-emerald-500', badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' },
+        rejected: { border: 'border-l-red-500',     badge: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300' },
+        trashed:  { border: 'border-l-slate-400',   badge: 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300' },
+    };
+    return map[s] || { border: 'border-l-indigo-500', badge: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300' };
+};
+
+// Day dividers in the conversation
+const dayKey = (d) => new Date(d).toDateString();
+const isNewDay = (i) =>
+    i === 0 || dayKey(liveMessages.value[i]?.created_at) !== dayKey(liveMessages.value[i - 1]?.created_at);
+const dayLabel = (d) => {
+    const date = new Date(d);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+        year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
+    });
+};
 
 const groupItemsByFabric = (items) =>
     (items || []).reduce((acc, item) => {
-        (acc[item.fabric] = acc[item.fabric] || []).push(item);
+        const key = item.fabric_type || item.fabric;
+        (acc[key] = acc[key] || []).push(item);
+        return acc;
+    }, {});
+
+const groupItemsByFabricType = (items) =>
+    (items || []).reduce((acc, item) => {
+        const type = item.fabric_type || item.fabric;
+        (acc[type] = acc[type] || []).push(item);
         return acc;
     }, {});
 
@@ -1376,6 +1894,11 @@ onMounted(() => {
 .animate-float-delayed { animation: float 8s ease-in-out 1.2s infinite; }
 .animate-pop { animation: pop 0.5s cubic-bezier(0.22,1,0.36,1) both; }
 .animate-bounce-soft { animation: bounceSoft 2.4s ease-in-out infinite; }
+.card-enter-active { transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+.card-enter-from { opacity: 0; transform: translateY(8px); }
+.card-leave-active { transition: opacity 0.2s ease; }
+.card-leave-to { opacity: 0; }
+.card-move { transition: transform 0.3s ease; }
 .modal-enter-active { transition: opacity 0.25s ease; }
 .modal-enter-active > div { transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease; }
 .modal-enter-from { opacity: 0; }
@@ -1384,4 +1907,35 @@ onMounted(() => {
 .modal-leave-to { opacity: 0; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Render the sample request as a viewport-level dialog so page overflow cannot clip it. */
+details[open].group {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 60;
+    width: min(48rem, calc(100vw - 2rem));
+    height: min(90dvh, 52rem);
+    max-height: calc(100dvh - 2rem);
+    min-height: 0;
+    transform: translate(-50%, -50%);
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28), 0 0 0 100vmax rgba(15, 23, 42, 0.48);
+}
+details[open].group > form {
+    overflow: visible;
+}
+
+/* Woven-thread texture behind the fabric sample bar */
+.weave {
+    background-image:
+        repeating-linear-gradient(0deg,  rgba(16, 185, 129, 0.10) 0 1px, transparent 1px 6px),
+        repeating-linear-gradient(90deg, rgba(16, 185, 129, 0.10) 0 1px, transparent 1px 6px),
+        linear-gradient(100deg, rgba(209, 250, 229, 0.9), rgba(255, 255, 255, 0) 70%);
+}
 </style>

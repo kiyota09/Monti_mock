@@ -7,6 +7,7 @@ use App\Models\Man\KnittingFlag;
 use App\Models\Man\KnittingMachineSetup;
 use App\Models\Man\Machine;
 use App\Models\Man\MachineReport;
+use App\Models\Inv\Material;
 use App\Models\Ord\SalesOrder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -53,25 +54,53 @@ class KnittingMechanicController extends ManufacturingStaffController
             ->orderBy('machine_no')
             ->get(['id', 'machine_no', 'status']);
 
+        $yarnOptions = Material::where('category', 'Yarn')->orderBy('name')->get()
+            ->map(fn (Material $material) => $material->display_name)->unique()->values();
+
         $jobOrders = SalesOrder::where('status', 'in_production')
             ->orderBy('created_at', 'asc')
             ->take(30)
             ->get(['id', 'jo_number', 'color', 'design', 'yarn_type', 'quantity']);
+
+        $fabricDesignOptions = SalesOrder::where('status', 'in_production')
+            ->whereNotNull('design')->where('design', '!=', '')
+            ->orderBy('design')->distinct()->pluck('design')->values();
 
         $fabrics = Fabric::where('status', 'pending')
             ->orderBy('created_at', 'asc')
             ->take(30)
             ->get(['id', 'code', 'yarn_type', 'weight']);
 
-        $myOpenSetups = KnittingMachineSetup::with(['machine', 'fabric', 'salesOrder'])
+        $myOpenSetups = KnittingMachineSetup::with([
+            'machine', 'fabric', 'salesOrder.client', 'salesOrder.recipe.product',
+            'salesOrder.recipe.fabricSampleRequest', 'requester:id,name',
+        ])
             ->where('operator_id', $this->staff()->id)
             ->whereIn('status', ['pending', 'in_progress'])
             ->latest()
             ->get();
 
+        $myOpenSetups->each(function (KnittingMachineSetup $setup) {
+            $order = $setup->salesOrder;
+            $recipe = $order?->recipe;
+            $sample = $recipe?->fabricSampleRequest ?: $recipe?->sampleRequests()->latest('id')->first();
+            $setup->setAttribute('jo_details', [
+                'client' => $order?->client?->company_name,
+                'product' => $recipe?->product?->name,
+                'fabric_design' => $order?->design ?: $recipe?->weave_design ?: $sample?->fabric_name,
+                'color' => $order?->color ?: $recipe?->dye_color,
+                'yarn_type' => $order?->yarn_type ?: $recipe?->yarn_type,
+                'quantity' => $order?->quantity,
+                'texture' => $sample?->texture,
+                'requested_gsm' => $sample?->gsm,
+            ]);
+        });
+
         return Inertia::render('Dashboard/MAN/Employee/KnittingMechanic/Setups', [
             'machines' => $machines,
+            'yarnOptions' => $yarnOptions,
             'jobOrders' => $jobOrders,
+            'fabricDesignOptions' => $fabricDesignOptions,
             'fabrics' => $fabrics,
             'myOpenSetups' => $myOpenSetups,
         ]);
@@ -91,7 +120,8 @@ class KnittingMechanicController extends ManufacturingStaffController
             'stitch_length' => 'nullable|string|max:64',
             'yarn_tension' => 'nullable|string|max:64',
             'takeup_pressure' => 'nullable|string|max:64',
-            'gsm_target' => 'nullable|string|max:64',
+            'gsm_target' => 'nullable|numeric|min:1',
+            'yarn_type' => 'nullable|string|max:255',
             'cams_config' => 'nullable|string',
             'pattern_ref' => 'nullable|string|max:255',
             'remarks' => 'nullable|string',
@@ -113,6 +143,7 @@ class KnittingMechanicController extends ManufacturingStaffController
                 'yarn_tension' => $validated['yarn_tension'] ?? null,
                 'takeup_pressure' => $validated['takeup_pressure'] ?? null,
                 'gsm_target' => $validated['gsm_target'] ?? null,
+                'yarn_type' => $validated['yarn_type'] ?? null,
                 'cams_config' => $validated['cams_config'] ?? null,
                 'pattern_ref' => $validated['pattern_ref'] ?? null,
             ],
@@ -137,6 +168,9 @@ class KnittingMechanicController extends ManufacturingStaffController
 
         $validated = $request->validate([
             'status' => 'required|in:pending,in_progress,done',
+            'gsm_target' => $setup->requested_by && $request->input('status') === 'done' ? 'required|numeric|min:1' : 'nullable|numeric|min:1',
+            'pattern_ref' => 'nullable|string|max:255',
+            'yarn_type' => $setup->requested_by && $request->input('status') === 'done' ? 'required|string|max:255' : 'nullable|string|max:255',
         ]);
 
         $order = ['pending' => 0, 'in_progress' => 1, 'done' => 2];
@@ -144,7 +178,22 @@ class KnittingMechanicController extends ManufacturingStaffController
             return back()->withErrors(['status' => 'Setup sheets cannot move backwards.']);
         }
 
-        $setup->update(['status' => $validated['status']]);
+        $settings = $setup->settings ?? [];
+        if (array_key_exists('gsm_target', $validated) && $validated['gsm_target'] !== null) {
+            $settings['gsm_target'] = $validated['gsm_target'];
+        }
+        if (array_key_exists('pattern_ref', $validated) && $validated['pattern_ref'] !== null) {
+            $settings['pattern_ref'] = $validated['pattern_ref'];
+        }
+        if (array_key_exists('yarn_type', $validated) && $validated['yarn_type'] !== null) {
+            $settings['yarn_type'] = $validated['yarn_type'];
+        }
+
+        $setup->update([
+            'status' => $validated['status'],
+            'settings' => $settings,
+            'processed_at' => $validated['status'] === 'done' ? now() : $setup->processed_at,
+        ]);
 
         return redirect()->back()->with('message', "Setup sheet {$setup->code} marked as {$validated['status']}.");
     }

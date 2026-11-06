@@ -1,8 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const props = defineProps({
     modelValue: { type: Boolean, default: false },
@@ -80,6 +79,8 @@ const submit = async () => {
 
         if (status === 404 || data?.status === 'not_found') {
             phase.value = 'not_found';
+        } else if (data?.status === 'ambiguous') {
+            error.value = data.message || 'This email is linked to multiple portal accounts. Contact support to recover the correct account.';
         } else if (status === 422) {
             const first = Object.values(data?.errors ?? {}).flat()?.[0];
             error.value = first || 'Please enter a valid email address.';

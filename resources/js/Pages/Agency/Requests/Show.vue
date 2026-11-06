@@ -3,8 +3,7 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { watch } from 'vue';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const props = defineProps<{
     request: {

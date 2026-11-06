@@ -12,6 +12,8 @@ class EcoQuotationItem extends Model
         'eco_quotation_id',
         'product_id',
         'fabric',
+        'fabric_type_id',
+        'fabric_type',
         'design',
         'color',
         'kilos',

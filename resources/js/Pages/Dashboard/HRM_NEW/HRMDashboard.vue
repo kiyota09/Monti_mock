@@ -5,7 +5,7 @@
       <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
 
       <!-- Professional Header -->
-      <header class="mb-8 relative">
+      <header data-erp-page-banner="fallback" class="mb-8 relative">
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div>
             <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">

@@ -18,7 +18,6 @@ export const inventoryModule = {
             { label: 'Products', href: route('inv.products'), icon: Package, permKey: 'products' },
             { label: 'Stock Checker', href: route('inv.checker'), icon: AlertCircle, permKey: 'checker' },
         ]
-        if (isCEO) return all
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         if (userPosition === 'manager' && user?.role === 'INV' && !ctx.hasExplicitModuleGrants('INV')) return all

@@ -8,11 +8,28 @@ use App\Models\Scm\MaterialRequest;
 use App\Services\Inv\MaterialStockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
 class MaterialController extends Controller
 {
+    private const MATERIAL_CATEGORIES = [
+        'Yarn',
+        'Dye Stuff',
+        'Auxillary Agent',
+        'Basic Chemicals',
+        'Boiler Chemicals',
+        'Post-Treatment',
+        'Pre-Treatment',
+        'Bio-Processing Enzymes',
+        'Care Agents',
+    ];
+
+    // Let existing records keep their classification until staff reassign them.
+    private const LEGACY_CATEGORIES = ['Supplies', 'Packaging'];
+    private const YARN_TIERS = ['Ultra Premium', 'Premium', 'Standard', 'Economy', 'Recycled'];
+
     /**
      * Display the materials catalog with stock levels and delivery history.
      * Stock math comes from MaterialStockService (shared with Checker and
@@ -48,9 +65,8 @@ class MaterialController extends Controller
                 if (!$receivingRecord) return null;
                 
                 // Link back to PO items to retrieve the historical unit price
-                $poItem = $receivingRecord->purchaseOrder->items
-                    ->where('material_id', $item->material_id)
-                    ->first();
+                $poItems = $receivingRecord->purchaseOrder?->items;
+                $poItem = $poItems?->where('material_id', $item->material_id)->first();
 
                 $unitPrice = (float) ($poItem->unit_price ?? 0);
 
@@ -58,11 +74,27 @@ class MaterialController extends Controller
                  * FETCH ACTUAL LOT NUMBER (control_number)
                  * We find the specific stock record created during this receiving event
                  */
-                $stockRecord = $material->stockItems
-                    ->where('purchase_order_id', $receivingRecord->scm_purchase_order_id)
-                    ->where('warehouse_id', $receivingRecord->warehouse_id)
-                    ->where('quantity', $item->received_qty)
-                    ->first();
+                $stockRecord = $material->stockItems->first(fn ($stock) =>
+                    $stock->purchase_order_id == $receivingRecord->scm_purchase_order_id
+                    && (int) $stock->warehouse_id === (int) $receivingRecord->warehouse_id
+                    && (float) $stock->quantity === (float) $item->received_qty
+                );
+
+                // Manual opening receipts have no purchase order, and their
+                // stock lot may later be moved to its category warehouse.
+                // Match by the receipt timestamp and receiver so history still
+                // shows the original lot after a warehouse move.
+                if (! $stockRecord && ! $receivingRecord->scm_purchase_order_id) {
+                    $receivedAt = $receivingRecord->received_at
+                        ? Carbon::parse($receivingRecord->received_at)->format('Y-m-d H:i:s')
+                        : null;
+                    $stockRecord = $material->stockItems->first(fn ($stock) =>
+                        ! $stock->purchase_order_id
+                        && (int) $stock->received_by === (int) $receivingRecord->received_by
+                        && $receivedAt !== null
+                        && Carbon::parse($stock->received_at)->format('Y-m-d H:i:s') === $receivedAt
+                    );
+                }
 
                 return [
                     'po_number'        => $receivingRecord->purchaseOrder->po_number ?? 'N/A',
@@ -112,7 +144,7 @@ class MaterialController extends Controller
         MaterialRequest::create([
             'req_number'    => 'REQ-' . strtoupper(bin2hex(random_bytes(3))),
             'material_id'   => $material->id,
-            'material_name' => $material->name,
+            'material_name' => $material->display_name,
             'category'      => $material->category,
             'unit'          => $material->unit,
             'required_qty'  => $validated['required_qty'] ?? $material->reorder_point,
@@ -156,7 +188,7 @@ class MaterialController extends Controller
                 MaterialRequest::create([
                     'req_number' => 'REQ-' . strtoupper(bin2hex(random_bytes(3))),
                     'material_id' => $material->id,
-                    'material_name' => $material->name,
+                    'material_name' => $material->display_name,
                     'category' => $material->category,
                     'unit' => $material->unit,
                     'current_stock' => MaterialStockService::unopenedStock($material->id, $warehouseIds),
@@ -186,13 +218,22 @@ class MaterialController extends Controller
     {
         $material = Material::findOrFail($id);
 
+        $tier = $request->input('yarn_tier');
         $validated = $request->validate([
             'name'          => 'required|string|max:255',
-            'category'      => 'required|in:Yarn,Dye,Supplies,Packaging',
+            'category'      => ['required', Rule::in([...self::MATERIAL_CATEGORIES, ...self::LEGACY_CATEGORIES])],
+            'yarn_tier'     => [$request->input('category') === 'Yarn' ? 'required' : 'nullable', Rule::in(self::YARN_TIERS)],
             'unit'          => 'required|in:Rolls,Kg,Pcs',
             'reorder_point' => 'required|numeric|min:0',
         ]);
 
+        if ($validated['category'] === 'Yarn') {
+            $duplicate = Material::where('category', 'Yarn')->where('name', $validated['name'])
+                ->where('yarn_tier', $tier)->where('id', '!=', $material->id)->exists();
+            if ($duplicate) return back()->withErrors(['name' => 'A Yarn material with this name and tier already exists.']);
+        } else {
+            $validated['yarn_tier'] = null;
+        }
         $material->update($validated);
 
         return redirect()->back()->with('success', 'Material updated successfully.');
@@ -203,17 +244,25 @@ class MaterialController extends Controller
      */
     public function store(Request $request)
     {
+        $tier = $request->input('yarn_tier');
         $validated = $request->validate([
             'name'          => 'required|string|max:255',
-            'category'      => 'required|in:Yarn,Dye,Supplies,Packaging',
+            'category'      => ['required', Rule::in(self::MATERIAL_CATEGORIES)],
+            'yarn_tier'     => [$request->input('category') === 'Yarn' ? 'required' : 'nullable', Rule::in(self::YARN_TIERS)],
             'unit'          => 'required|in:Rolls,Kg,Pcs',
             'reorder_point' => 'required|integer|min:0',
         ]);
+
+        if ($validated['category'] === 'Yarn' && Material::where('category', 'Yarn')->where('name', $validated['name'])->where('yarn_tier', $tier)->exists()) {
+            return back()->withErrors(['name' => 'A Yarn material with this name and tier already exists.']);
+        }
+        if ($validated['category'] !== 'Yarn') $validated['yarn_tier'] = null;
 
         Material::create([
             'mat_id'        => Material::nextMatId(),
             'name'          => $validated['name'],
             'category'      => $validated['category'],
+            'yarn_tier'     => $validated['yarn_tier'] ?? null,
             'unit'          => $validated['unit'],
             'reorder_point' => $validated['reorder_point'],
             'unit_cost'     => 0, 

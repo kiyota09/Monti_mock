@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { confirmModal } from '@/lib/feedback';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 const props = defineProps<{
     application: Record<string, any>;
@@ -14,8 +14,8 @@ const props = defineProps<{
 
 const withdrawing = ref(false);
 
-const withdraw = () => {
-    if (!confirm(`Withdraw your application for "${props.application?.job_title}"?`)) return;
+const withdraw = async () => {
+    if (!await confirmModal(`Withdraw your application for "${props.application?.job_title}"?`)) return;
     withdrawing.value = true;
     router.post(route('applicant.applications.withdraw', props.application.id), {}, {
         onSuccess: () => toast.success('Application withdrawn.'),

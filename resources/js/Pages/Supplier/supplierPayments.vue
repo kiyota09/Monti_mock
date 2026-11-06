@@ -2,10 +2,11 @@
 import { ref, computed } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import SupplierPageHeader from '@/Components/SupplierPageHeader.vue';
 import ReceiptsModal from '@/Components/ReceiptsModal.vue';
 import {
     Wallet, Search, ReceiptText, FileText, CalendarClock,
-    BadgeCheck, Building2, CheckCircle2, Hourglass, Tag,
+    BadgeCheck, CheckCircle2, Hourglass, Tag,
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -74,30 +75,19 @@ const closeReceipts = () => { showReceipts.value = false; receiptRow.value = nul
         <div class="min-h-screen">
             <div class="space-y-6 pb-10">
 
-                <!-- Hero header -->
-                <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 p-6 sm:p-8 text-white shadow-xl shadow-emerald-500/20">
-                    <div class="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-                    <div class="absolute -bottom-24 -left-10 h-64 w-64 rounded-full bg-emerald-300/20 blur-3xl" />
-                    <div class="relative flex flex-wrap items-center gap-4">
-                        <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur ring-1 ring-white/30 shadow-lg">
-                            <Wallet class="h-7 w-7" />
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-100">
-                                <Building2 class="h-3.5 w-3.5" /> {{ supplierData.business_name || 'Supplier' }}
-                            </p>
-                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Payments Received</h1>
-                            <p class="text-sm text-emerald-100/90">Every payment Monti Textiles has made to you — with full receipts.</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur">
-                                {{ peso(stats?.outstanding ?? 0) }} outstanding
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- Search + filters -->
-                    <div class="relative mt-6 flex flex-col sm:flex-row gap-3">
+                <SupplierPageHeader
+                    :supplier-name="supplierData.business_name || 'Supplier workspace'"
+                    :icon="Wallet"
+                    title="Payments Received"
+                    subtitle="Every payment Monti Textiles has made to you — with full receipts."
+                >
+                    <template #aside>
+                        <span class="supplier-page-header-chip rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold text-white ring-1 ring-white/25 backdrop-blur">
+                            {{ peso(stats?.outstanding ?? 0) }} outstanding
+                        </span>
+                    </template>
+                    <template #filters>
+                    <div class="flex flex-col gap-3 sm:flex-row">
                         <div class="relative flex-1">
                             <Search class="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             <input v-model="searchQuery" type="text" placeholder="Search invoice no., PO, or status..."
@@ -105,13 +95,14 @@ const closeReceipts = () => { showReceipts.value = false; receiptRow.value = nul
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <button v-for="key in pillKeys" :key="key" @click="statusFilter = key"
-                                :class="statusFilter === key ? 'bg-white text-emerald-700 shadow-lg scale-105' : 'bg-white/15 text-white hover:bg-white/25'"
-                                class="rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide backdrop-blur transition-all duration-200 active:scale-95">
+                                :class="statusFilter === key ? 'bg-white text-slate-900 shadow-lg scale-105' : 'bg-white/15 text-white hover:bg-white/25'"
+                                class="supplier-page-header-filter rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide backdrop-blur transition-all duration-200 active:scale-95">
                                 {{ key }} · {{ counts[key] ?? 0 }}
                             </button>
                         </div>
                     </div>
-                </div>
+                    </template>
+                </SupplierPageHeader>
 
                 <!-- Stat cards -->
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">

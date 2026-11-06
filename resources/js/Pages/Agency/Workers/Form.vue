@@ -4,6 +4,7 @@
 // after HR approves and all required checks are satisfied.
 import { computed, ref, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { confirmModal } from '@/lib/feedback';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
 
 const props = defineProps<{
@@ -172,10 +173,10 @@ function removeNewCategoryFile(key: string, index: number) {
 // row + file stay recoverable). Removes the row from the visible list.
 const deletingDocId = ref<number | null>(null);
 
-function deleteUploadedDocument(doc: any) {
+async function deleteUploadedDocument(doc: any) {
     if (!isEdit || !props.worker) return;
     const name = doc.original_name || doc.label || doc.doc_type;
-    if (!confirm(`Remove "${name}"? It will be hidden but kept in the database (recoverable).`)) return;
+    if (!await confirmModal(`Remove "${name}"? It will be hidden but kept in the database (recoverable).`)) return;
     deletingDocId.value = doc.id;
     router.delete(route('agency.workers.documents.destroy', [props.worker.id, doc.id]), {
         preserveScroll: true,

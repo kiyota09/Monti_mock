@@ -3,8 +3,7 @@
 import { ref, watch } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 type Row = {
     id: number; date: string; worker_id: number; worker_code: string | null; worker_name: string | null;

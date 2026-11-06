@@ -26,7 +26,6 @@ export const logModule = {
             { label: 'Proof', href: route('logistics.proof.index'), icon: Camera, permKey: 'proof' },
             { label: 'Reports', href: route('logistics.reports.index'), icon: FileText, permKey: 'reports' },
         ]
-        if (isCEO) return all
         // Explicit rows (even all-'disabled') are the exact access set and
         // override this shortcut — mirrors backend CheckPagePermission.
         // With zero explicit rows the backend auto-grants fill the shared

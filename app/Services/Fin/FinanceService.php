@@ -41,7 +41,7 @@ class FinanceService
             $invoice = FinInvoice::firstOrCreate(
                 ['sales_order_id' => $so->id],
                 [
-                    'invoice_no' => 'INV-' . ltrim((string) $so->jo_number, 'JO-') ?: ('SO-' . $so->id),
+                    'invoice_no' => $this->invoiceNumberFor($so),
                     'client_id' => $so->client_id,
                     'client_name' => $so->client?->company_name ?? 'N/A',
                     'amount' => (float) $so->total_amount,
@@ -83,7 +83,11 @@ class FinanceService
     {
         $this->syncInvoices();
 
-        $invoices = FinInvoice::with(['salesOrder'])->withSum('payments as paid_sum', 'amount')
+        $invoices = FinInvoice::with([
+            'salesOrder.purchaseOrder.items.product',
+            'salesOrder.manufacturingOrder',
+            'salesOrder.recipe.product',
+        ])->withSum('payments as paid_sum', 'amount')
             ->when($clientId, fn ($q) => $q->where('client_id', $clientId))
             ->latest()
             ->get();
@@ -102,6 +106,9 @@ class FinanceService
             : User::whereIn('id', $recorderIds)->pluck('name', 'id');
 
         return $invoices->map(function ($inv) use ($payments, $recorders) {
+            $salesOrder = $inv->salesOrder;
+            $purchaseOrder = $salesOrder?->purchaseOrder;
+            $recipe = $salesOrder?->recipe;
             $receipts = collect($payments->get($inv->id, collect()))->map(fn ($p) => [
                 'id' => 'FIN-' . $p->id,
                 'source' => 'Finance ledger',
@@ -116,6 +123,7 @@ class FinanceService
 
             return [
                 'id' => $inv->id,
+                'client_id' => $inv->client_id,
                 'invoice_no' => $inv->invoice_no,
                 'client' => $inv->client_name,
                 'amount' => round((float) $inv->amount, 2),
@@ -127,6 +135,48 @@ class FinanceService
                 'status' => $inv->displayStatus(),
                 'notes' => $inv->notes,
                 'created_at' => $inv->created_at?->format('Y-m-d'),
+                'order_details' => $salesOrder ? [
+                    'job_order' => $salesOrder->jo_number,
+                    'control_number' => $salesOrder->control_number,
+                    'status' => $salesOrder->status,
+                    'order_date' => $salesOrder->created_at?->format('Y-m-d'),
+                    'quantity' => (float) $salesOrder->quantity,
+                    'yarn_type' => $salesOrder->yarn_type,
+                    'color' => $salesOrder->color,
+                    'design' => $salesOrder->design,
+                    'priority' => $salesOrder->priority,
+                    'expected_ship_date' => $salesOrder->expected_ship_date?->format('Y-m-d'),
+                    'unit_price' => (float) $salesOrder->unit_price,
+                    'subtotal' => (float) $salesOrder->subtotal,
+                    'tax_rate' => (float) $salesOrder->tax_rate,
+                    'tax_amount' => (float) $salesOrder->tax_amount,
+                    'total_amount' => (float) $salesOrder->total_amount,
+                    'payment_status' => $salesOrder->payment_status,
+                    'production_status' => $salesOrder->manufacturingOrder?->status,
+                    'purchase_order' => $purchaseOrder ? [
+                        'po_number' => $purchaseOrder->po_number,
+                        'status' => $purchaseOrder->status,
+                        'order_date' => $purchaseOrder->created_at?->format('Y-m-d'),
+                        'delivery_date' => $purchaseOrder->delivery_date?->format('Y-m-d'),
+                        'discount_amount' => (float) $purchaseOrder->discount_amount,
+                        'notes' => $purchaseOrder->notes,
+                        'items' => $purchaseOrder->items->map(fn ($item) => [
+                            'product' => $item->product?->name ?? 'Product',
+                            'category' => $item->product?->category,
+                            'sku' => $item->product?->sku,
+                            'quantity' => (float) $item->quantity,
+                            'unit_price' => (float) $item->unit_price,
+                            'line_total' => (float) $item->line_total,
+                        ])->values(),
+                    ] : null,
+                    'recipe' => $recipe ? [
+                        'id' => $recipe->id,
+                        'product' => $recipe->product?->name,
+                        'yarn_type' => $recipe->yarn_type,
+                        'dye_color' => $recipe->dye_color,
+                        'weave_design' => $recipe->weave_design,
+                    ] : null,
+                ] : null,
                 'receipts' => $receipts,
                 'receipt_count' => $receipts->count(),
             ];
@@ -725,5 +775,22 @@ class FinanceService
 
             return $payment;
         });
+    }
+
+    /**
+     * Keep the JO-based invoice number where possible, while distinguishing
+     * separate sales orders that happen to share a JO number.
+     */
+    private function invoiceNumberFor(SalesOrder $order): string
+    {
+        $jobOrder = trim((string) $order->jo_number);
+        $reference = preg_replace('/^JO-/i', '', $jobOrder);
+        $base = 'INV-' . ($reference !== '' ? $reference : 'SO-' . $order->id);
+
+        $baseIsUsedByAnotherOrder = FinInvoice::where('invoice_no', $base)
+            ->where('sales_order_id', '!=', $order->id)
+            ->exists();
+
+        return $baseIsUsedByAnotherOrder ? $base . '-SO' . $order->id : $base;
     }
 }

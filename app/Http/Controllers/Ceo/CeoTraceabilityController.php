@@ -187,6 +187,7 @@ class CeoTraceabilityController extends Controller
         $fabric->load([
             'operator', 'machine', 'salesOrder.client', 'manufacturingOrder',
             'dyeJobs.operator', 'dyeJobs.machine', 'dyeJobs.chemicals',
+            'bleachingJobs.operator', 'squeezerJobs.operator', 'squeezerJobs.machine', 'squeezerJobs.ironJob.operator',
             'softenerJobs.operator', 'softenerJobs.squeezerJob.operator',
             'softenerJobs.squeezerJob.ironJob.operator',
             'packages.operator',
@@ -233,6 +234,28 @@ class CeoTraceabilityController extends Controller
                 'at' => $dj->processed_at, 'status' => null,
             ];
         }
+        foreach ($fabric->bleachingJobs as $bj) {
+            $stages[] = [
+                'stage' => 'Bleaching', 'code' => $bj->code,
+                'operator' => $bj->operator?->name, 'machine' => null,
+                'detail' => trim(($bj->bleaching_method ?? '').($bj->remarks ? ' · '.$bj->remarks : '')),
+                'at' => $bj->processed_at, 'status' => $bj->status,
+            ];
+        }
+        foreach ($fabric->squeezerJobs as $sq) {
+            $stages[] = [
+                'stage' => 'Finishing Squeezer', 'code' => $sq->code,
+                'operator' => $sq->operator?->name, 'machine' => $sq->machine?->machine_no ?? $sq->machine_id,
+                'detail' => $sq->remarks, 'at' => $sq->processed_at, 'status' => null,
+            ];
+            if ($ir = $sq->ironJob) {
+                $stages[] = [
+                    'stage' => 'Finishing Heatsetting', 'code' => $ir->code,
+                    'operator' => $ir->operator?->name, 'machine' => null,
+                    'detail' => $ir->remarks, 'at' => $ir->processed_at, 'status' => null,
+                ];
+            }
+        }
         foreach ($fabric->softenerJobs as $sj) {
             $stages[] = [
                 'stage' => 'Softener', 'code' => $sj->code,
@@ -240,6 +263,9 @@ class CeoTraceabilityController extends Controller
                 'detail' => $sj->softener_type, 'at' => $sj->processed_at, 'status' => $sj->status,
             ];
             if ($sq = $sj->squeezerJob) {
+                if ($sq->fabric_id) {
+                    continue;
+                }
                 $stages[] = [
                     'stage' => 'Squeezer', 'code' => $sq->code,
                     'operator' => $sq->operator?->name, 'machine' => $sq->machine?->machine_no ?? $sq->machine_id,

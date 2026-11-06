@@ -340,7 +340,7 @@ class LeadController extends Controller
     {
         $user = Auth::user();
         $validated = $request->validate([
-            'scheduled_at' => 'required|date',
+            'scheduled_at' => 'required|date|after:now',
             'location' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
         ]);

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { showNotice } from '@/lib/feedback';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
@@ -85,7 +86,7 @@ const formatCurrency = (amount: number): string => {
 };
 
 const downloadPayslipPDF = (payslipId: number) => {
-  alert(`PDF download for payslip #${payslipId} would be implemented here.`);
+  showNotice(`PDF download for payslip #${payslipId} would be implemented here.`);
 };
 </script>
 

@@ -22,7 +22,7 @@ class FleetController extends Controller
             'model' => 'required',
             'year' => 'required|integer|min:1990|max:' . date('Y'),
             'mileage' => 'nullable|numeric',
-            'max_packages' => 'nullable|integer|min:1|max:1000',
+            'max_load_kg' => 'required|numeric|min:0.01|max:99999999.99',
             'status' => 'required|in:available,in_use,under_maintenance,retired',
             'remarks' => 'nullable|string',
         ]);
@@ -35,9 +35,12 @@ class FleetController extends Controller
         $validated = $request->validate([
             'status' => 'required|in:available,in_use,under_maintenance,retired',
             'mileage' => 'nullable|numeric',
-            'max_packages' => 'nullable|integer|min:1|max:1000',
+            'max_load_kg' => 'required|numeric|min:0.01|max:99999999.99',
             'remarks' => 'nullable|string',
         ]);
+        if ((float)$validated['max_load_kg'] + 0.001 < $truck->loadedWeightKg()) {
+            return back()->withErrors(['max_load_kg' => 'The capacity cannot be lower than the weight currently on this truck.']);
+        }
         $truck->update($validated);
         return back()->with('success', 'Truck updated.');
     }

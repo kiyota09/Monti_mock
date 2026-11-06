@@ -29,13 +29,13 @@ class ScmPlanningController extends Controller
 
         // Open demand grouped by material
         $demand = MaterialRequest::whereIn('status', ['pending', 'forwarded', 'rfq_sent'])
-            ->selectRaw('material_id, material_name, unit, SUM(required_qty) as qty, MAX(urgency) as top_urgency, COUNT(*) as requests')
-            ->groupBy('material_id', 'material_name', 'unit')
+            ->selectRaw('material_id, MAX(material_name) as material_name, unit, SUM(required_qty) as qty, MAX(urgency) as top_urgency, COUNT(*) as requests')
+            ->groupBy('material_id', 'unit')
             ->orderByDesc('qty')
             ->get();
 
         $materials = Material::whereIn('id', $demand->pluck('material_id')->filter()->all())
-            ->get(['id', 'name', 'reorder_point', 'unit'])
+            ->get(['id', 'name', 'category', 'yarn_tier', 'reorder_point', 'unit'])
             ->keyBy('id');
 
         $rows = $demand->map(function ($d) use ($onHand, $materials) {
@@ -45,7 +45,7 @@ class ScmPlanningController extends Controller
 
             return [
                 'material_id' => $d->material_id,
-                'material_name' => $d->material_name,
+                'material_name' => $meta?->display_name ?? $d->material_name,
                 'unit' => $d->unit,
                 'required_qty' => $need,
                 'on_hand' => $have,

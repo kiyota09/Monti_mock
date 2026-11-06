@@ -1,4 +1,5 @@
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -13,7 +14,7 @@ const props = defineProps({ dyes: Array, solutions: Array });
 const showForm = ref(false);
 const form = useForm({ material_name: '', concentration: '', lot_no: '', prepared_at: '', expiry_date: '', sds_url: '', remarks: '' });
 const submit = () => form.post(route('man.staff.dyeing-lab-chemist.store-solution'), { preserveScroll: true, onSuccess: () => { showForm.value = false; form.reset(); } });
-const removeSolution = (s) => { if (confirm(`Remove solution record for ${s.material_name}?`)) router.delete(route('man.staff.dyeing-lab-chemist.destroy-solution', s.id), { preserveScroll: true }); };
+const removeSolution = async (s) => { if (await confirmModal(`Remove solution record for ${s.material_name}?`)) router.delete(route('man.staff.dyeing-lab-chemist.destroy-solution', s.id), { preserveScroll: true }); };
 
 const expired = (date) => date && new Date(date) < new Date(new Date().toDateString());
 const fmtDate = (v) => v ? new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';

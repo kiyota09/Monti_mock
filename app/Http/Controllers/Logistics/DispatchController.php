@@ -38,6 +38,7 @@ class DispatchController extends Controller
                     'package_number' => $pkg->package_number,
                     'product_name'   => $pkg->product?->name,
                     'quantity'       => (float) $pkg->quantity,
+                    'weight_kg'      => $pkg->weight_kg === null ? null : (float) $pkg->weight_kg,
                     'client_id'      => $client?->id,
                     'client_name'    => $client?->company_name,
                     'client_address' => $this->clientAddress($client),
@@ -49,8 +50,8 @@ class DispatchController extends Controller
 
         $trucks = Truck::where('status', 'available')->get()->map(fn ($t) => [
             ...$t->toArray(),
-            'loaded_count'   => $t->loadedPackagesCount(),
-            'remaining_slots' => max(0, (int) $t->max_packages - $t->loadedPackagesCount()),
+            'loaded_weight_kg' => $t->loadedWeightKg(),
+            'remaining_capacity_kg' => max(0, (float)($t->max_load_kg ?? 0) - $t->loadedWeightKg()),
         ]);
 
         $deliveries = Delivery::with(['packages.product', 'truck', 'driver.user', 'conductor1.user', 'stops.client'])
@@ -132,31 +133,34 @@ class DispatchController extends Controller
             'driver_id'           => 'required|exists:drivers,id',
             'conductor1_id'       => 'nullable|exists:conductors,id',
             'conductor2_id'       => 'nullable|exists:conductors,id',
-            'scheduled_departure' => 'required|date',
+            'scheduled_departure' => 'required|date|after:now',
             'package_ids'         => 'required|array|min:1',
-            'package_ids.*'       => 'exists:warehouse_packages,id',
+            'package_ids.*'       => 'required|distinct|exists:warehouse_packages,id',
             'notes'               => 'nullable|string',
         ]);
 
-        $truck = Truck::findOrFail($validated['truck_id']);
+        [$delivery, $packageCount] = DB::transaction(function () use ($validated) {
+            $truck = Truck::whereKey($validated['truck_id'])->lockForUpdate()->firstOrFail();
+            abort_unless($truck->status === 'available', 422, 'This truck is not available for a new load.');
+            abort_if((float)($truck->max_load_kg ?? 0) <= 0, 422, 'Set this truck’s maximum load capacity in Fleet before dispatch.');
+            $packages = WarehousePackage::whereIn('id', $validated['package_ids'])
+                ->where('status', 'dispatched')->whereDoesntHave('deliveries')
+                ->with(['product', 'manufacturingOrder.salesOrder', 'manufacturingOrder.purchaseOrder'])
+                ->lockForUpdate()->get();
+            if ($packages->count() !== count($validated['package_ids'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['package_ids' => 'Some selected packages are no longer available for loading.']);
+            }
+            if ($packages->contains(fn($pkg) => $pkg->weight_kg === null || (float)$pkg->weight_kg <= 0)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['package_ids' => 'Every staged package needs a recorded weight in kilograms before it can be loaded.']);
+            }
+            $loadWeight = (float)$packages->sum(fn($pkg)=>(float)$pkg->weight_kg);
+            $alreadyLoaded = $truck->loadedWeightKg();
+            if ($alreadyLoaded + $loadWeight > (float)$truck->max_load_kg + 0.001) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'package_ids' => "This load is {$loadWeight} kg and exceeds {$truck->truck_number}'s remaining capacity of ".max(0,(float)$truck->max_load_kg-$alreadyLoaded).' kg.',
+                ]);
+            }
 
-        $packages = WarehousePackage::whereIn('id', $validated['package_ids'])
-            ->where('status', 'dispatched')
-            ->whereDoesntHave('deliveries')
-            ->with(['product', 'manufacturingOrder.salesOrder', 'manufacturingOrder.purchaseOrder'])
-            ->get();
-
-        if ($packages->count() !== count($validated['package_ids'])) {
-            return back()->withErrors(['package_ids' => 'Some selected packages are no longer available for loading.']);
-        }
-
-        if ($truck->max_packages && $packages->count() > $truck->max_packages) {
-            return back()->withErrors([
-                'package_ids' => "Truck {$truck->truck_number} carries at most {$truck->max_packages} package(s).",
-            ]);
-        }
-
-        $delivery = DB::transaction(function () use ($validated, $truck, $packages) {
             $delivery = Delivery::create([
                 'delivery_number'     => 'DLV-' . strtoupper(Str::random(8)),
                 'truck_id'            => $truck->id,
@@ -179,11 +183,11 @@ class DispatchController extends Controller
                 Conductor::where('id', $validated['conductor2_id'])->update(['is_available' => false]);
             }
 
-            return $delivery;
+            return [$delivery, $packages->count()];
         });
 
         return redirect()->route('logistics.dispatch.index')
-            ->with('success', "Load {$delivery->delivery_number} created with {$packages->count()} package(s).");
+            ->with('success', "Load {$delivery->delivery_number} created with {$packageCount} package(s).");
     }
 
     /**

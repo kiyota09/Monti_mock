@@ -19,6 +19,15 @@ export function usePageAccess() {
     const grants = computed(() => page.props.auth?.page_permissions || [])
 
     const levelOf = (module, pg) => {
+        const authUser = page.props.auth?.user
+        if (String(module).toUpperCase() === 'MAN' && authUser?.is_manufacturing_supervisor) {
+            const role = authUser.manufacturing_supervisor_current_role
+            const rolePage = String(pg || '').toLowerCase()
+            const scoped = role && authUser.manufacturing_supervisor_page_permissions?.[role]
+            if (scoped && Object.prototype.hasOwnProperty.call(scoped, rolePage)) {
+                return String(scoped[rolePage]).toLowerCase()
+            }
+        }
         const hit = grants.value.find(
             (g) =>
                 String(g.module || '').toUpperCase() === String(module).toUpperCase() &&

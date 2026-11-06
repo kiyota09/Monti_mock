@@ -140,6 +140,7 @@
 </template>
 
 <script setup>
+import { confirmModal } from '@/lib/feedback';
 import { computed, ref } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
 import { AlertTriangle, FileText, Plus, X, User, Truck } from 'lucide-vue-next';
@@ -194,8 +195,8 @@ const submit = () => {
     });
 };
 
-const remove = (doc) => {
-    if (!confirm(`Delete "${doc.title}"?`)) return;
+const remove = async (doc) => {
+    if (!await confirmModal(`Delete "${doc.title}"?`)) return;
     router.delete(route('logistics.driver.document.destroy', doc.id), {
         preserveScroll: true,
         onSuccess: () => props.notify('success', 'Document deleted.'),

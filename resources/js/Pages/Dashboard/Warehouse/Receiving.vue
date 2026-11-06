@@ -1,4 +1,5 @@
 <script setup>
+import { showNotice } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -46,7 +47,7 @@ const receiveForm = useForm({
 const getPOMaterialDisplay = (po) => {
     if (!po.items || po.items.length === 0) return 'No Materials';
     const firstItem = po.items[0];
-    const name = firstItem.material?.name || firstItem.material_name || 'Unknown Item';
+    const name = firstItem.material?.display_name || firstItem.material?.name || firstItem.material_name || 'Unknown Item';
     return po.items.length > 1 ? `${name} (+${po.items.length - 1} more)` : name;
 };
 
@@ -74,7 +75,7 @@ const selectPO = (po) => {
     
     receiveForm.items = po.items.map(item => ({
         material_id: item.material_id,
-        material_name: item.material?.name || item.material_name,
+        material_name: item.material?.display_name || item.material?.name || item.material_name,
         expected_qty: parseFloat(item.qty),
         received_qty: parseFloat(item.qty),
         rejected_qty: 0,
@@ -99,7 +100,7 @@ const updateReceivedQty = (index, value) => {
 };
 
 const submitReceive = () => {
-    if (!receiveForm.warehouse_id) return alert('Please select a destination warehouse.');
+    if (!receiveForm.warehouse_id) return showNotice('Please select a destination warehouse.');
     
     receiveForm.post(route('warehouse.receiving.store'), {
         preserveScroll: true,
@@ -107,7 +108,7 @@ const submitReceive = () => {
             showReceiveModal.value = false;
             receiveForm.reset();
         },
-        onError: () => alert('Error processing receipt.')
+        onError: () => showNotice('Error processing receipt.')
     });
 };
 

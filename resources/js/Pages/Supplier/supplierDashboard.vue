@@ -1,313 +1,161 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import SupplierPageHeader from '@/Components/SupplierPageHeader.vue';
 import {
-    FileText, CheckCircle, Clock, AlertTriangle,
-    ArrowRight, Send, X, DollarSign, Package,
-    Building2, MapPin, FileQuestion
+    ArrowRight, Banknote, Boxes, CheckCircle2,
+    ClipboardList, FileQuestion, MessageSquare, PackageCheck, Receipt,
+    ShoppingBag, ShoppingCart, Truck,
 } from 'lucide-vue-next';
 
 const props = defineProps({
-    auth: Object,
-    stats: {
-        type: Object,
-        default: () => ({ activeRFQs: 0, pendingResponses: 0, submittedQuotes: 0 })
-    },
-    rfqs: {
-        type: Array,
-        default: () => []
-    },
-    catalogPrices: {
-        type: Object,
-        default: () => ({})
-    }
+    auth: { type: Object, default: () => ({}) },
+    stats: { type: Object, default: () => ({}) },
+    pendingRfqs: { type: Array, default: () => [] },
+    recentOrders: { type: Array, default: () => [] },
+    recentInvoices: { type: Array, default: () => [] },
 });
 
-const isLoaded = ref(false);
-onMounted(() => { isLoaded.value = true; });
+const supplier = computed(() => props.auth?.supplier || props.auth?.user || {});
+const displayName = computed(() => supplier.value.representative_name || supplier.value.business_name || 'Supplier');
+const money = (value) => `₱${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const dateLabel = (value) => value ? new Date(value).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+const orderStatus = (status) => ({
+    sent: 'New order', production: 'In production', shipping: 'Shipping',
+    delivered: 'Delivered', completed: 'Completed',
+}[status] || String(status || 'Pending').replaceAll('_', ' '));
+const statusClass = (status) => ({
+    sent: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+    production: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+    shipping: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300',
+    delivered: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+    completed: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+}[status] || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300');
 
-// Safe access to the supplier data
-const supplierData = computed(() => props.auth?.supplier || props.auth?.user || {});
+const metrics = computed(() => [
+    { label: 'RFQs needing a response', value: props.stats.pendingResponses || 0, icon: FileQuestion, tone: 'blue', href: route('supplier.rfqs') },
+    { label: 'Open purchase orders', value: props.stats.openOrders || 0, icon: ShoppingCart, tone: 'indigo', href: route('supplier.orders') },
+    { label: 'In production', value: props.stats.inProduction || 0, icon: Boxes, tone: 'amber', href: route('supplier.orders') },
+    { label: 'Unpaid invoices', value: props.stats.unpaidInvoices || 0, icon: Receipt, tone: 'emerald', href: route('supplier.payments') },
+]);
 
-// ─── Quotation Form Modal ──────────────────────────────────────────────────
-const showQuoteModal = ref(false);
-const selectedRfq = ref(null);
-const priceFromCatalog = ref(false);
-
-const quoteForm = useForm({
-    unit_price: '',
-    lead_time: '',
-    validity_date: '',
-    payment_terms: '',
-    notes: '',
-});
-
-const openQuoteModal = (rfq) => {
-    selectedRfq.value = rfq;
-    // Auto-fill from My Products catalog price when listed (still editable).
-    const catalogPrice = props.catalogPrices?.[rfq.material_id];
-    quoteForm.unit_price = catalogPrice != null && catalogPrice !== '' ? catalogPrice : '';
-    priceFromCatalog.value = quoteForm.unit_price !== '';
-    quoteForm.lead_time = '';
-    quoteForm.validity_date = '';
-    quoteForm.payment_terms = rfq.payment_terms; // Default to what SCM requested
-    quoteForm.notes = '';
-    quoteForm.clearErrors();
-    showQuoteModal.value = true;
+const metricTone = {
+    blue: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+    indigo: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300',
+    amber: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+    emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
 };
-
-const submitQuote = () => {
-    quoteForm.post(`/supplier/rfq/${selectedRfq.value.id}/respond`, {
-        preserveScroll: true,
-        onSuccess: () => {
-            showQuoteModal.value = false;
-        }
-    });
-};
-
-const formatCurrency = (val) => '₱' + Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 </script>
 
 <template>
-
-    <Head title="Supplier Hub | Monti Textile" />
-
+    <Head title="Supplier Dashboard | Monti Textile" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Vendor Hub
-                </h1>
-                <p class="text-slate-500 text-sm mt-0.5">Welcome back, {{ supplierData.representative_name || 'Vendor'
-                    }}</p>
-            </div>
-            <div
-                class="flex items-center gap-4 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                <div
-                    class="h-10 w-10 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg flex items-center justify-center font-black text-lg">
-                    {{ (supplierData.business_name || 'S').charAt(0).toUpperCase() }}
-                </div>
-                <div>
-                    <p class="text-sm font-bold text-slate-900 dark:text-white">{{ supplierData.business_name }}</p>
-                    <p class="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">Official Vendor</p>
-                </div>
-            </div>
-        </div>
+        <main class="w-full space-y-6 p-4 sm:p-6">
+            <SupplierPageHeader :supplier-name="supplier.business_name || 'Supplier workspace'" :icon="ClipboardList" :title="`Good day, ${displayName}`" subtitle="Procurement and order overview">
+                <template #aside>
+                    <Link :href="route('supplier.rfqs')" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-extrabold text-emerald-900 shadow-sm transition hover:bg-white/90">
+                        <FileQuestion class="h-4 w-4" /> Review RFQs <ArrowRight class="h-4 w-4" />
+                    </Link>
+                </template>
+            </SupplierPageHeader>
 
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-5 mb-8">
-            <div
-                class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                <div>
-                    <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Active
-                        RFQs</p>
-                    <p class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">{{ stats.activeRFQs }}</p>
-                </div>
-                <div class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-xl hidden sm:block">
-                    <FileText class="w-6 h-6" />
-                </div>
-            </div>
-            <div
-                class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                <div>
-                    <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Pending
-                        Action</p>
-                    <p class="text-2xl sm:text-3xl font-black text-amber-600">{{ stats.pendingResponses }}</p>
-                </div>
-                <div class="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-600 rounded-xl hidden sm:block">
-                    <AlertTriangle class="w-6 h-6" />
-                </div>
-            </div>
-            <div
-                class="col-span-2 md:col-span-1 bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                <div>
-                    <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Submitted
-                        Quotes</p>
-                    <p class="text-2xl sm:text-3xl font-black text-emerald-600">{{ stats.submittedQuotes }}</p>
-                </div>
-                <div class="p-3 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded-xl hidden sm:block">
-                    <CheckCircle class="w-6 h-6" />
-                </div>
-            </div>
-        </div>
+            <section aria-label="Supplier performance overview" class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <Link v-for="metric in metrics" :key="metric.label" :href="metric.href" class="group rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+                    <div class="flex items-start justify-between gap-2">
+                        <p class="text-xs font-bold leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">{{ metric.label }}</p>
+                        <span :class="metricTone[metric.tone]" class="rounded-xl p-2"><component :is="metric.icon" class="h-4 w-4" /></span>
+                    </div>
+                    <p class="mt-3 text-3xl font-black tracking-tight text-slate-900 dark:text-white">{{ metric.value }}</p>
+                    <span class="mt-2 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">View details <ArrowRight class="h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span>
+                </Link>
+            </section>
 
-        <h2 class="text-lg font-black text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-            <FileQuestion class="w-5 h-5 text-blue-500" /> Requests for Quotation (RFQ)
-        </h2>
+            <div class="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]">
+                <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 dark:border-slate-800 sm:px-5">
+                        <div>
+                            <h2 class="font-black text-slate-900 dark:text-white">Purchase order activity</h2>
+                            <p class="mt-0.5 text-xs text-slate-500">Latest orders and fulfillment status</p>
+                        </div>
+                        <Link :href="route('supplier.orders')" class="shrink-0 text-xs font-extrabold text-emerald-700 hover:underline dark:text-emerald-400">All orders</Link>
+                    </div>
 
-        <div v-if="rfqs.length === 0"
-            class="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <FileText class="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p class="text-sm font-bold text-slate-500">No RFQs have been assigned to you yet.</p>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div v-for="rfq in rfqs" :key="rfq.id"
-                class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col">
-                <div class="flex justify-between items-start mb-4">
-                    <div>
-                        <div class="flex items-center gap-2 mb-1.5">
-                            <span
-                                class="font-mono text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-md">{{
-                                rfq.rfq_number }}</span>
-                            <span
-                                :class="['text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full', rfq.my_response ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700']">
-                                {{ rfq.my_response ? 'Quoted' : 'Requires Action' }}
+                    <div v-if="recentOrders.length" class="divide-y divide-slate-100 dark:divide-slate-800">
+                        <Link v-for="order in recentOrders" :key="order.id" :href="route('supplier.orders')" class="flex items-center gap-3 px-4 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-800/50 sm:px-5">
+                            <span class="rounded-xl bg-slate-100 p-2.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><PackageCheck class="h-4 w-4" /></span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-extrabold text-slate-900 dark:text-white">{{ order.po_number }}</span>
+                                <span class="mt-0.5 block text-xs text-slate-500">Issued {{ dateLabel(order.issued_date) }}<template v-if="order.expected_delivery"> · Due {{ dateLabel(order.expected_delivery) }}</template></span>
                             </span>
-                        </div>
-                        <h3 class="text-lg font-black text-slate-900 dark:text-white leading-tight">{{ rfq.material_name
-                            }}</h3>
-                        <p class="text-xs text-slate-500 font-medium mt-0.5">{{ rfq.category }}</p>
+                            <span class="text-right">
+                                <span :class="statusClass(order.status)" class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black">{{ orderStatus(order.status) }}</span>
+                                <span class="mt-1 block text-xs font-bold text-slate-700 dark:text-slate-300">{{ money(order.grand_total) }}</span>
+                            </span>
+                        </Link>
                     </div>
-                    <div
-                        class="text-right flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-700">
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Required Qty
-                        </p>
-                        <p class="text-lg font-black text-slate-900 dark:text-white leading-none">{{
-                            rfq.required_qty.toLocaleString() }} <span class="text-xs text-slate-500">{{ rfq.unit
-                                }}</span></p>
+                    <div v-else class="px-5 py-10 text-center">
+                        <ShoppingCart class="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" />
+                        <p class="mt-2 text-sm font-bold text-slate-700 dark:text-slate-300">No purchase orders yet</p>
+                        <p class="mt-1 text-xs text-slate-500">New orders from Monti Textile will appear here.</p>
                     </div>
-                </div>
+                </section>
 
-                <div class="grid grid-cols-2 gap-3 mb-4 flex-1">
-                    <div>
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SCM Deadline</p>
-                        <p
-                            class="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-0.5 flex items-center gap-1.5">
-                            <Clock class="w-3.5 h-3.5" /> {{ rfq.deadline }}
-                        </p>
-                    </div>
-                    <div>
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Delivery Address</p>
-                        <p
-                            class="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-0.5 truncate flex items-center gap-1.5">
-                            <MapPin class="w-3.5 h-3.5" /> {{ rfq.delivery_address }}
-                        </p>
-                    </div>
-                    <div class="col-span-2" v-if="rfq.notes">
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SCM Notes</p>
-                        <p
-                            class="text-xs text-slate-600 dark:text-slate-400 mt-0.5 italic bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
-                            {{ rfq.notes }}</p>
-                    </div>
-                </div>
-
-                <div class="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800">
-                    <div v-if="rfq.my_response"
-                        class="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 p-3 rounded-xl">
+                <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+                    <div class="flex items-start justify-between gap-3">
                         <div>
-                            <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Your Quoted
-                                Price</p>
-                            <p class="font-black text-emerald-700 dark:text-emerald-400">{{
-                                formatCurrency(rfq.my_response.total_price) }}</p>
+                            <h2 class="font-black text-slate-900 dark:text-white">Quotation requests</h2>
+                            <p class="mt-0.5 text-xs text-slate-500">Open opportunities that need your response</p>
                         </div>
-                        <div class="text-right">
-                            <p class="text-[10px] font-bold text-emerald-600">{{ rfq.my_response.lead_time }} lead</p>
-                            <span
-                                class="text-[10px] font-bold bg-emerald-200/50 text-emerald-700 px-2 py-0.5 rounded-md uppercase">{{
-                                    rfq.my_response.status.replace('_', ' ') }}</span>
+                        <span class="rounded-xl bg-blue-50 p-2 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"><ClipboardList class="h-4 w-4" /></span>
+                    </div>
+                    <div v-if="pendingRfqs.length" class="mt-4 space-y-3">
+                        <div v-for="rfq in pendingRfqs" :key="rfq.id" class="rounded-xl border border-slate-100 p-3 dark:border-slate-800">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-extrabold text-slate-900 dark:text-white">{{ rfq.material_name }}</p>
+                                    <p class="mt-0.5 text-xs text-slate-500">{{ rfq.rfq_number }} · {{ Number(rfq.required_qty).toLocaleString() }} {{ rfq.unit }}</p>
+                                </div>
+                                <span class="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">Due {{ dateLabel(rfq.deadline) }}</span>
+                            </div>
                         </div>
                     </div>
-                    <button v-else @click="openQuoteModal(rfq)"
-                        class="w-full inline-flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]">
-                        Submit Quotation
-                        <ArrowRight class="w-4 h-4" />
-                    </button>
-                </div>
+                    <div v-else class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+                        <CheckCircle2 class="mb-2 h-5 w-5" /> You’re caught up. No quotations are waiting for a response.
+                    </div>
+                    <Link :href="route('supplier.rfqs')" class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200">
+                        Open RFQ page <ArrowRight class="h-4 w-4" />
+                    </Link>
+                </section>
             </div>
-        </div>
 
-        <Teleport to="body">
-            <div v-if="showQuoteModal"
-                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-                @click.self="showQuoteModal = false">
-                <div
-                    class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-
-                    <div
-                        class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex justify-between items-center flex-shrink-0">
-                        <div>
-                            <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                                <DollarSign class="w-5 h-5 text-emerald-500" /> Submit Quotation
-                            </h3>
-                            <p class="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">{{
-                                selectedRfq?.rfq_number }}</p>
-                        </div>
-                        <button @click="showQuoteModal = false"
-                            class="p-2 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 transition shadow-sm border border-slate-200 dark:border-slate-600">
-                            <X class="w-4 h-4 text-slate-500" />
-                        </button>
+            <div class="grid gap-6 lg:grid-cols-2">
+                <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+                    <div class="flex items-center justify-between gap-3">
+                        <div><h2 class="font-black text-slate-900 dark:text-white">Invoice status</h2><p class="mt-0.5 text-xs text-slate-500">Recently submitted supplier invoices</p></div>
+                        <Link :href="route('supplier.payments')" class="text-xs font-extrabold text-emerald-700 hover:underline dark:text-emerald-400">Payments</Link>
                     </div>
-
-                    <div class="p-5 sm:p-6 overflow-y-auto flex-1 space-y-5">
-                        <div
-                            class="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                            <p class="text-sm font-black text-slate-800 dark:text-slate-200">{{
-                                selectedRfq?.material_name }}</p>
-                            <p class="text-xs text-slate-500 mt-1">Requested: <span
-                                    class="font-black text-slate-700 dark:text-slate-300">{{
-                                        selectedRfq?.required_qty.toLocaleString() }} {{ selectedRfq?.unit }}</span></p>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unit
-                                    Price (₱) *</label>
-                                <input v-model="quoteForm.unit_price" type="number" min="0.01" step="0.01"
-                                    placeholder="e.g. 50.00" @input="priceFromCatalog = false"
-                                    class="mt-1 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-bold" />
-                                <p v-if="priceFromCatalog && quoteForm.unit_price"
-                                    class="text-[10px] text-emerald-600 font-bold mt-1 text-right">
-                                    From your Products catalog — editable
-                                </p>
-                                <p v-if="quoteForm.unit_price"
-                                    class="text-[10px] text-emerald-600 font-bold mt-1 text-right">
-                                    Total: {{ formatCurrency(quoteForm.unit_price * selectedRfq.required_qty) }}
-                                </p>
-                            </div>
-                            <div>
-                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estimated
-                                    Lead Time *</label>
-                                <input v-model="quoteForm.lead_time" type="text" placeholder="e.g. 7-10 Days"
-                                    class="mt-1 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-bold" />
-                            </div>
-                            <div>
-                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Offer
-                                    Valid Until *</label>
-                                <input v-model="quoteForm.validity_date" type="date"
-                                    :min="new Date().toISOString().split('T')[0]"
-                                    class="mt-1 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-bold" />
-                            </div>
-                            <div>
-                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Payment
-                                    Terms *</label>
-                                <input v-model="quoteForm.payment_terms" type="text"
-                                    class="mt-1 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-bold" />
-                            </div>
-                            <div class="sm:col-span-2">
-                                <label
-                                    class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Additional
-                                    Notes</label>
-                                <textarea v-model="quoteForm.notes" rows="2" placeholder="Any conditions or remarks..."
-                                    class="mt-1 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-bold resize-none"></textarea>
-                            </div>
+                    <div v-if="recentInvoices.length" class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+                        <div v-for="invoice in recentInvoices" :key="invoice.id" class="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                            <span class="rounded-lg bg-emerald-50 p-2 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"><Receipt class="h-4 w-4" /></span>
+                            <div class="min-w-0 flex-1"><p class="truncate text-sm font-bold text-slate-900 dark:text-white">{{ invoice.invoice_number }}</p><p class="text-xs text-slate-500">{{ invoice.po_number || 'Purchase invoice' }} · {{ dateLabel(invoice.invoice_date) }}</p></div>
+                            <div class="text-right"><p class="text-sm font-extrabold text-slate-900 dark:text-white">{{ money(invoice.amount) }}</p><p class="text-[10px] font-bold capitalize text-slate-500">{{ invoice.status }}</p></div>
                         </div>
                     </div>
+                    <p v-else class="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-slate-800/60">No supplier invoices have been submitted yet.</p>
+                </section>
 
-                    <div
-                        class="px-5 py-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-3 bg-slate-50 dark:bg-slate-800 flex-shrink-0">
-                        <button @click="showQuoteModal = false"
-                            class="w-full sm:flex-1 py-3 text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-600 hover:bg-white dark:hover:bg-slate-700 transition">
-                            Cancel
-                        </button>
-                        <button @click="submitQuote"
-                            :disabled="quoteForm.processing || !quoteForm.unit_price || !quoteForm.lead_time || !quoteForm.validity_date"
-                            class="w-full sm:flex-1 inline-flex items-center justify-center gap-2 py-3 text-sm font-black rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-lg shadow-emerald-500/20 disabled:opacity-40">
-                            <Send class="w-4 h-4" /> {{ quoteForm.processing ? 'Submitting...' : 'Submit Quotation' }}
-                        </button>
+                <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+                    <h2 class="font-black text-slate-900 dark:text-white">Supplier shortcuts</h2>
+                    <p class="mt-0.5 text-xs text-slate-500">Common tasks for your Monti Textile account</p>
+                    <div class="mt-4 grid grid-cols-2 gap-3">
+                        <Link :href="route('supplier.messages')" class="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm font-bold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-emerald-950/20"><MessageSquare class="h-4 w-4 text-emerald-600" /> Messages</Link>
+                        <Link :href="route('supplier.products')" class="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm font-bold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-emerald-950/20"><ShoppingBag class="h-4 w-4 text-emerald-600" /> My products</Link>
+                        <Link :href="route('supplier.orders')" class="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm font-bold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-emerald-950/20"><Truck class="h-4 w-4 text-emerald-600" /> Track orders</Link>
+                        <Link :href="route('supplier.payments')" class="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm font-bold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-emerald-950/20"><Banknote class="h-4 w-4 text-emerald-600" /> Payments</Link>
                     </div>
-                </div>
+                </section>
             </div>
-        </Teleport>
-
+        </main>
     </AuthenticatedLayout>
 </template>

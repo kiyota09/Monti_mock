@@ -838,6 +838,7 @@
 </template>
 
 <script setup>
+import { requestInput } from '@/lib/feedback';
 import { ref, computed, watch } from "vue";
 import { router, usePage } from "@inertiajs/vue3";
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -846,8 +847,7 @@ import {
     Monitor, Clock, FileText, Shield, User, MapPin, Building2, CreditCard, Folder, GraduationCap,
     KeyRound, Copy, X
 } from 'lucide-vue-next';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import { toast } from '@/lib/feedback';
 
 // Dynamic Record Tab State
 const activeTab = ref("personal");
@@ -1036,7 +1036,7 @@ const resetForm = () => {
   toast.info('Changes discarded.');
 };
 
-const triggerAction = (action) => {
+const triggerAction = async (action) => {
   const id = employee.value?.id;
   if (!id && !['export', 'print'].includes(action)) { toast.error('Select an employee first.'); return; }
   if (action === 'export') {
@@ -1059,7 +1059,7 @@ const triggerAction = (action) => {
     return;
   }
   if (action === 'transfer') {
-    const dept = prompt('Transfer to which department (name or code)?', employee.value.department || '');
+    const dept = await requestInput('Transfer to which department (name or code)?', { inputValue: employee.value.department || '' });
     if (dept === null) return;
     router.patch(route('hrm.workforce.employees.update', id), { department: dept }, {
       onSuccess: () => toast.success('Employee transferred.'),
@@ -1075,7 +1075,7 @@ const triggerAction = (action) => {
     return;
   }
   if (action === 'archive' || action === 'terminate') {
-    const reason = prompt(`Reason for ${action} (${employee.value.firstName} ${employee.value.lastName}) — required:`);
+    const reason = await requestInput(`Reason for ${action} (${employee.value.firstName} ${employee.value.lastName}) — required:`, { input: 'textarea', title: 'Reason required' });
     if (!reason) return;
     router.delete(route('hrm.employees.toggle-status', id), { data: { reason }, preserveScroll: true });
   }

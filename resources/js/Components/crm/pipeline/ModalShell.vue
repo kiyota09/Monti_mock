@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue';
 import { X } from 'lucide-vue-next';
+import FabricModalArtwork from '@/Components/FabricModalArtwork.vue';
 
 // Shared modal chrome: overlay, ESC-to-close, body scroll-lock (nest-safe),
 // consistent panel shape. Parents render with v-if and listen to @close.
@@ -53,8 +54,9 @@ onUnmounted(() => {
                 aria-modal="true"
             >
                 <div
-                    :class="['max-h-[92vh] w-full overflow-y-auto rounded-3xl bg-white shadow-2xl dark:bg-zinc-900', sizes[size] || sizes.md]"
+                    :class="['fabric-shell-panel max-h-[92vh] w-full overflow-y-auto rounded-3xl border border-sky-100 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900', sizes[size] || sizes.md]"
                 >
+                    <FabricModalArtwork kind="info" label="Blue fabric swatches" />
                     <slot name="header" />
                     <slot />
                     <slot name="footer" />
@@ -69,4 +71,5 @@ onUnmounted(() => {
 .modal-shell-enter-active > div, .modal-shell-leave-active > div { transition: transform 0.25s cubic-bezier(0.22,1,0.36,1), opacity 0.25s ease; }
 .modal-shell-enter-from, .modal-shell-leave-to { opacity: 0; }
 .modal-shell-enter-from > div, .modal-shell-leave-to > div { opacity: 0; transform: scale(0.96) translateY(8px); }
+.fabric-shell-panel :deep(.fabric-modal-art) { height: 100px; }
 </style>

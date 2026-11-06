@@ -7,7 +7,13 @@ use App\Models\Hrm\EmployeeShift;
 use App\Models\Man\Machine;
 use App\Models\Man\MachineReport;
 use App\Models\Man\ManTaskAssignment;
+use App\Models\Man\DyeingBatchFabric;
+use App\Models\Man\Fabric;
+use App\Models\Man\LabTrial;
+use App\Models\Man\ManufacturingOrder;
+use App\Models\Inv\Material;
 use App\Support\ManufacturingRoles;
+use App\Support\ManufacturingPages;
 use Illuminate\Support\Facades\Auth;
 
 abstract class ManufacturingStaffController extends Controller
@@ -19,7 +25,15 @@ abstract class ManufacturingStaffController extends Controller
      */
     protected function staff()
     {
-        return Auth::user();
+        $user = Auth::user();
+        if ($user?->is_manufacturing_supervisor) {
+            // Staff page controllers use manufacturing_role to select their
+            // stage-specific labels and workflow. Give the supervisor the
+            // current route role while retaining the supervisor identity.
+            $user->manufacturing_role = ManufacturingPages::roleForRouteName(request()->route()?->getName());
+        }
+
+        return $user;
     }
 
     /**
@@ -57,18 +71,34 @@ abstract class ManufacturingStaffController extends Controller
      */
     protected function myAssignmentScope(): array
     {
-        $stage = ManufacturingRoles::stageForRole($this->staff()->manufacturing_role);
+        $user = $this->staff();
+        $role = $this->workspaceRole($user);
+        $stage = ManufacturingRoles::stageForRole($role);
 
-        $base = ManTaskAssignment::where('assigned_to', $this->staff()->id)->active();
-        if ($stage) {
-            $base->where('stage', $stage);
+        $base = ManTaskAssignment::active();
+        if ($user->is_manufacturing_supervisor) {
+            // A supervisor monitors every JO assigned to anyone in the
+            // selected staff role, regardless of which employee has it.
+            $staffIds = $role
+                ? \App\Models\Core\User::where('role', 'MAN')->where('position', 'staff')
+                    ->where('is_manufacturing_supervisor', false)->where('manufacturing_role', $role)->pluck('id')
+                : collect();
+            $base->whereIn('assigned_to', $staffIds);
+        } else {
+            $base->where('assigned_to', $user->id);
+            if ($stage) {
+                $base->where('stage', $stage);
+            }
         }
 
+        $assignmentRows = (clone $base)->get(['fabric_id', 'manufacturing_order_id', 'sales_order_id']);
+        $orderAssignments = $assignmentRows->whereNull('fabric_id');
+        $assignedFabricIds = $assignmentRows->pluck('fabric_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+
         return [
-            'mo' => (clone $base)->whereNotNull('manufacturing_order_id')
-                ->pluck('manufacturing_order_id')->unique()->values()->all(),
-            'so' => (clone $base)->whereNotNull('sales_order_id')
-                ->pluck('sales_order_id')->unique()->values()->all(),
+            'mo' => $orderAssignments->whereNotNull('manufacturing_order_id')->pluck('manufacturing_order_id')->map(fn ($id) => (int) $id)->unique()->values()->all(),
+            'so' => $orderAssignments->whereNotNull('sales_order_id')->pluck('sales_order_id')->map(fn ($id) => (int) $id)->unique()->values()->all(),
+            'fabric_ids' => $assignedFabricIds->all(),
         ];
     }
 
@@ -82,8 +112,13 @@ abstract class ManufacturingStaffController extends Controller
         $scope = $this->myAssignmentScope();
 
         return $query->where(function ($q) use ($scope, $moColumn, $soColumn) {
-            $q->whereIn($moColumn, $scope['mo'])
-                ->orWhereIn($soColumn, $scope['so']);
+            if (! $scope['mo'] && ! $scope['so'] && ! $scope['fabric_ids']) {
+                $q->whereRaw('1 = 0');
+                return;
+            }
+            if ($scope['mo']) $q->whereIn($moColumn, $scope['mo']);
+            if ($scope['so']) $q->orWhereIn($soColumn, $scope['so']);
+            if ($scope['fabric_ids']) $q->orWhereIn('id', $scope['fabric_ids']);
         });
     }
 
@@ -96,15 +131,347 @@ abstract class ManufacturingStaffController extends Controller
     {
         $scope = $this->myAssignmentScope();
 
-        if ($manufacturingOrderId && in_array($manufacturingOrderId, $scope['mo'], true)) {
+        if ($manufacturingOrderId && in_array((int) $manufacturingOrderId, $scope['mo'], true)) {
             return true;
         }
 
-        if ($salesOrderId && in_array($salesOrderId, $scope['so'], true)) {
+        if ($salesOrderId && in_array((int) $salesOrderId, $scope['so'], true)) {
             return true;
         }
 
         return false;
+    }
+
+    protected function isAssignedFabric(int $fabricId, ?int $manufacturingOrderId, ?int $salesOrderId): bool
+    {
+        $scope = $this->myAssignmentScope();
+
+        return in_array($fabricId, $scope['fabric_ids'], true)
+            || ($manufacturingOrderId && in_array($manufacturingOrderId, $scope['mo'], true))
+            || ($salesOrderId && in_array($salesOrderId, $scope['so'], true));
+    }
+
+    /** Keep Dyeing Lab Chemist formula sections instead of inferring them from inventory categories. */
+    protected function dyeingFormulaGroups(?array $formula, float $productionWeightKg = 0): array
+    {
+        $definitions = [
+            ['label' => 'Dye stuffs', 'aliases' => ['dyestuffs', 'dye_stuffs'], 'quantity_keys' => ['pct', 'percentage', 'quantity'], 'dose' => 'pct'],
+            ['label' => 'Basic Chemicals', 'aliases' => ['basic_chemicals', 'basic_chemical'], 'quantity_keys' => ['gpl', 'g_per_liter', 'quantity'], 'dose' => 'gpl'],
+            ['label' => 'Auxiliary Agents', 'aliases' => ['auxiliary_agents', 'auxiliaries', 'auxiliary'], 'quantity_keys' => ['gpl', 'g_per_liter', 'quantity'], 'dose' => 'gpl'],
+            ['label' => 'Post Treatment', 'aliases' => ['post_treatment', 'post_treatment_agents'], 'quantity_keys' => ['gpl', 'g_per_liter', 'quantity'], 'dose' => 'gpl'],
+        ];
+        $itemsByGroup = collect($definitions)->mapWithKeys(fn ($definition) => [
+            $definition['label'] => collect($definition['aliases'])
+                ->flatMap(fn ($key) => $formula[$key] ?? [])
+                ->values(),
+        ]);
+        $materialIds = $itemsByGroup->flatten(1)
+            ->pluck('material_id')->filter()->unique()->values();
+        $materials = $materialIds->isEmpty()
+            ? collect()
+            : Material::whereIn('id', $materialIds)->get()->keyBy('id');
+
+        $liquorRatio = $this->dyeingLiquorRatio($formula['liquor_ratio'] ?? null);
+
+        return collect($definitions)->map(function ($definition) use ($itemsByGroup, $materials, $productionWeightKg, $liquorRatio) {
+            $rows = $itemsByGroup->get($definition['label'], collect())->map(function ($item) use ($definition, $materials, $productionWeightKg, $liquorRatio) {
+                $materialId = $item['material_id'] ?? null;
+                $material = $materialId ? $materials->get($materialId) : null;
+                $labQuantity = null;
+                foreach ($definition['quantity_keys'] as $key) {
+                    if (array_key_exists($key, $item)) {
+                        $labQuantity = (float) $item[$key];
+                        break;
+                    }
+                }
+                $quantity = $definition['dose'] === 'pct'
+                    ? $productionWeightKg * (float) $labQuantity / 100
+                    : (float) $labQuantity * $liquorRatio * $productionWeightKg / 1000;
+                $displayDose = rtrim(rtrim(number_format((float) $labQuantity, 4, '.', ''), '0'), '.');
+                $weight = number_format($productionWeightKg, 2, '.', '');
+                $calculation = $definition['dose'] === 'pct'
+                    ? "{$weight} kg × {$displayDose}% ÷ 100"
+                    : "{$displayDose} g/L × {$liquorRatio} L/kg × {$weight} kg ÷ 1000";
+
+                return [
+                    'material_id' => $materialId,
+                    'name' => $material?->display_name ?? ($item['name'] ?? $item['material_name'] ?? 'Material'),
+                    'quantity' => round($quantity, 4),
+                    'unit' => 'kg',
+                    'lab_quantity' => $labQuantity,
+                    'lab_unit' => $definition['dose'] === 'pct' ? '% OWF' : 'g/L',
+                    'calculation' => $calculation,
+                ];
+            })->values();
+
+            return ['label' => $definition['label'], 'materials' => $rows->all()];
+        })->all();
+    }
+
+    protected function dyeingLiquorRatio(mixed $value): float
+    {
+        if (is_numeric($value) && (float) $value > 0) return (float) $value;
+        if (preg_match_all('/\d+(?:\.\d+)?/', (string) $value, $matches) && $matches[0]) {
+            return max(0.01, (float) end($matches[0]));
+        }
+
+        return 10.0;
+    }
+
+    /** Resolve the approved dye formula from the JO first, then its linked recipe history. */
+    protected function dyeingFormulaForOrder(?ManufacturingOrder $order, $salesOrder): ?array
+    {
+        $recipe = $salesOrder?->recipe;
+        $formula = $order?->dyeing_production_recipe
+            ?: $recipe?->dyeing_formula
+            ?: $recipe?->fabricSampleRequest?->formula
+            ?: $recipe?->sampleRequests?->sortByDesc('id')->first()?->formula;
+
+        if (! $formula && $salesOrder) {
+            $formula = LabTrial::where('status', 'passed')
+                ->whereHas('dip', fn ($query) => $query
+                    ->where('sales_order_id', $salesOrder->id)
+                    ->where('status', 'approved'))
+                ->latest('id')->first()?->formula;
+        }
+
+        if (is_string($formula)) {
+            $formula = json_decode($formula, true);
+        }
+
+        return is_array($formula) && $formula ? $formula : null;
+    }
+
+    protected function dyeingProductionWeight(?ManufacturingOrder $order, $salesOrder): float
+    {
+        $weight = (float) ($order?->total_quantity ?? 0);
+        if ($weight > 0) return $weight;
+
+        $weight = $order ? (float) $order->fabrics()->sum('weight') : 0;
+        if ($weight > 0) return $weight;
+
+        if ($salesOrder) {
+            $weight = (float) Fabric::where('sales_order_id', $salesOrder->id)->sum('weight');
+            if ($weight > 0) return $weight;
+        }
+
+        return (float) ($salesOrder?->quantity ?? 0);
+    }
+
+    protected function assignedProductionOrders(string $department): array
+    {
+        $user = $this->staff();
+        $role = $this->workspaceRole($user);
+        $stage = ManufacturingRoles::stageForRole($role);
+        if (! $stage && ! $user->is_manufacturing_supervisor) {
+            return [];
+        }
+
+        $processStage = [
+            'dyeing_bleaching' => 'bleaching',
+            'dyeing_pre_treatment' => 'pre_treatment',
+            'dyeing_color' => 'color',
+            'dyeing_treatment' => 'post_treatment',
+        ][$stage] ?? null;
+
+        $query = ManTaskAssignment::with([
+            'manufacturingOrder.salesOrder.client',
+            'manufacturingOrder.salesOrder.recipe.product',
+            'manufacturingOrder.salesOrder.recipe.fabricSampleRequest',
+            'manufacturingOrder.salesOrder.recipe.sampleRequests',
+            'manufacturingOrder.purchaseOrder.client',
+            'fabric.manufacturingOrder.salesOrder.client',
+            'fabric.manufacturingOrder.salesOrder.recipe.product',
+            'fabric.manufacturingOrder.salesOrder.recipe.fabricSampleRequest',
+            'fabric.manufacturingOrder.salesOrder.recipe.sampleRequests',
+            'fabric.salesOrder.client',
+            'fabric.salesOrder.recipe.product',
+            'fabric.salesOrder.recipe.fabricSampleRequest',
+            'fabric.salesOrder.recipe.sampleRequests',
+            'salesOrder.client',
+            'salesOrder.recipe.product',
+            'salesOrder.recipe.fabricSampleRequest',
+            'salesOrder.recipe.sampleRequests',
+        ])
+            ->where('department', $department)
+            ->active();
+        if ($user->is_manufacturing_supervisor) {
+            $staffIds = $role
+                ? \App\Models\Core\User::where('role', 'MAN')->where('position', 'staff')
+                    ->where('is_manufacturing_supervisor', false)->where('manufacturing_role', $role)->pluck('id')
+                : collect();
+            $query->whereIn('assigned_to', $staffIds);
+        } else {
+            $query->where('stage', $stage)
+                ->where('assigned_to', $user->id);
+        }
+
+        return $query->latest()->get()
+            ->map(function (ManTaskAssignment $assignment) use ($processStage) {
+                $order = $assignment->manufacturingOrder ?: $assignment->fabric?->manufacturingOrder;
+                $salesOrder = $assignment->salesOrder ?: $order?->salesOrder ?: $assignment->fabric?->salesOrder;
+                $manufacturingOrderId = $assignment->manufacturing_order_id ?: $order?->id;
+                $salesOrderId = $assignment->sales_order_id ?: $salesOrder?->id;
+                $fabricId = $assignment->fabric_id;
+                $productionWeight = $this->dyeingProductionWeight($order, $salesOrder);
+                $recipe = $salesOrder?->recipe;
+                $recipeMaterials = $recipe?->materials ?? [];
+                $materialRows = collect($recipeMaterials)->map(function ($quantity, $materialId) {
+                    return ['material_id' => $materialId, 'quantity' => $quantity];
+                })->values();
+                $materials = Material::whereIn('id', $materialRows->pluck('material_id')->all())->get()->keyBy('id');
+                $recipeMaterialData = $materialRows->map(function ($row) use ($materials) {
+                    $material = $materials->get($row['material_id']);
+                    $category = strtolower(preg_replace('/[^a-z]/', '', (string) $material?->category));
+                    $classification = match ($category) {
+                        'dye', 'dyestuff', 'dyestuffs' => 'Dye stuff',
+                        'basicchemical', 'basicchemicals' => 'Basic Chemicals',
+                        'auxillaryagent', 'auxiliaryagent', 'auxiliaryagents', 'agentauxiliary' => 'Agent Auxiliary',
+                        'posttreatment', 'posttreatmentagent' => 'Post Treatment',
+                        default => 'Other',
+                    };
+
+                    return [
+                        'material_id' => $row['material_id'],
+                        'name' => $material?->display_name ?? ('Material #'.$row['material_id']),
+                        'category' => $material?->category,
+                        'classification' => $classification,
+                        'quantity' => $row['quantity'],
+                        'unit' => $material?->unit,
+                    ];
+                });
+                $recipeGroups = collect(['Dye stuff', 'Basic Chemicals', 'Agent Auxiliary', 'Post Treatment', 'Other'])
+                    ->map(fn ($label) => [
+                        'label' => $label,
+                        'materials' => $recipeMaterialData->where('classification', $label)->values()->all(),
+                    ])->all();
+                $dyeingFormula = $this->dyeingFormulaForOrder($order, $salesOrder);
+                $formulaGroups = $this->dyeingFormulaGroups($dyeingFormula, $productionWeight);
+                if (is_array($dyeingFormula) && $dyeingFormula) {
+                    $formulaGroupCollection = collect($formulaGroups);
+                    $formulaMaterialIds = $formulaGroupCollection->flatMap(fn ($group) => collect($group['materials'])
+                        ->pluck('material_id'))->filter()->map(fn ($id) => (int) $id)->unique();
+                    $otherMaterials = $recipeMaterialData->reject(fn ($row) => $formulaMaterialIds->contains((int) $row['material_id']))->values();
+                    $recipeGroups = $formulaGroupCollection->all();
+                    if ($otherMaterials->isNotEmpty()) {
+                        $recipeGroups[] = ['label' => 'Other recipe materials', 'materials' => $otherMaterials->all()];
+                    }
+                }
+                $recipeData = ($recipe || (is_array($dyeingFormula) && $dyeingFormula)) ? [
+                    'id' => $recipe?->id,
+                    'product' => $recipe?->product?->name,
+                    'yarn_type' => $recipe?->yarn_type ?? $salesOrder?->yarn_type,
+                    'dye_color' => $recipe?->dye_color ?? $salesOrder?->color,
+                    'weave_design' => $recipe?->weave_design ?? $salesOrder?->design,
+                    'materials' => $recipeMaterialData->values()->all(),
+                    'material_groups' => $recipeGroups,
+                    'formula_groups' => $formulaGroups,
+                ] : null;
+                $stageItems = $processStage && ($manufacturingOrderId || $salesOrderId || $fabricId)
+                    ? DyeingBatchFabric::query()->where('current_stage', $processStage)
+                        ->when($assignment->fabric_id, fn ($query) => $query->where('fabric_id', $assignment->fabric_id))
+                        ->whereHas('fabric', function ($query) use ($manufacturingOrderId, $salesOrderId, $fabricId) {
+                            $query->where(function ($ids) use ($manufacturingOrderId, $salesOrderId, $fabricId) {
+                                if ($manufacturingOrderId) {
+                                    $ids->where('manufacturing_order_id', $manufacturingOrderId);
+                                }
+                                if ($salesOrderId) {
+                                    $method = $manufacturingOrderId ? 'orWhere' : 'where';
+                                    $ids->{$method}('sales_order_id', $salesOrderId);
+                                }
+                                if ($fabricId && ! $manufacturingOrderId && ! $salesOrderId) {
+                                    $ids->whereKey($fabricId);
+                                }
+                                if (! $manufacturingOrderId && ! $salesOrderId && ! $fabricId) {
+                                    $ids->whereRaw('1 = 0');
+                                }
+                            });
+                        })
+                    : collect();
+                $readyCount = $stageItems instanceof \Illuminate\Database\Eloquent\Builder
+                    ? (clone $stageItems)->where('status', 'active')->count()
+                    : 0;
+                $reviewCount = $stageItems instanceof \Illuminate\Database\Eloquent\Builder
+                    ? (clone $stageItems)->where('status', 'awaiting_review')->count()
+                    : 0;
+                $initialStage = $order?->dyeing_bleaching_required === true ? 'bleaching' : 'pre_treatment';
+                $unbatchedCount = 0;
+                if ($processStage === $initialStage && $order?->dyeing_bleaching_required !== null
+                    && ($manufacturingOrderId || $salesOrderId || $fabricId)) {
+                    $unbatchedQuery = Fabric::query()->whereIn('status', ['dyeing', 'bleaching'])
+                        ->whereDoesntHave('dyeingBatchFabric')
+                        ->when($assignment->fabric_id, fn ($query) => $query->whereKey($assignment->fabric_id))
+                        ->where(function ($ids) use ($manufacturingOrderId, $salesOrderId, $fabricId) {
+                            if ($manufacturingOrderId) {
+                                $ids->where('manufacturing_order_id', $manufacturingOrderId);
+                            }
+                            if ($salesOrderId) {
+                                $method = $manufacturingOrderId ? 'orWhere' : 'where';
+                                $ids->{$method}('sales_order_id', $salesOrderId);
+                            }
+                            if ($fabricId && ! $manufacturingOrderId && ! $salesOrderId) {
+                                $ids->whereKey($fabricId);
+                            }
+                        });
+                    $unbatchedCount = $unbatchedQuery->count();
+                }
+                $stageState = $readyCount > 0 ? 'ready'
+                    : ($reviewCount > 0 ? 'awaiting_review'
+                        : ($unbatchedCount > 0 ? 'awaiting_batch' : 'waiting_previous_stage'));
+
+                return [
+                    'assignment_id' => $assignment->id,
+                    'fabric_code' => $assignment->fabric?->code,
+                    'fabric_weight' => $assignment->fabric ? (float) $assignment->fabric->weight : null,
+                    'manufacturing_order_id' => $manufacturingOrderId,
+                    'sales_order_id' => $salesOrderId,
+                    'reference' => $salesOrder?->jo_number
+                        ?? $order?->purchaseOrder?->po_number
+                        ?? ($manufacturingOrderId ? 'MO-'.$manufacturingOrderId : ($assignment->fabric?->code ? 'Fabric '.$assignment->fabric->code : 'Unlinked Job Order')),
+                    'client' => $salesOrder?->client?->company_name ?? $order?->purchaseOrder?->client?->company_name,
+                    'job_order' => $salesOrder ? [
+                        'control_number' => $salesOrder->control_number,
+                        'color' => $salesOrder->color,
+                        'yarn_type' => $salesOrder->yarn_type,
+                        'design' => $salesOrder->design,
+                        'quantity' => (float) $salesOrder->quantity,
+                        'expected_ship_date' => $salesOrder->expected_ship_date?->toDateString(),
+                        'priority' => $salesOrder->priority,
+                        'status' => $salesOrder->status,
+                        'recipe_id' => $salesOrder->recipe_id,
+                    ] : null,
+                    'manufacturing_order' => $order ? [
+                        'id' => $order->id,
+                        'total_quantity' => (float) $order->total_quantity,
+                        'remaining_quantity' => (float) $order->remaining_quantity,
+                        'status' => $order->status,
+                        'notes' => $order->notes,
+                    ] : null,
+                    'recipe' => $recipeData,
+                    'stage' => $assignment->stage,
+                    'status' => $assignment->status,
+                    'notes' => $assignment->notes,
+                    'ready_fabric_count' => $readyCount,
+                    'review_fabric_count' => $reviewCount,
+                    'unbatched_fabric_count' => $unbatchedCount,
+                    'stage_state' => $stageState,
+                    'route' => $order?->dyeing_bleaching_required === null
+                        ? null
+                        : ($order->dyeing_bleaching_required
+                            ? 'Bleaching → Pre Treatment → Color → Post Treatment'
+                            : 'Pre Treatment → Color → Post Treatment'),
+                ];
+            })->values()->all();
+    }
+
+    /** Resolve the role workspace currently being viewed by a supervisor. */
+    protected function workspaceRole($user): ?string
+    {
+        if ($user?->is_manufacturing_supervisor) {
+            return ManufacturingPages::roleForRouteName(request()->route()?->getName());
+        }
+
+        return $user?->manufacturing_role;
     }
 
     /**
