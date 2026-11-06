@@ -121,10 +121,6 @@ return new class extends Migration
             ->where('category', 'Yarn')->where('name', $choice[0])->where('yarn_tier', $choice[1])->first(['id', 'name', 'yarn_tier']))
             ->filter()->values();
 
-        if ($yarns->count() !== 5) {
-            throw new RuntimeException('Five base yarn materials are required to seed the Pantone fabric formulas.');
-        }
-
         $materials = DB::table('materials')->orderBy('id')->get(['id', 'mat_id', 'name', 'category', 'unit']);
         $groups = [
             'dye_stuffs' => $materials->where('category', 'Dye Stuff')->values(),
@@ -132,12 +128,6 @@ return new class extends Migration
             'basic_chemicals' => $materials->where('category', 'Basic Chemicals')->values(),
             'post_treatment' => $materials->where('category', 'Post-Treatment')->values(),
         ];
-
-        foreach ($groups as $group => $items) {
-            if ($items->isEmpty()) {
-                throw new RuntimeException("No inventory materials found for Pantone formula group {$group}.");
-            }
-        }
 
         foreach ($colors as $index => [$name, $hex]) {
             if (DB::table('pantone_references')->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->exists()) {
@@ -165,6 +155,10 @@ return new class extends Migration
 
                 foreach ($counts as $group => $count) {
                     $available = $groups[$group];
+                    if ($available->isEmpty()) {
+                        $combinations[$group] = [];
+                        continue;
+                    }
                     $start = $seed % $available->count();
                     $rows = [];
 

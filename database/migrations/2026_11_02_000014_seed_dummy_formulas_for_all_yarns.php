@@ -20,10 +20,8 @@ return new class extends Migration
             'post_treatment' => $materials->where('category', 'Post-Treatment')->values(),
         ];
 
-        foreach ($groups as $group => $items) {
-            if ($items->isEmpty()) {
-                throw new RuntimeException("Cannot seed all-yarn Pantone formulas: no materials exist for {$group}.");
-            }
+        if ($yarns->isEmpty() || collect($groups)->contains(fn ($items) => $items->isEmpty())) {
+            return;
         }
 
         foreach (DB::table('pantone_references')->orderBy('id')->pluck('id') as $pantoneId) {

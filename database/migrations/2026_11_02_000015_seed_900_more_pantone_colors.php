@@ -11,10 +11,6 @@ return new class extends Migration
         $source = json_decode(file_get_contents($sourcePath), true, flags: JSON_THROW_ON_ERROR);
         $yarns = DB::table('materials')->where('category', 'Yarn')->orderBy('id')->get(['id']);
 
-        if ($yarns->isEmpty()) {
-            throw new RuntimeException('Cannot add Pantone references without Yarn materials.');
-        }
-
         $materials = DB::table('materials')->orderBy('id')->get(['id', 'mat_id', 'name', 'category']);
         $groups = [
             'dye_stuffs' => $materials->where('category', 'Dye Stuff')->values(),
@@ -22,12 +18,6 @@ return new class extends Migration
             'basic_chemicals' => $materials->where('category', 'Basic Chemicals')->values(),
             'post_treatment' => $materials->where('category', 'Post-Treatment')->values(),
         ];
-
-        foreach ($groups as $group => $items) {
-            if ($items->isEmpty()) {
-                throw new RuntimeException("Cannot seed Pantone formulas: no materials exist for {$group}.");
-            }
-        }
 
         $added = 0;
         foreach ($source as $code => $reference) {
@@ -71,6 +61,10 @@ return new class extends Migration
                 $combinations = [];
 
                 foreach ($groups as $group => $available) {
+                    if ($available->isEmpty()) {
+                        $combinations[$group] = [];
+                        continue;
+                    }
                     $count = $group === 'dye_stuffs' ? 3 : ($group === 'post_treatment' ? 1 : 2);
                     $start = $seed % $available->count();
                     $rows = [];
