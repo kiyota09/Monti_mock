@@ -95,25 +95,6 @@ Route::middleware('auth:web,client')->group(function () {
     // Forced password change (first login / after a recovery password).
     Route::post('password/force', [ForcedPasswordController::class, 'employee'])
         ->name('password.force');
-<<<<<<< HEAD
-
-    // ✅ Unified Logout Logic
-    // Logs out of EVERY guard (web, client, supplier, applicant, agency). Logging
-    // out a single guard leaves the other guards' remember-me cookies alive,
-    // so the next request silently re-authenticates and the user appears to
-    // still be logged in ("log out twice" bug).
-    Route::post('logout', function (Request $request) {
-        foreach (['web', 'client', 'supplier', 'applicant', 'agency'] as $guard) {
-            Auth::guard($guard)->logout();
-        }
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect('/');
-    })->name('logout');
-=======
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 });
 
 // Clear every guard even if auth middleware no longer recognizes the current one.

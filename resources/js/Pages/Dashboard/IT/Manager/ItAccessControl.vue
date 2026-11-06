@@ -32,11 +32,8 @@ const showNotifications = ref(false);
 const commandButton = ref(null);
 const commandMenuStyle = ref({});
 const selectedRequestId = ref(null);
-<<<<<<< HEAD
-=======
 const confirmPosition = ref(null);
 const showModuleConfirm = ref(false);
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 
 const statusForm = useForm({ user_id: '', action: '', suspended_until: '' });
 const positionForm = useForm({ user_id: '', position: '', role: '', supervisor_department: '' });
@@ -347,9 +344,6 @@ const savePosition = () => {
     positionForm.clearErrors();
     positionForm.post(route('it.access-control.position'), {
         preserveScroll: true,
-<<<<<<< HEAD
-        onSuccess: () => { managing.value = null; },
-=======
         onSuccess: () => { managing.value = null; confirmPosition.value = null; },
     });
 };
@@ -370,7 +364,6 @@ const confirmSaveModules = () => {
     showModuleConfirm.value = false;
     modulesForm.post(route('it.access-control.modules'), {
         preserveScroll: true,
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     });
 };
 
@@ -1015,9 +1008,6 @@ onUnmounted(() => {
         </div>
         </Teleport>
 
-<<<<<<< HEAD
-
-=======
         <!-- Final confirmation modal for position commands (teleported with
              the drawer so it always renders above it, fully in view) -->
         <Teleport to="body">
@@ -1063,6 +1053,5 @@ onUnmounted(() => {
             </div>
         </div>
         </Teleport>
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     </AuthenticatedLayout>
 </template>

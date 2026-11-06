@@ -109,7 +109,16 @@ function formatAddedAt(value: string | null): { date: string; time: string } | n
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse min-w-[800px]">
+                <table class="w-full table-fixed text-left border-collapse min-w-[1050px]">
+                    <colgroup>
+                        <col class="w-[22%]" />
+                        <col class="w-[13%]" />
+                        <col class="w-[15%]" />
+                        <col class="w-[12%]" />
+                        <col class="w-[17%]" />
+                        <col class="w-[12%]" />
+                        <col class="w-[9%]" />
+                    </colgroup>
                     <thead>
                         <tr class="bg-slate-800 text-[10px] font-bold uppercase tracking-wider text-white/90">
                             <th class="py-3 px-4">Name</th>
@@ -123,24 +132,24 @@ function formatAddedAt(value: string | null): { date: string; time: string } | n
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                         <tr v-for="w in workers" :key="w.id" class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                            <td class="py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">
+                            <td class="align-top py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">
                                 {{ w.name }}
-                                <p v-if="w.status === 'For Correction' && w.pending_note" class="mt-0.5 text-[11px] font-medium text-orange-600 dark:text-orange-400">HR: {{ w.pending_note }}</p>
+                                <p v-if="w.status === 'For Correction' && w.pending_note" class="mt-1 max-w-full whitespace-normal break-words rounded-lg bg-orange-50 px-2 py-1.5 text-[11px] font-medium leading-relaxed text-orange-700 dark:bg-orange-900/20 dark:text-orange-300">HR: {{ w.pending_note }}</p>
                             </td>
-                            <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{{ w.department || '—' }}</td>
-                            <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{{ w.position_skill || '—' }}</td>
-                            <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{{ w.current_assignment || '—' }}</td>
-                            <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
+                            <td class="align-top py-3 px-4 text-xs whitespace-normal break-words text-slate-500 dark:text-slate-400">{{ w.department || '—' }}</td>
+                            <td class="align-top py-3 px-4 text-xs whitespace-normal break-words text-slate-500 dark:text-slate-400">{{ w.position_skill || '—' }}</td>
+                            <td class="align-top py-3 px-4 text-xs whitespace-normal break-words text-slate-500 dark:text-slate-400">{{ w.current_assignment || '—' }}</td>
+                            <td class="align-top py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
                                 <template v-if="formatAddedAt(w.created_at)">
                                     <p>{{ formatAddedAt(w.created_at)?.date }}</p>
                                     <p class="mt-0.5">{{ formatAddedAt(w.created_at)?.time }}</p>
                                 </template>
                                 <span v-else>—</span>
                             </td>
-                            <td class="py-3 px-4 text-center">
+                            <td class="align-top py-3 px-4 text-center">
                                 <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', statusBadge(w.status)]">{{ w.status }}</span>
                             </td>
-                            <td class="py-3 px-4">
+                            <td class="align-top py-3 px-4">
                                 <div class="flex items-center justify-end gap-1">
                                     <Link :href="route('agency.workers.edit', w.id)" class="p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg" title="Edit">
                                         <Pencil class="w-4 h-4" />

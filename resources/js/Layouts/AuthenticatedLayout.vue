@@ -161,7 +161,7 @@ const reloadPage = () => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-50 dark:bg-zinc-950">
+    <div class="flex h-[100dvh] overflow-hidden bg-gray-50 dark:bg-zinc-950">
         <!-- Error Overlay -->
         <div v-if="hasError" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-800">
@@ -187,31 +187,17 @@ const reloadPage = () => {
         <Sidebar v-if="!hasError" />
         <MobileSidebar v-if="!hasError" />
         <div :class="sidebarCollapsed ? 'md:pl-0' : 'md:pl-64'"
-            class="pt-16 md:pt-0 flex flex-col flex-1 h-[100dvh] overflow-hidden transition-all duration-300">
+            class="pt-16 md:pt-0 flex min-h-0 min-w-0 flex-1 flex-col h-full overflow-hidden transition-all duration-300">
             <TopBar v-if="!hasError" />
-<<<<<<< HEAD
-            <main class="flex-1 min-h-0 overflow-hidden bg-gray-50 dark:bg-zinc-900">
-                <div class="h-full w-full">
-                    <!-- Location status – fixed floating badge just below the
-                         top nav, upper-left. Takes no layout space. -->
-                    <div :class="sidebarCollapsed ? 'md:left-4' : 'md:left-64'"
-                        class="pointer-events-none fixed top-[4.5rem] left-4 z-30 flex items-center gap-2">
-                        <div v-if="locationReady" class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 flex items-center gap-2 shadow-sm">
-                            <span class="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                            Secure Zone Verified
-                        </div>
-                        <div v-else class="text-[10px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full animate-pulse border border-blue-100 shadow-sm">
-=======
-            <main>
-                <div>
+            <main class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div class="flex min-h-0 flex-1 flex-col">
                     <!-- Location status – always visible -->
-                    <div class="sticky top-36 z-10 mb-4 flex items-center gap-4 md:top-20">
+                    <div class="z-10 mb-4 flex shrink-0 items-center gap-4">
                         <div v-if="locationReady" class="text-[10px] text-emerald-500 font-bold uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 flex items-center gap-2">
                             <span class="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
                             Secure Zone Verified
                         </div>
                         <div v-else role="status" class="text-[10px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full animate-pulse border border-blue-100">
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                             Searching Perimeter...
                         </div>
                     </div>
@@ -221,7 +207,7 @@ const reloadPage = () => {
                     <div :class="isCrmPage
                         ? 'pt-9'
                         : 'px-3 pb-3 pt-9 sm:px-4 sm:pb-4 sm:pt-9 lg:px-5 lg:pb-5 lg:pt-9'"
-                        class="app-viewport h-full w-full overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950">
+                        class="app-viewport min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950">
                         <slot />
                     </div>
                 </div>
@@ -237,30 +223,3 @@ const reloadPage = () => {
         <ForcePasswordChangeModal />
     </div>
 </template>
-<<<<<<< HEAD
-
-<style>
-/* Workspace sizing: every module page fills the viewport below the top nav.
-   Page wrappers often clamp themselves with min-h-screen / max-w-* / mx-auto,
-   so neutralise those at the outer two levels only. Only centered wrappers
-   (mx-auto) are widened, and fixed/dialog elements (modals) are excluded so
-   they keep their designed width and are never stretched. */
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
-    min-height: 100% !important;
-}
-/* IT and supplier pages render sibling sections in the layout slot. Let each
-   section follow its content instead of assigning every sibling a viewport height. */
-html[data-module="it"] .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]),
-html[data-module="supplier"] .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]) {
-    min-height: 0 !important;
-}
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
-    > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"] {
-    max-width: none !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-}
-</style>
-=======
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073

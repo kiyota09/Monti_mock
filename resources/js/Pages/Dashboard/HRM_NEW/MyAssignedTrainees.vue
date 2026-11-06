@@ -740,10 +740,10 @@ const finalDoneScore = ref(null);
             </div>
 
             <!-- Detail modal -->
-            <div v-if="selected" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="selected" class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
                 <div class="absolute inset-0 bg-slate-900/50" @click="closeDetail"></div>
-                <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-                    <div class="p-5 border-b border-slate-200 flex items-start justify-between sticky top-0 bg-white">
+                <div class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                    <div class="sticky top-0 z-10 flex shrink-0 items-start justify-between border-b border-slate-200 bg-white p-5">
                         <div>
                             <h3 class="font-black text-slate-900">Trainee Training Details</h3>
                             <p class="text-[11px] text-slate-500">{{ selected.name }} · {{ selected.employee_id }}</p>
@@ -751,7 +751,7 @@ const finalDoneScore = ref(null);
                         <button @click="closeDetail" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400"><X class="w-4 h-4" /></button>
                     </div>
 
-                    <div class="p-5 space-y-6">
+                    <div class="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-5">
                         <!-- Employee Information -->
                         <section class="bg-slate-50 border border-slate-200 rounded-xl p-4">
                             <h4 class="text-xs font-black uppercase text-slate-500 mb-2">Employee Information</h4>

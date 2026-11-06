@@ -1266,25 +1266,6 @@ const confirmComplete = () => {
         toast.error('Complete all required applicant documents first.');
         return;
     }
-<<<<<<< HEAD
-    dialog.fire({
-        title: 'Complete Onboarding?',
-        text: 'This marks the onboarding as completed. You can then create the employee record.',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, Complete',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#059669',
-        customClass: { popup: 'rounded-[2rem]' },
-    }).then((result) => {
-        if (result.isConfirmed) {
-            router.post(route('hrm.onboarding.complete', props.onboarding.id), {}, {
-                preserveScroll: true,
-                onSuccess: () => toast.success('Onboarding completed.'),
-                onError: () => toast.error('Failed to complete onboarding.'),
-            });
-        }
-=======
     activeModal.value = 'complete-confirm';
 };
 
@@ -1294,7 +1275,6 @@ const submitComplete = () => {
         preserveScroll: true,
         onSuccess: () => toast.success('Onboarding completed.'),
         onError: () => toast.error('Failed to complete onboarding.'),
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     });
 };
 
@@ -1535,20 +1515,6 @@ const confirmCreateEmployee = () => {
         toast.error('The onboarding must be completed before creating the employee record.');
         return;
     }
-<<<<<<< HEAD
-    dialog.fire({
-        title: 'Create Employee Record?',
-        html: 'This will generate an employee record from the verified applicant data, update the application to <b>Hired</b>, and finalize onboarding.',
-        icon: 'info',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, Create Employee',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#2563eb',
-        customClass: { popup: 'rounded-[2rem]' },
-    }).then((result) => {
-        // After confirmation, show the full CREATE EMPLOYEE conversion modal.
-        if (result.isConfirmed) openHireModal();
-=======
     activeModal.value = 'create-employee-confirm';
 };
 
@@ -1572,7 +1538,6 @@ const proceedToAgencyReferral = () => {
     }
     const referralUrl = route('hrm.recruitment.agency-referrals.index', {
         applicant_job_application_id: props.agencyReferralApplicationId,
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     });
     closeModal();
     router.visit(referralUrl);

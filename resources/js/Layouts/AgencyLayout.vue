@@ -51,17 +51,11 @@ const reloadPage = () => {
         <!-- Normal Layout -->
         <Sidebar v-if="!hasError" />
         <MobileSidebar v-if="!hasError" />
-        <div class="md:pl-64 pt-16 md:pt-0 flex flex-col flex-1 h-[100dvh] overflow-hidden transition-all duration-300">
+        <div class="md:pl-64 pt-16 md:pt-0 flex min-h-0 min-w-0 flex-col flex-1 h-[100dvh] overflow-hidden transition-all duration-300">
             <TopBar v-if="!hasError" />
-<<<<<<< HEAD
-            <main class="flex-1 min-h-0 overflow-hidden bg-gray-50 dark:bg-zinc-900">
-                <div class="h-full w-full">
-                    <div class="app-viewport h-full w-full overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-5 bg-slate-50 dark:bg-zinc-950">
-=======
-            <main>
-                <div>
+            <main class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+                <div class="min-h-full">
                     <div class="agency-motion bg-slate-50 dark:bg-zinc-900 rounded-2xl p-4 sm:p-6 min-h-[400px]">
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                         <slot />
                     </div>
                 </div>
@@ -73,21 +67,6 @@ const reloadPage = () => {
     </div>
 </template>
 
-<<<<<<< HEAD
-<style>
-/* Agency workspace: pages fill the viewport and scroll internally. Wrapper
-   min-height / centered max-width clamps are neutralised at the outer two
-   levels only, and modals are excluded so they keep their designed width. */
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]) {
-    min-height: 100% !important;
-}
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
-    > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"] {
-    max-width: none !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-=======
 <style scoped>
 .agency-motion :deep(button),
 .agency-motion :deep(a),
@@ -133,6 +112,5 @@ const reloadPage = () => {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 }
 </style>

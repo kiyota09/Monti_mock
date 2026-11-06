@@ -415,6 +415,7 @@ const reviewSections = computed(() => [
     { title: 'Work and Deployment', fields: [
         ['Department / assignment', form.proposed_department], ['Position / skill', form.position_skill],
         ['Years of experience', form.years_experience], ['Availability date', form.availability],
+        ['Employment arrangement', form.employment_arrangement],
         ['Daily rate', form.daily_rate === '' ? '' : `₱${form.daily_rate}`],
     ] },
     { title: 'Government ID', fields: [
@@ -828,6 +829,18 @@ const errCls = 'mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-ro
                         <p :class="hintCls">Choose a date at least 3 days from today.</p>
                         <p v-if="legacyAvailability" class="mt-1 text-[11px] text-slate-400">Previous value: {{ legacyAvailability }} — pick a calendar date to update it.</p>
                         <p v-if="err('availability') || availabilityError" :class="errCls">{{ err('availability') || availabilityError }}</p>
+                    </div>
+                    <div>
+                        <label :class="labelCls">Employment arrangement</label>
+                        <select v-model="form.employment_arrangement" :class="fieldCls('employment_arrangement')">
+                            <option value="">Select arrangement...</option>
+                            <option>Full-time</option>
+                            <option>Part-time</option>
+                            <option>Contractual</option>
+                            <option>Project-based</option>
+                            <option>Seasonal</option>
+                        </select>
+                        <p v-if="err('employment_arrangement')" :class="errCls">{{ err('employment_arrangement') }}</p>
                     </div>
                     <div>
                         <label :class="labelCls">Daily rate (₱)</label>

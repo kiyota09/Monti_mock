@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
 import { usePage, Link, router, useForm } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import axios from 'axios';
@@ -105,73 +105,17 @@ const showLogoutConfirm = ref(false);
 const showLogoutSuccess = ref(false);
 const logoutDestination = ref('/');
 const loggingOut = ref(false);
-<<<<<<< HEAD
-const logoutForm = ref(null);
-const logoutRetryStorageKey = 'monti.logout.csrf-retry';
-const logoutRetriedStorageKey = 'monti.logout.csrf-retried';
-const readLogoutStorage = (key) => {
-    try { return sessionStorage.getItem(key); } catch { return null; }
-};
-const writeLogoutStorage = (key, value) => {
-    try { sessionStorage.setItem(key, value); } catch { /* native form remains available */ }
-};
-const clearLogoutStorage = (key) => {
-    try { sessionStorage.removeItem(key); } catch { /* storage may be disabled */ }
-};
-=======
 const csrfToken = ref('');
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 
 const refreshCsrfToken = () => {
     csrfToken.value = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || csrfToken.value;
 };
 
-<<<<<<< HEAD
-// Logout via fetch (instead of a raw native submit) so a stale CSRF token /
-// expired CSRF token (HTTP 419) reloads once and automatically retries with
-// the refreshed token, avoiding a second manual click. Falls back to the
-// native form submit if the request itself cannot be made (offline…).
-const submitLogout = async () => {
-    if (loggingOut.value) return;
-    loggingOut.value = true;
-    refreshCsrfToken();
-    try {
-        const res = await fetch(logoutHref.value, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': csrfToken.value, 'Accept': 'text/html' },
-            credentials: 'same-origin',
-            redirect: 'follow',
-        });
-        if (res.ok) {
-            clearLogoutStorage(logoutRetryStorageKey);
-            clearLogoutStorage(logoutRetriedStorageKey);
-            showLogoutConfirm.value = false;
-            logoutDestination.value = res.url || '/';
-            showLogoutSuccess.value = true;
-            return;
-        }
-        if (res.status === 419) {
-            if (readLogoutStorage(logoutRetriedStorageKey) === logoutHref.value) {
-                clearLogoutStorage(logoutRetriedStorageKey);
-                throw new Error('The refreshed logout request was rejected.');
-            }
-            writeLogoutStorage(logoutRetryStorageKey, logoutHref.value);
-            window.location.reload();
-            return;
-        }
-        throw new Error(`Logout failed with status ${res.status}`);
-    } catch {
-        // Last resort: plain native submit (previous behavior).
-        logoutForm.value?.submit();
-    } finally {
-        loggingOut.value = false;
-=======
 // Let the browser submit directly so Laravel's redirect is handled normally.
 const prepareLogout = (event) => {
     if (loggingOut.value) {
         event.preventDefault();
         return;
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     }
     refreshCsrfToken();
     const tokenInput = event.currentTarget.querySelector('input[name="_token"]');
@@ -751,12 +695,6 @@ const createThread = async () => {
 let msgTimer = null;
 onMounted(() => {
     csrfToken.value = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    if (readLogoutStorage(logoutRetryStorageKey) === logoutHref.value) {
-        clearLogoutStorage(logoutRetryStorageKey);
-        writeLogoutStorage(logoutRetriedStorageKey, logoutHref.value);
-        showLogoutConfirm.value = true;
-        nextTick(() => submitLogout());
-    }
     initTheme();
     syncModuleScope();
     document.addEventListener('click', closeSettingsOnOutsideClick);
@@ -1413,14 +1351,6 @@ onMounted(() => {
                      renders from any tab — it previously only existed while
                      the messenger panel was open) -->
                 <Teleport to="body">
-<<<<<<< HEAD
-                    <div v-if="showLogoutConfirm" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showLogoutConfirm = false">
-                        <div class="fabric-logout-confirm w-full max-w-xs overflow-hidden rounded-3xl bg-white text-center shadow-2xl dark:bg-zinc-900">
-                            <FabricModalArtwork kind="info" label="Blue fabric swatches" />
-                            <div class="px-6 pb-2 pt-4">
-                                <h4 class="text-base font-black text-gray-900 dark:text-white">Log out?</h4>
-                                <p class="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-=======
                     <div v-show="showLogoutConfirm" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showLogoutConfirm = false">
                         <div class="w-full max-w-xs overflow-hidden rounded-3xl bg-white text-center shadow-2xl dark:bg-zinc-900">
                             <div class="px-6 pb-2 pt-6">
@@ -1429,7 +1359,6 @@ onMounted(() => {
                                 </div>
                                 <h4 class="mt-3 text-base font-black text-gray-900 dark:text-white">Log out?</h4>
                                 <p class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                                     Are you sure you want to sign out of your account{{ displayName ? `, ${displayName}` : '' }}?
                                 </p>
                             </div>

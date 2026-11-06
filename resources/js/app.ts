@@ -98,7 +98,7 @@ router.on('navigate', (event) => {
 axios.interceptors.request.use((config) => {
     (config as any).__feedbackTimer = window.setTimeout(() => {
         setSlow(true);
-    }, 6000);
+    }, 10000);
     return config;
 });
 axios.interceptors.response.use((response) => {

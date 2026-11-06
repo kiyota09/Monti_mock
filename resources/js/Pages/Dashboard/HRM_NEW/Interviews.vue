@@ -2087,11 +2087,7 @@ const confirmNoShow = () => {
 };
 
 const markNoShow = async (interview) => {
-<<<<<<< HEAD
-    if (!await confirmModal(`Mark ${interview.candidate_name} as No Show?`)) return;
-=======
     if (!interview) return;
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     isSubmitting.value = true;
     try {
         await axios.post(`/hrm/recruitment/interviews/${interview.id}/no-show`);
@@ -2424,12 +2420,9 @@ select {
         transform: rotate(360deg);
     }
 }
-<<<<<<< HEAD
-=======
 
 .bg-grid-slate-100 {
     background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
     background-size: 24px 24px;
 }
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 </style>
