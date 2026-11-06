@@ -14,6 +14,7 @@ use App\Models\Hrm\HrmJobPosting;
 use App\Models\Hrm\HrmOnboarding;
 use App\Models\Hrm\HrmPosition;
 use App\Services\Applicants\ApplicantProfileService;
+use App\Services\Hrm\ApplicantApplicationHoldService;
 use App\Support\NotifiesApplicant;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
@@ -137,6 +138,7 @@ class ApplicantController extends Controller
         $this->log($applicant, $from, 'Interview', $request->user()->id, 'Accepted → ' . $data['module']);
         ApplicantJobApplication::where('applicant_id', $applicant->id)
             ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+            ->notOnHold()
             ->update(['status' => 'Interview']);
         NotifiesApplicant::push($applicant, 'interview', 'Application Accepted', 'Your application was accepted and routed for interview.', ['position' => $applicant->position_applied, 'status' => 'Interview']);
 
@@ -166,6 +168,7 @@ class ApplicantController extends Controller
         $this->log($applicant, $from, 'Interview', $request->user()->id, 'Interview scheduled');
         ApplicantJobApplication::where('applicant_id', $applicant->id)
             ->whereNotIn('status', ['Withdrawn', 'Rejected', 'Hired'])
+            ->notOnHold()
             ->update(['status' => 'Interview']);
         NotifiesApplicant::push($applicant, 'interview', 'Interview Scheduled', 'Your ' . ($interview->type ?? '') . ' interview has been scheduled.', [
             'position' => $applicant->position_applied,
@@ -190,7 +193,9 @@ class ApplicantController extends Controller
         $this->log($applicant, $from, 'Rejected', $request->user()->id, $data['reason']);
         ApplicantJobApplication::where('applicant_id', $applicant->id)
             ->whereNotIn('status', ['Withdrawn', 'Hired'])
+            ->notOnHold()
             ->update(['status' => 'Rejected']);
+        ApplicantApplicationHoldService::reconcileApplicantHolds((int) $applicant->id);
         NotifiesApplicant::push($applicant, 'rejection', 'Application Update', 'Thank you for your interest. A decision has been made on your application.', ['position' => $applicant->position_applied, 'status' => 'Rejected']);
 
         return back()->with('message', 'Applicant rejected and archived.');
@@ -222,7 +227,9 @@ class ApplicantController extends Controller
         $this->log($applicant, $from, 'Hired', $request->user()->id, 'Advanced to onboarding #' . $onboarding->id);
         ApplicantJobApplication::where('applicant_id', $applicant->id)
             ->whereNotIn('status', ['Withdrawn', 'Rejected'])
+            ->notOnHold()
             ->update(['status' => 'Hired']);
+        ApplicantApplicationHoldService::closeAllHeldForApplicant((int) $applicant->id);
         if ($applicant->job_posting_id) {
             HrmJobPosting::whereKey($applicant->job_posting_id)->increment('filled_vacancies');
         }

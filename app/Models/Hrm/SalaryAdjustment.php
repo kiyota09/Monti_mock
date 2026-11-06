@@ -25,8 +25,7 @@ class SalaryAdjustment extends Model
     ];
 
     public const TYPES = [
-        'Merit Increase', 'Annual Review', 'Promotion',
-        'Probation Pass', 'Allowance Change', 'Market Adjustment',
+        'Merit Increase', 'Annual Review', 'Promotion', 'Allowance Change',
     ];
 
     protected $fillable = [

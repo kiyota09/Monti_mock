@@ -15,6 +15,7 @@ type SheetRow = {
 
 const props = defineProps<{
     departments: Array<string>;
+    agencies: Array<string>;
     department: string;
     date: string;
     sheet: Array<SheetRow>;
@@ -28,6 +29,7 @@ watch(() => (page.props as any).flash, (flash: any) => {
 }, { immediate: true, deep: true });
 
 const selectedDepartment = ref(props.department || '');
+const selectedAgency = ref('');
 const pickedDate = ref(props.date);
 const search = ref('');
 
@@ -37,12 +39,16 @@ function reload() {
 watch([selectedDepartment, pickedDate], () => reload());
 
 const rows = computed(() => props.sheet);
+const agencies = computed(() => props.agencies || []);
 
 // Search starts from the department filter bar — narrows displayed workers.
 const filteredRows = computed(() => {
     const q = search.value.trim().toLowerCase();
-    if (!q) return rows.value;
-    return rows.value.filter((r) => ((r.worker_name || '') + ' ' + (r.position_skill || '')).toLowerCase().includes(q));
+    return rows.value.filter((r) => {
+        const matchesSearch = !q || ((r.worker_name || '') + ' ' + (r.position_skill || '')).toLowerCase().includes(q);
+        const matchesAgency = !selectedAgency.value || r.agency === selectedAgency.value;
+        return matchesSearch && matchesAgency;
+    });
 });
 
 const fmtTime = (t: string | null) => {
@@ -134,6 +140,13 @@ function changeStatus(r: SheetRow) {
                     <option v-for="d in departments" :key="d" :value="d">{{ d }}</option>
                 </select>
             </div>
+            <div class="flex-1">
+                <label class="block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Agency (filter)</label>
+                <select v-model="selectedAgency" class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200">
+                    <option value="">All agencies</option>
+                    <option v-for="agency in agencies" :key="agency" :value="agency">{{ agency }}</option>
+                </select>
+            </div>
             <div>
                 <label class="block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Date</label>
                 <input v-model="pickedDate" type="date" class="px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200" />
@@ -162,7 +175,6 @@ function changeStatus(r: SheetRow) {
                     <thead>
                         <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                             <th class="py-3 px-4">Worker</th>
-                            <th class="py-3 px-4">Worker ID</th>
                             <th class="py-3 px-4">Agency</th>
                             <th class="py-3 px-4">Department</th>
                             <th class="py-3 px-4">Job Position</th>
@@ -177,7 +189,6 @@ function changeStatus(r: SheetRow) {
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                         <tr v-for="r in filteredRows" :key="r.worker_id" class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
                             <td class="py-2 px-4 text-sm font-bold text-slate-900 dark:text-white">{{ r.worker_name }}</td>
-                            <td class="py-2 px-4 text-xs font-mono text-slate-500 dark:text-slate-400">{{ r.worker_code || '—' }}</td>
                             <td class="py-2 px-4 text-xs text-slate-500 dark:text-slate-400">{{ r.agency || '—' }}</td>
                             <td class="py-2 px-4 text-xs text-slate-500 dark:text-slate-400">{{ r.department || '—' }}</td>
                             <td class="py-2 px-4 text-xs text-slate-500 dark:text-slate-400">{{ r.position_skill || '—' }}</td>

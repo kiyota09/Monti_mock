@@ -240,25 +240,24 @@ const startLockoutCountdown = () => {
 // OTP INPUT HANDLING
 // ============================================
 const handleOtpInput = (index, event) => {
-    const value = event.target.value;
-
-    if (value && !/^\d$/.test(value)) {
-        event.target.value = '';
-        return;
+    const inputValue = event.target.value.replace(/\D/g, '');
+    // Mobile keyboards and password managers may place the whole code in one box.
+    if (inputValue.length > 1) {
+        const digits = inputValue.slice(0, 6).split('');
+        otpDigits.value = Array.from({ length: 6 }, (_, i) => digits[i] || '');
+        event.target.value = otpDigits.value[index];
+        nextTick(() => inputRefs[Math.min(index + digits.length, 5)]?.focus());
+    } else {
+        const value = inputValue.slice(0, 1);
+        otpDigits.value[index] = value;
+        event.target.value = value;
+        if (value && index < 5) nextTick(() => inputRefs[index + 1]?.focus());
     }
-
-    otpDigits.value[index] = value;
 
     if (otpError.value) {
         otpError.value = '';
     }
 
-    if (value && index < 5) {
-        const nextInput = inputRefs[index + 1];
-        if (nextInput) {
-            nextInput.focus();
-        }
-    }
 };
 
 const handleOtpKeydown = (index, event) => {
@@ -268,6 +267,8 @@ const handleOtpKeydown = (index, event) => {
             prevInput.focus();
         }
     }
+    if (event.key === 'ArrowLeft' && index > 0) inputRefs[index - 1]?.focus();
+    if (event.key === 'ArrowRight' && index < 5) inputRefs[index + 1]?.focus();
 };
 
 const handleOtpPaste = (event) => {
@@ -488,12 +489,21 @@ watch(() => props.is_locked, (newVal) => {
         subtitle="Enter the 6-digit verification code we sent to your email address."
         badge="Applicant Portal"
         accent="sky"
+        compact
     >
         <Head title="Verify Email | Monti Textile" />
 
-        <p class="text-center text-white font-semibold text-sm -mt-4 mb-6">{{ email }}</p>
+        <div class="mb-5 -mt-3 flex items-center gap-3 rounded-2xl border border-sky-200/15 bg-gradient-to-br from-sky-400/10 to-white/[0.03] px-4 py-3 shadow-lg shadow-black/10">
+            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-sky-300/40 bg-sky-300 text-slate-950 shadow-md shadow-sky-950/30">
+                <Mail class="h-5 w-5 stroke-[2.5]" />
+            </span>
+            <div class="min-w-0">
+                <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Verification sent to</p>
+                <p class="mt-1 break-all text-sm font-semibold text-white">{{ email }}</p>
+            </div>
+        </div>
 
-        <div class="space-y-6">
+        <div class="space-y-4">
             <!-- PROGRESSIVE LOCKOUT WARNING (ported from Auth-1) -->
             <div v-if="isLocked"
                 class="bg-red-500/20 border border-red-500/30 rounded-xl p-4 text-center">
@@ -524,23 +534,25 @@ watch(() => props.is_locked, (newVal) => {
             </div>
 
             <!-- OTP Input -->
-            <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-3 text-center">
-                    Enter 6-digit verification code
+            <div class="rounded-2xl border border-white/10 bg-black/10 px-3 py-4 sm:px-5">
+                <label class="mb-3 block text-center">
+                    <span class="block text-sm font-semibold text-white">Enter your verification code</span>
+                    <span class="mt-1 block text-xs text-slate-400">Use the 6-digit code from your email</span>
                 </label>
-                <div class="flex justify-center gap-2 sm:gap-3">
+                <div class="flex justify-center gap-1.5 min-[390px]:gap-2.5 sm:gap-3" role="group" aria-label="6-digit verification code">
                     <input
-                        v-for="(digit, index) in 6"
+                        v-for="(digit, index) in otpDigits"
                         :key="index"
                         :ref="el => { if (el) inputRefs[index] = el }"
                         type="text"
-                        maxlength="1"
                         inputmode="numeric"
-                        v-model="otpDigits[index]"
                         @input="handleOtpInput(index, $event)"
                         @keydown="handleOtpKeydown(index, $event)"
                         @paste="handleOtpPaste"
-                        class="otp-input w-10 h-12 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-mono tracking-wider rounded-lg border-2 transition-all duration-200 bg-white/10 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-transparent focus:bg-white/20 outline-none"
+                        :value="digit"
+                        :aria-label="`Digit ${index + 1} of 6`"
+                        autocomplete="one-time-code"
+                        class="otp-input h-12 w-9 rounded-xl border border-white/15 bg-slate-950/50 text-center text-xl font-semibold !text-white caret-white shadow-inner outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-sky-300 focus:bg-sky-300/10 focus:ring-4 focus:ring-sky-400/20 min-[390px]:w-10 sm:h-14 sm:w-12 sm:text-2xl"
                         :class="{
                             'border-white/30': !otpError,
                             'border-red-500 ring-2 ring-red-500/50': otpError,
@@ -559,14 +571,12 @@ watch(() => props.is_locked, (newVal) => {
             </div>
 
             <!-- Resend -->
-            <div class="text-center">
-                <p class="text-sm text-slate-400">
-                    Didn't receive the code?
-                </p>
+            <div class="flex flex-col items-center justify-center gap-1 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-3 text-center sm:flex-row sm:gap-2">
+                <p class="text-xs text-slate-400">Didn't receive the code?</p>
                 <button
                     @click="resendOtp"
                     :disabled="isResending || countdown > 0 || isLocked"
-                    class="text-sm text-sky-300 hover:text-sky-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium mt-1"
+                    class="text-sm font-semibold text-sky-300 transition-colors hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     <span v-if="isLocked" class="inline-flex items-center gap-1.5">
                         <Lock class="w-4 h-4" /> Locked ({{ formattedLockoutTime }})
@@ -581,7 +591,7 @@ watch(() => props.is_locked, (newVal) => {
             <PrimaryButton
                 @click="verifyOtp"
                 :disabled="otpDigits.join('').length !== 6 || isVerifying || isLocked || showSuccessModal"
-                class="auth-btn w-full py-3 text-sm"
+                class="auth-btn relative z-10 inline-flex w-full items-center justify-center border border-black/15 border-t-2 border-t-black/25 !bg-[var(--auth-btn)] py-3 text-center text-sm !shadow-none ring-1 ring-inset ring-white/10 transition-colors duration-200 hover:!bg-[var(--auth-btn)] active:!bg-[var(--auth-btn)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200"
                 :class="{ 'opacity-60 cursor-wait': isVerifying || isLocked }"
             >
                 <span v-if="isLocked" class="inline-flex items-center gap-1.5"><Lock class="w-4 h-4" /> Locked ({{ formattedLockoutTime }})</span>
@@ -590,7 +600,7 @@ watch(() => props.is_locked, (newVal) => {
                 <span v-else>Verify Email</span>
             </PrimaryButton>
 
-            <div class="text-center pt-4 border-t border-white/10">
+            <div class="text-center pt-3 border-t border-white/10">
                 <Link :href="route('applicant.register')" class="text-sm text-slate-400 hover:text-white transition-colors">
                     ← Back to Registration
                 </Link>
@@ -651,7 +661,7 @@ input:-webkit-autofill:active {
 }
 
 .otp-input:focus {
-    transform: scale(1.05);
+    transform: translateY(-2px);
 }
 
 input[type="text"]::-webkit-outer-spin-button,

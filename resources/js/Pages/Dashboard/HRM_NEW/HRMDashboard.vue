@@ -539,6 +539,8 @@
   </AuthenticatedLayout>
 </template>
 
+
+
 <script setup>
 import { ref, computed } from "vue";
 import { Link } from '@inertiajs/vue3';

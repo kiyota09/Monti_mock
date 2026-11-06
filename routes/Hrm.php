@@ -22,11 +22,13 @@ use App\Http\Controllers\Hrm\Workforce\DepartmentController as NewDepartmentCont
 use App\Http\Controllers\Hrm\Workforce\PositionController as NewPositionController;
 use App\Http\Controllers\Hrm\Workforce\EmploymentTypeController as NewEmploymentTypeController;
 use App\Http\Controllers\Hrm\Workforce\EmployeeDirectoryController as NewEmployeeDirectoryController;
+use App\Http\Controllers\Hrm\Workforce\PerformanceManagementController;
 use App\Http\Controllers\Hrm\Workforce\LeaveManagementController as NewLeaveManagementController;
 use App\Http\Controllers\Hrm\Workforce\AttendanceController as NewAttendanceController;
 use App\Http\Controllers\Hrm\Workforce\MyAttendanceController as NewMyAttendanceController;
 use App\Http\Controllers\Hrm\Recruitment\JobPostingController as NewJobPostingController;
 use App\Http\Controllers\Hrm\Recruitment\ApplicationController as NewApplicationController;
+use App\Http\Controllers\Hrm\Recruitment\AgencyReferralController as NewAgencyReferralController;
 use App\Http\Controllers\Hrm\Recruitment\InterviewController as NewInterviewController;
 use App\Http\Controllers\Hrm\Onboarding\StatusController as NewOnboardingStatusController;
 use App\Http\Controllers\Hrm\Onboarding\TemplateController as NewOnboardingTemplateController;
@@ -278,22 +280,25 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
 
     // My Assigned Trainees (reporting-manager workspace, strictly manager_id == me)
     Route::get('/my-assigned-trainees', [AssignedTraineesController::class, 'index'])
-        ->middleware('page.permission:trainee,view')
+        ->middleware('page.permission:my_assigned_trainees,view')
         ->name('assigned-trainees.index');
     Route::get('/my-assigned-trainees/{id}', [AssignedTraineesController::class, 'show'])
-        ->middleware('page.permission:trainee,view')
+        ->middleware('page.permission:my_assigned_trainees,view')
         ->name('assigned-trainees.show');
     Route::post('/my-assigned-trainees/{id}/weekly', [AssignedTraineesController::class, 'weekly'])
-        ->middleware('page.permission:trainee,edit')
+        ->middleware('page.permission:my_assigned_trainees,edit')
         ->name('assigned-trainees.weekly');
     Route::post('/my-assigned-trainees/{id}/final', [AssignedTraineesController::class, 'final'])
-        ->middleware('page.permission:trainee,edit')
+        ->middleware('page.permission:my_assigned_trainees,edit')
         ->name('assigned-trainees.final');
+    Route::post('/my-assigned-trainees/{id}/probation-evaluation', [AssignedTraineesController::class, 'saveProbationEvaluation'])
+        ->middleware('page.permission:my_assigned_trainees,edit')
+        ->name('assigned-trainees.probation-evaluation');
     Route::post('/my-assigned-trainees/{id}/clock', [AssignedTraineesController::class, 'clock'])
-        ->middleware('page.permission:trainee,edit')
+        ->middleware('page.permission:my_assigned_trainees,edit')
         ->name('assigned-trainees.clock');
     Route::post('/my-assigned-trainees/{id}/observation', [AssignedTraineesController::class, 'observation'])
-        ->middleware('page.permission:trainee,edit')
+        ->middleware('page.permission:my_assigned_trainees,edit')
         ->name('assigned-trainees.observation');
 
     // Bare onboarding URL (e.g. top-bar breadcrumb) → current onboarding page.
@@ -475,6 +480,41 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
         Route::delete('/departments/{department}', [NewDepartmentController::class, 'destroy'])
             ->middleware('page.permission:employee,edit')->name('departments.destroy');
 
+        Route::get('/performance-kpi', [PerformanceManagementController::class, 'index'])
+            ->middleware('page.permission:employee,view')->name('performance-kpi.index');
+        Route::get('/performance-kpi/templates', [PerformanceManagementController::class, 'templates'])
+            ->middleware('page.permission:kpi_templates,view')->name('performance-kpi.templates.index');
+        Route::get('/kpi-evaluation', [PerformanceManagementController::class, 'kpiEvaluations'])
+            ->middleware('page.permission:employee,view')->name('performance-kpi.records.index');
+        Route::post('/performance-kpi/evaluations', [PerformanceManagementController::class, 'store'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.store');
+        Route::put('/performance-kpi/evaluations/{evaluation}', [PerformanceManagementController::class, 'update'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.update');
+        Route::post('/performance-kpi/evaluations/{evaluation}/cancel', [PerformanceManagementController::class, 'cancel'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.cancel');
+        Route::post('/performance-kpi/evaluations/{evaluation}/manager-review', [PerformanceManagementController::class, 'managerReview'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.manager-review');
+        Route::post('/performance-kpi/evaluations/{evaluation}/hr-review', [PerformanceManagementController::class, 'hrReview'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.hr-review');
+        Route::post('/performance-kpi/evaluations/{evaluation}/acknowledge', [PerformanceManagementController::class, 'acknowledge'])
+            ->middleware('page.permission:employee,view')->name('performance-kpi.evaluations.acknowledge');
+        Route::post('/performance-kpi/evaluations/{evaluation}/evidence', [PerformanceManagementController::class, 'uploadEvidence'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.evidence');
+        Route::get('/performance-kpi/evaluations/{evaluation}/evidence/{evidence}', [PerformanceManagementController::class, 'downloadEvidence'])
+            ->middleware('page.permission:employee,view')->name('performance-kpi.evaluations.evidence.download');
+        Route::post('/performance-kpi/templates', [PerformanceManagementController::class, 'saveTemplate'])
+            ->middleware('page.permission:kpi_templates,edit')->name('performance-kpi.templates.store');
+        Route::post('/performance-kpi/templates/{template}/action', [PerformanceManagementController::class, 'templateAction'])
+            ->middleware('page.permission:kpi_templates,edit')->name('performance-kpi.templates.action');
+        Route::post('/performance-kpi/classifications', [PerformanceManagementController::class, 'saveClassifications'])
+            ->middleware('page.permission:kpi_templates,edit')->name('performance-kpi.classifications.store');
+        Route::post('/performance-kpi/plans', [PerformanceManagementController::class, 'storePlan'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.plans.store');
+        Route::put('/performance-kpi/plans/{pip}', [PerformanceManagementController::class, 'updatePlan'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.plans.update');
+        Route::get('/performance-kpi/export', [PerformanceManagementController::class, 'export'])
+            ->middleware('page.permission:employee,view')->name('performance-kpi.export');
+
         Route::get('/positions', [NewPositionController::class, 'index'])
             ->middleware('page.permission:employee,view')->name('positions.index');
         Route::post('/positions', [NewPositionController::class, 'store'])
@@ -632,6 +672,25 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
         Route::get('/applications/export', [NewApplicationController::class, 'export'])
             ->middleware('page.permission:application,view')->name('applications.export');
 
+        Route::get('/agency-referrals', [NewAgencyReferralController::class, 'index'])
+            ->middleware('module.access:HRM')->name('agency-referrals.index');
+        Route::get('/agency-referrals/eligible-applicants', [NewAgencyReferralController::class, 'eligibleApplicants'])
+            ->middleware('module.access:HRM')->name('agency-referrals.eligible');
+        Route::post('/agency-referrals', [NewAgencyReferralController::class, 'store'])
+            ->middleware('module.access:HRM')->name('agency-referrals.store');
+        Route::get('/agency-referrals/{referral}', [NewAgencyReferralController::class, 'show'])
+            ->middleware('module.access:HRM')->name('agency-referrals.show');
+        Route::post('/agency-referrals/{referral}/send', [NewAgencyReferralController::class, 'send'])
+            ->middleware('module.access:HRM')->name('agency-referrals.send');
+        Route::post('/agency-referrals/{referral}/request-update', [NewAgencyReferralController::class, 'requestUpdate'])
+            ->middleware('module.access:HRM')->name('agency-referrals.request-update');
+        Route::post('/agency-referrals/{referral}/agency-response', [NewAgencyReferralController::class, 'agencyResponse'])
+            ->middleware('module.access:HRM')->name('agency-referrals.agency-response');
+        Route::post('/agency-referrals/{referral}/monti-decision', [NewAgencyReferralController::class, 'montiDecision'])
+            ->middleware('module.access:HRM')->name('agency-referrals.monti-decision');
+        Route::post('/agency-referrals/{referral}/withdraw', [NewAgencyReferralController::class, 'withdraw'])
+            ->middleware('module.access:HRM')->name('agency-referrals.withdraw');
+
         Route::get('/interviews', [NewInterviewController::class, 'index'])
             ->middleware('page.permission:interview,view')->name('interviews.index');
         Route::get('/interviews/list', [NewInterviewController::class, 'list'])
@@ -711,9 +770,13 @@ Route::prefix('hrm')->middleware(['auth', 'verified'])->group(function () {
     })->middleware('page.permission:application,view');
     Route::get('/recruitment/applications/hired', [NewApplicationController::class, 'hired'])
         ->middleware('page.permission:application,view');
+    Route::get('/recruitment/applications/{application}/screening-page', [NewApplicationController::class, 'screeningPage'])
+        ->middleware('page.permission:application,edit');
     Route::get('/recruitment/applications/{application}/profile', [NewApplicationController::class, 'profile'])
         ->middleware('page.permission:application,view');
     Route::post('/recruitment/applications/{application}/start-screening', [NewApplicationController::class, 'startScreening'])
+        ->middleware('page.permission:application,edit');
+    Route::post('/recruitment/applications/{application}/screening-draft', [NewApplicationController::class, 'saveScreeningDraft'])
         ->middleware('page.permission:application,edit');
     Route::post('/recruitment/applications/{application}/screening', [NewApplicationController::class, 'screening'])
         ->middleware('page.permission:application,edit');

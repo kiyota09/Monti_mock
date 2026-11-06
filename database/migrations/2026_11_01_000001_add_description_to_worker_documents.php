@@ -8,15 +8,15 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('payrolls', function (Blueprint $table) {
-            $table->unique(['employee_id', 'period'], 'payrolls_employee_period_unique');
+        Schema::table('worker_documents', function (Blueprint $table) {
+            $table->text('description')->nullable()->after('label');
         });
     }
 
     public function down(): void
     {
-        Schema::table('payrolls', function (Blueprint $table) {
-            $table->dropUnique('payrolls_employee_period_unique');
+        Schema::table('worker_documents', function (Blueprint $table) {
+            $table->dropColumn('description');
         });
     }
 };

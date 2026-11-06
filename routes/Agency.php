@@ -6,9 +6,10 @@ use App\Http\Controllers\Auth\PasswordRecoveryController;
 use App\Http\Controllers\Agency\AgencyDashboardController;
 use App\Http\Controllers\Agency\AttendancePortalController;
 use App\Http\Controllers\Agency\BillingPortalController;
-// use App\Http\Controllers\Agency\NotificationController;
+use App\Http\Controllers\Agency\NotificationController;
 use App\Http\Controllers\Agency\PasswordController;
 use App\Http\Controllers\Agency\RequestPortalController;
+use App\Http\Controllers\Agency\ReferredApplicantsController;
 use App\Http\Controllers\Agency\WorkerPortalController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +30,14 @@ Route::post('agency/logout', [AgencyAuthController::class, 'logout'])
 
 Route::middleware('auth:agency')->prefix('agency')->name('agency.')->group(function () {
     Route::get('/dashboard', [AgencyDashboardController::class, 'index'])->name('dashboard');
+
+    // Applicant referrals sent by Monti HR (agency scoped in the controller).
+    Route::get('/referrals', [ReferredApplicantsController::class, 'index'])->name('referrals.index');
+    Route::get('/referrals/{referral}', [ReferredApplicantsController::class, 'show'])->name('referrals.show');
+    Route::post('/referrals/{referral}/review', [ReferredApplicantsController::class, 'startReview'])->name('referrals.review');
+    Route::post('/referrals/{referral}/respond', [ReferredApplicantsController::class, 'respond'])->name('referrals.respond');
+    Route::get('/referrals/{referral}/documents/{document}', [ReferredApplicantsController::class, 'downloadDocument'])
+        ->name('referrals.documents.download');
 
     // Forced password change at first login.
     Route::get('/password', [PasswordController::class, 'edit'])->name('password.edit');
@@ -55,12 +64,14 @@ Route::middleware('auth:agency')->prefix('agency')->name('agency.')->group(funct
     Route::post('/attendance/{attendance}/confirm', [AttendancePortalController::class, 'confirm'])->name('attendance.confirm');
     Route::post('/attendance/{attendance}/dispute', [AttendancePortalController::class, 'dispute'])->name('attendance.dispute');
 
-    // Billing (Issued/Paid only, read-only + exports).
+    // Billing (Issued/Paid only, read-only + exports) + create invoice.
     Route::get('/billing', [BillingPortalController::class, 'index'])->name('billing.index');
+    Route::get('/billing/create', [BillingPortalController::class, 'create'])->name('billing.create');
+    Route::post('/billing', [BillingPortalController::class, 'store'])->name('billing.store');
     Route::get('/billing/{statement}', [BillingPortalController::class, 'show'])->name('billing.show');
     Route::get('/billing/{statement}/export-pdf', [BillingPortalController::class, 'exportPdf'])->name('billing.export-pdf');
     Route::get('/billing/{statement}/export-excel', [BillingPortalController::class, 'exportExcel'])->name('billing.export-excel');
 
     // Notifications (bell next to Settings — HR activity for this agency).
-    // Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
 });

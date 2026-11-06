@@ -10,6 +10,13 @@ import GlobalFeedback from '@/Components/system/GlobalFeedback.vue';
 import { notify, setSlow } from '@/lib/feedback';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const pages = import.meta.glob<DefineComponent>('./Pages/**/*.vue');
+
+const resolveInertiaPage = (name: string) => {
+    const requested = `./Pages/${name}.vue`;
+    const matched = Object.keys(pages).find((path) => path.toLowerCase() === requested.toLowerCase()) || requested;
+    return resolvePageComponent(matched, pages);
+};
 
 // ─── GLOBAL JAVASCRIPT ERROR HANDLERS ──────────────────────────────────
 // Catches errors that happen outside Vue (e.g., in setTimeout, fetch, etc.)
@@ -143,11 +150,7 @@ window.onunhandledrejection = function (event) {
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
-    resolve: (name) =>
-        resolvePageComponent(
-            `./Pages/${name}.vue`,
-            import.meta.glob<DefineComponent>('./Pages/**/*.vue'),
-        ),
+    resolve: (name) => resolveInertiaPage(name),
     setup({ el, App, props, plugin }) {
         realtimeEnabled = pageHasAuthenticatedUser(props.initialPage?.props as Record<string, any> | undefined);
         acceptRealtimeVersion((props.initialPage?.props as Record<string, any> | undefined)?.realtime_version);

@@ -127,6 +127,7 @@ const navItems = computed(() => {
         }
         return [
             { label: 'Dashboard', href: agencyRoute('agency.dashboard', '/agency/dashboard'), icon: LayoutDashboard },
+            { label: 'Referred Applicants', href: agencyRoute('agency.referrals.index', '/agency/referrals'), icon: FileText },
             { label: 'My Workers', href: agencyRoute('agency.workers.index', '/agency/workers'), icon: UserCog2 },
             { label: 'Manpower Requests', href: agencyRoute('agency.requests.index', '/agency/requests'), icon: ClipboardList },
             { label: 'Attendance', href: agencyRoute('agency.attendance.index', '/agency/attendance'), icon: Clock },

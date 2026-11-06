@@ -69,7 +69,7 @@ class ManDashboardController extends Controller
             return Redirect::route($routes[$role]);
         }
 
-        return Inertia::render('Dashboard/MAN/Employee/Index');
+        return Inertia::render('Dashboard/MAN/Employee/index');
     }
 
     /**

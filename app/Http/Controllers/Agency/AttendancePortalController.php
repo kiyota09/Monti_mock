@@ -61,7 +61,9 @@ class AttendancePortalController extends Controller
         // comes from their live attendance_logs (employee clock); saved
         // attendance rows fill in workers without a login (e.g. released).
         $date = is_string($date) ? $date : today()->toDateString();
-        $workerIds = Worker::where('agency_id', $agencyId)->pluck('id')->all();
+        $workerIds = Worker::where('agency_id', $agencyId)
+            ->where('status', Worker::STATUS_DEPLOYED)
+            ->pluck('id')->all();
 
         $assignments = ManpowerAssignment::with('request:id,department,shift,status')
             ->whereNull('released_at')
@@ -71,8 +73,10 @@ class AttendancePortalController extends Controller
             ->whereIn('worker_id', $workerIds)
             ->get()->keyBy('worker_id');
 
-        $workerUsers = Worker::where('agency_id', $agencyId)->whereNotNull('email')
-            ->get(['id', 'name', 'email', 'position_skill', 'proposed_department', 'created_at']);
+        $workerUsers = Worker::where('agency_id', $agencyId)
+            ->where('status', Worker::STATUS_DEPLOYED)
+            ->whereNotNull('email')
+            ->get(['id', 'name', 'email', 'position_skill', 'proposed_department', 'availability', 'created_at']);
 
         // Worker -> user login: same personal_email, tie-broken by name.
         $candidateUsers = User::whereNotNull('personal_email')->get(['id', 'name', 'personal_email', 'join_date', 'created_at'])
@@ -86,9 +90,12 @@ class AttendancePortalController extends Controller
                 ?: ($candidates->count() === 1 ? $candidates->first() : null);
             if ($match) {
                 $workerIdToUserId[$w->id] = $match->id;
-                $deploymentStartByWorker[$w->id] = $asDate($match->join_date) ?: $asDate($match->created_at);
+                $accountStart = $asDate($match->join_date) ?: $asDate($match->created_at);
+                $startDates = array_filter([$asDate($w->availability), $accountStart]);
+                $deploymentStartByWorker[$w->id] = $startDates ? max($startDates) : null;
             } else {
-                $deploymentStartByWorker[$w->id] = $asDate($w->created_at);
+                $startDates = array_filter([$asDate($w->availability), $asDate($w->created_at)]);
+                $deploymentStartByWorker[$w->id] = $startDates ? max($startDates) : null;
             }
         }
         $logsByUser = $workerIdToUserId
@@ -113,10 +120,13 @@ class AttendancePortalController extends Controller
             }
             $seen[$w->id] = true;
             $start = $deploymentStartByWorker[$w->id] ?? null;
+            $asg = $assignments->get($w->id);
+            $assignmentStart = $asDate($asg?->assigned_at);
+            $eligibleStarts = array_filter([$start, $assignmentStart]);
+            $start = $eligibleStarts ? max($eligibleStarts) : null;
             if ($start && $date < $start) {
                 continue;
             }
-            $asg = $assignments->get($w->id);
             $departmentOf = $asg?->request?->department ?: ($w->proposed_department ?: null);
             if ($department !== '' && (string) $departmentOf !== $department) {
                 continue;

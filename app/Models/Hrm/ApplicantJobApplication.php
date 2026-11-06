@@ -2,8 +2,11 @@
 
 namespace App\Models\Hrm;
 
+use App\Services\Hrm\ApplicantApplicationHoldService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ApplicantJobApplication extends Model
 {
@@ -12,8 +15,26 @@ class ApplicantJobApplication extends Model
         'applicant_id', 'job_posting_id', 'status', 'cover_letter',
         'notice_period', 'availability_date', 'resume_path',
         'failed_stage', 'failed_at', 'rejection_reason',
+        'is_on_hold', 'previous_status', 'hold_reason', 'held_by_application_id',
     ];
-    protected $casts = ['availability_date' => 'date', 'failed_at' => 'datetime'];
+    protected $casts = [
+        'availability_date' => 'date',
+        'failed_at' => 'datetime',
+        'is_on_hold' => 'boolean',
+    ];
+
+    protected static function booted(): void
+    {
+        static::created(function (self $application) {
+            ApplicantApplicationHoldService::afterCreated($application);
+        });
+
+        static::updated(function (self $application) {
+            if ($application->wasChanged('status')) {
+                ApplicantApplicationHoldService::afterStatusChange($application);
+            }
+        });
+    }
 
     public function applicant(): BelongsTo
     {
@@ -23,6 +44,35 @@ class ApplicantJobApplication extends Model
     public function jobPosting(): BelongsTo
     {
         return $this->belongsTo(HrmJobPosting::class, 'job_posting_id');
+    }
+
+    public function heldByApplication(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'held_by_application_id');
+    }
+
+    public function holdings(): HasMany
+    {
+        return $this->hasMany(self::class, 'held_by_application_id');
+    }
+
+    public function scopeNotOnHold(Builder $query): Builder
+    {
+        return ApplicantApplicationHoldService::withoutHolds($query);
+    }
+
+    public function scopeOnHold(Builder $query): Builder
+    {
+        if (! ApplicantApplicationHoldService::columnsReady()) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('is_on_hold', true);
+    }
+
+    public function isOnHold(): bool
+    {
+        return (bool) $this->is_on_hold;
     }
 
     public function getIsWithdrawnAttribute(): bool

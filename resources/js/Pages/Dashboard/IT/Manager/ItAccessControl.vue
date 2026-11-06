@@ -32,6 +32,11 @@ const showNotifications = ref(false);
 const commandButton = ref(null);
 const commandMenuStyle = ref({});
 const selectedRequestId = ref(null);
+<<<<<<< HEAD
+=======
+const confirmPosition = ref(null);
+const showModuleConfirm = ref(false);
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 
 const statusForm = useForm({ user_id: '', action: '', suspended_until: '' });
 const positionForm = useForm({ user_id: '', position: '', role: '', supervisor_department: '' });
@@ -216,6 +221,7 @@ const openManage = (user) => {
     managing.value = user;
     selectedRequestId.value = null;
     activeTab.value = 'account';
+    showModuleConfirm.value = false;
     suspendUntil.value = '';
     statusForm.user_id = user.id;
     positionForm.user_id = user.id;
@@ -341,7 +347,30 @@ const savePosition = () => {
     positionForm.clearErrors();
     positionForm.post(route('it.access-control.position'), {
         preserveScroll: true,
+<<<<<<< HEAD
         onSuccess: () => { managing.value = null; },
+=======
+        onSuccess: () => { managing.value = null; confirmPosition.value = null; },
+    });
+};
+
+const rejectSelected = () => {
+    if (!selectedRequestId.value) return;
+    router.post(route('it.access-control.requests.reject', selectedRequestId.value), {}, {
+        preserveScroll: true,
+        onSuccess: () => { managing.value = null; confirmPosition.value = null; selectedRequestId.value = null; },
+    });
+};
+
+const saveModules = () => {
+    showModuleConfirm.value = true;
+};
+
+const confirmSaveModules = () => {
+    showModuleConfirm.value = false;
+    modulesForm.post(route('it.access-control.modules'), {
+        preserveScroll: true,
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     });
 };
 
@@ -986,6 +1015,54 @@ onUnmounted(() => {
         </div>
         </Teleport>
 
+<<<<<<< HEAD
 
+=======
+        <!-- Final confirmation modal for position commands (teleported with
+             the drawer so it always renders above it, fully in view) -->
+        <Teleport to="body">
+        <div v-if="confirmPosition && managing" class="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" @click.self="confirmPosition = null">
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-md p-6 my-auto">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                        <CheckCircle2 class="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase">Confirm {{ confirmPosition.action }}</h3>
+                        <p class="text-[11px] text-slate-400">Executive command #{{ confirmPosition.id }} · by {{ confirmPosition.requested_by_name }}</p>
+                    </div>
+                </div>
+                <p class="text-sm text-slate-600 dark:text-slate-300 mt-4">
+                    Apply <strong>{{ confirmPosition.action }}</strong> for <strong>{{ managing.name }}</strong>:
+                    {{ requestCurrentLabel(confirmPosition) }} → <strong>{{ positionForm.position }}</strong><span v-if="positionForm.position === 'supervisor' && positionForm.supervisor_department"> ({{ positionForm.supervisor_department }})</span>
+                    <span v-if="positionForm.role && positionForm.position !== 'supervisor'"> ({{ positionForm.role }})</span>?
+                </p>
+                <p v-if="confirmPosition.reason" class="text-xs text-slate-400 mt-2">Reason: “{{ confirmPosition.reason }}”</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
+                    <button @click="confirmPosition = null" class="py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200">Cancel</button>
+                    <button @click="savePosition" :disabled="positionForm.processing" class="inline-flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+                        <Ban v-if="false" /> Confirm &amp; Apply
+                    </button>
+                </div>
+            </div>
+        </div>
+        </Teleport>
+
+        <Teleport to="body">
+        <div v-if="showModuleConfirm && managing" class="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="module-grants-confirm-title" @click.self="showModuleConfirm = false">
+            <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30"><CheckCircle2 class="h-5 w-5 text-blue-600" /></div>
+                    <div><h3 id="module-grants-confirm-title" class="text-sm font-black uppercase text-slate-900 dark:text-white">Confirm module grants</h3><p class="text-xs text-slate-500">{{ managing.name }}</p></div>
+                </div>
+                <p class="mt-4 text-sm text-slate-600 dark:text-slate-300">Save the selected modules for this account? Newly granted modules start with every page disabled. Removing a module revokes its page access.</p>
+                <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button @click="showModuleConfirm = false" class="rounded-xl bg-slate-100 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">Cancel</button>
+                    <button @click="confirmSaveModules" :disabled="modulesForm.processing" class="rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">{{ modulesForm.processing ? 'Saving…' : 'Confirm & Save' }}</button>
+                </div>
+            </div>
+        </div>
+        </Teleport>
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     </AuthenticatedLayout>
 </template>

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Core\User;
 use App\Models\Hrm\HrmDepartment;
 use App\Models\Hrm\HrmPosition;
+use App\Support\ManufacturingRoles;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,11 @@ class PositionController extends Controller
 
     public function index(Request $request)
     {
-        $q = HrmPosition::with(['department', 'reportsTo']);
+        $q = HrmPosition::with([
+            'department',
+            'reportsTo',
+            'holders:id,name,profile_photo_path,hrm_position_id',
+        ]);
         if ($s = $request->get('search')) {
             $q->where(fn ($w) => $w->where('name', 'like', "%{$s}%")->orWhere('code', 'like', "%{$s}%"));
         }
@@ -30,20 +35,27 @@ class PositionController extends Controller
             $q->whereNull('archived_at');
         }
 
-        $positions = $q->latest()->paginate(12)->withQueryString();
+        $positions = $q->latest()->get();
         // Attach filled counts (employees holding each org position)
-        $positions->getCollection()->transform(function ($p) {
-            $p->filled_positions = User::where('hrm_position_id', $p->id)->count();
+        $positions->transform(function ($p) {
+            $holders = $p->holders;
+            $p->filled_positions = $holders->count();
+            $p->users = $holders->map(fn ($employee) => [
+                'id' => $employee->id,
+                'name' => $employee->name,
+                'photo_url' => $employee->profile_photo_path ? asset('storage/' . $employee->profile_photo_path) : null,
+            ])->values();
+            $p->unsetRelation('holders');
             $p->department_name = $p->department?->name;
             $p->reports_to_name = $p->reportsTo?->name;
             return $p;
         });
 
         return Inertia::render('Dashboard/HRM_NEW/Position', [
-            'positionsData' => $positions,
+            'positionsData' => ['data' => $positions],
             'filters' => $request->only(['search', 'department', 'status']),
             'filterOptions' => [
-                'departments' => HrmDepartment::select('id', 'name')->get(),
+                'departments' => HrmDepartment::select('id', 'name', 'category')->get(),
                 'managementLevels' => ['Executive', 'Managerial', 'Supervisory', 'Individual Contributor', 'Trainee'],
             ],
             'metrics' => [
@@ -53,8 +65,9 @@ class PositionController extends Controller
                 'totalFilled' => (int) User::whereNotNull('hrm_position_id')->count(),
                 'totalVacant' => max(0, (int) HrmPosition::sum('approved_headcount') - (int) User::whereNotNull('hrm_position_id')->count()),
             ],
-            'departments' => HrmDepartment::select('id', 'name')->get(),
+            'departments' => HrmDepartment::select('id', 'name', 'category')->get(),
             'allPositions' => HrmPosition::select('id', 'name', 'department_id')->get(),
+            'manufacturingRoles' => collect(ManufacturingRoles::LABELS)->map(fn ($label, $slug) => ['value' => $slug, 'label' => $label])->values(),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
     }
@@ -81,6 +94,8 @@ class PositionController extends Controller
         'status' => 'nullable|in:active,inactive',
     ]);
 
+        $this->validateManufacturingPosition($request, $data);
+
         if (empty($data['code'])) {
             $data['code'] = self::nextCode();
         }
@@ -90,6 +105,19 @@ class PositionController extends Controller
         return back()->with('success', 'Position created.');
     }
 
+    private function validateManufacturingPosition(Request $request, array $data, ?HrmPosition $position = null): void
+    {
+        $departmentId = $data['department_id'] ?? $position?->department_id;
+        $department = $departmentId ? HrmDepartment::find($departmentId) : null;
+
+        if (strtoupper((string) $department?->category) !== 'MAN') {
+            return;
+        }
+
+        $request->validate([
+            'name' => ['required', \Illuminate\Validation\Rule::in(array_values(ManufacturingRoles::LABELS))],
+        ]);
+    }
     protected static function nextCode(): string
     {
         $next = (int) (HrmPosition::max('id') ?? 0) + 1;
@@ -124,6 +152,7 @@ class PositionController extends Controller
         if (!empty($data['reports_to_id']) && (int) $data['reports_to_id'] === (int) $position->id) {
             $data['reports_to_id'] = null;
         }
+        $this->validateManufacturingPosition($request, $data, $position);
         $position->update($data);
 
         return back()->with('success', 'Position updated.');
@@ -162,7 +191,9 @@ class PositionController extends Controller
     {
         // Blocked while employees hold the position (ported from super_monti).
         if ($position->holders()->count() > 0) {
-            return back()->with('error', 'Cannot delete position with active employees.');
+            return back()->withErrors([
+                'delete' => 'Cannot delete this position while employees are assigned to it. Reassign those employees first.',
+            ]);
         }
         $position->delete();
 
@@ -273,9 +304,13 @@ class PositionController extends Controller
 
     public function employees(HrmPosition $position)
     {
+        $employees = User::where('hrm_position_id', $position->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'employee_id']);
+
         return response()->json([
-            'employees' => User::where('hrm_position_id', $position->id)->select('id', 'name', 'email')->paginate(10),
-            'total' => User::where('hrm_position_id', $position->id)->count(),
+            'employees' => $employees,
+            'total' => $employees->count(),
         ]);
     }
 }

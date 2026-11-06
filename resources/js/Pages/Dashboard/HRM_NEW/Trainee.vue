@@ -106,7 +106,7 @@ const guessRole = (deptId, fallback = '') => {
     return '';
 };
 const formatDate = (date) => date ? new Date(date).toLocaleDateString() : 'N/A';
-const formatGrade = (g) => (g === null || g === undefined) ? '—' : `${Number(g).toFixed(2)}%`;
+const formatGrade = (g) => (g === null || g === undefined) ? '0.00%' : `${Number(g).toFixed(2)}%`;
 
 const evalBadge = (status) => {
     switch (status) {
@@ -253,7 +253,7 @@ const dFmtDate = (d) => {
     return isNaN(dt) ? '—' : dt.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 const dWeekOptions = computed(() => {
-    const n = Math.max(1, Math.min(52, Number(trainingDetail.value?.duration_weeks) || 8));
+    const n = Math.max(1, Math.min(4, Number(trainingDetail.value?.duration_weeks) || 4));
     return Array.from({ length: n }, (_, i) => i + 1);
 });
 const dWeekStart = (week) => {
@@ -416,7 +416,7 @@ const dWeekOverdue = (week) => {
 const dEvaluatedCount = computed(() => (trainingDetail.value?.weekly_evaluations || []).length);
 const dScoreText = (v) => (v === null || v === undefined ? '—' : `${v} / 5`);
 const dWeeklyRecLabel = (r) => ({ continue: 'Continue Training', needs_improvement: 'Needs Improvement', ready_final: 'Ready for Final Evaluation', reassigned: 'Reassigned', early_termination: 'Early Termination' }[r] || '—');
-const dFinalRecLabel = (r) => ({ regularization: 'Recommend for Regularization', needs_improvement: 'Needs Improvement', reassigned: 'Reassigned', extend: 'Extend Training', do_not_recommend: 'Do Not Recommend' }[r] || '—');
+const dFinalRecLabel = (r) => ({ regularization: 'Recommend for Regularization', needs_improvement: 'Needs Improvement', reassigned: 'Reassigned', extend: 'Extend Training', passed_training: 'Passed Training', do_not_recommend: 'Do Not Recommend' }[r] || '—');
 const dFinalCriteria = computed(() => [
     { key: 'attendance', label: 'Attendance', weight: '20%', score: trainingDetail.value?.final_breakdown?.attendance ?? null },
     { key: 'knowledge', label: 'Knowledge', weight: '25%', score: trainingDetail.value?.final_breakdown?.knowledge ?? null },
@@ -455,7 +455,9 @@ const hrReviewBadge = (s) => ({
     'Reassigned': 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
     'Pending': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
 }[s] || 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300');
-const hrDecisionLabel = (d) => ({ approve_regularization: 'Approve Regularization', extend_training: 'Extend Training', do_not_regularize: 'Do Not Regularize', approve_reassignment: 'Approve Reassignment', reject_reassignment: 'Reject Reassignment' }[d] || d || '—');
+const hrDecisionLabel = (d) => ({ approve_regularization: 'Approve Regularization', worker_training_passed: 'Worker Training Passed', worker_do_not_pass: 'Do Not Pass', extend_training: 'Extend Training', do_not_regularize: 'Do Not Regularize', approve_reassignment: 'Approve Reassignment', reject_reassignment: 'Reject Reassignment' }[d] || d || '—');
+const isWorkerTrainingReview = computed(() => trainingDetail.value?.person_type === 'Worker');
+const hrDecisionNeedsNotes = computed(() => !['approve_regularization', 'worker_training_passed'].includes(hrDecision.value));
 const hrReviewerName = computed(() => hrReview.value?.reviewer_name || user.value?.name || '—');
 
 const reloadDetail = async () => {
@@ -476,7 +478,7 @@ const submitHrReview = (skipConfirm = false) => {
     if (!trainingDetail.value || !canEdit.value || hrSaving.value) return;
     if (!hrDecision.value) { triggerToast('Select an HR decision first.'); return; }
     if (hrDecision.value === 'approve_regularization' && !skipConfirm) { showApproveConfirm.value = true; return; }
-    if (hrDecision.value === 'do_not_regularize' && !hrNotes.value.trim()) { triggerToast('HR notes are required for this decision.'); return; }
+    if (['do_not_regularize', 'worker_do_not_pass'].includes(hrDecision.value) && !hrNotes.value.trim()) { triggerToast('HR notes are required for this decision.'); return; }
     if (hrDecision.value === 'approve_regularization' && !hrEffectiveDate.value) { triggerToast('Set the regularization effective date.'); return; }
     if (hrDecision.value === 'approve_regularization' && hrEffectiveDate.value < todayLocal()) { triggerToast('Regularization date cannot be in the past.'); return; }
     hrSaving.value = true;
@@ -532,6 +534,9 @@ const hrDecidedKey = computed(() => {
     const s = hrReview.value?.status;
     if (s === 'Reassigned') return 'approve_reassignment';
     if (s === 'Rejected' && trainingDetail.value?.manager_recommendation === 'reassigned') return 'reject_reassignment';
+    if (trainingDetail.value?.person_type === 'Worker') {
+        return { Approved: 'worker_training_passed', Rejected: 'worker_do_not_pass' }[s] || '';
+    }
     return { Approved: 'approve_regularization', Extended: 'extend_training', Rejected: 'do_not_regularize' }[s] || '';
 });
 const rePositions = computed(() => {
@@ -943,50 +948,50 @@ const failTrainee = () => {
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Review completed trainee training and process final evaluation results. <span class="font-semibold text-slate-600 dark:text-slate-300">Click the table for view.</span></p>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
+                    <table class="min-w-full text-xs">
                         <thead>
                             <tr class="text-left text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-700">
-                                <th class="px-4 py-3 font-bold">Trainee</th>
-                                <th class="px-4 py-3 font-bold">Employee ID</th>
-                                <th class="px-4 py-3 font-bold">Position</th>
-                                <th class="px-4 py-3 font-bold">Department</th>
-                                <th class="px-4 py-3 font-bold">Training Status</th>
-                                <th class="px-4 py-3 font-bold">Grade</th>
-                                <th class="px-4 py-3 font-bold">Evaluation</th>
-                                <th class="px-4 py-3 font-bold">Result</th>
+                                <th class="px-3 py-2 font-bold">Trainee</th>
+                                <th class="px-3 py-2 font-bold">Type</th>
+                                <th class="px-3 py-2 font-bold">Position</th>
+                                <th class="px-3 py-2 font-bold">Department</th>
+                                <th class="px-3 py-2 font-bold">Training Status</th>
+                                <th class="px-3 py-2 font-bold">Grade</th>
+                                <th class="px-3 py-2 font-bold">Evaluation</th>
+                                <th class="px-3 py-2 font-bold">Result</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                             <tr v-if="filteredTrainees.length === 0">
-                                <td colspan="8" class="px-4 py-12 text-center">
-                                    <User class="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                                <td colspan="8" class="px-3 py-8 text-center">
+                                    <User class="h-8 w-8 text-slate-300 mx-auto mb-2" />
                                     <p class="font-bold text-slate-500">No trainees found</p>
                                     <p class="text-xs text-slate-400 mt-1">All trainees and newly hired employees from different departments and modules appear here for HR to monitor and evaluate.</p>
                                 </td>
                             </tr>
                             <tr v-for="t in filteredTrainees" :key="t.id" @click="openDetails(t)" class="hover:bg-blue-50/40 dark:hover:bg-slate-700/30 transition-colors cursor-pointer">
-                                <td class="px-4 py-3">
-                                    <div class="flex items-center gap-3">
-                                        <div class="h-9 w-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center text-xs font-black shrink-0">{{ getInitials(t.name) }}</div>
+                                <td class="px-3 py-2">
+                                    <div class="flex items-center gap-2">
+                                        <div class="h-7 w-7 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center text-[10px] font-black shrink-0">{{ getInitials(t.name) }}</div>
                                         <div>
-                                            <div class="font-bold text-slate-900 dark:text-white whitespace-nowrap">{{ t.name }}</div>
-                                            <div class="text-[11px] text-slate-400">{{ t.email }}</div>
+                                            <div class="text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">{{ t.name }}</div>
+                                            <div class="text-[10px] text-slate-400">{{ t.email }}</div>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ t.employee_id }}</td>
-                                <td class="px-4 py-3 text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ t.position }}</td>
-                                <td class="px-4 py-3 text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ t.department }}</td>
-                                <td class="px-4 py-3">
-                                    <span :class="['px-2 py-1 rounded-full text-[11px] font-bold whitespace-nowrap', trainingBadge(t.training_status)]">{{ t.training_status }}</span>
+                                <td class="px-3 py-2 font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ t.person_type || (String(t.employee_id || '').startsWith('WRK-') ? 'Worker' : 'Employee') }}</td>
+                                <td class="px-3 py-2 text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ t.position }}</td>
+                                <td class="px-3 py-2 text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ t.department }}</td>
+                                <td class="px-3 py-2">
+                                    <span :class="['px-1.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap', trainingBadge(t.training_status)]">{{ t.training_status }}</span>
                                 </td>
-                                <td class="px-4 py-3 font-black text-slate-800 dark:text-slate-100 whitespace-nowrap">{{ formatGrade(t.grade) }}</td>
-                                <td class="px-4 py-3">
-                                    <span :class="['px-2 py-1 rounded-full text-[11px] font-bold whitespace-nowrap', evaluationBadge(t.evaluation_state)]">{{ t.evaluation_state }}</span>
+                                <td class="px-3 py-2 font-black text-slate-800 dark:text-slate-100 whitespace-nowrap">{{ formatGrade(t.grade) }}</td>
+                                <td class="px-3 py-2">
+                                    <span :class="['px-1.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap', evaluationBadge(t.evaluation_state)]">{{ t.evaluation_state }}</span>
                                     <div v-if="t.retraining_count > 0" class="text-[10px] font-bold text-purple-600 dark:text-purple-400 mt-0.5 whitespace-nowrap">Retraining #{{ t.retraining_count }}</div>
                                 </td>
-                                <td class="px-4 py-3">
-                                    <span v-if="t.result" :class="['px-2 py-1 rounded-full text-[11px] font-bold whitespace-nowrap', resultBadge(t.result)]">{{ t.result }}</span>
+                                <td class="px-3 py-2">
+                                    <span v-if="t.result" :class="['px-1.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap', resultBadge(t.result)]">{{ t.result }}</span>
                                     <span v-else class="text-slate-300 dark:text-slate-600">—</span>
                                 </td>
                             </tr>
@@ -1486,12 +1491,19 @@ const failTrainee = () => {
                             <div>
                                 <div class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">HR Decision</div>
                                 <div class="flex flex-col gap-2 text-xs">
-                                    <label class="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 cursor-pointer"><input v-model="hrDecision" type="radio" value="approve_regularization" class="accent-emerald-600" /> <b>Approve Regularization</b> <span class="text-slate-400">— Trainee becomes Regular</span></label>
-                                    <label class="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 cursor-pointer"><input v-model="hrDecision" type="radio" value="do_not_regularize" class="accent-red-600" /> <b>Do Not Regularize</b> <span class="text-slate-400">— end employment</span></label>
+                                    <template v-if="isWorkerTrainingReview">
+                                        <label class="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 cursor-pointer"><input v-model="hrDecision" type="radio" value="worker_training_passed" class="accent-emerald-600" /> <b>Worker Training Passed</b> <span class="text-slate-400">— notify the agency and clear the worker for a contract</span></label>
+                                        <label class="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 cursor-pointer"><input v-model="hrDecision" type="radio" value="worker_do_not_pass" class="accent-red-600" /> <b>Do Not Pass</b> <span class="text-slate-400">— record a failed training result</span></label>
+                                    </template>
+                                    <template v-else>
+                                        <label class="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 cursor-pointer"><input v-model="hrDecision" type="radio" value="approve_regularization" class="accent-emerald-600" /> <b>Approve Regularization</b> <span class="text-slate-400">— Trainee becomes Regular</span></label>
+                                        <label class="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 cursor-pointer"><input v-model="hrDecision" type="radio" value="do_not_regularize" class="accent-red-600" /> <b>Do Not Regularize</b> <span class="text-slate-400">— end employment</span></label>
+                                    </template>
                                 </div>
                             </div>
+                            <p v-if="isWorkerTrainingReview && hrDecision === 'worker_training_passed'" class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Submitting this review marks training complete and adds an update to the worker’s agency activity feed so the agency can issue a contract.</p>
                             <div>
-                                <div class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">HR Notes{{ hrDecision && hrDecision !== 'approve_regularization' ? ' *' : '' }}</div>
+                                <div class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">HR Notes{{ hrDecision && hrDecisionNeedsNotes ? ' *' : '' }}</div>
                                 <textarea v-model="hrNotes" rows="2" placeholder="Enter HR review notes..." class="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"></textarea>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">

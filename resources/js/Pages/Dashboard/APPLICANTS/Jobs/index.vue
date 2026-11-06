@@ -76,6 +76,9 @@ const selectedType = ref(props.searchParams?.employment_type || 'All');
 const selectedLocation = ref(props.searchParams?.work_location || 'All');
 const selectedWorkMode = ref(props.searchParams?.work_mode || 'All');
 const viewMode = ref<'grid' | 'list'>('grid');
+const displayedProfileCompletion = computed(() =>
+    props.profileCompletion?.is_complete ? props.profileCompletion.percentage : 0,
+);
 
 // ============================================
 // MODAL STATE
@@ -672,7 +675,7 @@ function getNoticePeriodLabel(value: string): string {
                 <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Find a position that matches your skills and experience at Monti Corp.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2 shrink-0">
-                <span v-if="!profileCompletion?.is_complete" class="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{{ profileCompletion?.percentage || 0 }}% Complete</span>
+                <span v-if="!profileCompletion?.is_complete" class="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{{ displayedProfileCompletion }}% Complete</span>
                 <button
                     @click="resetFilters"
                     class="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition active:scale-95"
@@ -1550,7 +1553,7 @@ function getNoticePeriodLabel(value: string): string {
                 <div class="p-6 space-y-4">
                     <div class="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
                         <span class="text-sm text-amber-700 dark:text-amber-400">Profile Completion</span>
-                        <span class="text-sm font-bold text-amber-700 dark:text-amber-400">{{ profileCompletion?.percentage || 0 }}%</span>
+                        <span class="text-sm font-bold text-amber-700 dark:text-amber-400">{{ displayedProfileCompletion }}%</span>
                     </div>
 
                     <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
@@ -1574,7 +1577,7 @@ function getNoticePeriodLabel(value: string): string {
                         <div class="h-2 overflow-hidden rounded-full bg-slate-200">
                             <div
                                 class="h-full rounded-full bg-amber-500 transition-all"
-                                :style="{ width: (profileCompletion?.percentage || 0) + '%' }"
+                                :style="{ width: displayedProfileCompletion + '%' }"
                             ></div>
                         </div>
                     </div>

@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
+import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Search, ClipboardList, X, Star, Lock, ChevronLeft, ChevronRight, Eye } from 'lucide-vue-next';
 
 const props = defineProps({
     trainees: { type: Array, default: () => [] },
+    probationary: { type: Array, default: () => [] },
     summary: { type: Object, default: () => ({ total: 0, in_training: 0, due_evaluation: 0, final_evaluation: 0, completed: 0, extended: 0 }) },
     departments: { type: Array, default: () => [] },
     positions: { type: Array, default: () => [] },
@@ -16,6 +18,23 @@ const props = defineProps({
 
 const page = usePage();
 const saving = ref(false);
+const showProbationEvaluation = ref(false);
+const savingProbationEvaluation = ref(false);
+const probationEvaluationError = ref('');
+const probationEmployee = ref(null);
+const probationCriteria = [
+    { key: 'quality', label: 'Quality of Work', help: 'Accuracy and compliance with work standards' },
+    { key: 'productivity', label: 'Productivity', help: 'Completes assigned work within expected timelines' },
+    { key: 'attendance', label: 'Attendance and Punctuality', help: 'Follows work schedule and attendance rules' },
+    { key: 'communication', label: 'Communication', help: 'Communicates clearly and professionally' },
+    { key: 'teamwork', label: 'Teamwork', help: 'Works effectively with colleagues' },
+    { key: 'job_knowledge', label: 'Job Knowledge', help: 'Understands the duties and procedures of the role' },
+];
+const probationEvaluationForm = ref({ id: null, period_label: '', period_start: '', period_end: '', scores: {}, strengths: '', improvements: '', comments: '', recommendation: '', status: 'Draft' });
+const probationRecommendations = [
+    { value: 'Regularize', label: 'Recommend regularization' },
+    { value: 'Do not regularize', label: 'Recommend non-regularization (with documented reasons)' },
+];
 
 // ---- Filters ----
 const search = ref('');
@@ -23,6 +42,23 @@ const statusFilter = ref('All');
 const positionFilter = ref('All');
 const departmentFilter = ref('All');
 const programFilter = ref('All');
+const assignmentView = ref('training');
+const traineeColumnLabels = ['Trainee', 'Type', 'Position', 'Department', 'Training Program', 'Start Date', 'Expected End', 'Status', 'Evaluation', 'Action'];
+const traineeColumnWidths = ref([155, 85, 165, 145, 190, 108, 108, 145, 100, 85]);
+
+function startColumnResize(event, index) {
+    const startX = event.clientX;
+    const startWidth = traineeColumnWidths.value[index];
+    const onMove = (moveEvent) => {
+        traineeColumnWidths.value[index] = Math.max(60, Math.min(500, startWidth + moveEvent.clientX - startX));
+    };
+    const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+}
 
 const statusOptions = ['All', 'Not Started', 'In Progress', 'Evaluation Due', 'Final Evaluation', 'Completed', 'Extended'];
 
@@ -35,6 +71,16 @@ const filtered = computed(() => {
         const okD = departmentFilter.value === 'All' || t.department === departmentFilter.value;
         const okG = programFilter.value === 'All' || t.training_program === programFilter.value;
         return okQ && okS && okP && okD && okG;
+    });
+});
+
+const filteredProbationary = computed(() => {
+    const q = search.value.trim().toLowerCase();
+    return (props.probationary || []).filter((t) => {
+        const okQ = !q || [t.name, t.employee_id, t.position, t.department, t.employment_type].join(' ').toLowerCase().includes(q);
+        const okP = positionFilter.value === 'All' || t.position === positionFilter.value;
+        const okD = departmentFilter.value === 'All' || t.department === departmentFilter.value;
+        return okQ && okP && okD;
     });
 });
 
@@ -57,10 +103,81 @@ const fmtDate = (d) => {
     return isNaN(dt) ? '—' : dt.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+const probationEvaluationFinal = computed(() => {
+    const end = probationEmployee.value?.probation_end;
+    if (!end) return false;
+    const days = Math.ceil((new Date(`${String(end).slice(0, 10)}T00:00:00`) - new Date(new Date().toDateString())) / 86400000);
+    return days <= 30;
+});
+const probationStatusLabel = computed(() => {
+    const status = probationEvaluationForm.value.status;
+    if (status === 'Submitted') return 'Submitted for HR review';
+    if (status === 'Finalized') return 'Finalized';
+    return 'Pending · Not yet submitted';
+});
+function openProbationEvaluation(employee) {
+    probationEmployee.value = employee;
+    probationEvaluationError.value = '';
+    const saved = employee.probation_evaluation;
+    const today = new Date();
+    const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const start = employee.probation_start && employee.probation_start <= todayValue ? employee.probation_start : todayValue;
+    const elapsedMonths = Math.max(1, Math.floor((today - new Date(`${start}T00:00:00`)) / (30 * 86400000)) + 1);
+    const evaluationKind = probationEvaluationFinal.value ? 'Final evaluation' : (saved ? 'Follow-up evaluation' : 'Initial evaluation');
+    probationEvaluationForm.value = {
+        id: saved?.id || null,
+        period_label: saved?.period_label || `Month ${elapsedMonths} · ${evaluationKind}`,
+        period_start: saved?.period_start || start,
+        period_end: saved?.period_end || todayValue,
+        scores: Object.fromEntries(probationCriteria.map(({ key }) => [key, saved?.scores?.[key] ?? ''])),
+        strengths: saved?.strengths || '', improvements: saved?.improvements || '', comments: saved?.comments || '',
+        recommendation: ['Regularize', 'Do not regularize'].includes(saved?.recommendation) ? saved.recommendation : '',
+        status: saved?.status || 'Draft',
+    };
+    showProbationEvaluation.value = true;
+}
+async function saveProbationEvaluation(submit) {
+    if (!probationEmployee.value || savingProbationEvaluation.value) return;
+    probationEvaluationError.value = '';
+    if (!probationRecommendations.some(({ value }) => value === probationEvaluationForm.value.recommendation)) {
+        probationEvaluationError.value = 'Choose a recommendation before saving.';
+        return;
+    }
+    savingProbationEvaluation.value = true;
+    try {
+        await axios.post(route('hrm.assigned-trainees.probation-evaluation', probationEmployee.value.id), {
+            evaluation_id: probationEvaluationForm.value.id,
+            period_label: probationEvaluationForm.value.period_label,
+            period_start: probationEvaluationForm.value.period_start,
+            period_end: probationEvaluationForm.value.period_end,
+            scores: probationEvaluationForm.value.scores,
+            strengths: probationEvaluationForm.value.strengths,
+            improvements: probationEvaluationForm.value.improvements,
+            comments: probationEvaluationForm.value.comments,
+            recommendation: probationEvaluationForm.value.recommendation,
+            submit,
+        });
+        showProbationEvaluation.value = false;
+        router.reload({ only: ['probationary'] });
+    } catch (e) {
+        probationEvaluationError.value = e.response?.data?.message || Object.values(e.response?.data?.errors || {}).flat()[0] || 'Could not save the evaluation.';
+    } finally {
+        savingProbationEvaluation.value = false;
+    }
+}
+
 // ---- Detail ----
 const selected = ref(null);
+const selectedIsWorker = computed(() => selected.value?.person_type === 'Worker' || Boolean(selected.value?.worker_id));
+const trainingNotStarted = computed(() => {
+    const start = String(selected.value?.training_start || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return false;
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return start > today;
+});
 const weekOptions = computed(() => {
-    const n = Math.max(1, Math.min(52, Number(selected.value?.duration_weeks) || parseInt(String(selected.value?.duration_label || '8')) || 8));
+    const n = Math.max(1, Math.min(4, Number(selected.value?.duration_weeks) || parseInt(String(selected.value?.duration_label || '4')) || 4));
     return Array.from({ length: n }, (_, i) => i + 1);
 });
 const loadWeeklyForm = (week, skipAuto = false) => {
@@ -99,7 +216,7 @@ const openDetail = (t) => {
     loadWeeklyForm(firstUnsaved || 1);
     finalForm.value = {
         attendance: 5, knowledge: 5, practical_skills: 5, work_behavior: 5, safety_compliance: 5,
-        notes: '', recommendation: 'regularization',
+        notes: '', recommendation: t.person_type === 'Worker' ? 'passed_training' : 'regularization',
     };
 };
 const closeDetail = () => { selected.value = null; showAttendanceModal.value = false; showObservationModal.value = false; selectedDay.value = null; showWeeklyConfirm.value = false; showFinalConfirm.value = false; showFinalModal.value = false; showFinalDoneModal.value = false; finalDoneScore.value = null; weeklyNotesError.value = false; };
@@ -222,6 +339,7 @@ const attStatusBadge = (s) => ({
 
 // ---- Daily Observation modal (per-date, nested inside Evaluation Details) ----
 const showObservationModal = ref(false);
+const showTrainingStartNotice = ref(false);
 const selectedDay = ref(null);
 const savingObservation = ref(false);
 const observationForm = ref({ knowledge: 5, practical_skills: 5, work_behavior: 5, safety_compliance: 5, knowledge_notes: '', practical_skills_notes: '', work_behavior_notes: '', safety_compliance_notes: '', notes: '' });
@@ -237,6 +355,10 @@ const dayKey = (d) => {
 };
 const hasObservation = (d) => !!observationByDate.value[dayKey(d)];
 const openObservation = (d) => {
+    if (trainingNotStarted.value) {
+        showTrainingStartNotice.value = true;
+        return;
+    }
     selectedDay.value = d;
     const saved = observationByDate.value[dayKey(d)];
     observationForm.value = saved ? {
@@ -255,6 +377,7 @@ const openObservation = (d) => {
 const closeObservation = () => { showObservationModal.value = false; selectedDay.value = null; };
 const saveObservation = () => {
     if (!selected.value || !selectedDay.value) return;
+    if (trainingNotStarted.value) return;
     savingObservation.value = true;
     const id = selected.value.id;
     router.post(route('hrm.assigned-trainees.observation', id), { date: dayKey(selectedDay.value), ...observationForm.value }, {
@@ -351,6 +474,8 @@ const finalUnlocked = computed(() => weeklyComplete.value || readyForFinal.value
 
 const saveWeekly = () => {
     if (!selected.value || saving.value) return;
+    if (trainingNotStarted.value) return;
+    if (finalSubmitted.value) return;
     if (terminatedEarly.value) return;
     if (terminationNeedsNotes.value) { weeklyNotesError.value = true; return; }
     weeklyNotesError.value = false;
@@ -359,6 +484,8 @@ const saveWeekly = () => {
 
 const confirmWeeklySave = () => {
     if (!selected.value || saving.value) return;
+    if (trainingNotStarted.value) { showWeeklyConfirm.value = false; return; }
+    if (finalSubmitted.value) { showWeeklyConfirm.value = false; return; }
     if (terminatedEarly.value) { showWeeklyConfirm.value = false; return; }
     if (terminationNeedsNotes.value) { weeklyNotesError.value = true; showWeeklyConfirm.value = false; return; }
     saving.value = true;
@@ -436,12 +563,14 @@ const clockTrainee = (action) => {
 
 const submitFinal = () => {
     if (!selected.value || saving.value) return;
+    if (trainingNotStarted.value) return;
     if (!finalUnlocked.value || finalSubmitted.value || terminatedEarly.value) return;
     showFinalConfirm.value = true;
 };
 
 const confirmFinalSubmit = () => {
     if (!selected.value || saving.value) return;
+    if (trainingNotStarted.value) { showFinalConfirm.value = false; return; }
     if (!finalUnlocked.value || finalSubmitted.value || terminatedEarly.value) { showFinalConfirm.value = false; return; }
     saving.value = true;
     const id = selected.value.id;
@@ -460,6 +589,10 @@ const confirmFinalSubmit = () => {
         onSuccess: async () => {
             showFinalConfirm.value = false;
             showFinalModal.value = false;
+            if (selectedIsWorker.value) {
+                router.visit(route('hrm.trainee.index'));
+                return;
+            }
             await refreshSelected(id);
             // Post-submit confirmation modal (score + HR-review next step).
             finalDoneScore.value = doneScore;
@@ -478,11 +611,11 @@ const finalDoneScore = ref(null);
 </script>
 
 <template>
-    <Head title="My Assigned Trainees" />
+    <Head title="My Assigned Personnel" />
     <AuthenticatedLayout>
         <div class="p-6 space-y-6">
             <div>
-                <h1 class="text-xl font-black text-slate-900">My Assigned Trainees</h1>
+                <h1 class="text-xl font-black text-slate-900">My Assigned Personnel</h1>
                 <p class="text-xs text-slate-500 mt-1">Monitor the training progress and evaluate employees assigned to you.</p>
             </div>
 
@@ -506,13 +639,19 @@ const finalDoneScore = ref(null);
                 </div>
             </div>
 
+            <div class="flex items-center gap-2">
+                <button @click="assignmentView = 'training'" :class="['px-4 py-2 rounded-xl text-xs font-bold border transition-colors', assignmentView === 'training' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50']">
+                    Training <span class="ml-1 opacity-75">({{ (props.trainees || []).length }})</span>
+                </button>
+            </div>
+
             <!-- Filters -->
             <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm grid grid-cols-1 md:grid-cols-5 gap-3">
                 <div class="relative md:col-span-1">
                     <Search class="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                    <input v-model="search" placeholder="Search trainee" class="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs" />
+                    <input v-model="search" :placeholder="assignmentView === 'training' ? 'Search trainee' : 'Search employee'" class="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs" />
                 </div>
-                <select v-model="statusFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                <select v-if="assignmentView === 'training'" v-model="statusFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
                     <option v-for="s in statusOptions" :key="s" :value="s">{{ s === 'All' ? 'Training Status' : s }}</option>
                 </select>
                 <select v-model="positionFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
@@ -523,47 +662,77 @@ const finalDoneScore = ref(null);
                     <option value="All">Department</option>
                     <option v-for="d in departments" :key="d.id" :value="d.name">{{ d.name }}</option>
                 </select>
-                <select v-model="programFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
+                <select v-if="assignmentView === 'training'" v-model="programFilter" class="px-3 py-2 border border-slate-200 rounded-xl text-xs">
                     <option value="All">Training Program</option>
                     <option v-for="g in programs" :key="g" :value="g">{{ g }}</option>
                 </select>
             </div>
 
             <!-- Trainee List -->
-            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+            <div v-if="assignmentView === 'training'" class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="table-fixed border-collapse text-[11px]" :style="{ width: traineeColumnWidths.reduce((sum, width) => sum + width, 0) + 'px' }">
+                        <colgroup><col v-for="(width, index) in traineeColumnWidths" :key="index" :style="{ width: width + 'px' }" /></colgroup>
+                        <thead class="sticky top-0 z-10 bg-slate-100 text-slate-600 uppercase text-[10px]">
+                            <tr>
+                                <th v-for="(label, index) in traineeColumnLabels" :key="label" class="relative border border-slate-300 px-2 py-2 text-left font-bold tracking-wide select-none">{{ label }}<span role="separator" aria-orientation="vertical" :aria-label="`Resize ${label} column`" title="Drag to resize column" @pointerdown.stop.prevent="startColumnResize($event, index)" class="absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none hover:bg-blue-400/60"></span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="t in filtered" :key="t.id" class="odd:bg-white even:bg-slate-50/70 hover:bg-blue-50">
+                                <td class="border border-slate-200 px-2 py-1.5 font-bold text-slate-800">{{ t.name }}</td>
+                                <td class="border border-slate-200 px-2 py-1.5">{{ t.person_type || 'Employee' }}</td>
+                                <td class="border border-slate-200 px-2 py-1.5">{{ t.position }}</td>
+                                <td class="border border-slate-200 px-2 py-1.5">{{ t.department }}</td>
+                                <td class="border border-slate-200 px-2 py-1.5">{{ t.training_program }}</td>
+                                <td class="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{{ fmtDate(t.training_start) }}</td>
+                                <td class="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{{ fmtDate(t.expected_end) }}</td>
+                                <td class="border border-slate-200 px-2 py-1.5"><span :class="['px-1.5 py-0.5 rounded-full font-bold inline-flex items-center gap-1 whitespace-nowrap', statusBadge(t.display_status)]"><span :class="['w-1.5 h-1.5 rounded-full inline-block', statusDotClass(t.display_status)]"></span>{{ t.display_status }}</span></td>
+                                <td class="border border-slate-200 px-2 py-1.5 font-bold">{{ t.latest_evaluation_label }}</td>
+                                <td class="border border-slate-200 px-2 py-1.5 text-center">
+                                    <button @click="openDetail(t)" class="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-md font-bold text-[10px]">{{ t.display_status === 'Final Evaluation' || t.display_status === 'Evaluation Due' ? 'Evaluate' : 'View' }}</button>
+                                </td>
+                            </tr>
+                            <tr v-if="!filtered.length">
+                                <td colspan="10" class="border border-slate-200 px-3 py-8 text-center text-slate-400">No trainees assigned to you.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div v-else-if="false" class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-xs">
                         <thead class="bg-slate-50 text-slate-500 uppercase text-[10px]">
                             <tr>
-                                <th class="px-4 py-3 text-left">Trainee</th>
-                                <th class="px-4 py-3 text-left">Employee ID</th>
+                                <th class="px-4 py-3 text-left">Employee</th>
+                                <th class="px-4 py-3 text-left">Type</th>
                                 <th class="px-4 py-3 text-left">Position</th>
                                 <th class="px-4 py-3 text-left">Department</th>
-                                <th class="px-4 py-3 text-left">Training Program</th>
+                                <th class="px-4 py-3 text-left">Employment Type</th>
                                 <th class="px-4 py-3 text-left">Start Date</th>
-                                <th class="px-4 py-3 text-left">Expected End</th>
+                                <th class="px-4 py-3 text-left">Probation End</th>
                                 <th class="px-4 py-3 text-left">Status</th>
-                                <th class="px-4 py-3 text-left">Latest Evaluation</th>
+                                <th class="px-4 py-3 text-left">Evaluation</th>
                                 <th class="px-4 py-3 text-left">Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="t in filtered" :key="t.id" class="border-t border-slate-100 hover:bg-slate-50">
+                            <tr v-for="t in filteredProbationary" :key="t.id" class="border-t border-slate-100 hover:bg-slate-50">
                                 <td class="px-4 py-3 font-bold text-slate-800">{{ t.name }}</td>
-                                <td class="px-4 py-3 font-mono">{{ t.employee_id }}</td>
+                                <td class="px-4 py-3">{{ t.person_type || 'Employee' }}</td>
                                 <td class="px-4 py-3">{{ t.position }}</td>
                                 <td class="px-4 py-3">{{ t.department }}</td>
-                                <td class="px-4 py-3">{{ t.training_program }}</td>
-                                <td class="px-4 py-3">{{ fmtDate(t.training_start) }}</td>
-                                <td class="px-4 py-3">{{ fmtDate(t.expected_end) }}</td>
-                                <td class="px-4 py-3"><span :class="['px-2 py-1 rounded-full font-bold inline-flex items-center gap-1.5', statusBadge(t.display_status)]"><span :class="['w-2 h-2 rounded-full inline-block', statusDotClass(t.display_status)]"></span>{{ t.display_status }}</span></td>
-                                <td class="px-4 py-3 font-bold">{{ t.latest_evaluation_label }}</td>
-                                <td class="px-4 py-3">
-                                    <button @click="openDetail(t)" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-[11px]">{{ t.display_status === 'Final Evaluation' || t.display_status === 'Evaluation Due' ? 'Evaluate' : 'View' }}</button>
-                                </td>
+                                <td class="px-4 py-3">{{ t.employment_type }}</td>
+                                <td class="px-4 py-3">{{ fmtDate(t.probation_start) }}</td>
+                                <td class="px-4 py-3">{{ fmtDate(t.probation_end) }}</td>
+                                <td class="px-4 py-3">{{ t.employment_status_label }}</td>
+                                <td class="px-4 py-3"><span v-if="t.probation_evaluation" class="font-semibold" :class="t.probation_evaluation.status === 'Finalized' ? 'text-emerald-700' : t.probation_evaluation.status === 'Submitted' ? 'text-blue-700' : 'text-amber-700'">{{ t.probation_evaluation.status }} · {{ Number(t.probation_evaluation.overall_score).toFixed(1) }}%</span><span v-else class="text-slate-400">Not started</span></td>
+                                <td class="px-4 py-3"><button @click="openProbationEvaluation(t)" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-[11px]">{{ !t.probation_evaluation ? 'Evaluate' : t.probation_evaluation.status === 'Draft' ? 'Continue evaluation' : 'View evaluation' }}</button></td>
                             </tr>
-                            <tr v-if="!filtered.length">
-                                <td colspan="10" class="px-4 py-10 text-center text-slate-400">No trainees assigned to you.</td>
+                            <tr v-if="!filteredProbationary.length">
+                                <td colspan="10" class="px-4 py-10 text-center text-slate-400">No probationary employees assigned to you.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -612,6 +781,9 @@ const finalDoneScore = ref(null);
                         <!-- Weekly Evaluation -->
                         <section class="border border-slate-200 rounded-xl p-4">
                             <h4 class="text-xs font-black uppercase text-slate-700 mb-1">Week {{ weeklyForm.week_number }} Evaluation</h4>
+                            <div v-if="trainingNotStarted" class="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                                <b>Evaluation locked.</b> Training starts {{ fmtDate(selected.training_start) }}. You can evaluate once the start date arrives.
+                            </div>
                             <p class="text-[11px] text-slate-500 mb-3">Weekly scale 1–5 · Overall {{ weeklyOverall }}/5 · data kept per week · Due <b :class="weekOverdue(weeklyForm.week_number) ? 'text-red-600' : ''">{{ weekEndLabel(weeklyForm.week_number) }}</b></p>
                             <div v-if="terminatedEarly" class="mb-3 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800 flex items-center gap-2">
                                 <Lock class="w-4 h-4 shrink-0" /><span><b>Training terminated early (Week {{ terminationWeek }}) — remaining weeks cancelled.</b> No final evaluation will happen.</span>
@@ -663,7 +835,8 @@ const finalDoneScore = ref(null);
                                 Past weeks: <span v-for="w in selected.weekly_evaluations" :key="w.id" class="font-bold text-slate-700 mr-2">W{{ w.week_number }} {{ Number(w.overall).toFixed(1) }}/5</span>
                             </div>
                             <button v-if="terminatedEarly" disabled class="mt-4 px-5 py-2.5 bg-red-100 text-red-700 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-not-allowed"><Lock class="w-4 h-4" /> Terminated — Locked</button>
-                            <button v-else @click="saveWeekly" :disabled="saving" class="mt-4 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold disabled:opacity-50">Save Evaluation</button>
+                            <button v-else-if="finalSubmitted" disabled class="mt-4 px-5 py-2.5 bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-not-allowed"><Lock class="w-4 h-4" /> Final Evaluation Submitted — Locked</button>
+                            <button v-else @click="saveWeekly" :disabled="saving || trainingNotStarted" class="mt-4 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">Save Evaluation</button>
                         </section>
 
                         <!-- Final Evaluation -->
@@ -686,7 +859,7 @@ const finalDoneScore = ref(null);
                             <div v-if="selected.final_score !== null && selected.final_score !== undefined" class="mt-2 text-[11px] text-slate-500">Saved final: <b>{{ selected.final_score }}/100</b><span v-if="selected.manager_recommendation"> · {{ selected.manager_recommendation }}</span></div>
                             <button v-if="finalSubmitted" disabled class="mt-4 px-5 py-2.5 bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-not-allowed"><Lock class="w-4 h-4" /> Submitted — Locked</button>
                             <button v-else-if="terminatedEarly" disabled class="mt-4 px-5 py-2.5 bg-red-100 text-red-700 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-not-allowed"><Lock class="w-4 h-4" /> No Final Evaluation — Terminated</button>
-                            <button v-else-if="finalUnlocked" @click="showFinalModal = true" class="mt-4 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold">Open Final Evaluation</button>
+                            <button v-else-if="finalUnlocked" @click="showFinalModal = true" :disabled="trainingNotStarted" class="mt-4 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">Open Final Evaluation</button>
                         </section>
                     </div>
 
@@ -735,9 +908,15 @@ const finalDoneScore = ref(null);
                                 <textarea v-model="finalForm.notes" placeholder="Final notes" class="mt-3 w-full px-3 py-2 border border-slate-200 rounded-xl text-xs" rows="2"></textarea>
                                 <div class="mt-3 text-xs font-bold">Manager Recommendation</div>
                                 <div class="flex flex-wrap gap-4 mt-1 text-xs">
-                                    <label class="flex items-center gap-1.5"><input v-model="finalForm.recommendation" type="radio" value="regularization" /> Recommend for Regularization</label>
-                                    <label class="flex items-center gap-1.5"><input v-model="finalForm.recommendation" type="radio" value="reassigned" /> Reassigned</label>
-                                    <label class="flex items-center gap-1.5"><input v-model="finalForm.recommendation" type="radio" value="do_not_recommend" /> Do Not Recommend</label>
+                                    <template v-if="selectedIsWorker">
+                                        <label class="flex items-center gap-1.5"><input v-model="finalForm.recommendation" type="radio" value="passed_training" /> Passed Training</label>
+                                        <label class="flex items-center gap-1.5"><input v-model="finalForm.recommendation" type="radio" value="do_not_recommend" /> Do Not Recommend</label>
+                                    </template>
+                                    <template v-else>
+                                        <label class="flex items-center gap-1.5"><input v-model="finalForm.recommendation" type="radio" value="regularization" /> Recommend for Regularization</label>
+                                        <label class="flex items-center gap-1.5"><input v-model="finalForm.recommendation" type="radio" value="reassigned" /> Reassigned</label>
+                                        <label class="flex items-center gap-1.5"><input v-model="finalForm.recommendation" type="radio" value="do_not_recommend" /> Do Not Recommend</label>
+                                    </template>
                                 </div>
                             </div>
                             <div class="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 rounded-b-2xl">
@@ -809,7 +988,7 @@ const finalDoneScore = ref(null);
                                                 <td class="px-3 py-2">{{ d.timeOut }}</td>
                                                 <td class="px-3 py-2"><span :class="['px-2 py-0.5 rounded-full font-bold text-[10px]', attStatusBadge(d.status)]">{{ d.status }}</span></td>
                                                 <td class="px-3 py-2">
-                                                    <button type="button" @click="openObservation(d)" class="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-slate-600 rounded-lg text-[10px] font-bold transition">
+                                                    <button type="button" @click="openObservation(d)" :title="trainingNotStarted ? 'Training has not started yet' : 'Add or view daily observation'" :class="['inline-flex items-center gap-1 px-2.5 py-1 border rounded-lg text-[10px] font-bold transition', trainingNotStarted ? 'cursor-pointer border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 text-slate-600']">
                                                         <Eye class="w-3.5 h-3.5" /> Observation<span v-if="hasObservation(d)" class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
                                                     </button>
                                                 </td>
@@ -850,12 +1029,82 @@ const finalDoneScore = ref(null);
                                 </div>
                                 <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
                                     <button @click="closeObservation" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">Close</button>
-                                    <button @click="saveObservation" :disabled="savingObservation" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold disabled:opacity-50 transition">Save Observation</button>
+                                    <button @click="saveObservation" :disabled="savingObservation || trainingNotStarted" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition">Save Observation</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+            <div v-if="showTrainingStartNotice" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/50 p-4" @click.self="showTrainingStartNotice = false">
+                <section role="dialog" aria-modal="true" aria-labelledby="training-start-notice-title" class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"><Lock class="h-5 w-5" /></div>
+                        <div>
+                            <h2 id="training-start-notice-title" class="text-sm font-black text-slate-900">Training has not started</h2>
+                            <p class="mt-1 text-xs leading-relaxed text-slate-600">Daily observations become available on {{ fmtDate(selected?.training_start) }}. You can record an observation after the training start date.</p>
+                        </div>
+                    </div>
+                    <div class="mt-5 flex justify-end">
+                        <button @click="showTrainingStartNotice = false" class="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700">Close</button>
+                    </div>
+                </section>
+            </div>
+            <div v-if="showProbationEvaluation && probationEmployee" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4" @click.self="showProbationEvaluation = false">
+                <section role="dialog" aria-modal="true" aria-labelledby="probation-evaluation-title" class="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+                    <header class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white p-5">
+                        <div><p class="text-[10px] font-bold uppercase tracking-widest text-blue-700">Probationary Employee Evaluation</p><h2 id="probation-evaluation-title" class="mt-1 text-lg font-black text-slate-900">Manager evaluation</h2><p class="mt-1 text-xs text-slate-500">{{ probationEmployee.name }} · {{ probationEmployee.employee_id }}</p></div>
+                        <button @click="showProbationEvaluation = false" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X class="h-4 w-4" /></button>
+                    </header>
+                    <div class="space-y-5 p-5">
+                        <section class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs sm:grid-cols-2">
+                            <div><span class="text-slate-500">Employee</span><p class="mt-1 font-bold">{{ probationEmployee.position }} · {{ probationEmployee.name }}</p></div>
+                            <div><span class="text-slate-500">Employment type</span><p class="mt-1 font-bold">{{ probationEmployee.employment_type }} · Active</p></div>
+                            <div><span class="text-slate-500">Evaluation period</span><p class="mt-1 font-bold">{{ probationEvaluationForm.period_label }}</p></div>
+                            <div><span class="text-slate-500">Evaluation status</span><p class="mt-1 font-bold" :class="probationEvaluationForm.status === 'Submitted' ? 'text-blue-700' : probationEvaluationForm.status === 'Finalized' ? 'text-emerald-700' : 'text-amber-700'">{{ probationStatusLabel }}</p></div>
+                            <div><span class="text-slate-500">Probation end date</span><p class="mt-1 font-bold">{{ fmtDate(probationEmployee.probation_end) }}</p></div>
+                            <div><span class="text-slate-500">Timeline</span><p class="mt-1 font-bold">{{ fmtDate(probationEmployee.probation_start) }} – {{ fmtDate(probationEmployee.probation_end) }}</p></div>
+                        </section>
+
+                        <section>
+                            <div class="mb-3"><h3 class="text-sm font-black text-slate-900">1. Performance Criteria</h3><p class="mt-1 text-[11px] text-slate-500">Rate each criterion from 1 (below expectations) to 5 (excellent).</p></div>
+                            <div class="space-y-2">
+                                <label v-for="criterion in probationCriteria" :key="criterion.key" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                                    <span><span class="block text-xs font-bold text-slate-800">{{ criterion.label }}</span><span class="mt-0.5 block text-[10px] text-slate-500">{{ criterion.help }}</span></span>
+                                    <select v-model="probationEvaluationForm.scores[criterion.key]" :disabled="probationEvaluationForm.status !== 'Draft'" class="w-28 rounded-lg border-slate-200 text-xs disabled:bg-slate-100"><option value="">Score</option><option v-for="scoreValue in 5" :key="scoreValue" :value="scoreValue">{{ scoreValue }} / 5</option></select>
+                                </label>
+                            </div>
+                        </section>
+
+                        <section class="space-y-3">
+                            <h3 class="text-sm font-black text-slate-900">2. Manager’s Feedback</h3>
+                            <label class="block text-xs font-bold">Strengths<textarea v-model="probationEvaluationForm.strengths" :disabled="probationEvaluationForm.status !== 'Draft'" rows="2" placeholder="Key strengths demonstrated during probation" class="mt-1 w-full rounded-xl border-slate-200 text-xs disabled:bg-slate-100" /></label>
+                            <label class="block text-xs font-bold">Areas for Improvement<textarea v-model="probationEvaluationForm.improvements" :disabled="probationEvaluationForm.status !== 'Draft'" rows="2" placeholder="Specific areas and actions to improve" class="mt-1 w-full rounded-xl border-slate-200 text-xs disabled:bg-slate-100" /></label>
+                            <label class="block text-xs font-bold">Comments and Supporting Evidence<textarea v-model="probationEvaluationForm.comments" :disabled="probationEvaluationForm.status !== 'Draft'" rows="3" placeholder="Include examples and supporting details" class="mt-1 w-full rounded-xl border-slate-200 text-xs disabled:bg-slate-100" /></label>
+                        </section>
+
+                        <section>
+                            <h3 class="mb-2 text-sm font-black text-slate-900">3. Manager’s Recommendation</h3>
+                            <div class="space-y-2 rounded-xl border border-slate-100 p-3">
+                                <label v-for="choice in probationRecommendations" :key="choice.value" class="flex items-start gap-2 text-xs text-slate-700">
+                                    <input v-model="probationEvaluationForm.recommendation" type="radio" :value="choice.value" :disabled="probationEvaluationForm.status === 'Finalized'" class="mt-0.5" />
+                                    <span>{{ choice.label }}</span>
+                                </label>
+                            </div>
+                        </section>
+                        <p v-if="probationEvaluationError" class="rounded-lg bg-rose-50 p-3 text-xs font-medium text-rose-700">{{ probationEvaluationError }}</p>
+                    </div>
+                    <footer class="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50 p-4">
+                        <button @click="showProbationEvaluation = false" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600">{{ probationEvaluationForm.status === 'Draft' ? 'Cancel' : 'Close' }}</button>
+                        <template v-if="probationEvaluationForm.status === 'Draft'">
+                            <button @click="saveProbationEvaluation(false)" :disabled="savingProbationEvaluation" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">Save draft</button>
+                            <button @click="saveProbationEvaluation(true)" :disabled="savingProbationEvaluation" class="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{{ savingProbationEvaluation ? 'Submitting…' : 'Submit for HR review' }}</button>
+                        </template>
+                        <template v-else-if="probationEvaluationForm.status === 'Submitted'">
+                            <button @click="saveProbationEvaluation(true)" :disabled="savingProbationEvaluation || !probationEvaluationForm.recommendation" class="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{{ savingProbationEvaluation ? 'Updating…' : 'Update recommendation' }}</button>
+                        </template>
+                    </footer>
+                </section>
             </div>
         </div>
     </AuthenticatedLayout>

@@ -43,7 +43,7 @@ const boolLabel = (v) => String(v) === '1' ? 'Yes' : 'No';
                         <span class="text-slate-800 font-semibold">Settings</span>
                     </nav>
                     <h1 class="text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Payroll settings</h1>
-                    <p class="text-sm text-slate-500 mt-1.5">Rates, divisors, shift times and calendar used by payroll math, attendance and payslips. Changes apply to new calculations immediately.</p>
+                    <p class="text-sm text-slate-500 mt-1.5">Configure rates, shift defaults, cutoff dates and payroll behavior. Each control explains what it changes and where the value is used.</p>
                 </header>
 
                 <div class="flex gap-2 mb-4 relative">
@@ -62,6 +62,10 @@ const boolLabel = (v) => String(v) === '1' ? 'Yes' : 'No';
                     Read-only. Only HR can edit payroll settings.
                 </div>
 
+                <div v-if="tab === 'settings'" class="mb-5 px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-800 text-xs leading-relaxed relative">
+                    Edit a value, then select <strong>Save changes</strong> to apply it. Calculation and calendar settings affect new payroll calculations and generated periods; existing payroll records keep their saved amounts. Display and warning settings change what users see, not pay amounts.
+                </div>
+
                 <div v-if="tab === 'settings'" class="space-y-6 relative">
                     <div v-for="(items, group) in settings" :key="group" class="bg-white rounded-2xl border border-slate-200/60 shadow-lg overflow-hidden">
                         <div class="p-4 border-b border-slate-100">
@@ -72,13 +76,16 @@ const boolLabel = (v) => String(v) === '1' ? 'Yes' : 'No';
                                 <div>
                                     <p class="text-sm font-bold text-slate-800">{{ s.label }}</p>
                                     <p class="text-xs text-slate-500 mt-0.5 font-mono">{{ s.key }}</p>
-                                    <p v-if="s.description" class="text-xs text-slate-500 mt-0.5">{{ s.description }}</p>
+                                    <p v-if="s.description" class="text-xs text-slate-500 mt-1"><span class="font-semibold text-slate-600">What this control does:</span> {{ s.description }}</p>
                                 </div>
                                 <div>
                                     <input v-if="s.value_type === 'number'" v-model="form.values[s.key]" type="number" min="0" step="any"
                                         :disabled="!canEdit" :aria-label="s.label"
                                         class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60" />
                                     <input v-else-if="s.value_type === 'time'" v-model="form.values[s.key]" type="text" placeholder="HH:MM:SS"
+                                        :disabled="!canEdit" :aria-label="s.label"
+                                        class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60" />
+                                    <input v-else-if="s.value_type === 'date'" v-model="form.values[s.key]" type="date"
                                         :disabled="!canEdit" :aria-label="s.label"
                                         class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60" />
                                     <select v-else-if="s.value_type === 'boolean'" v-model="form.values[s.key]"

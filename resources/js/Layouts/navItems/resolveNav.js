@@ -185,6 +185,8 @@ function pageVisible(mod, page, user, moduleList, grantedList, normPerms, explic
     const role = user?.role
     const pos = String(user?.position || '').toLowerCase()
 
+    if (page.public) return true
+
     // Workforce pages mirror SidebarWorkforce.getChildren.
     if (mod.id === 'WRF') {
         if (pos === 'manager' && role === 'WRF') return true

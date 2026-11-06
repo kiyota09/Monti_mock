@@ -4,9 +4,9 @@ import { confirmModal } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Pencil } from 'lucide-vue-next';
+import { History, Pencil } from 'lucide-vue-next';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     request: {
         id: number;
         code: string;
@@ -53,18 +53,25 @@ const props = defineProps<{
         }>;
         activities: Array<{ id: number; date: string; action: string; details: string | null; actor: string; reason: string | null }>;
     };
+    hiring_managers?: Array<{ id: number; name: string; position: string }>;
+    default_hiring_manager_id?: number | null;
     permissions?: Record<string, string>;
-}>();
+}>(), {
+    hiring_managers: () => [],
+    default_hiring_manager_id: null,
+});
 
 const page = usePage();
 const flash = computed(() => (page.props as any).flash || {});
 const canEdit = computed(() => (props.permissions?.requests || 'edit') === 'edit');
 
 const confirmAction = ref<'cancel' | null>(null);
+const showActivityModal = ref(false);
 const reason = ref('');
 const reasonError = ref('');
 
 const assignForm = useForm({ worker_id: '' as string | number });
+const selectedManagerId = ref<string | number>(props.default_hiring_manager_id || '');
 
 function statusBadge(s: string): string {
     const map: Record<string, string> = {
@@ -120,7 +127,10 @@ function confirmAssignWorker() {
     assignTarget.value = null;
     previewEmail.value = '';
     suggestPreviewEmail(true);
-    previewStartDate.value = props.request.start_date || hirePreview.value.availability || '';
+    previewStartDate.value = defaultDeploymentDate(hirePreview.value.availability);
+    previewStartDateError.value = '';
+    selectedManagerId.value = props.default_hiring_manager_id || '';
+    resetTraining();
 }
 
 const releaseTarget = ref<any>(null);
@@ -179,6 +189,9 @@ function closeAssignedWorker() {
 const selectedAvailable = computed(() =>
     props.request.available_workers.find((w) => String(w.id) === String(assignForm.worker_id)) || null
 );
+const hasAssignableAvailableWorkers = computed(() =>
+    props.request.available_workers.some((worker) => worker.worker_status === 'Available')
+);
 
 function acceptProposal(id: number) {
     const target = props.request.proposals.find((p) => p.id === id) || null;
@@ -196,8 +209,59 @@ const hireMode = ref<'proposal' | 'direct' | null>(null);
 // Reference-only company email (same format as Onboarding CREATE EMPLOYEE).
 // Editable + Generate button. Never posted — preview only.
 const previewEmail = ref('');
-// Editable calendar for deployment start. Reference only — never posted.
+// Deployment start date saved with the completed assignment.
 const previewStartDate = ref('');
+const previewStartDateError = ref('');
+const trainingRequired = ref(false);
+const trainingDateError = ref('');
+const managerError = ref('');
+
+const todayDate = (() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+})();
+
+function defaultDeploymentDate(workerAvailability?: string | null): string {
+    return [props.request.start_date, workerAvailability, todayDate]
+        .filter((date): date is string => Boolean(date))
+        .sort()
+        .at(-1) || todayDate;
+}
+
+function addFourWeeks(dateValue: string): string {
+    if (!dateValue) return '';
+    const [year, month, day] = dateValue.split('-').map(Number);
+    const target = new Date(year, month - 1, day);
+    target.setDate(target.getDate() + 28);
+    return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+}
+
+const trainingEndMax = computed(() => addFourWeeks(previewStartDate.value));
+const trainingEndDate = computed(() => trainingRequired.value ? trainingEndMax.value : '');
+
+function updateDeploymentStart() {
+    previewStartDateError.value = '';
+    trainingDateError.value = '';
+}
+
+function resetTraining() {
+    trainingRequired.value = false;
+    trainingDateError.value = '';
+}
+
+function onTrainingRequiredChange() {
+    trainingDateError.value = '';
+    managerError.value = '';
+}
+
+function formatYearsExperience(value: string | number | null | undefined): string {
+    if (value === null || value === undefined || value === '') return '—';
+    const years = Number(value);
+    return Number.isFinite(years) ? String(Math.trunc(years)) : String(value);
+}
 
 function suggestPreviewEmail(force = false) {
     if (!force && previewEmail.value.trim()) return;
@@ -229,7 +293,10 @@ function confirmAcceptProposal() {
     acceptTarget.value = null;
     previewEmail.value = '';
     suggestPreviewEmail(true);
-    previewStartDate.value = props.request.start_date || hirePreview.value.availability || '';
+    previewStartDate.value = defaultDeploymentDate(hirePreview.value.availability);
+    previewStartDateError.value = '';
+    selectedManagerId.value = props.default_hiring_manager_id || '';
+    resetTraining();
 }
 function closeHirePreview() {
     if (accepting.value) return;
@@ -238,20 +305,41 @@ function closeHirePreview() {
     hireMode.value = null;
     previewEmail.value = '';
     previewStartDate.value = '';
+    resetTraining();
 }
 function finishHirePreview() {
     if (!hirePreview.value || accepting.value) return;
+    if (!previewStartDate.value || previewStartDate.value < todayDate) {
+        previewStartDateError.value = 'Choose today or a future deployment date.';
+        return;
+    }
+    previewStartDateError.value = '';
+    if (trainingRequired.value && !selectedManagerId.value) {
+        managerError.value = 'Choose a reporting manager to supervise this training.';
+        return;
+    }
+    managerError.value = '';
+    if (trainingRequired.value && (!trainingEndDate.value || trainingEndDate.value < previewStartDate.value || trainingEndDate.value > trainingEndMax.value)) {
+        trainingDateError.value = 'Choose a training end date between the deployment date and four weeks later.';
+        return;
+    }
+    trainingDateError.value = '';
     // Finish: send real preview data — backend assigns (+ Accepted for proposals) and emails worker.
     accepting.value = true;
     const payload = {
         company_email: previewEmail.value || undefined,
         start_date: previewStartDate.value || undefined,
+        manager_id: selectedManagerId.value || null,
+        training_required: trainingRequired.value,
+        training_end_date: trainingRequired.value ? trainingEndDate.value : null,
     } as any;
     const done = () => {
         hirePreview.value = null;
         hireMode.value = null;
         previewEmail.value = '';
         previewStartDate.value = '';
+        previewStartDateError.value = '';
+        resetTraining();
         assignForm.reset();
     };
     if (hireMode.value === 'direct') {
@@ -308,18 +396,24 @@ const canAssign = computed(() =>
 </script>
 
 <template>
-    <Head :title="request.code + ' - Requests - Monti ERP'" />
+    <Head :title="request.department + ' manpower request - Monti ERP'" />
     <AuthenticatedLayout>
+        <button type="button" title="Request history" aria-label="Show request history" @click="showActivityModal = true" class="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/30">
+            <History class="h-5 w-5" />
+            <span v-if="request.activities.length" class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-slate-900 px-1 text-[10px] font-bold text-white dark:border-slate-800">
+                {{ request.activities.length }}
+            </span>
+        </button>
         <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
             <Link :href="route('hrm.manpower-requests.index')" class="hover:text-blue-600">Requests</Link>
             <span>/</span>
-            <span class="text-slate-800 dark:text-slate-200 font-semibold">{{ request.code }}</span>
+            <span class="text-slate-800 dark:text-slate-200 font-semibold">Details</span>
         </nav>
 
         <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
                 <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-tight">
-                    {{ request.code }} <span class="text-slate-400 font-bold">· {{ request.department }} · {{ request.position_skill }}</span>
+                    {{ request.department }} <span class="text-slate-400 font-bold">· {{ request.position_skill }}</span>
                 </h1>
                 <div class="flex items-center gap-2 mt-1">
                     <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', statusBadge(request.status)]">{{ request.status }}</span>
@@ -363,7 +457,7 @@ const canAssign = computed(() =>
         </div>
 
         <div v-if="confirmAction === 'cancel' && canEdit" class="mb-4 p-4 rounded-xl bg-white dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600">
-            <p class="text-sm font-black text-slate-900 dark:text-white">Cancel request {{ request.code }}?</p>
+            <p class="text-sm font-black text-slate-900 dark:text-white">Cancel this request?</p>
             <textarea
                 v-model="reason"
                 rows="2"
@@ -387,7 +481,7 @@ const canAssign = computed(() =>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Start date</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.start_date || '—' }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">End date</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.end_date || '—' }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Shift</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.shift || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Agency</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ request.agency || '—' }} <span class="text-slate-400">({{ request.agency_code || '—' }})</span></dd></div>
+                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Agency</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ request.agency || '—' }}</dd></div>
                     <div v-if="request.notes"><dt class="text-slate-400">Notes</dt><dd class="mt-1 text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{{ request.notes }}</dd></div>
                 </dl>
                 <div class="mt-4">
@@ -405,20 +499,23 @@ const canAssign = computed(() =>
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Assigned workers</h2>
                 <form v-if="canAssign" @submit.prevent="assignWorker" class="mb-3">
                     <div class="flex items-center gap-2">
-                        <select v-model="assignForm.worker_id" class="flex-1 px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200">
-                            <option value="">Select an available worker...</option>
+                        <select v-model="assignForm.worker_id" class="flex-1 min-w-0 px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200">
+                            <option value="">Select a matching worker...</option>
                             <option v-for="w in request.available_workers" :key="w.id" :value="w.id">
-                                {{ w.name }} ({{ w.code }}){{ w.position_skill ? ' · ' + w.position_skill : '' }}
+                                {{ w.name }}{{ w.proposed_department ? ' · ' + w.proposed_department : '' }}{{ w.position_skill ? ' · ' + w.position_skill : '' }}{{ w.worker_status !== 'Available' ? ' · Pending HR approval' : '' }}
                             </option>
                         </select>
-                        <button type="submit" :disabled="!assignForm.worker_id || assignForm.processing" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-60 whitespace-nowrap">
+                        <Link v-if="selectedAvailable?.worker_status === 'Pending'" :href="route('hrm.workers.show', selectedAvailable.id)" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition whitespace-nowrap">
+                            Review &amp; approve
+                        </Link>
+                        <button v-else type="submit" :disabled="!assignForm.worker_id || assignForm.processing || selectedAvailable?.worker_status !== 'Available'" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-60 whitespace-nowrap">
                             Assign
                         </button>
                     </div>
                     <div v-if="selectedAvailable" class="mt-2 rounded-xl bg-blue-50/60 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/40 px-3 py-3 text-xs">
                         <div class="flex items-center justify-between gap-2">
                             <p class="font-bold text-blue-700 dark:text-blue-300">
-                                {{ selectedAvailable.name }} <span class="font-mono font-semibold text-slate-400">({{ selectedAvailable.code }})</span>
+                                {{ selectedAvailable.name }}
                             </p>
                             <span v-if="selectedAvailable.worker_status" class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-white dark:bg-slate-800 border border-blue-100 dark:border-blue-900/40 text-blue-700 dark:text-blue-300">{{ selectedAvailable.worker_status }}</span>
                         </div>
@@ -452,6 +549,8 @@ const canAssign = computed(() =>
                         </dl>
                     </div>
                 </form>
+                <p v-if="canAssign && request.available_workers.length === 0" class="mb-3 text-[11px] leading-5 text-slate-400">No agency workers match this request’s department and position.</p>
+                <p v-else-if="canAssign && !hasAssignableAvailableWorkers" class="mb-3 text-[11px] leading-5 text-amber-600">Select a Pending worker and choose Review &amp; approve. Once HR approves the worker, return here to assign them.</p>
                 <p v-if="assignForm.errors.worker_id" class="mb-2 text-xs text-rose-600">{{ assignForm.errors.worker_id }}</p>
                 <p v-if="!canAssign && request.stored_status === 'Open' && request.agency_status !== 'Active'" class="mb-3 px-2 py-1.5 rounded-lg text-[11px] font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
                     No new workers can be assigned while the agency is not Active.
@@ -462,7 +561,7 @@ const canAssign = computed(() =>
                         <div>
                             <button @click="openAssignedWorker(a)" title="View worker info"
                                 class="font-bold text-blue-600 hover:text-blue-700 hover:underline text-left transition">
-                                {{ a.worker_name }} <span class="font-mono text-slate-400">({{ a.worker_code }})</span>
+                                {{ a.worker_name }}
                             </button>
                             <p class="text-slate-500 dark:text-slate-400">{{ a.position_skill || '' }}{{ a.assigned_at ? ' · since ' + a.assigned_at : '' }}{{ a.assigned_by ? ' · by ' + a.assigned_by : '' }}</p>
                         </div>
@@ -485,7 +584,7 @@ const canAssign = computed(() =>
                         <div>
                             <button @click="openProposalWorker(p)" title="View worker info"
                                 class="font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left transition">
-                                {{ p.worker_name }} <span class="font-mono text-slate-400">({{ p.worker_code }})</span>
+                                {{ p.worker_name }}
                             </button>
                             <p class="text-slate-500 dark:text-slate-400">proposed {{ p.proposed_at || '' }}{{ p.proposed_by ? ' by ' + p.proposed_by : '' }}</p>
                             <p v-if="p.status !== 'Proposed'" class="text-slate-500 dark:text-slate-400">{{ p.status }}{{ p.reviewed_by ? ' by ' + p.reviewed_by : '' }}{{ p.review_reason ? ' — ' + p.review_reason : '' }}</p>
@@ -516,7 +615,7 @@ const canAssign = computed(() =>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                             <tr v-for="s in request.attendance_summary" :key="s.worker_id">
-                                <td class="py-2 px-3 text-xs font-bold text-slate-900 dark:text-white">{{ s.worker_name }} <span class="font-mono text-slate-400">({{ s.worker_code }})</span></td>
+                                <td class="py-2 px-3 text-xs font-bold text-slate-900 dark:text-white">{{ s.worker_name }}</td>
                                 <td class="py-2 px-3 text-center text-xs text-slate-600 dark:text-slate-300">{{ s.records }}</td>
                                 <td class="py-2 px-3 text-center text-xs text-slate-600 dark:text-slate-300">{{ s.present }} / {{ s.absent }} / {{ s.late }}</td>
                                 <td class="py-2 px-3 text-center text-xs text-slate-600 dark:text-slate-300">{{ s.hours }}{{ s.overtime_hours ? '+' + s.overtime_hours + ' OT' : '' }}</td>
@@ -526,19 +625,36 @@ const canAssign = computed(() =>
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5 lg:col-span-2">
-                <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Activity (last 20)</h2>
-                <div v-if="request.activities.length === 0" class="text-xs text-slate-400">No activity recorded yet.</div>
-                <ul class="divide-y divide-slate-100 dark:divide-slate-700/50">
-                    <li v-for="a in request.activities" :key="a.id" class="py-2 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs">
-                        <span class="text-slate-400 whitespace-nowrap w-40 shrink-0">{{ a.date }}</span>
-                        <span class="font-bold text-slate-800 dark:text-slate-100 shrink-0">{{ actionLabel(a.action) }}</span>
-                        <span class="text-slate-500 dark:text-slate-400 flex-1">{{ a.details || '' }}</span>
-                        <span class="text-slate-500 dark:text-slate-400 shrink-0">by {{ a.actor }}</span>
-                        <span v-if="a.reason" class="text-slate-400 italic shrink-0">“{{ a.reason }}”</span>
-                    </li>
-                </ul>
-            </div>
+        </div>
+
+        <!-- Request activity modal -->
+        <div v-if="showActivityModal" class="fixed inset-0 z-50 bg-transparent" @click.self="showActivityModal = false" @keydown.esc="showActivityModal = false">
+            <section role="dialog" aria-modal="true" aria-labelledby="request-activity-title" class="fixed bottom-24 right-6 flex max-h-[min(70vh,32rem)] w-[min(36rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+                <header class="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+                    <div class="flex items-center gap-3">
+                        <History class="h-5 w-5 text-blue-600" />
+                        <div>
+                            <h2 id="request-activity-title" class="text-base font-black text-slate-900 dark:text-white">Request history</h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Last 20 activities</p>
+                        </div>
+                    </div>
+                    <button type="button" @click="showActivityModal = false" class="rounded-lg px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700" aria-label="Close request history">Close</button>
+                </header>
+                <div class="min-h-0 overflow-y-auto px-5">
+                    <p v-if="request.activities.length === 0" class="py-10 text-center text-sm text-slate-400">No activity recorded yet.</p>
+                    <ul v-else class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                        <li v-for="a in request.activities" :key="a.id" class="flex flex-col gap-1 py-4 sm:flex-row sm:items-start sm:gap-4">
+                            <span class="shrink-0 text-xs text-slate-400 sm:w-40">{{ a.date }}</span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-bold text-slate-800 dark:text-slate-100">{{ actionLabel(a.action) }}</p>
+                                <p v-if="a.details" class="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">{{ a.details }}</p>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">by {{ a.actor }}</p>
+                                <p v-if="a.reason" class="mt-1 text-xs italic text-slate-400">“{{ a.reason }}”</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </section>
         </div>
 
         <!-- Proposal worker-info modal -->
@@ -547,7 +663,6 @@ const canAssign = computed(() =>
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <h3 class="text-base font-black text-slate-900 dark:text-white">{{ selectedProposal.worker_name }}</h3>
-                        <p class="text-xs font-mono text-slate-400">{{ selectedProposal.worker_code }}</p>
                     </div>
                     <button @click="closeProposalWorker" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Close">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -609,7 +724,6 @@ const canAssign = computed(() =>
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <h3 class="text-base font-black text-slate-900 dark:text-white">{{ selectedAssigned.worker_name }}</h3>
-                        <p class="text-xs font-mono text-slate-400">{{ selectedAssigned.worker_code }}</p>
                     </div>
                     <button @click="closeAssignedWorker" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Close">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -666,7 +780,7 @@ const canAssign = computed(() =>
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md p-5 shadow-2xl">
                 <h3 class="text-base font-black text-slate-900 dark:text-white">Release {{ releaseTarget.worker_name }}?</h3>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    The worker returns to Available and a slot reopens on <span class="font-bold text-slate-700 dark:text-slate-200">{{ request.code }}</span>.
+                    The worker returns to Available and a slot reopens on this request.
                 </p>
                 <textarea v-model="releaseReason" rows="2" placeholder="Reason (required)" class="mt-3 w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200"></textarea>
                 <p v-if="releaseError" class="mt-1 text-xs text-rose-600">{{ releaseError }}</p>
@@ -695,12 +809,12 @@ const canAssign = computed(() =>
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md p-5 shadow-2xl">
                 <h3 class="text-base font-black text-slate-900 dark:text-white">Review worker account?</h3>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    This opens the worker account for <span class="font-bold text-slate-700 dark:text-slate-200">{{ request.code }}</span>
+                    This opens the worker account for this request
                     ({{ request.filled }} of {{ request.needed }} filled). Status stays Proposed until you click Finish.
                 </p>
                 <div class="mt-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3 text-xs">
                     <p class="font-black text-slate-900 dark:text-white">
-                        {{ acceptTarget.worker_name }} <span class="font-mono font-semibold text-slate-400">({{ acceptTarget.worker_code }})</span>
+                        {{ acceptTarget.worker_name }}
                     </p>
                     <p class="mt-1 text-slate-500 dark:text-slate-400">
                         {{ acceptTarget.position_skill || '—' }}{{ acceptTarget.daily_rate ? ' · ₱' + acceptTarget.daily_rate + '/day' : '' }}{{ acceptTarget.proposed_at ? ' · proposed ' + acceptTarget.proposed_at : '' }}{{ acceptTarget.proposed_by ? ' by ' + acceptTarget.proposed_by : '' }}
@@ -720,12 +834,12 @@ const canAssign = computed(() =>
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md p-5 shadow-2xl">
                 <h3 class="text-base font-black text-slate-900 dark:text-white">Review worker account?</h3>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    This opens the worker account for <span class="font-bold text-slate-700 dark:text-slate-200">{{ request.code }}</span>
+                    This opens the worker account for this request
                     ({{ request.filled }} of {{ request.needed }} filled). Nothing is assigned until you click Finish.
                 </p>
                 <div class="mt-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3 text-xs">
                     <p class="font-black text-slate-900 dark:text-white">
-                        {{ assignTarget.worker_name }} <span class="font-mono font-semibold text-slate-400">({{ assignTarget.worker_code }})</span>
+                        {{ assignTarget.worker_name }}
                     </p>
                     <p class="mt-1 text-slate-500 dark:text-slate-400">
                         {{ assignTarget.position_skill || '—' }}{{ assignTarget.daily_rate ? ' · ₱' + assignTarget.daily_rate + '/day' : '' }}
@@ -761,13 +875,11 @@ const canAssign = computed(() =>
                         <div class="border-t border-slate-200 dark:border-slate-700 mt-1 mb-3"></div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs">
                             <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Worker</span><span class="font-bold text-slate-800 dark:text-slate-100">{{ hirePreview.worker_name }}</span></div>
-                            <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Worker ID</span><span class="font-mono font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.worker_code }}</span></div>
                             <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Position / skill</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.position_skill || '—' }}</span></div>
                             <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Phone</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.phone || '—' }}</span></div>
                             <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Gender</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.gender || '—' }}</span></div>
                             <div v-if="hireMode !== 'direct'" class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Proposal</span><span class="font-semibold text-amber-600">⏳ Proposed — under review{{ hirePreview.proposed_at ? ' · ' + hirePreview.proposed_at : '' }}</span></div>
                             <div v-else class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Source</span><span class="font-semibold text-blue-600">Direct assign — available worker</span></div>
-                            <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Request</span><span class="font-mono font-semibold text-slate-700 dark:text-slate-200">{{ request.code }}</span></div>
                         </div>
                     </section>
 
@@ -779,8 +891,29 @@ const canAssign = computed(() =>
                             <div><p class="text-slate-400 font-semibold mb-1">Department</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.department }}</p></div>
                             <div><p class="text-slate-400 font-semibold mb-1">Department module (users.role)</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.department_module || '—' }}</p><p class="mt-1 text-[10px] text-slate-500">Same mapping as CREATE EMPLOYEE — prefilled from department, display only.</p></div>
                             <div><p class="text-slate-400 font-semibold mb-1">Employment arrangement</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">Agency Contract</p><p class="mt-1 text-[10px] text-slate-500">Fixed for agency workers — display only.</p></div>
-                            <div><p class="text-slate-400 font-semibold mb-1">Deployment start (request)</p><input v-model="previewStartDate" type="date" class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm font-semibold" /><p class="mt-1 text-[10px] text-slate-500">Calendar — editable, reference only.</p></div>
-                            <div><p class="text-slate-400 font-semibold mb-1">Years of experience</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ hirePreview.years_experience ?? '—' }}</p></div>
+                            <div>
+                                <label for="reporting-manager" class="mb-1 block font-semibold text-slate-400">Reporting manager</label>
+                                <select id="reporting-manager" v-model="selectedManagerId" :disabled="hiring_managers.length === 0" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                    <option value="">{{ hiring_managers.length ? 'Select a reporting manager...' : 'No manager assigned to this department' }}</option>
+                                    <option v-for="manager in hiring_managers" :key="manager.id" :value="manager.id">{{ manager.name }} · {{ manager.position }}</option>
+                                </select>
+                                <p v-if="managerError" class="mt-1 text-[10px] font-bold text-rose-600">{{ managerError }}</p>
+                                <p v-else class="mt-1 text-[10px] text-slate-500">Managers assigned to {{ request.department }}. Required when training is enabled.</p>
+                            </div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Deployment start date</p><input v-model="previewStartDate" @input="updateDeploymentStart" type="date" :min="todayDate" required class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm font-semibold" /><p v-if="previewStartDateError" class="mt-1 text-[10px] font-bold text-rose-600">{{ previewStartDateError }}</p><p v-else class="mt-1 text-[10px] text-slate-500">Saved as the worker's deployment start date.</p></div>
+                            <label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                <input v-model="trainingRequired" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500" @change="onTrainingRequiredChange" />
+                                Training required
+                            </label>
+                            <template v-if="trainingRequired">
+                                <div>
+                                    <label for="training-end-date" class="mb-1 block font-semibold text-slate-400">Training end date</label>
+                                    <input id="training-end-date" :value="trainingEndDate" type="date" :min="previewStartDate" :max="trainingEndMax" readonly class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" />
+                                    <p class="mt-1 text-[10px] text-slate-500">Automatically set to four weeks after deployment (maximum).</p>
+                                </div>
+                            </template>
+                            <p v-if="trainingDateError" class="md:col-span-2 text-[10px] font-bold text-rose-600">{{ trainingDateError }}</p>
+                            <div><p class="text-slate-400 font-semibold mb-1">Years of experience</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ formatYearsExperience(hirePreview.years_experience) }}</p></div>
                         </div>
                     </section>
 
@@ -831,9 +964,17 @@ const canAssign = computed(() =>
                     <Link :href="route('hrm.workers.show', hirePreview.worker_id || hirePreview.id)" class="text-xs font-bold text-blue-600 hover:text-blue-700 transition">Open full worker profile →</Link>
                     <div class="flex items-center gap-2">
                         <button @click="closeHirePreview" :disabled="accepting" class="px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all disabled:opacity-50">Cancel</button>
-                        <button @click="finishHirePreview" :disabled="accepting" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-60">{{ accepting ? 'Working...' : (hireMode === 'direct' ? '[ Finish — Assign worker ]' : '[ Finish — Accept worker ]') }}</button>
+                        <button @click="finishHirePreview" :disabled="accepting" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-60">{{ accepting ? 'Working...' : (hireMode === 'direct' ? 'Finish — Assign worker' : 'Finish — Accept worker') }}</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div v-if="accepting" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="status" aria-live="polite" aria-label="Assigning worker">
+            <div class="w-full max-w-sm rounded-2xl border border-white/15 bg-white p-7 text-center shadow-2xl dark:bg-slate-800 dark:border-slate-700">
+                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border-4 border-emerald-100 border-t-emerald-600 dark:border-emerald-900 dark:border-t-emerald-400 animate-spin"></div>
+                <h2 class="mt-5 text-base font-black text-slate-900 dark:text-white">{{ hireMode === 'proposal' ? 'Accepting worker proposal' : 'Deploying worker' }}</h2>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-300">Creating the worker account and saving the assignment. Please wait.</p>
             </div>
         </div>
     </AuthenticatedLayout>

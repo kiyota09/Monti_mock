@@ -11,6 +11,8 @@ use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\TraineeGrade;
 use App\Models\Hrm\TraineeDailyObservation;
 use App\Models\Hrm\TraineeWeeklyEvaluation;
+use App\Models\Hrm\ProbationEvaluation;
+use App\Http\Controllers\Hrm\Workforce\ProbationEvaluationController;
 use App\Support\ReapplyCooldown;
 use App\Traits\HasPagePermissions;
 use Carbon\Carbon;
@@ -21,7 +23,7 @@ class AssignedTraineesController extends Controller
 {
     use HasPagePermissions;
 
-    private const TRAINING_WEEKS = 8;
+    private const TRAINING_WEEKS = 4;
 
     /**
      * My Assigned Trainees — strictly rows where users.manager_id == me.
@@ -36,7 +38,9 @@ class AssignedTraineesController extends Controller
             'traineeTransfers',
             'hrmOrgPosition:id,name',
             'hrmDepartment:id,name',
+            'hrmEmploymentType:id,name',
             'manager:id,name',
+            'worker:id,position_skill',
             'weeklyEvaluations' => fn ($q) => $q->orderBy('week_number'),
         ];
 
@@ -50,7 +54,18 @@ class AssignedTraineesController extends Controller
         $assignedNewHires = User::whereIn('position', ['staff', 'supervisor', 'manager', 'secretary', 'special_officer', 'vice_president'])
             ->where('manager_id', $viewer?->id)
             ->where('is_active', true)
-            ->where('created_at', '>=', now()->subDays(60))
+            ->where(function ($q) {
+                $q->where('created_at', '>=', now()->subDays(60))
+                    ->orWhereNotNull('training_duration_weeks')
+                    ->orWhere(function ($probation) {
+                        $probation->whereNull('regularization_date')
+                            ->where(function ($status) {
+                                $status->whereHas('hrmEmploymentType', fn ($type) => $type->whereRaw('LOWER(name) LIKE ?', ['%probation%']))
+                                    ->orWhereNotNull('probation_end_date')
+                                    ->orWhereRaw('LOWER(COALESCE(employment_status, ?)) LIKE ?', ['', '%probation%']);
+                            });
+                    });
+            })
             ->with($with)
             ->orderByDesc('created_at')
             ->take(100)
@@ -63,11 +78,44 @@ class AssignedTraineesController extends Controller
         $appliedMap = Applicant::whereIn('email', $users->pluck('email')->filter()->unique()->all())
             ->orderBy('id')->get()->keyBy('email');
 
-        $rows = $users->map(fn ($u) => self::assignedRow($u, $appliedMap[$u->email]->position_applied ?? null))->values();
+        $rows = $users->map(function ($u) use ($appliedMap) {
+            $row = self::assignedRow($u, $appliedMap[$u->email]->position_applied ?? null);
+            $employmentType = $u->hrmEmploymentType?->name;
+            $isProbationary = $u->position !== 'trainee' && empty($u->regularization_date) && (
+                str_contains(strtolower((string) $employmentType), 'probation')
+                || ! empty($u->probation_end_date)
+                || str_contains(strtolower((string) $u->employment_status), 'probation')
+            );
+            $isTraining = $u->position === 'trainee' || (! $isProbationary && ! empty($u->training_duration_weeks));
+
+            return array_merge($row, [
+                'assignment_type' => $isTraining ? 'training' : ($isProbationary ? 'probationary' : null),
+                'employment_type' => $employmentType ?: '—',
+                'probation_start' => $u->join_date ? (string) $u->join_date : null,
+                'probation_end' => $u->probation_end_date ? (string) $u->probation_end_date : null,
+            ]);
+        })->values();
+        $probationEvaluationMap = ProbationEvaluation::whereIn('user_id', $rows->where('assignment_type', 'probationary')->pluck('id'))
+            ->orderByDesc('period_end')->orderByDesc('id')->get()->groupBy('user_id')->map->first();
+        $rows = $rows->map(function ($row) use ($probationEvaluationMap) {
+            $record = $probationEvaluationMap->get($row['id']);
+            $row['probation_evaluation'] = $record ? [
+                'id' => $record->id, 'period_label' => $record->period_label,
+                'period_start' => $record->period_start?->toDateString(), 'period_end' => $record->period_end?->toDateString(),
+                'due_date' => $record->due_date?->toDateString(), 'scores' => $record->scores,
+                'overall_score' => $record->overall_score, 'comments' => $record->comments,
+                'strengths' => $record->strengths, 'improvements' => $record->improvements,
+                'recommendation' => $record->recommendation, 'status' => $record->status,
+            ] : null;
+            return $row;
+        });
+        $trainingRows = $rows->where('assignment_type', 'training')->values();
+        $probationaryRows = $rows->where('assignment_type', 'probationary')->values();
 
         return Inertia::render('Dashboard/HRM_NEW/MyAssignedTrainees', [
-            'trainees' => $rows,
-            'summary' => self::summary($rows),
+            'trainees' => $trainingRows,
+            'probationary' => $probationaryRows,
+            'summary' => self::summary($trainingRows),
             'departments' => HrmDepartment::whereNull('archived_at')->orderBy('name')->select('id', 'name')->get(),
             'positions' => HrmPosition::whereNull('archived_at')->orderBy('name')->select('id', 'name', 'department_id')->get(),
             'programs' => $rows->pluck('training_program')->filter()->unique()->values()->all(),
@@ -111,6 +159,7 @@ class AssignedTraineesController extends Controller
             'hrmOrgPosition:id,name',
             'hrmDepartment:id,name',
             'manager:id,name',
+            'worker:id,position_skill',
             'weeklyEvaluations' => fn ($q) => $q->orderBy('week_number'),
         ])->findOrFail($id);
 
@@ -125,13 +174,60 @@ class AssignedTraineesController extends Controller
         ]);
     }
 
+    public function saveProbationEvaluation(Request $request, $id)
+    {
+        $employee = User::with('hrmEmploymentType')->findOrFail($id);
+        self::authorizeAssignedAccess($request->user(), $employee);
+        $hasProbationRecord = str_contains(strtolower((string) $employee->hrmEmploymentType?->name), 'probation')
+            || ! empty($employee->probation_end_date)
+            || str_contains(strtolower((string) $employee->employment_status), 'probation');
+        abort_unless($hasProbationRecord && empty($employee->regularization_date), 422, 'This employee is not assigned as probationary.');
+
+        $data = $request->validate([
+            'evaluation_id' => 'nullable|integer|exists:hrm_probation_evaluations,id',
+            'period_label' => 'required|string|max:80',
+            'period_start' => 'required|date', 'period_end' => 'required|date|after_or_equal:period_start',
+            'scores' => 'required|array', 'scores.*' => 'required|numeric|min:1|max:5',
+            'strengths' => 'nullable|string|max:5000', 'improvements' => 'nullable|string|max:5000',
+            'comments' => 'nullable|string|max:10000',
+            'recommendation' => 'required|in:Regularize,Do not regularize',
+            'submit' => 'sometimes|boolean',
+        ]);
+        foreach (array_keys(ProbationEvaluationController::CRITERIA) as $criterion) {
+            if (! array_key_exists($criterion, $data['scores'])) {
+                return response()->json(['message' => 'Please score all six evaluation criteria.'], 422);
+            }
+        }
+        $evaluation = ! empty($data['evaluation_id'])
+            ? ProbationEvaluation::where('user_id', $employee->id)->findOrFail($data['evaluation_id'])
+            : new ProbationEvaluation(['user_id' => $employee->id, 'evaluator_id' => $request->user()->id]);
+        abort_unless(in_array($evaluation->status, [null, 'Draft', 'Submitted'], true), 422, 'This evaluation has already been finalized.');
+        if ($evaluation->status === 'Submitted') {
+            abort_unless((bool) ($data['submit'] ?? false), 422, 'A submitted evaluation can only update its recommendation.');
+            $evaluation->update(['recommendation' => $data['recommendation']]);
+
+            return response()->json(['evaluation' => $evaluation->fresh()]);
+        }
+        $criteriaScores = collect($data['scores'])->only(array_keys(ProbationEvaluationController::CRITERIA));
+        $evaluation->fill([
+            'period_label' => $data['period_label'], 'period_start' => $data['period_start'],
+            'period_end' => $data['period_end'], 'due_date' => $employee->probation_end_date,
+            'scores' => $criteriaScores->all(), 'overall_score' => round($criteriaScores->avg() * 20, 2),
+            'strengths' => $data['strengths'] ?? null, 'improvements' => $data['improvements'] ?? null,
+            'comments' => $data['comments'] ?? null, 'recommendation' => $data['recommendation'],
+            'status' => ($data['submit'] ?? false) ? 'Submitted' : 'Draft',
+        ])->save();
+
+        return response()->json(['evaluation' => $evaluation->fresh()]);
+    }
+
     /**
      * Weekly evaluation (1–5 scale). Overall = average → x/5.
      */
     public function weekly(Request $request, $id)
     {
         $validated = $request->validate([
-            'week_number' => 'required|integer|min:1|max:12',
+            'week_number' => 'required|integer|min:1|max:4',
             'attendance' => 'required|numeric|min:1|max:5',
             'knowledge' => 'required|numeric|min:1|max:5',
             'practical_skills' => 'required|numeric|min:1|max:5',
@@ -144,6 +240,15 @@ class AssignedTraineesController extends Controller
         $trainee = User::findOrFail($id);
         self::authorizeAssignedAccess($request->user(), $trainee);
 
+        $trainingStart = $trainee->training_start_date ?? $trainee->join_date;
+        if ($trainingStart && Carbon::parse($trainingStart)->toDateString() > today()->toDateString()) {
+            $msg = 'Training evaluations are unavailable until the training start date (' . Carbon::parse($trainingStart)->toDateString() . ').';
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
+            return back()->withErrors(['weekly' => $msg]);
+        }
+
         // Training already ended (e.g. early termination) — remaining weeks
         // are cancelled, nothing more can be evaluated.
         if (! $trainee->is_active) {
@@ -152,6 +257,14 @@ class AssignedTraineesController extends Controller
                 return response()->json(['message' => $msg], 422);
             }
 
+            return back()->withErrors(['weekly' => $msg]);
+        }
+
+        if ($trainee->traineeGrade?->final_grade !== null) {
+            $msg = 'The final evaluation has been submitted; weekly evaluations are locked.';
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
             return back()->withErrors(['weekly' => $msg]);
         }
 
@@ -197,7 +310,7 @@ class AssignedTraineesController extends Controller
                 'message' => "Week {$validated['week_number']} evaluation saved ({$overall}/5).",
                 'overall' => $overall,
                 'weekly' => $weekly,
-                'trainee' => self::assignedRow($trainee->fresh(['traineeGrade', 'trainingEnrollments.training', 'traineeTransfers', 'hrmOrgPosition', 'hrmDepartment', 'manager', 'weeklyEvaluations']), $applied),
+                'trainee' => self::assignedRow($trainee->fresh(['traineeGrade', 'trainingEnrollments.training', 'traineeTransfers', 'hrmOrgPosition', 'hrmDepartment', 'manager', 'worker:id,position_skill', 'weeklyEvaluations']), $applied),
             ]);
         }
 
@@ -209,6 +322,10 @@ class AssignedTraineesController extends Controller
      */
     public function final(Request $request, $id)
     {
+        $trainee = User::findOrFail($id);
+        self::authorizeAssignedAccess($request->user(), $trainee);
+        $isWorker = ! empty($trainee->worker_id);
+
         $validated = $request->validate([
             'attendance' => 'required|numeric|min:0|max:100',
             'knowledge' => 'required|numeric|min:0|max:100',
@@ -216,11 +333,17 @@ class AssignedTraineesController extends Controller
             'work_behavior' => 'required|numeric|min:0|max:100',
             'safety_compliance' => 'required|numeric|min:0|max:100',
             'notes' => 'nullable|string|max:2000',
-            'recommendation' => 'required|in:regularization,reassigned,do_not_recommend',
+            'recommendation' => 'required|in:' . ($isWorker ? 'passed_training,do_not_recommend' : 'regularization,reassigned,do_not_recommend'),
         ]);
 
-        $trainee = User::findOrFail($id);
-        self::authorizeAssignedAccess($request->user(), $trainee);
+        $trainingStart = $trainee->training_start_date ?? $trainee->join_date;
+        if ($trainingStart && Carbon::parse($trainingStart)->toDateString() > today()->toDateString()) {
+            $msg = 'Training evaluations are unavailable until the training start date (' . Carbon::parse($trainingStart)->toDateString() . ').';
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
+            return back()->withErrors(['final' => $msg]);
+        }
 
         // Early-terminated training is cancelled — no final evaluation happens.
         if (! $trainee->is_active) {
@@ -246,7 +369,7 @@ class AssignedTraineesController extends Controller
         // as the manager marks any week "Ready for Final Evaluation", in which
         // case the remaining training days are auto-passed and the trainee no
         // longer needs to attend training.
-        $requiredWeeks = max(1, min(52, (int) ($trainee->training_duration_weeks ?? self::TRAINING_WEEKS) ?: self::TRAINING_WEEKS));
+        $requiredWeeks = max(1, min(4, (int) ($trainee->training_duration_weeks ?? self::TRAINING_WEEKS) ?: self::TRAINING_WEEKS));
         $doneWeeks = TraineeWeeklyEvaluation::where('user_id', $trainee->id)->distinct('week_number')->count('week_number');
         $readyForFinal = TraineeWeeklyEvaluation::where('user_id', $trainee->id)->where('recommendation', 'ready_final')->exists();
         if ($doneWeeks < $requiredWeeks && ! $readyForFinal) {
@@ -260,6 +383,11 @@ class AssignedTraineesController extends Controller
 
         $final = TraineeGrade::computeFinalGrade($validated);
         $passed = $final >= TraineeGrade::PASSING_GRADE;
+        if ($isWorker && $validated['recommendation'] === 'passed_training' && ! $passed) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'recommendation' => 'The final score must meet the passing grade to recommend Passed Training.',
+            ]);
+        }
 
         $payload = [
             'attendance' => $validated['attendance'],
@@ -280,7 +408,11 @@ class AssignedTraineesController extends Controller
         // recommendation) are recorded as Evaluated with no retraining flag
         // and no deactivation — HR sees them and decides (approve / extend /
         // do not regularize, or transfer for a reassignment).
-        if (in_array($validated['recommendation'], ['regularization', 'needs_improvement', 'reassigned'], true) && $passed) {
+        if ($isWorker && $validated['recommendation'] === 'passed_training') {
+            $payload['evaluation_status'] = 'Evaluated';
+            $payload['passed_to_hr'] = false;
+            $trainee->update(['is_active' => true]);
+        } elseif (in_array($validated['recommendation'], ['regularization', 'needs_improvement', 'reassigned'], true) && $passed) {
             // Submitted for HR review — the manager recommends, HR decides.
             // passed_to_hr + Regular employment happen only on HR approval.
             $payload['evaluation_status'] = 'Evaluated';
@@ -310,7 +442,7 @@ class AssignedTraineesController extends Controller
                 'message' => "Final evaluation submitted ({$final}/100). Awaiting HR review.",
                 'final_score' => $final,
                 'grade' => $grade,
-                'trainee' => self::assignedRow($trainee->fresh(['traineeGrade', 'trainingEnrollments.training', 'traineeTransfers', 'hrmOrgPosition', 'hrmDepartment', 'manager', 'weeklyEvaluations']), $applied),
+                'trainee' => self::assignedRow($trainee->fresh(['traineeGrade', 'trainingEnrollments.training', 'traineeTransfers', 'hrmOrgPosition', 'hrmDepartment', 'manager', 'worker:id,position_skill', 'weeklyEvaluations']), $applied),
             ]);
         }
 
@@ -340,6 +472,21 @@ class AssignedTraineesController extends Controller
         self::authorizeAssignedAccess($request->user(), $trainee);
 
         $date = Carbon::parse($validated['date'])->toDateString();
+        $trainingStart = $trainee->training_start_date ?? $trainee->join_date;
+        if ($trainingStart && Carbon::parse($trainingStart)->toDateString() > today()->toDateString()) {
+            $msg = 'Daily observations are unavailable until the training start date (' . Carbon::parse($trainingStart)->toDateString() . ').';
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
+            return back()->withErrors(['observation' => $msg]);
+        }
+        if ($trainingStart && $date < Carbon::parse($trainingStart)->toDateString()) {
+            $msg = 'Daily observations cannot be recorded before the training start date.';
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
+            return back()->withErrors(['observation' => $msg]);
+        }
 
         $observation = TraineeDailyObservation::updateOrCreate(
             ['user_id' => $trainee->id, 'date' => $date],
@@ -422,13 +569,16 @@ class AssignedTraineesController extends Controller
     public static function assignedRow(User $t, ?string $appliedPosition = null): array
     {
         $base = TraineeController::traineeRow($t, $appliedPosition);
+        if ($t->worker?->position_skill) {
+            $base['position'] = $t->worker->position_skill;
+        }
 
         // Training schedule comes from Create Employee (deployment start +
         // duration/end calendar); fall back to join_date + default weeks.
         // When the trainee has been reassigned, the week calendar restarts
         // from the latest transfer's effective date (duration stays the same).
         $weeks = (int) ($t->training_duration_weeks ?? self::TRAINING_WEEKS);
-        $weeks = max(1, min(52, $weeks ?: self::TRAINING_WEEKS));
+        $weeks = max(1, min(4, $weeks ?: self::TRAINING_WEEKS));
         try {
             $latestTransfer = \App\Models\Hrm\TraineeTransfer::where('user_id', $t->id)
                 ->whereNotNull('effective_date')
@@ -451,7 +601,13 @@ class AssignedTraineesController extends Controller
             $start = now();
         }
         try {
-            $expectedEnd = (clone $start)->addWeeks($weeks);
+            $maximumEnd = (clone $start)->addWeeks(4);
+            $expectedEnd = $t->training_end_date
+                ? Carbon::parse($t->training_end_date)
+                : (clone $start)->addWeeks($weeks);
+            if ($expectedEnd->gt($maximumEnd)) {
+                $expectedEnd = $maximumEnd;
+            }
         } catch (\Throwable $e) {
             $expectedEnd = (clone $start)->addWeeks($weeks);
         }
@@ -510,6 +666,7 @@ class AssignedTraineesController extends Controller
         ];
 
         return array_merge($base, [
+            'person_type' => $t->worker_id ? 'Worker' : 'Employee',
             'training_program' => $program,
             'training_start' => $start->toDateString(),
             'expected_end' => $expectedEnd->toDateString(),
@@ -575,7 +732,7 @@ class AssignedTraineesController extends Controller
         if (now()->lt($start->copy()->startOfDay())) {
             return 'Not Started';
         }
-        if (now()->gte($expectedEnd) || $currentWeek >= (int) ($t->training_duration_weeks ?? self::TRAINING_WEEKS)) {
+        if (now()->gte($expectedEnd) || $currentWeek >= min(4, (int) ($t->training_duration_weeks ?? self::TRAINING_WEEKS))) {
             return ($grade?->final_grade !== null || $grade?->evaluation_status === 'Evaluated') ? 'Completed' : 'Final Evaluation';
         }
         if ($currentWeek >= 3) {

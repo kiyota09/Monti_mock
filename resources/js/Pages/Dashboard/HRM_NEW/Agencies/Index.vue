@@ -33,18 +33,16 @@ watch(() => (page.props as any).flash, (flash: any) => {
 
 const search = ref(props.filters?.search || '');
 const status = ref(props.filters?.status || 'All');
-const expiring = ref(!!props.filters?.expiring);
 
 function applyFilters(pageNum = 1) {
     const params: any = { page: pageNum };
     if (search.value) params.search = search.value;
     if (status.value && status.value !== 'All') params.status = status.value;
-    if (expiring.value) params.expiring = 1;
     router.get(route('hrm.agencies.index'), params, { preserveState: true, preserveScroll: true, replace: true });
 }
 
 let searchTimeout: any = null;
-watch([search, status, expiring], () => {
+watch([search, status], () => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => applyFilters(1), 400);
 });
@@ -134,10 +132,6 @@ function openAgency(id: number) {
                         <option value="Suspended">Suspended</option>
                         <option value="Terminated">Terminated</option>
                     </select>
-                    <label class="inline-flex items-center gap-2 px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 cursor-pointer">
-                        <input v-model="expiring" type="checkbox" class="w-4 h-4 accent-blue-600" />
-                        Expiring within 30 days
-                    </label>
                 </div>
             </div>
 
@@ -145,7 +139,6 @@ function openAgency(id: number) {
                 <table class="w-full text-left border-collapse min-w-[860px]">
                     <thead>
                         <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                            <th class="py-3 px-4">Code</th>
                             <th class="py-3 px-4">Agency</th>
                             <th class="py-3 px-4">Contact</th>
                             <th class="py-3 px-4 text-center">Users</th>
@@ -167,7 +160,6 @@ function openAgency(id: number) {
                                     : 'hover:bg-slate-50 dark:hover:bg-slate-800/60',
                             ]"
                         >
-                            <td class="py-3 px-4 text-xs font-mono font-bold text-slate-700 dark:text-slate-200">{{ a.code }}</td>
                             <td class="py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">{{ a.name }}</td>
                             <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{{ a.contact_name || '—' }}</td>
                             <td class="py-3 px-4 text-center text-sm font-bold text-slate-700 dark:text-slate-200">{{ a.users_count }}</td>

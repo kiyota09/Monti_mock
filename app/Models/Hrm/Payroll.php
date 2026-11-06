@@ -20,6 +20,8 @@ class Payroll extends Model
         'employee_name',
         'role',
         'period',
+        'cutoff_start',
+        'cutoff_end',
         'department',
         'job_title',
 
@@ -112,6 +114,8 @@ class Payroll extends Model
         'employer_pagibig' => 'decimal:2',
         'accrual_13th' => 'decimal:2',
         'paid_at' => 'datetime',
+        'cutoff_start' => 'date',
+        'cutoff_end' => 'date',
     ];
 
     /**

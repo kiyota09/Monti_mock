@@ -92,7 +92,7 @@ class AttendanceController extends Controller
                 ->whereNull('released_at')->get()->keyBy('worker_id');
             $existingByWorker = Attendance::with('worker.agency:id,name')->whereDate('date', $date)->get()->keyBy('worker_id');
 
-            $workerUsers = Worker::with('agency:id,name')->whereNotNull('email')->get(['id', 'name', 'code', 'email', 'position_skill', 'proposed_department', 'agency_id', 'created_at']);
+            $workerUsers = Worker::with('agency:id,name')->whereNotNull('email')->get(['id', 'name', 'code', 'email', 'position_skill', 'proposed_department', 'agency_id', 'availability', 'created_at']);
 
             // Worker -> user login: same personal_email, tie-broken by name
             // (seed data may reuse one email across workers).
@@ -111,9 +111,12 @@ class AttendanceController extends Controller
                     $userIdsMatched[$match->id] = true;
                     // Attendance only counts from the deployment date set on
                     // the worker employee account (join_date of the login).
-                    $deploymentStartByWorker[$w->id] = $asDate($match->join_date) ?: $asDate($match->created_at);
+                    $accountStart = $asDate($match->join_date) ?: $asDate($match->created_at);
+                    $startDates = array_filter([$asDate($w->availability), $accountStart]);
+                    $deploymentStartByWorker[$w->id] = $startDates ? max($startDates) : null;
                 } else {
-                    $deploymentStartByWorker[$w->id] = $asDate($w->created_at);
+                    $startDates = array_filter([$asDate($w->availability), $asDate($w->created_at)]);
+                    $deploymentStartByWorker[$w->id] = $startDates ? max($startDates) : null;
                 }
             }
             $logsByUser = $userIdsMatched
@@ -138,12 +141,16 @@ class AttendanceController extends Controller
                 }
                 $seen[$w->id] = true;
                 // Before their deployment start date the worker is not on the
-                // sheet at all (never auto-marked Absent).
+                // sheet at all (never auto-marked Absent). A backdated planned
+                // start cannot precede the actual assignment date.
                 $start = $deploymentStartByWorker[$w->id] ?? null;
+                $asg = $assignments->get($w->id);
+                $assignmentStart = $asDate($asg?->assigned_at);
+                $eligibleStarts = array_filter([$start, $assignmentStart]);
+                $start = $eligibleStarts ? max($eligibleStarts) : null;
                 if ($start && $date < $start) {
                     continue;
                 }
-                $asg = $assignments->get($w->id);
                 // Deployed request department first; proposed only as fallback.
                 $departmentOf = $asg?->request?->department ?: ($w->proposed_department ?: null);
                 if ($department !== '' && (string) $departmentOf !== $department) {
@@ -252,6 +259,7 @@ class AttendanceController extends Controller
 
         return Inertia::render('Dashboard/HRM_NEW/Attendance/Bulk', [
             'departments' => $departments,
+            'agencies' => Agency::where('status', Agency::STATUS_ACTIVE)->orderBy('name')->pluck('name')->values()->all(),
             'department' => $department,
             'date' => $date,
             'sheet' => $sheet,

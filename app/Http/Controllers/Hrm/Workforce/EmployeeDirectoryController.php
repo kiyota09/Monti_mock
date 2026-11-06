@@ -47,6 +47,9 @@ class EmployeeDirectoryController extends Controller
         if ($d = $request->get('department')) {
             $q->where(fn ($w) => $w->where('hrm_department_id', $d)->orWhere('role', $d)->orWhere('department', $d));
         }
+        if ($positionId = $request->get('position')) {
+            $q->where('hrm_position_id', $positionId);
+        }
         if ($r = $request->get('role')) {
             $q->where('role', $r);
         }
@@ -76,7 +79,7 @@ class EmployeeDirectoryController extends Controller
                 'inactive' => User::whereNull('worker_id')->where('is_active', false)->count(),
                 'byDepartment' => $deptCounts,
             ],
-            'filters' => $request->only(['search', 'department', 'role', 'status']),
+            'filters' => $request->only(['search', 'department', 'position', 'role', 'status']),
             'departments' => HrmDepartment::whereNull('archived_at')->select('id', 'code', 'name')->get(),
             'positions' => HrmPosition::whereNull('archived_at')->select('id', 'name', 'department_id')->get(),
             'employmentTypes' => HrmEmploymentType::where('is_active', true)->select('id', 'name')->get(),
@@ -140,6 +143,10 @@ class EmployeeDirectoryController extends Controller
             'payroll_group' => 'nullable|string|max:60', 'salary_grade' => 'nullable|string|max:30',
             'basic_salary' => 'nullable|numeric|min:0', 'bank_account' => 'nullable|string|max:255',
             'tax_id' => 'nullable|string|max:60', 'sss_id' => 'nullable|string|max:60',
+            'pagibig_id' => 'nullable|string|max:60', 'philhealth_id' => 'nullable|string|max:60',
+            'sss_contribution' => 'nullable|numeric|min:0',
+            'pagibig_contribution' => 'nullable|numeric|min:0',
+            'philhealth_contribution' => 'nullable|numeric|min:0',
             'work_schedule' => 'nullable|string|max:255', 'shift' => 'nullable|string|max:255',
             'timezone' => 'nullable|string|max:20', 'biometrics_id' => 'nullable|string|max:60',
             'join_date' => 'nullable|date', 'probation_end_date' => 'nullable|date',
@@ -153,6 +160,13 @@ class EmployeeDirectoryController extends Controller
             'skills' => 'nullable|string', 'languages' => 'nullable|string|max:255',
             'trainings' => 'nullable|string',
         ]);
+
+        // HR owns employment status and probation dates; regularization must
+        // pass through the finalized probation evaluation workflow.
+        if (strtoupper((string) $request->user()?->role) !== 'HRM'
+            && array_intersect(['hrm_employment_type_id', 'probation_end_date', 'regularization_date'], array_keys($data))) {
+            abort(403, 'Only HR can change employment type or probation dates.');
+        }
 
         // Guard against self-reporting.
         if (! empty($data['manager_id']) && (int) $data['manager_id'] === (int) $employee->id) {
@@ -405,7 +419,9 @@ class EmployeeDirectoryController extends Controller
             'basicSalaryRaw' => $u->basic_salary,
             'bankAccount' => $u->bank_account ?? '',
             'taxID' => $u->tax_id ?? '',
-            'ssn' => $u->sss_id ?? '',
+            'sssContribution' => $u->sss_contribution,
+            'pagibigContribution' => $u->pagibig_contribution,
+            'philhealthContribution' => $u->philhealth_contribution,
             'workSchedule' => $u->work_schedule ?? '',
             'shift' => $u->shift ?? '',
             'timeZone' => $u->timezone ?? 'GMT+8',

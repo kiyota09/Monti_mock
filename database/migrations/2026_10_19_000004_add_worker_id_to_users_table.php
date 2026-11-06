@@ -9,6 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::hasColumn('users', 'worker_id')) {
+<<<<<<< HEAD:database/migrations/2026_10_19_000003_add_worker_id_to_users_table.php
             $hasWorkerForeignKey = collect(Schema::getForeignKeys('users'))->contains(
                 fn (array $foreignKey) => ($foreignKey['columns'] ?? []) === ['worker_id']
                     && ($foreignKey['foreign_table'] ?? null) === 'workers'
@@ -20,6 +21,8 @@ return new class extends Migration
                 });
             }
 
+=======
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073:database/migrations/2026_10_19_000004_add_worker_id_to_users_table.php
             return;
         }
 

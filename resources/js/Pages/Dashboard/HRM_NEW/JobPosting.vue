@@ -1,9 +1,14 @@
 <template>
   <AuthenticatedLayout>
-    <div class="flex min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+    <div class="flex min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
 
+<<<<<<< HEAD
       <div class="flex-1 p-8 text-slate-900 font-sans min-w-0 relative flex flex-col">
 
+=======
+      <div class="flex-1 p-8 text-slate-900 dark:text-zinc-100 font-sans min-w-0 relative flex flex-col">
+        
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
         <!-- Subtle Background Pattern -->
         <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
 
@@ -11,15 +16,15 @@
         <header class="mb-6 relative shrink-0">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-              <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-                <span class="hover:text-slate-700 cursor-pointer transition-colors">Dashboard</span>
-                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-zinc-300 mb-2">
+                <span class="hover:text-slate-700 dark:text-zinc-200 dark:hover:text-white cursor-pointer transition-colors">Dashboard</span>
+                <svg class="w-3 h-3 text-slate-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
                 </svg>
-                <span class="text-slate-800 font-semibold">Recruitment</span>
+                <span class="text-slate-800 dark:text-zinc-200 font-semibold">Recruitment</span>
               </nav>
-              <h1 class="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Job Postings</h1>
-              <p class="text-sm text-slate-500 mt-0.5">Create, publish, and manage job advertisements. Connect positions with recruitment to attract qualified applicants.</p>
+              <h1 class="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">Job Postings</h1>
+              <p class="text-sm text-slate-500 dark:text-zinc-300 mt-0.5">Create, publish, and manage job advertisements. Connect positions with recruitment to attract qualified applicants.</p>
             </div>
 
             <!-- Quick Actions - Right Aligned -->
@@ -36,7 +41,7 @@
 
               <button
                 @click="toggleArchived()"
-                class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
@@ -46,7 +51,7 @@
 
               <button
                 @click="exportReport"
-                class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
@@ -59,11 +64,16 @@
 
         <!-- KPI METRICS ROW - All 7 Metrics -->
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 mb-4 shrink-0">
+<<<<<<< HEAD
           <div v-for="metric in metrics" :key="metric.label"
                class="group bg-white rounded-xl border border-slate-200/60 p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-blue-200/60 shadow-md backdrop-blur-sm cursor-pointer"
+=======
+          <div v-for="metric in metrics" :key="metric.label" 
+               class="group bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 dark:border-zinc-800 p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-blue-200/60 shadow-md backdrop-blur-sm cursor-pointer"
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                @click="quickFilter(metric.filter)">
             <div class="flex items-center justify-between mb-1">
-              <span class="text-[9px] font-semibold text-slate-500 uppercase tracking-wider">{{ metric.label }}</span>
+              <span class="text-[9px] font-semibold text-slate-500 dark:text-zinc-300 uppercase tracking-wider">{{ metric.label }}</span>
               <div :class="['w-7 h-7 rounded-lg flex items-center justify-center shadow-inner', metric.bg]">
                 <svg class="w-3.5 h-3.5" :class="metric.color" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path v-if="metric.icon === 'clipboard'" stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -77,16 +87,16 @@
                 </svg>
               </div>
             </div>
-            <div class="text-lg font-bold" :class="metric.color">{{ metric.value }}</div>
+            <div class="text-lg font-bold dark:text-zinc-100" :class="metric.color">{{ metric.value }}</div>
           </div>
         </div>
 
         <!-- SEARCH BAR -->
-        <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm p-3 mb-4 shrink-0">
+        <div class="bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 dark:border-zinc-800 shadow-md backdrop-blur-sm p-3 mb-4 shrink-0">
           <div class="flex flex-col md:flex-row md:items-center gap-3">
             <div class="flex-1 relative">
               <span class="absolute inset-y-0 left-0 flex items-center pl-3">
-                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <svg class="w-4 h-4 text-slate-400 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
                 </svg>
               </span>
@@ -95,16 +105,16 @@
                 type="text"
                 placeholder="Search job postings..."
                 @input="debouncedSearch"
-                class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
+                class="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:text-zinc-400 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
               />
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
-              <select v-model="filters.status" @change="loadPostings" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 cursor-pointer">
+              <select v-model="filters.status" @change="loadPostings" class="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-xs text-slate-600 dark:text-zinc-200 focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 cursor-pointer">
                 <option value="">All Statuses</option>
                 <option v-for="status in filterOptions.statuses" :key="status" :value="status">{{ status }}</option>
               </select>
-              <select v-model="filters.department" @change="loadPostings" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 cursor-pointer">
+              <select v-model="filters.department" @change="loadPostings" class="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-xs text-slate-600 dark:text-zinc-200 focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 cursor-pointer">
                 <option value="">All Departments</option>
                 <option v-for="dept in filterOptions.departments" :key="dept.id || dept" :value="dept.name || dept">{{ dept.name || dept }}</option>
               </select>
@@ -113,30 +123,41 @@
         </div>
 
         <!-- TABLE VIEW SECTION - FULL HEIGHT -->
+<<<<<<< HEAD
         <div class="bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden flex-1 flex flex-col min-h-0">
 
+=======
+        <div class="bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 dark:border-zinc-800 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden flex-1 flex flex-col min-h-0">
+          
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
           <!-- Job Postings Table - Scrollable -->
           <div class="flex-1 overflow-auto">
-            <table class="w-full text-left border-collapse">
+            <table class="w-full min-w-[980px] text-left border-collapse">
               <thead class="sticky top-0 z-10">
-                <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <tr class="bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 border-b border-slate-200 dark:border-zinc-700 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-300">
                   <th class="py-2.5 px-4">Posting</th>
-                  <th class="py-2.5 px-4">Position</th>
                   <th class="py-2.5 px-4">Department</th>
                   <th class="py-2.5 px-4 text-center">Employment Type</th>
                   <th class="py-2.5 px-4 text-center">Vacancies</th>
                   <th class="py-2.5 px-4 text-center">Applications</th>
                   <th class="py-2.5 px-4 text-center">Status</th>
-                  <th class="py-2.5 px-4">Hiring Manager</th>
                   <th class="py-2.5 px-4">Published</th>
                   <th class="py-2.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
+<<<<<<< HEAD
               <tbody class="divide-y divide-slate-100">
                 <tr
                   v-for="posting in filteredPostings"
                   :key="posting.id"
                   class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all duration-200 group"
+=======
+              <tbody class="divide-y divide-slate-100 dark:divide-zinc-800">
+                <tr 
+                  v-for="posting in filteredPostings" 
+                  :key="posting.id" 
+                  class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent dark:hover:from-zinc-800 dark:hover:to-zinc-800 transition-all duration-200 group"
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                 >
                   <td class="py-2.5 px-4">
                     <div class="flex items-center gap-2">
@@ -146,31 +167,27 @@
                         </svg>
                       </div>
                       <div class="min-w-0">
-                        <div class="text-xs font-bold text-slate-900 truncate">{{ posting.position || posting.title }}</div>
-                        <div class="text-[9px] text-slate-400 font-mono">{{ posting.posting_id }}</div>
+                    <div class="text-sm font-bold text-slate-900 dark:text-zinc-100 truncate">{{ posting.position || posting.title }}</div>
                       </div>
                     </div>
                   </td>
                   <td class="py-2.5 px-4">
-                    <div class="text-xs text-slate-700 truncate max-w-[120px]">{{ posting.position }}</div>
-                  </td>
-                  <td class="py-2.5 px-4">
-                    <div class="text-xs text-slate-700 truncate max-w-[100px]">{{ posting.department }}</div>
+                    <div class="text-sm text-slate-700 dark:text-zinc-200 truncate max-w-[140px]">{{ posting.department }}</div>
                   </td>
                   <td class="py-2.5 px-4 text-center">
-                    <span :class="getEmploymentBadgeClass(posting.employment_type)" class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-semibold whitespace-nowrap">
+                    <span :class="getEmploymentBadgeClass(posting.employment_type)" class="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap">
                       {{ posting.employment_type || 'Full-time' }}
                     </span>
                   </td>
                   <td class="py-2.5 px-4 text-center">
-                    <div class="text-xs font-bold text-slate-800">{{ posting.filled_vacancies }}/{{ posting.vacancies }}</div>
+                    <div class="text-sm font-bold text-slate-800 dark:text-zinc-200">{{ posting.filled_vacancies }}/{{ posting.vacancies }}</div>
                   </td>
                   <td class="py-2.5 px-4 text-center">
-                    <div class="text-xs font-bold text-blue-600">{{ posting.total_applications }}</div>
+                    <div class="text-sm font-bold text-blue-600 dark:text-blue-300">{{ posting.total_applications }}</div>
                   </td>
                   <td class="py-2.5 px-4 text-center">
                     <span :class="[
-                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold shadow-sm whitespace-nowrap',
+                      'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm whitespace-nowrap',
                       getStatusBadgeClass(posting.status)
                     ]">
                       <svg v-if="posting.status === 'Draft'" class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 8 8">
@@ -186,17 +203,19 @@
                     </span>
                   </td>
                   <td class="py-2.5 px-4">
-                    <div class="text-xs text-slate-700 truncate max-w-[100px]">{{ posting.hiring_manager || '—' }}</div>
-                  </td>
-                  <td class="py-2.5 px-4">
-                    <div class="text-xs text-slate-600">{{ posting.published_date || '—' }}</div>
+                    <div class="text-sm text-slate-600 dark:text-zinc-300">{{ posting.published_date || '—' }}</div>
                   </td>
                   <td class="py-2.5 px-4">
                     <div class="flex items-center justify-end gap-1">
                       <button
                         v-if="!posting.archived_at"
+<<<<<<< HEAD
                         @click="openModal('edit', posting)"
                         class="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-all"
+=======
+                        @click="openModal('edit', posting)" 
+                        class="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 dark:text-zinc-400 hover:text-blue-600 transition-all"
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                         title="Edit"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -212,7 +231,7 @@
                           <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                         </svg>
                       </button>
-                      <button @click="viewPosting(posting)" class="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-400 hover:text-emerald-600 transition-all" title="View">
+                      <button @click="viewPosting(posting)" class="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-400 dark:text-zinc-400 hover:text-emerald-600 transition-all" title="View">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
                           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -222,7 +241,7 @@
                       <div class="relative">
                         <button
                           @click.stop="togglePostingMenu(posting.id,$event)"
-                          class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all"
+                          class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:text-zinc-300 transition-all"
                           title="More"
                         >
                           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -236,7 +255,7 @@
                           v-if="activeMenu === posting.id"
                           :ref="setMenuRef"
                           :style="menuStyle"
-                          class="fixed w-52 bg-white border border-slate-200 rounded-xl shadow-2xl z-[60] py-1 min-w-[180px]"
+                          class="fixed w-52 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl shadow-2xl z-[60] py-1 min-w-[180px]"
                           @click.stop
                         >
                           <button
@@ -269,6 +288,7 @@
                             </svg>
                             Reopen
                           </button>
+<<<<<<< HEAD
                           <button
                             @click="duplicatePosting(posting)"
                             class="w-full text-left px-4 py-2 text-xs text-purple-600 hover:bg-purple-50 flex items-center gap-2 transition-colors"
@@ -283,6 +303,13 @@
                             v-if="!posting.archived_at"
                             @click="archivePosting(posting.id)"
                             class="w-full text-left px-4 py-2 text-xs text-slate-500 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+=======
+                          <hr class="my-1 border-slate-100" />
+                          <button 
+                            v-if="!posting.archived_at" 
+                            @click="archivePosting(posting.id)" 
+                            class="w-full text-left px-4 py-2 text-xs text-slate-500 dark:text-zinc-300 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                               <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
@@ -317,14 +344,14 @@
                 </tr>
                 <!-- Empty State -->
                 <tr v-if="filteredPostings.length === 0">
-                  <td colspan="10" class="py-12 text-center">
+                  <td colspan="9" class="py-12 text-center">
                     <div class="flex flex-col items-center justify-center">
                       <svg class="w-16 h-16 text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
                       </svg>
-                      <p class="text-sm text-slate-500">No job postings found</p>
-                      <p class="text-xs text-slate-400 mt-1">Try adjusting your search or filters</p>
-                      <button v-if="hasActiveFilters" @click="clearFilters" class="mt-3 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all">
+                      <p class="text-sm text-slate-500 dark:text-zinc-300">No job postings found</p>
+                      <p class="text-xs text-slate-400 dark:text-zinc-400 mt-1">Try adjusting your search or filters</p>
+                      <button v-if="hasActiveFilters" @click="clearFilters" class="mt-3 px-4 py-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:bg-slate-50 transition-all">
                         Clear Filters
                       </button>
                     </div>
@@ -336,19 +363,19 @@
         </div>
 
         <!-- Footer with record count -->
-        <div class="mt-3 text-xs text-slate-400 shrink-0">
+        <div class="mt-3 text-sm text-slate-500 dark:text-zinc-300 shrink-0">
           Showing {{ filteredPostings.length }} {{ filteredPostings.length === 1 ? 'record' : 'records' }}
         </div>
 
         <!-- VALIDATION ERROR MODAL -->
         <div v-if="showValidationModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div class="bg-white rounded-2xl border border-slate-200/60 w-full max-w-md overflow-hidden shadow-2xl">
-            <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-rose-50 to-transparent">
+          <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 dark:border-zinc-700 w-full max-w-md overflow-hidden shadow-2xl">
+            <div class="p-6 border-b border-slate-100 dark:border-zinc-700 flex items-center justify-between bg-gradient-to-r from-rose-50 to-transparent dark:from-zinc-800 dark:to-zinc-900">
               <div>
                 <h3 class="text-sm font-bold text-rose-600">Validation Error</h3>
-                <p class="text-xs text-slate-500 mt-0.5">Please check the following:</p>
+                <p class="text-xs text-slate-500 dark:text-zinc-300 mt-0.5">Please check the following:</p>
               </div>
-              <button @click="closeValidationModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-all duration-200 hover:rotate-90 transform">
+              <button @click="closeValidationModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:text-zinc-300 transition-all duration-200 hover:rotate-90 transform">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -362,7 +389,7 @@
                   </svg>
                 </div>
                 <div>
-                  <p class="text-sm text-slate-700">{{ validationMessage }}</p>
+                  <p class="text-sm text-slate-700 dark:text-zinc-200">{{ validationMessage }}</p>
                 </div>
               </div>
               <div class="flex justify-end">
@@ -376,13 +403,13 @@
 
         <!-- CUSTOM CONFIRMATION MODAL -->
         <div v-if="showConfirmModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div class="bg-white rounded-2xl border border-slate-200/60 w-full max-w-md overflow-hidden shadow-2xl">
-            <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-transparent">
+          <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 dark:border-zinc-700 w-full max-w-md overflow-hidden shadow-2xl">
+            <div class="p-6 border-b border-slate-100 dark:border-zinc-700 flex items-center justify-between bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900">
               <div>
-                <h3 class="text-sm font-bold text-slate-900">{{ confirmModal.title }}</h3>
-                <p class="text-xs text-slate-500 mt-0.5">{{ confirmModal.subtitle }}</p>
+                <h3 class="text-sm font-bold text-slate-900 dark:text-zinc-100">{{ confirmModal.title }}</h3>
+                <p class="text-xs text-slate-500 dark:text-zinc-300 mt-0.5">{{ confirmModal.subtitle }}</p>
               </div>
-              <button @click="closeConfirmModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-all duration-200 hover:rotate-90 transform">
+              <button @click="closeConfirmModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:text-zinc-300 transition-all duration-200 hover:rotate-90 transform">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -397,11 +424,11 @@
                   </svg>
                 </div>
                 <div>
-                  <p class="text-sm text-slate-700">{{ confirmModal.message }}</p>
+                  <p class="text-sm text-slate-700 dark:text-zinc-200">{{ confirmModal.message }}</p>
                 </div>
               </div>
               <div class="flex justify-end gap-3">
-                <button @click="closeConfirmModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">
+                <button @click="closeConfirmModal" class="px-5 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">
                   Cancel
                 </button>
                 <button
@@ -418,17 +445,22 @@
 
         <!-- CREATE/EDIT MODAL -->
         <div v-if="activeModal" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+<<<<<<< HEAD
           <div class="bg-white rounded-2xl border border-slate-200/60 w-full max-w-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
 
+=======
+          <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 dark:border-zinc-700 w-full max-w-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+            
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
             <!-- Modal Header -->
-            <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-transparent shrink-0">
+            <div class="p-6 border-b border-slate-100 dark:border-zinc-700 flex items-center justify-between bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 shrink-0">
               <div>
-                <h3 class="text-sm font-bold text-slate-900">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-zinc-100">
                   {{ modalType === 'create' ? 'Create Job Posting' : modalType === 'view' ? 'View Job Posting' : 'Edit Job Posting' }}
                 </h3>
-                <p class="text-xs text-slate-500 mt-0.5">Advertise open positions and manage recruitment campaigns.</p>
+                <p class="text-xs text-slate-500 dark:text-zinc-300 mt-0.5">Advertise open positions and manage recruitment campaigns.</p>
               </div>
-              <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-all duration-200 hover:rotate-90 transform">
+              <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:text-zinc-300 transition-all duration-200 hover:rotate-90 transform">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -439,111 +471,152 @@
             <div class="flex-1 overflow-y-auto p-6 space-y-5">
 
               <!-- Section 1: Position Selection -->
-              <div class="bg-slate-50/50 border border-slate-200 rounded-xl p-5">
+              <div class="bg-slate-50/50 dark:bg-zinc-800/70 border border-slate-200 dark:border-zinc-700 rounded-xl p-5">
                 <div class="flex items-center gap-2 mb-4">
                   <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
                     <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
                   </div>
-                  <h4 class="text-sm font-bold text-slate-800">Position Selection</h4>
+                  <h4 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Position Selection</h4>
+                </div>
+                <div class="mb-4">
+                  <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Department <span class="text-rose-500">*</span></label>
+                  <select v-model="form.department_id" :disabled="modalType === 'view'" @change="onDepartmentChange" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400">
+                    <option value="">Select Department</option>
+                    <option v-for="dept in filterOptions.departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
+                  </select>
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1.5">Position <span class="text-rose-500">*</span></label>
-                  <select v-model="form.position_id" :disabled="modalType === 'view'" @change="onPositionChange" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.position_id }">
-                    <option value="">Select Position</option>
-                    <option v-for="pos in props.positions" :key="pos.id" :value="pos.id">{{ pos.name }}</option>
+                  <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Position <span class="text-rose-500">*</span></label>
+                  <select v-model="form.position_id" :disabled="modalType === 'view' || !form.department_id" @change="onPositionChange" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.position_id }">
+                    <option value="">{{ form.department_id ? 'Select Position' : 'Select Department First' }}</option>
+                    <option v-for="pos in filteredPositions" :key="pos.id" :value="pos.id">{{ pos.name }}</option>
                   </select>
                   <p v-if="validationErrors.position_id" class="text-[10px] text-rose-500 mt-1">{{ validationErrors.position_id }}</p>
                 </div>
                 <!-- Auto-filled Position Details -->
-                <div v-if="form.position_id" class="mt-4 p-4 bg-white border border-slate-200 rounded-xl">
+                <div v-if="form.position_id" class="mt-4 p-4 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl">
                   <div class="flex items-center justify-between mb-2">
-                    <h5 class="text-xs font-bold text-slate-700">Position Details (Auto-filled)</h5>
+                    <h5 class="text-xs font-bold text-slate-700 dark:text-zinc-200">Position Details (Auto-filled)</h5>
                     <Link :href="route('hrm.workforce.positions.index')" class="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline">Open Positions page →</Link>
                   </div>
                   <div class="grid grid-cols-2 gap-2 text-xs">
-                    <div><span class="text-slate-500">Department:</span> <span class="font-semibold">{{ form.department || '—' }}</span></div>
-                    <div><span class="text-slate-500">Reports To:</span> <span class="font-semibold">{{ form.reports_to || '—' }}</span></div>
-                    <div><span class="text-slate-500">Min Salary:</span> <span class="font-semibold">{{ formatCurrency(form.salary_min) }}</span></div>
-                    <div><span class="text-slate-500">Max Salary:</span> <span class="font-semibold">{{ formatCurrency(form.salary_max) }}</span></div>
-                    <div><span class="text-slate-500">Available Vacancies:</span> <span class="font-semibold">{{ getAvailableVacancies() }}</span></div>
+                    <div><span class="text-slate-500 dark:text-zinc-300">Department:</span> <span class="font-semibold">{{ form.department || '—' }}</span></div>
+                    <div><span class="text-slate-500 dark:text-zinc-300">Reports To:</span> <span class="font-semibold">{{ form.reports_to || '—' }}</span></div>
+                    <div><span class="text-slate-500 dark:text-zinc-300">Min Salary:</span> <span class="font-semibold">{{ formatCurrency(form.salary_min) }}</span></div>
+                    <div><span class="text-slate-500 dark:text-zinc-300">Max Salary:</span> <span class="font-semibold">{{ formatCurrency(form.salary_max) }}</span></div>
+                    <div><span class="text-slate-500 dark:text-zinc-300">Available Vacancies:</span> <span class="font-semibold">{{ getAvailableVacancies() }}</span></div>
                   </div>
                 </div>
               </div>
 
               <!-- Section 2: Posting Information -->
-              <div class="bg-slate-50/50 border border-slate-200 rounded-xl p-5">
+              <div class="bg-slate-50/50 dark:bg-zinc-800/70 border border-slate-200 dark:border-zinc-700 rounded-xl p-5">
                 <div class="flex items-center gap-2 mb-4">
                   <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
                     <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                     </svg>
                   </div>
-                  <h4 class="text-sm font-bold text-slate-800">Posting Information</h4>
+                  <h4 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Posting Information</h4>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                   <div class="col-span-2">
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Posting Title</label>
-                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold flex items-center gap-2 cursor-not-allowed opacity-90">
-                      <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Posting Title</label>
+                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-700 dark:text-zinc-200 font-semibold flex items-center gap-2 cursor-not-allowed opacity-90">
+                      <svg class="w-3.5 h-3.5 text-slate-400 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                       </svg>
                       <span>{{ selectedPositionName || 'Select a position above — its name becomes the posting title' }}</span>
                     </div>
-                    <p class="text-[10px] text-slate-400 mt-1">Auto-filled from the selected position. No manual title needed.</p>
+                    <p class="text-[10px] text-slate-400 dark:text-zinc-400 mt-1">Auto-filled from the selected position. No manual title needed.</p>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Employment Type <span class="text-rose-500">*</span></label>
-                    <select v-model="form.employment_type_id" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Employment Type <span class="text-rose-500">*</span></label>
+                    <select v-model="form.employment_type_id" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400">
                       <option value="">Select Employment Type</option>
-                      <option v-for="type in props.filterOptions?.employmentTypes || []" :key="type.id" :value="type.id">
+                      <option v-for="type in employmentTypeOptions" :key="type.id" :value="type.id">
                         {{ type.name }}
                       </option>
+                      <option v-if="selectedEmploymentType && !employmentTypeOptions.some(t => String(t.id) === String(selectedEmploymentType.id))" :value="selectedEmploymentType.id">
+                        {{ selectedEmploymentType.name }}
+                      </option>
                     </select>
+                  </div>
+                  <div v-if="isContractType" class="col-span-2 p-4 bg-amber-50/60 border border-amber-200 rounded-xl">
+                    <div class="flex items-center gap-2 mb-3">
+                      <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                      </svg>
+                      <h5 class="text-xs font-bold text-amber-700">Contract Duration</h5>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                      <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Duration</label>
+                        <input
+                          :value="form.contract_duration"
+                          @input="onContractDurationInput"
+                          type="text"
+                          inputmode="numeric"
+                          placeholder="e.g., 6"
+                          :disabled="modalType === 'view'"
+                          class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Period</label>
+                        <select v-model="form.contract_unit" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400">
+                          <option value="">Select Period</option>
+                          <option value="Month">Month</option>
+                          <option value="Year">Year</option>
+                        </select>
+                      </div>
+                    </div>
+                    <p class="text-[10px] text-amber-600 mt-2">Shown because the selected employment type is contractual.</p>
                   </div>
                 </div>
               </div>
 
               <!-- Section 3: Recruitment Details -->
-              <div class="bg-slate-50/50 border border-slate-200 rounded-xl p-5">
+              <div class="bg-slate-50/50 dark:bg-zinc-800/70 border border-slate-200 dark:border-zinc-700 rounded-xl p-5">
                 <div class="flex items-center gap-2 mb-4">
                   <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                     <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                     </svg>
                   </div>
-                  <h4 class="text-sm font-bold text-slate-800">Recruitment Details</h4>
+                  <h4 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Recruitment Details</h4>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Number of Vacancies <span class="text-rose-500">*</span></label>
-                    <input v-model.number="form.vacancies" type="number" min="1" :max="maxVacancies ?? undefined" @input="clampVacancies" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
-                    <p v-if="form.position_id" class="text-[10px] text-slate-400 mt-1">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Number of Vacancies <span class="text-rose-500">*</span></label>
+                    <input v-model.number="form.vacancies" type="number" min="1" :max="maxVacancies ?? undefined" @input="clampVacancies" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400" />
+                    <p v-if="form.position_id" class="text-[10px] text-slate-400 dark:text-zinc-400 mt-1">
                       {{ getPositionVacancyInfo() }}
                     </p>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Hiring Priority</label>
-                    <select v-model="form.hiring_priority" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Hiring Priority</label>
+                    <select v-model="form.hiring_priority" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400">
                       <option>Normal</option>
                       <option>High</option>
                       <option>Urgent</option>
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Application Deadline</label>
-                    <input v-model="form.closing_date" type="date" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Expected Start Date</label>
+                    <input v-model="form.expected_start_date" type="date" :min="todayDate" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400" />
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Expected Start Date</label>
-                    <input v-model="form.expected_start_date" type="date" :min="todayDate" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Application Deadline</label>
+                    <input v-model="form.closing_date" type="date" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400" />
                   </div>
                 </div>
               </div>
 
               <!-- Section 4: Job Information -->
-              <div class="bg-slate-50/50 border border-slate-200 rounded-xl p-5">
+              <div class="bg-slate-50/50 dark:bg-zinc-800/70 border border-slate-200 dark:border-zinc-700 rounded-xl p-5">
                 <div class="flex items-center gap-2 mb-4">
                   <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
                     <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -551,39 +624,39 @@
                       <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
                   </div>
-                  <h4 class="text-sm font-bold text-slate-800">Job Information</h4>
+                  <h4 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Job Information</h4>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Location</label>
-                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 cursor-not-allowed opacity-75 flex items-center gap-2">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Location</label>
+                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 dark:text-zinc-300 cursor-not-allowed opacity-75 flex items-center gap-2">
                       <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/>
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/>
                       </svg>
                       <span>{{ workLocation || 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite' }}</span>
                     </div>
-                    <p class="text-[10px] text-slate-400 mt-1">Fixed company location</p>
+                    <p class="text-[10px] text-slate-400 dark:text-zinc-400 mt-1">Fixed company location</p>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Mode</label>
-                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 cursor-not-allowed opacity-75 flex items-center gap-2">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Mode</label>
+                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 dark:text-zinc-300 cursor-not-allowed opacity-75 flex items-center gap-2">
                       <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>
                       </svg>
                       <span>On-site</span>
                     </div>
-                    <p class="text-[10px] text-slate-400 mt-1">Fixed to on-site work</p>
+                    <p class="text-[10px] text-slate-400 dark:text-zinc-400 mt-1">Fixed to on-site work</p>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Schedule</label>
-                    <input v-model="form.work_schedule" type="text" placeholder="e.g., Mon-Fri, 9AM-6PM" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs shadow-sm disabled:bg-slate-50 disabled:text-slate-400" />
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Schedule</label>
+                    <input v-model="form.work_schedule" type="text" placeholder="e.g., Mon-Fri, 9AM-6PM" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs shadow-sm disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400" />
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Shift</label>
-                    <select v-model="form.shift" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Shift</label>
+                    <select v-model="form.shift" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400">
                       <template v-if="(shifts || []).length">
-                        <option v-for="sh in shifts" :key="sh.id" :value="sh.name">{{ sh.name }}{{ sh.code ? ' (' + sh.code + ')' : '' }}</option>
+                        <option v-for="sh in shifts" :key="sh.id" :value="sh.name">{{ sh.name }}</option>
                       </template>
                       <template v-else>
                         <option>Morning Shift</option>
@@ -596,60 +669,81 @@
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Salary Visibility</label>
-                    <select v-model="form.salary_visibility" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Salary Visibility</label>
+                    <select v-model="form.salary_visibility" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400">
                       <option>Show Range</option>
                       <option>Hide</option>
                       <option>Show on Application</option>
                     </select>
                   </div>
+                  <div class="col-span-2">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Training Required?</label>
+                    <label
+                      :class="[
+                        form.training_required ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-slate-200 bg-white text-slate-600 dark:text-zinc-300',
+                        modalType === 'view' ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:border-amber-300'
+                      ]"
+                      class="w-full flex items-center justify-between rounded-xl border px-3 py-2.5 text-xs font-semibold shadow-sm transition-colors duration-200">
+                      <span>{{ form.training_required ? 'Yes, training is needed' : 'No training needed' }}</span>
+                      <input v-model="form.training_required" type="checkbox" :disabled="modalType === 'view'"
+                        class="peer sr-only" />
+                      <span :class="form.training_required ? 'border-amber-500 bg-amber-500' : 'border-slate-300 bg-white'"
+                        class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all duration-200 ease-out peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400 peer-focus-visible:ring-offset-2">
+                        <svg class="h-3.5 w-3.5 text-white transition-all duration-200 ease-out"
+                          :class="form.training_required ? 'scale-100 opacity-100' : 'scale-50 opacity-0'"
+                          viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                          <path d="m4 10 4 4 8-8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </div>
 
               <!-- Section 5: Salary Range -->
-              <div class="bg-slate-50/50 border border-slate-200 rounded-xl p-5">
+              <div class="bg-slate-50/50 dark:bg-zinc-800/70 border border-slate-200 dark:border-zinc-700 rounded-xl p-5">
                 <div class="flex items-center gap-2 mb-4">
                   <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
                     <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                   </div>
-                  <h4 class="text-sm font-bold text-slate-800">Salary Range</h4>
+                  <h4 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Salary Range</h4>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Minimum Salary</label>
-                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 cursor-not-allowed opacity-75 flex items-center gap-2">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Minimum Salary</label>
+                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 dark:text-zinc-300 cursor-not-allowed opacity-75 flex items-center gap-2">
                       <span v-if="form.salary_min !== null && form.salary_min !== ''" class="font-semibold">{{ formatCurrency(form.salary_min) }}</span>
-                      <span v-else class="text-slate-400">Auto from position</span>
+                      <span v-else class="text-slate-400 dark:text-zinc-400">Auto from position</span>
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Maximum Salary</label>
-                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 cursor-not-allowed opacity-75 flex items-center gap-2">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Maximum Salary</label>
+                    <div class="w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 dark:text-zinc-300 cursor-not-allowed opacity-75 flex items-center gap-2">
                       <span v-if="form.salary_max !== null && form.salary_max !== ''" class="font-semibold">{{ formatCurrency(form.salary_max) }}</span>
-                      <span v-else class="text-slate-400">Auto from position</span>
+                      <span v-else class="text-slate-400 dark:text-zinc-400">Auto from position</span>
                   </div>
                   <div v-show="showHiringManager" class="col-span-2">
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Hiring Manager <span class="text-slate-400 font-normal">(Optional)</span></label>
-                    <select v-model="form.hiring_manager" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Hiring Manager <span class="text-slate-400 dark:text-zinc-400 font-normal">(Optional)</span></label>
+                    <select v-model="form.hiring_manager" :disabled="modalType === 'view'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 dark:text-zinc-400">
                       <option value="">Select Hiring Manager (optional)</option>
                       <option v-for="emp in filteredHiringManagers || []" :key="emp.id" :value="emp.name">
                         {{ emp.name }} — {{ emp.job_position }}{{ emp.department ? ' (' + emp.department + ')' : '' }}
                       </option>
                     </select>
-                    <p class="text-[10px] text-slate-400 mt-1">
+                    <p class="text-[10px] text-slate-400 dark:text-zinc-400 mt-1">
                       {{ hiringManagerHint }}
                     </p>
                   </div>
                 </div>
               </div>
-                <p class="text-[10px] text-slate-400 mt-2">Read-only — taken from the selected position. Update it on the Positions page.</p>
+                <p class="text-[10px] text-slate-400 dark:text-zinc-400 mt-2">Read-only — taken from the selected position. Update it on the Positions page.</p>
               </div>
 
               <!-- Applicant Statistics (View Mode Only) -->
-              <div v-if="modalType === 'view' && form.applicant_stats" class="bg-slate-50/50 border border-slate-200 rounded-xl p-5">
-                <h4 class="text-sm font-bold text-slate-800 mb-3">Applicant Statistics</h4>
+              <div v-if="modalType === 'view' && form.applicant_stats" class="bg-slate-50/50 dark:bg-zinc-800/70 border border-slate-200 dark:border-zinc-700 rounded-xl p-5">
+                <h4 class="text-sm font-bold text-slate-800 dark:text-zinc-100 mb-3">Applicant Statistics</h4>
                 <div class="grid grid-cols-3 gap-3">
                   <div class="p-3 bg-blue-50 border border-blue-100 rounded-xl text-center">
                     <span class="text-lg font-bold text-blue-700">{{ form.applicant_stats?.total || 0 }}</span>
@@ -681,7 +775,7 @@
             </div>
 
             <!-- Modal Footer -->
-            <div class="p-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center justify-between shrink-0">
+            <div class="p-4 border-t border-slate-100 dark:border-zinc-700 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-between shrink-0">
               <div v-if="modalType === 'edit'" class="flex items-center gap-2">
                 <button @click="confirmDelete" class="px-4 py-2.5 bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">
                   <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -691,7 +785,7 @@
                 </button>
               </div>
               <div class="flex items-center gap-3 ml-auto">
-                <button @click="closeModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">
+                <button @click="closeModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">
                   Cancel
                 </button>
                 <button
@@ -786,10 +880,13 @@ const form = reactive({
     hiring_manager: '',
     work_location: props.workLocation || 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite',
     employment_type_id: null,
+    contract_duration: '',
+    contract_unit: '',
     work_mode: 'On-site',
     work_schedule: '',
     shift: 'Morning Shift',
     salary_visibility: 'Show Range',
+    training_required: false,
     recruitment_notes: '',
     internal_notes: '',
     require_initial_interview: true,
@@ -812,7 +909,7 @@ const metrics = computed(() => {
         { label: 'Hired', value: m.hired || 0, icon: 'check', bg: 'bg-emerald-50', color: 'text-emerald-600', filter: null },
         { label: 'Urgent', value: m.urgent || 0, icon: 'alert', bg: 'bg-rose-50', color: 'text-rose-600', filter: null },
         { label: 'Vacancies', value: m.vacancies || 0, icon: 'target', bg: 'bg-purple-50', color: 'text-purple-600', filter: null },
-        { label: 'Closed', value: m.closed || 0, icon: 'lock', bg: 'bg-slate-100', color: 'text-slate-500', filter: null },
+        { label: 'Closed', value: m.closed || 0, icon: 'lock', bg: 'bg-slate-100', color: 'text-slate-500 dark:text-zinc-300', filter: null },
     ];
 });
 
@@ -830,6 +927,30 @@ const filteredPostings = computed(() => {
 
 // Display name for a posting — position name wins since title is derived.
 const postingDisplayName = (p) => p?.position || p?.title || 'this posting';
+
+// Employment type options come from the active Employment Types records.
+const employmentTypeOptions = computed(() => {
+    return props.filterOptions?.employmentTypes || [];
+});
+const selectedEmploymentType = computed(() => {
+    const list = props.filterOptions?.employmentTypes || [];
+    return list.find(t => String(t.id) === String(form.employment_type_id)) || null;
+});
+const isContractType = computed(() => /contract/i.test(selectedEmploymentType.value?.name || ''));
+
+// Contract duration input accepts numbers only (no decimals, signs or text).
+const onContractDurationInput = (e) => {
+    const cleaned = String(e.target.value).replace(/[^0-9]/g, '');
+    form.contract_duration = cleaned;
+    e.target.value = cleaned;
+};
+
+const filteredPositions = computed(() => {
+    if (!form.department_id) return [];
+    return (props.positions || []).filter((position) =>
+        String(position.department_id) === String(form.department_id)
+    );
+});
 
 const selectedPositionName = computed(() => {
     if (form.position_id) {
@@ -872,14 +993,14 @@ const formatCurrency = (val) => {
 // Get employment badge class
 const getEmploymentBadgeClass = (type) => {
     const map = {
-        'Full-time': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        'Part-time': 'bg-blue-50 text-blue-700 border-blue-200',
-        'Contract': 'bg-amber-50 text-amber-700 border-amber-200',
-        'Temporary': 'bg-purple-50 text-purple-700 border-purple-200',
-        'Internship': 'bg-rose-50 text-rose-700 border-rose-200',
-        'Freelance': 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        'Full-time': 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+        'Part-time': 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+        'Contract': 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+        'Temporary': 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+        'Internship': 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+        'Freelance': 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
     };
-    return map[type] || 'bg-slate-50 text-slate-700 border-slate-200';
+    return map[type] || 'bg-slate-50 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 border-slate-200 dark:border-zinc-700';
 };
 
 // Get available vacancies from selected position
@@ -936,6 +1057,7 @@ const todayDate = (() => {
     return `${d.getFullYear()}-${m}-${day}`;
 })();
 
+<<<<<<< HEAD
 const getStatusBadgeClass = (s) => ({
   'Draft':'bg-amber-50 text-amber-700 border-amber-200',
   'Published':'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -943,6 +1065,15 @@ const getStatusBadgeClass = (s) => ({
   'Filled':'bg-blue-50 text-blue-700 border-blue-200',
   'Cancelled':'bg-rose-50 text-rose-700 border-rose-200',
   'Archived':'bg-slate-50 text-slate-400 border-slate-200'
+=======
+const getStatusBadgeClass = (s) => ({ 
+  'Draft':'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+  'Published':'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  'Closed':'bg-slate-50 dark:bg-zinc-800 text-slate-500 dark:text-zinc-300 border-slate-200 dark:border-zinc-700',
+  'Filled':'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+  'Cancelled':'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+  'Archived':'bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 }[s]||'');
 
 // Initialize postings from props
@@ -1138,6 +1269,20 @@ const showDeletePostingConfirmation = (posting) => {
 // POSITION CHANGE - AUTO-FILL FROM DATABASE
 // ============================================
 
+const onDepartmentChange = () => {
+    const department = (props.filterOptions?.departments || []).find(
+        (item) => String(item.id) === String(form.department_id)
+    );
+    form.department = department?.name || '';
+    form.position_id = '';
+    form.title = '';
+    form.reports_to = '';
+    form.salary_min = null;
+    form.salary_max = null;
+    form.vacancies = 1;
+    form.hiring_manager = '';
+};
+
 const onPositionChange = () => {
     const selectedPosition = props.positions.find(p => String(p.id) === String(form.position_id));
 
@@ -1158,8 +1303,10 @@ const onPositionChange = () => {
 
         form.hiring_manager = '';
     } else {
-        form.department = '';
-        form.department_id = null;
+        const department = (props.filterOptions?.departments || []).find(
+            (item) => String(item.id) === String(form.department_id)
+        );
+        form.department = department?.name || '';
         form.reports_to = '';
         form.salary_min = null;
         form.salary_max = null;
@@ -1248,10 +1395,13 @@ const openModal = (type, data = null) => {
             hiring_manager: data.hiring_manager || '',
             work_location: data.work_location || props.workLocation || 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite',
             employment_type_id: data.employment_type_id || null,
+            contract_duration: data.contract_duration || '',
+            contract_unit: data.contract_unit || '',
             work_mode: 'On-site',
             work_schedule: data.work_schedule || '',
             shift: data.shift || 'Morning Shift',
             salary_visibility: data.salary_visibility || 'Show Range',
+            training_required: Boolean(data.training_required),
             recruitment_notes: data.recruitment_notes || '',
             internal_notes: data.internal_notes || '',
             require_initial_interview: data.require_initial_interview !== undefined ? data.require_initial_interview : true,
@@ -1285,10 +1435,13 @@ const openModal = (type, data = null) => {
             hiring_manager: '',
             work_location: props.workLocation || 'Km 22 Emilio Aguinaldo Hwy, Anabu 1B, Imus, 4103 Cavite',
             employment_type_id: null,
+            contract_duration: '',
+            contract_unit: '',
             work_mode: 'On-site',
             work_schedule: '',
             shift: (props.shifts && props.shifts.length) ? props.shifts[0].name : 'Morning Shift',
             salary_visibility: 'Show Range',
+            training_required: false,
             recruitment_notes: '',
             internal_notes: '',
             require_initial_interview: true,

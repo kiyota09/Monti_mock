@@ -99,7 +99,7 @@ const formatTimeDisplay = (timeString: string | null): string => {
       </div>
     </template>
 
-    <div class="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="py-12">
       <!-- Statistics Cards -->
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <div v-for="(val, label) in {

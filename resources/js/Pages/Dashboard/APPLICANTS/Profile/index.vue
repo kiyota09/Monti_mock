@@ -87,6 +87,19 @@ const getPhotoUrl = (path) => {
 // ✅ Profile photo preview
 const photoPreview = ref(getPhotoUrl(props.applicant?.profile_photo_path))
 const originalPhotoUrl = ref(getPhotoUrl(props.applicant?.profile_photo_path))
+const hasDefaultApplicantName = props.applicant?.first_name === 'New' && props.applicant?.last_name === 'Applicant'
+const withoutDashPlaceholder = (value) => value === '-' || value === '—' || value === '–' ? '' : (value || '')
+
+function clearDashProfileValues() {
+    Object.keys(form).forEach((key) => {
+        if (typeof form[key] === 'string') form[key] = withoutDashPlaceholder(form[key])
+    })
+    Object.keys(form.emergency_contact || {}).forEach((key) => {
+        if (typeof form.emergency_contact[key] === 'string') {
+            form.emergency_contact[key] = withoutDashPlaceholder(form.emergency_contact[key])
+        }
+    })
+}
 
 // ✅ Keep preview in sync when server props refresh (e.g. after save),
 // so the uploaded photo stays visible across all steps/processes.
@@ -124,9 +137,9 @@ const getResumeUrl = (path) => {
 
 // ✅ IMPORTANT: Create form with proper data structure
 const form = useForm({
-    first_name: props.applicant?.first_name || '',
-    middle_name: props.applicant?.middle_name || '',
-    last_name: props.applicant?.last_name || '',
+    first_name: hasDefaultApplicantName ? '' : withoutDashPlaceholder(props.applicant?.first_name),
+    middle_name: withoutDashPlaceholder(props.applicant?.middle_name),
+    last_name: hasDefaultApplicantName ? '' : withoutDashPlaceholder(props.applicant?.last_name),
     suffix: props.applicant?.suffix || '',
     birth_date: props.applicant?.birth_date || '',
     place_of_birth: props.applicant?.place_of_birth || '',
@@ -137,7 +150,7 @@ const form = useForm({
     gender: props.applicant?.gender || '',
     civil_status: props.applicant?.civil_status || '',
     email: props.applicant?.email || '',
-    phone: props.applicant?.phone || '',
+    phone: withoutDashPlaceholder(props.applicant?.phone),
     street: props.applicant?.street || '',
     barangay: props.applicant?.barangay || '',
     city: props.applicant?.city || '',
@@ -170,6 +183,8 @@ const form = useForm({
     },
 })
 
+clearDashProfileValues()
+
 const sections = [
     { id: 'personal', label: 'Personal Information', description: 'Basic personal information' },
     { id: 'contact', label: 'Contact Information', description: 'Email and phone number' },
@@ -196,6 +211,49 @@ const profileCompletion = computed(() => {
     const completed = fields.filter(value => value !== null && value !== '').length
     return Math.round((completed / fields.length) * 100)
 })
+
+const maxBirthDate = computed(() => {
+    const latestAllowed = new Date()
+    latestAllowed.setFullYear(latestAllowed.getFullYear() - 18)
+    const year = latestAllowed.getFullYear()
+    const month = String(latestAllowed.getMonth() + 1).padStart(2, '0')
+    const day = String(latestAllowed.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+})
+
+const todayDate = computed(() => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+})
+
+function validateExperienceDate(experience, field) {
+    if (experience[field] && experience[field] > todayDate.value) {
+        experience[field] = ''
+        showModal({
+            type: 'error',
+            title: 'Invalid Work Experience Date',
+            message: 'Start and end dates cannot be in the future.',
+            confirmText: 'OK',
+            cancelText: '',
+        })
+    }
+}
+
+function validateBirthDate() {
+    if (form.birth_date && form.birth_date > maxBirthDate.value) {
+        form.birth_date = ''
+        showModal({
+            type: 'error',
+            title: 'Age Requirement Not Met',
+            message: 'Applicants must be at least 18 years old. Please enter a valid date of birth.',
+            confirmText: 'OK',
+            cancelText: '',
+        })
+    }
+}
 
 function selectSection(section) {
     activeSection.value = section
@@ -274,9 +332,9 @@ function cancelEditMode() {
         cancelText: 'Continue Editing',
         onConfirm: () => {
             // Reset all form fields
-            form.first_name = props.applicant?.first_name || ''
-            form.middle_name = props.applicant?.middle_name || ''
-            form.last_name = props.applicant?.last_name || ''
+            form.first_name = hasDefaultApplicantName ? '' : withoutDashPlaceholder(props.applicant?.first_name)
+            form.middle_name = withoutDashPlaceholder(props.applicant?.middle_name)
+            form.last_name = hasDefaultApplicantName ? '' : withoutDashPlaceholder(props.applicant?.last_name)
             form.suffix = props.applicant?.suffix || ''
             form.birth_date = props.applicant?.birth_date || ''
             form.place_of_birth = props.applicant?.place_of_birth || ''
@@ -287,7 +345,7 @@ function cancelEditMode() {
             form.gender = props.applicant?.gender || ''
             form.civil_status = props.applicant?.civil_status || ''
             form.email = props.applicant?.email || ''
-            form.phone = props.applicant?.phone || ''
+            form.phone = withoutDashPlaceholder(props.applicant?.phone)
             form.street = props.applicant?.street || ''
             form.barangay = props.applicant?.barangay || ''
             form.city = props.applicant?.city || ''
@@ -314,6 +372,7 @@ function cancelEditMode() {
                 phone: props.applicant?.emergency_contact?.phone || '',
                 address: props.applicant?.emergency_contact?.address || '',
             }
+            clearDashProfileValues()
             // Reset file uploads
             form.resumes = []
             form.resume_to_delete = []
@@ -719,6 +778,31 @@ function removeExperience(index) {
 
 // ✅ FIXED: Save profile with proper file handling
 function saveProfile() {
+    const hasFutureExperienceDate = (form.work_experience || []).some((experience) =>
+        experience.start_date > todayDate.value || experience.end_date > todayDate.value,
+    )
+    if (hasFutureExperienceDate) {
+        showModal({
+            type: 'error',
+            title: 'Invalid Work Experience Date',
+            message: 'Start and end dates cannot be in the future.',
+            confirmText: 'OK',
+            cancelText: '',
+        })
+        return
+    }
+
+    if (form.birth_date && form.birth_date > maxBirthDate.value) {
+        showModal({
+            type: 'error',
+            title: 'Age Requirement Not Met',
+            message: 'Applicants must be at least 18 years old. Please enter a valid date of birth.',
+            confirmText: 'OK',
+            cancelText: '',
+        })
+        return
+    }
+
     // Ensure resume_to_delete is an array
     if (!form.resume_to_delete) {
         form.resume_to_delete = []
@@ -1081,6 +1165,9 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <input 
                                                 v-model="form.birth_date" 
                                                 type="date" 
+                                                :max="maxBirthDate"
+                                                @input="validateBirthDate"
+                                                @change="validateBirthDate"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1120,7 +1207,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <input
                                                 v-model="form.place_of_birth"
                                                 type="text"
-                                                placeholder="e.g., Imus, Cavite"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1131,7 +1217,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <input
                                                 v-model="form.citizenship"
                                                 type="text"
-                                                placeholder="e.g., Filipino"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1142,7 +1227,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <input
                                                 v-model="form.religion"
                                                 type="text"
-                                                placeholder="e.g., Roman Catholic"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1156,7 +1240,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                 min="20"
                                                 max="300"
                                                 step="0.01"
-                                                placeholder="e.g., 65"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1170,7 +1253,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                 min="100"
                                                 max="250"
                                                 step="0.01"
-                                                placeholder="e.g., 170"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1199,7 +1281,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
-                                                placeholder="your-email@example.com"
                                             />
                                             <p class="mt-1 text-[10px] text-blue-600 dark:text-blue-400">
                                                 Email is synced with your account
@@ -1215,13 +1296,12 @@ const isDisabled = computed(() => !isEditMode.value)
                                                 type="text"
                                                 inputmode="numeric"
                                                 pattern="[0-9]*"
-                                                maxlength="15"
+                                                maxlength="13"
                                                 required
-                                                placeholder="09123456789"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
-                                                @input="form.phone = String(form.phone).replace(/\D/g, '')"
+                                                @input="form.phone = String(form.phone).replace(/\D/g, '').slice(0, 13)"
                                             />
                                             <p v-if="form.errors.phone" class="text-xs text-red-600 dark:text-red-400 mt-1">
                                                 {{ form.errors.phone }}
@@ -1247,7 +1327,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <input
                                                 v-model="form.emergency_contact.name"
                                                 type="text"
-                                                placeholder="Emergency contact name"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1261,7 +1340,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <input
                                                 v-model="form.emergency_contact.relationship"
                                                 type="text"
-                                                placeholder="e.g., Spouse, Parent, Sibling"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1274,12 +1352,11 @@ const isDisabled = computed(() => !isEditMode.value)
                                                 type="text"
                                                 inputmode="numeric"
                                                 pattern="[0-9]*"
-                                                maxlength="15"
-                                                placeholder="09123456789"
+                                                maxlength="13"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
-                                                @input="form.emergency_contact.phone = String(form.emergency_contact.phone).replace(/\D/g, '')"
+                                                @input="form.emergency_contact.phone = String(form.emergency_contact.phone).replace(/\D/g, '').slice(0, 13)"
                                             />
                                             <p v-if="form.errors['emergency_contact.phone']" class="text-xs text-red-600 dark:text-red-400 mt-1">
                                                 {{ form.errors['emergency_contact.phone'] }}
@@ -1290,7 +1367,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <input
                                                 v-model="form.emergency_contact.address"
                                                 type="text"
-                                                placeholder="Emergency contact address"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1411,7 +1487,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
-                                                placeholder="Name of school or university"
                                             />
                                         </div>
                                         <div>
@@ -1422,7 +1497,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
-                                                placeholder="Course or program name"
                                             />
                                         </div>
                                         <div>
@@ -1436,7 +1510,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
-                                                placeholder="YYYY"
                                                 @input="form.graduation_year = String(form.graduation_year).replace(/\D/g, '').slice(0, 4)"
                                             />
                                             <p v-if="form.errors.graduation_year" class="text-xs text-red-600 dark:text-red-400 mt-1">
@@ -1457,7 +1530,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
-                                                        placeholder="Elementary school name"
                                                     />
                                                 </div>
                                                 <div>
@@ -1471,7 +1543,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
-                                                        placeholder="YYYY"
                                                         @input="form.elementary_year = String(form.elementary_year).replace(/\D/g, '').slice(0, 4)"
                                                     />
                                                 </div>
@@ -1490,7 +1561,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
-                                                        placeholder="High school name"
                                                     />
                                                 </div>
                                                 <div>
@@ -1504,7 +1574,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
-                                                        placeholder="YYYY"
                                                         @input="form.high_year = String(form.high_year).replace(/\D/g, '').slice(0, 4)"
                                                     />
                                                 </div>
@@ -1523,7 +1592,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
-                                                        placeholder="Course & School name"
                                                     />
                                                 </div>
                                                 <div>
@@ -1537,7 +1605,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
-                                                        placeholder="YYYY"
                                                         @input="form.college_year = String(form.college_year).replace(/\D/g, '').slice(0, 4)"
                                                     />
                                                 </div>
@@ -1556,7 +1623,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
-                                                        placeholder="Course & School name"
                                                     />
                                                 </div>
                                                 <div>
@@ -1570,7 +1636,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
-                                                        placeholder="YYYY"
                                                         @input="form.vocational_year = String(form.vocational_year).replace(/\D/g, '').slice(0, 4)"
                                                     />
                                                 </div>
@@ -1586,7 +1651,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
-                                                placeholder="e.g., Microsoft Office, Sewing, Programming"
                                             />
                                         </div>
                                     </div>
@@ -1625,7 +1689,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                             <input
                                                 v-model="form.skills[index]"
                                                 type="text"
-                                                placeholder="e.g. Laravel"
                                                 class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                 :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                 :disabled="!isEditMode"
@@ -1729,6 +1792,9 @@ const isDisabled = computed(() => !isEditMode.value)
                                                     <input 
                                                         v-model="experience.start_date" 
                                                         type="date" 
+                                                        :max="todayDate"
+                                                        @input="validateExperienceDate(experience, 'start_date')"
+                                                        @change="validateExperienceDate(experience, 'start_date')"
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
@@ -1739,6 +1805,9 @@ const isDisabled = computed(() => !isEditMode.value)
                                                     <input 
                                                         v-model="experience.end_date" 
                                                         type="date" 
+                                                        :max="todayDate"
+                                                        @input="validateExperienceDate(experience, 'end_date')"
+                                                        @change="validateExperienceDate(experience, 'end_date')"
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
@@ -1752,7 +1821,6 @@ const isDisabled = computed(() => !isEditMode.value)
                                                         class="w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-70"
                                                         :class="!isEditMode ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
                                                         :disabled="!isEditMode"
-                                                        placeholder="Describe your main responsibilities..."
                                                     ></textarea>
                                                 </div>
                                             </div>

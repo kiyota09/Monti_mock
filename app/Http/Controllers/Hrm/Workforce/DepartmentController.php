@@ -81,11 +81,8 @@ class DepartmentController extends Controller
                     'department' => $u->hrmDepartment?->name ?: $u->department,
                     'hrm_department_id' => $u->hrm_department_id,
                 ])->values()->all(),
-            // Canonical module codes (HRM, CRM, …) drive the dropdown even
-            // when no department row uses them yet; union with any custom
-            // categories already stored so nothing disappears.
+            // Active role codes are canonical values shared with users.role.
             'categories' => HrmRole::where('is_active', true)->orderBy('code')->pluck('code')
-                ->merge(HrmDepartment::distinct()->pluck('category'))
                 ->filter()->unique()->values()->map(fn ($c) => ['value' => $c])->all(),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
@@ -96,7 +93,7 @@ class DepartmentController extends Controller
         $data = $request->validate([
             'code' => 'required|string|max:30|unique:hrm_departments,code',
             'name' => 'required|string|max:255',
-            'category' => 'nullable|string|max:60',
+            'category' => 'required|string|max:60|exists:hrm_roles,code',
             'description' => 'nullable|string',
             'head_id' => 'nullable|exists:users,id',
             'status' => 'nullable|in:active,inactive',
@@ -112,7 +109,7 @@ class DepartmentController extends Controller
         $data = $request->validate([
             'code' => 'sometimes|string|max:30|unique:hrm_departments,code,' . $department->id,
             'name' => 'sometimes|string|max:255',
-            'category' => 'nullable|string|max:60',
+            'category' => 'required|string|max:60|exists:hrm_roles,code',
             'description' => 'nullable|string',
             'head_id' => 'nullable|exists:users,id',
             'status' => 'nullable|in:active,inactive',

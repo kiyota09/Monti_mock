@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Agency;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hrm\AgencyActivity;
+use App\Models\Hrm\HrmPosition;
+use App\Models\Hrm\ManpowerProposal;
 use App\Models\Hrm\Worker;
 use App\Models\Hrm\WorkerDocument;
 use App\Support\NotifiesHr;
@@ -36,7 +38,13 @@ class WorkerPortalController extends Controller
     public function index(Request $request)
     {
         $agencyId = $this->agencyId($request);
-        $q = Worker::where('agency_id', $agencyId)->with('activeAssignments.request:id,code,department');
+        $q = Worker::where('agency_id', $agencyId)
+            ->where(function ($workers) {
+                $workers->where('status', '!=', Worker::STATUS_DEPLOYED)
+                    ->orWhereNull('availability')
+                    ->orWhereDate('availability', '>=', now()->toDateString());
+            })
+            ->with('activeAssignments.request:id,code,department');
 
         if ($s = $request->get('search')) {
             $q->where(fn ($w) => $w->where('name', 'like', "%{$s}%")
@@ -47,13 +55,21 @@ class WorkerPortalController extends Controller
         }
 
         $paginated = $q->orderBy('name')->paginate(15)->withQueryString();
+        $pageWorkers = collect($paginated->items());
+        $departmentByPosition = HrmPosition::with('department:id,name')
+            ->whereIn('name', $pageWorkers->pluck('position_skill')->filter()->unique())
+            ->get()
+            ->groupBy('name')
+            ->map(fn ($positions) => $positions->first()?->department?->name);
 
         return Inertia::render('Agency/Workers/Index', [
-            'workers' => collect($paginated->items())->map(fn ($w) => [
+            'workers' => $pageWorkers->map(fn ($w) => [
                 'id' => $w->id,
                 'code' => $w->code,
                 'name' => $w->name,
+                'created_at' => $w->created_at?->toIso8601String(),
                 'position_skill' => $w->position_skill,
+                'department' => $w->proposed_department ?: $departmentByPosition->get($w->position_skill),
                 'daily_rate' => $w->daily_rate,
                 'status' => $w->status,
                 'pending_note' => $w->pending_note,
@@ -68,6 +84,19 @@ class WorkerPortalController extends Controller
                 'total' => $paginated->total(),
             ],
             'filters' => $request->only(['search', 'status']),
+            'expired_documents' => WorkerDocument::query()
+                ->with('worker:id,code,name')
+                ->whereHas('worker', fn ($query) => $query->where('agency_id', $agencyId))
+                ->where('status', WorkerDocument::STATUS_EXPIRED)
+                ->orderByDesc('verified_at')
+                ->get()
+                ->map(fn (WorkerDocument $document) => [
+                    'worker_id' => $document->worker_id,
+                    'worker_code' => $document->worker?->code,
+                    'worker_name' => $document->worker?->name,
+                    'label' => $document->label ?: ($document->original_name ?: (WorkerDocument::TYPES[$document->doc_type] ?? $document->doc_type)),
+                    'review_note' => $document->review_note,
+                ])->values()->all(),
         ]);
     }
 
@@ -75,6 +104,7 @@ class WorkerPortalController extends Controller
     {
         return Inertia::render('Agency/Workers/Form', [
             'worker' => null,
+            'existing_workers' => $this->duplicateCandidates($this->agencyId($request)),
             'privacy_notice_version' => self::PRIVACY_NOTICE_VERSION,
             'document_types' => WorkerDocument::TYPES,
             'document_statuses' => WorkerDocument::STATUSES,
@@ -91,7 +121,7 @@ class WorkerPortalController extends Controller
                 $request->merge([$key => null]);
             }
         }
-        $data = $request->validate($this->rules());
+        $data = $request->validate($this->rules($request));
 
         if (empty($data['code'])) {
             $data['code'] = self::nextCode();
@@ -145,6 +175,7 @@ class WorkerPortalController extends Controller
 
         return Inertia::render('Agency/Workers/Form', [
             'worker' => $this->payload($worker),
+            'existing_workers' => $this->duplicateCandidates($this->agencyId($request), $worker->id),
             'privacy_notice_version' => self::PRIVACY_NOTICE_VERSION,
             'document_types' => WorkerDocument::TYPES,
             'document_statuses' => WorkerDocument::STATUSES,
@@ -162,7 +193,7 @@ class WorkerPortalController extends Controller
                 $request->merge([$key => null]);
             }
         }
-        $data = $request->validate($this->rules($worker->id, true));
+        $data = $request->validate($this->rules($request, $worker->id, true));
         if (empty($data['code'])) {
             $data['code'] = $worker->code;
         }
@@ -189,8 +220,16 @@ class WorkerPortalController extends Controller
         // Resubmitting after an HR correction request returns the worker to
         // Pending HR Approval so HR can re-review it.
         $resubmitted = $worker->status === Worker::STATUS_CORRECTION;
+        $pendingProposal = $resubmitted
+            ? ManpowerProposal::with('request:id,code')
+                ->where('worker_id', $worker->id)
+                ->where('status', ManpowerProposal::STATUS_PROPOSED)
+                ->latest('id')
+                ->first()
+            : null;
         if ($resubmitted) {
             $data['status'] = Worker::STATUS_PENDING;
+            $data['pending_note'] = null;
         }
 
         $worker->update($data);
@@ -215,11 +254,11 @@ class WorkerPortalController extends Controller
         $this->storeSupportingDocuments($request, $worker);
         if ($resubmitted) {
             $this->log($this->agencyId($request), $worker->id, null, 'worker_resubmitted', "Worker {$worker->code} corrected and resubmitted by {$request->user('agency')->name} — pending HR approval.", null, $request);
-            NotifiesHr::push(
-                "Correction completed — ready for HR review: {$worker->name} ({$worker->code})",
-                "{$request->user('agency')->name} completed your correction request for {$worker->code} — changes applied, request done, pending HR approval.",
-                'hrm.workers.index'
-            );
+            $notificationBody = $pendingProposal?->request
+                ? "{$request->user('agency')->name} submitted the requested updates for {$worker->code} on {$pendingProposal->request->code}. Reopen the request to review the latest worker assignment preview."
+                : "{$request->user('agency')->name} submitted the requested updates for {$worker->code}. The worker is pending HR review.";
+            $notificationRoute = $pendingProposal?->request ? 'hrm.manpower-requests.index' : 'hrm.workers.index';
+            NotifiesHr::push("Worker corrections submitted: {$worker->name} ({$worker->code})", $notificationBody, $notificationRoute);
         } else {
             $this->log($this->agencyId($request), $worker->id, null, 'worker_updated', "Worker {$worker->code} updated by {$request->user('agency')->name}.", null, $request);
         }
@@ -295,6 +334,7 @@ class WorkerPortalController extends Controller
                 'id' => $d->id,
                 'doc_type' => $d->doc_type,
                 'label' => $d->label,
+                'description' => $d->description,
                 'original_name' => $d->original_name,
                 'url' => Storage::url($d->file_path),
                 'issue_date' => optional($d->issue_date)->toDateString(),
@@ -303,6 +343,24 @@ class WorkerPortalController extends Controller
                 'review_note' => $d->review_note,
             ])->values()->all(),
         ];
+    }
+
+    protected function duplicateCandidates(int $agencyId, ?int $excludeId = null): array
+    {
+        return Worker::query()
+            ->where('agency_id', $agencyId)
+            ->when($excludeId, fn ($query) => $query->where('id', '!=', $excludeId))
+            ->get(['id', 'code', 'name', 'birth_date', 'phone', 'gov_id_number'])
+            ->map(fn (Worker $worker) => [
+                'id' => $worker->id,
+                'code' => $worker->code,
+                'name' => $worker->name,
+                'birth_date' => optional($worker->birth_date)->toDateString(),
+                'phone' => $worker->phone,
+                'gov_id_number' => $worker->gov_id_number,
+            ])
+            ->values()
+            ->all();
     }
 
     protected function storeSupportingDocuments(Request $request, Worker $worker): void
@@ -314,6 +372,7 @@ class WorkerPortalController extends Controller
         }
         $types = (array) $request->get('document_types', []);
         $labels = (array) $request->get('document_labels', []);
+        $descriptions = (array) $request->get('document_descriptions', []);
         $starts = (array) $request->get('document_starts', []);
         $expiries = (array) $request->get('document_expiries', []);
 
@@ -328,6 +387,7 @@ class WorkerPortalController extends Controller
             $worker->documents()->create([
                 'doc_type' => $docType,
                 'label' => $labels[$i] ?? (WorkerDocument::TYPES[$docType] ?? null),
+                'description' => $descriptions[$i] ?? null,
                 'file_path' => $file->store('workers/documents', 'public'),
                 'original_name' => $file->getClientOriginalName(),
                 'mime' => $file->getClientMimeType(),
@@ -339,7 +399,7 @@ class WorkerPortalController extends Controller
         }
     }
 
-    protected function rules(?int $ignoreId = null, bool $isUpdate = false): array
+    protected function rules(Request $request, ?int $ignoreId = null, bool $isUpdate = false): array
     {
         // Minimum submission: name, birth date, phone, address, resume,
         // education, skills, position/skill, availability, consent.
@@ -349,7 +409,7 @@ class WorkerPortalController extends Controller
         return [
             'name' => 'required|string|max:255',
             'code' => ['nullable', 'string', 'max:30', Rule::unique('workers', 'code')->ignore($ignoreId)],
-            'birth_date' => 'required|date|before:today',
+            'birth_date' => 'required|date|before_or_equal:' . now()->subYears(18)->toDateString(),
             'gender' => 'nullable|string|max:20',
             'phone' => ['required', 'string', 'max:60', 'regex:/^(09\d{2}\s?\d{3}\s?\d{4}|09\d{9}|\+63\d{10})$/'],
             'email' => 'nullable|email|max:255',
@@ -362,21 +422,51 @@ class WorkerPortalController extends Controller
             'trainings_certifications' => 'nullable|string|max:4000',
 
             'position_skill' => 'required|string|max:255',
-            'years_experience' => 'nullable|numeric|min:0|max:60',
+            'years_experience' => 'nullable|integer|min:0|max:60',
             'proposed_department' => 'nullable|string|max:255',
-            'availability' => 'required|date',
+            'availability' => 'required|date|after_or_equal:' . now()->addDays(3)->toDateString(),
             'daily_rate' => 'nullable|numeric|min:0',
             'employment_arrangement' => 'nullable|string|max:100',
 
             'gov_id_type' => 'nullable|string|max:60',
-            'gov_id_number' => ['nullable', 'string', 'max:100', Rule::unique('workers', 'gov_id_number')->ignore($ignoreId)],
+            'gov_id_number' => [
+                'nullable', 'string', 'max:100', Rule::unique('workers', 'gov_id_number')->ignore($ignoreId),
+                function ($attribute, $value, $fail) use ($request) {
+                    if (! filled($value)) {
+                        return;
+                    }
+
+                    $type = $request->input('gov_id_type');
+                    $number = trim((string) $value);
+                    $digits = preg_replace('/[\s-]/', '', $number);
+                    $valid = match ($type) {
+                        'SSS' => preg_match('/^\d{10}$/', $digits) === 1,
+                        'Pag-IBIG MID' => preg_match('/^\d{12}$/', $digits) === 1,
+                        'PhilHealth PIN' => preg_match('/^\d{12}$/', $digits) === 1,
+                        'TIN' => in_array(strlen($digits), [9, 12], true) && ctype_digit($digits),
+                        "Driver's License" => preg_match('/^[A-Za-z0-9-]+$/', $number) === 1,
+                        "Voter's ID / VIN", 'Passport' => preg_match('/^[A-Za-z0-9]+$/', $number) === 1,
+                        'National ID (PCN)' => preg_match('/^\d{16}$/', $digits) === 1,
+                        default => false,
+                    };
+
+                    if (! $valid) {
+                        $fail('The Government ID number does not match the selected ID type format.');
+                    }
+                },
+            ],
             'clearance_expiry' => 'nullable|date',
             'documents' => 'nullable|array|max:10',
-            'documents.*' => 'file|mimes:pdf,doc,docx,jpg,jpeg,png|max:10240',
+            // Validate the submitted filename extension here. Some valid
+            // browser-uploaded PNGs are reported by PHP fileinfo as a generic
+            // MIME type, which makes the content-based mimes rule reject them.
+            'documents.*' => 'file|extensions:pdf,doc,docx,jpg,jpeg,png|max:10240',
             'document_types' => 'nullable|array',
             'document_types.*' => 'nullable|string|max:40',
             'document_labels' => 'nullable|array',
             'document_labels.*' => 'nullable|string|max:255',
+            'document_descriptions' => 'nullable|array',
+            'document_descriptions.*' => 'nullable|string|max:1000',
             'document_starts' => 'nullable|array',
             'document_starts.*' => 'nullable|date',
             'document_expiries' => 'nullable|array',

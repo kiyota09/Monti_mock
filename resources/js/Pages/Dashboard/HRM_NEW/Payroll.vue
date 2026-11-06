@@ -232,37 +232,38 @@ const exportCsv = async () => {
 <template>
     <Head title="Payroll" />
     <AuthenticatedLayout>
-        <div class="flex min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 payroll-caps">
-            <div class="flex-1 p-8 text-slate-900 font-sans min-w-0 relative">
-                <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
+        <div class="flex min-h-screen bg-white">
+            <div class="flex-1 p-4 sm:p-6 lg:p-8 text-slate-900 font-sans min-w-0 relative flex flex-col gap-4">
+                <div class="absolute inset-0 bg-grid-slate-100 opacity-10 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
 
-                <header class="mb-8 relative">
-                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <header class="mb-0 relative shrink-0">
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         <div>
-                            <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
+                            <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
                                 <span class="hover:text-slate-700 cursor-pointer transition-colors">Dashboard</span>
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                                 <span class="text-slate-800 font-semibold">Payroll</span>
                             </nav>
-                            <h1 class="text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Payroll</h1>
+                            <h1 class="text-3xl font-bold tracking-tight text-[#263c43]">Payroll</h1>
+                            <p class="text-sm text-[#455a60] mt-0.5">Review payroll totals and manage each employee payment through approval.</p>
                         </div>
-                        <div class="flex flex-wrap items-center gap-3">
+                        <div class="flex flex-wrap items-center justify-end gap-2">
                             <select :value="frequency" aria-label="Pay frequency" @change="switchFrequency"
-                                class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer">
+                                class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
                                 <option value="weekly">Weekly</option>
                                 <option value="semi_monthly">Semi-monthly</option>
                                 <option value="monthly">Monthly</option>
                             </select>
                             <select :value="calendar_year" aria-label="Payroll year" @change="switchYear"
-                                class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer">
+                                class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
                                 <option v-for="y in [2024, 2025, 2026, 2027]" :key="y" :value="y">{{ y }}</option>
                             </select>
                             <select :value="active_period" aria-label="Pay period" @change="switchPeriod"
-                                class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer max-w-72">
+                                class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-72">
                                 <option v-for="p in periodOptions" :key="p.label" :value="p.label">{{ p.label }}{{ p.is_current ? ' · Current' : '' }}{{ p.locked ? ' · Locked' : '' }}{{ p.row_count ? ` (${p.row_count})` : '' }}</option>
                             </select>
                             <Link :href="route('hrm.payroll.generate')" :class="canEdit ? '' : 'opacity-50 pointer-events-none'"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5">
+                                class="flex items-center gap-2 px-4 py-2.5 bg-[#263c43] hover:bg-[#1e3036] text-white rounded-lg text-sm font-bold transition shadow-md">
                                 <Plus class="w-4 h-4" /> Generate Payroll
                             </Link>
                         </div>
@@ -279,12 +280,12 @@ const exportCsv = async () => {
                 <div v-if="flashMsg" class="mb-4 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold relative">{{ flashMsg }}</div>
                 <div v-if="localMsg" class="mb-4 px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold relative">{{ localMsg }}</div>
 
-                <div class="grid grid-cols-3 gap-4 mb-8 relative">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 relative">
                     <div v-for="m in metricCards" :key="m.label"
-                        class="group bg-white rounded-2xl border border-slate-200/60 p-5 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:border-blue-200/60 shadow-md backdrop-blur-sm">
+                        class="group bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_12px_32px_rgba(15,23,42,0.12)]">
                         <div class="flex items-center justify-between mb-3">
                             <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">{{ m.label }}</span>
-                            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center group-hover:from-blue-100 group-hover:to-blue-200 transition-all duration-300 shadow-inner">
+                            <div class="w-10 h-10 rounded-xl bg-[#f6eadc] flex items-center justify-center">
                                 <component :is="m.icon" class="w-5 h-5" :class="m.color" />
                             </div>
                         </div>
@@ -292,10 +293,10 @@ const exportCsv = async () => {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4 relative">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 relative">
                     <div v-for="(s, i) in steps" :key="s.key"
-                        class="bg-white rounded-2xl border p-4 shadow-md transition-all duration-300"
-                        :class="highlightStep === s.key ? 'border-blue-300 shadow-lg' : 'border-slate-200/60'">
+                        class="bg-white rounded-2xl border p-4 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
+                        :class="highlightStep === s.key ? 'border-[#bb8754]' : 'border-slate-100'">
                         <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">{{ i + 1 }}. {{ s.key }}</div>
                         <div class="text-2xl font-bold text-slate-900">{{ s.n }}</div>
                     </div>
@@ -305,23 +306,23 @@ const exportCsv = async () => {
                     Payroll complete for {{ active_period }}. Next: remit contributions and tax (see Remittances).
                 </div>
 
-                <div class="flex gap-2 mb-4 relative">
-                    <button type="button" @click="tab = 'pay'" class="px-4 py-2 rounded-xl text-xs font-bold border transition"
-                        :class="tab === 'pay' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'">Payroll</button>
-                    <button type="button" @click="tab = 'audit'" class="px-4 py-2 rounded-xl text-xs font-bold border transition"
-                        :class="tab === 'audit' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'">Audit log</button>
+                <div class="flex gap-2 relative">
+                    <button type="button" @click="tab = 'pay'" class="px-4 py-2 rounded-lg text-xs font-bold border transition"
+                        :class="tab === 'pay' ? 'bg-[#263c43] text-white border-[#263c43]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'">Payroll</button>
+                    <button type="button" @click="tab = 'audit'" class="px-4 py-2 rounded-lg text-xs font-bold border transition"
+                        :class="tab === 'audit' ? 'bg-[#263c43] text-white border-[#263c43]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'">Audit log</button>
                 </div>
 
-                <div v-if="tab === 'pay'" class="bg-white rounded-2xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden relative">
+                <div v-if="tab === 'pay'" class="bg-white rounded-2xl border border-slate-100 shadow-[0_14px_36px_rgba(15,23,42,0.14)] overflow-hidden relative">
                     <div class="p-4 border-b border-slate-100 flex flex-col xl:flex-row xl:items-center gap-3">
                         <div class="flex items-center gap-3 flex-wrap">
                             <div class="relative">
                                 <span class="absolute inset-y-0 left-0 flex items-center pl-3"><Search class="w-4 h-4 text-slate-400" /></span>
                                 <input v-model="searchQuery" type="text" placeholder="Search name or job title..."
-                                    class="w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
+                                    class="w-64 pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg text-xs focus:border-[#bb8754] focus:ring-2 focus:ring-[#bb8754]/20 shadow-sm transition-all duration-200" />
                             </div>
-                            <select v-model="deptFilter"
-                                class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-600 focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer">
+                                <select v-model="deptFilter"
+                                class="bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-600 focus:border-[#bb8754] focus:ring-2 focus:ring-[#bb8754]/20 shadow-sm cursor-pointer">
                                 <option v-for="d in departments" :key="d" :value="d">{{ d === 'All' ? 'All Departments' : d }}</option>
                             </select>
                         </div>
@@ -342,7 +343,7 @@ const exportCsv = async () => {
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
-                                <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                <tr class="bg-[#2d4148] text-[10px] font-bold uppercase tracking-wider text-white/90">
                                     <th class="py-3 px-5"><input type="checkbox" aria-label="Select all visible rows" :checked="visibleRows.length > 0 && visibleRows.every((p) => selected.has(p.id))" @change="toggleAllVisible" /></th>
                                     <th class="py-3 px-5 cursor-pointer" @click="toggleSort('name')">Employee</th>
                                     <th class="py-3 px-5 cursor-pointer" @click="toggleSort('dept')">Department</th>
@@ -353,7 +354,7 @@ const exportCsv = async () => {
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
-                                <tr v-for="p in visibleRows" :key="p.id" @click="openRow(p.id)" class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all duration-200 text-xs cursor-pointer">
+                                    <tr v-for="p in visibleRows" :key="p.id" @click="openRow(p.id)" class="hover:bg-[#f7f8f8] transition-colors duration-150 text-xs cursor-pointer">
                                     <td class="py-3 px-5" @click.stop><input type="checkbox" :aria-label="'Select ' + p.employee_name" :checked="selected.has(p.id)" @change="toggleOne(p.id)" /></td>
                                     <td class="py-3 px-5">
                                         <div class="flex items-center gap-3">
@@ -387,12 +388,11 @@ const exportCsv = async () => {
                         <span class="font-bold text-slate-900">{{ peso(footerTotals.n) }}</span>
                     </div>
                 </div>
-                <p v-if="tab === 'pay'" class="text-xs text-slate-500 mt-3 relative">Amounts are in PHP for a semi-monthly period. Rates follow the 2026 SSS, PhilHealth, Pag-IBIG and TRAIN schedules as I understand them. Verify against the official circulars and your accountant before real use.</p>
 
-                <div v-if="tab === 'audit'" class="bg-white rounded-2xl border border-slate-200/60 shadow-lg backdrop-blur-sm overflow-hidden relative">
+                <div v-if="tab === 'audit'" class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden relative">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse text-xs">
-                            <thead><tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            <thead><tr class="bg-slate-50/50 border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                                 <th class="py-3 px-5">Time</th><th class="py-3 px-5">Role</th><th class="py-3 px-5">Message</th><th class="py-3 px-5">Decision</th>
                             </tr></thead>
                             <tbody class="divide-y divide-slate-100">
@@ -428,10 +428,7 @@ const exportCsv = async () => {
 </template>
 
 <style scoped>
-.payroll-caps, .payroll-caps *, .payroll-caps input::placeholder { text-transform: capitalize; }
 .bg-grid-slate-100 { background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px); background-size: 24px 24px; }
-.bg-clip-text { -webkit-background-clip: text; background-clip: text; }
-.backdrop-blur-sm { backdrop-filter: blur(8px); }
 button:disabled { opacity: .45; cursor: not-allowed; }
 :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 </style>

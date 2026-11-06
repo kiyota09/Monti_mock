@@ -4,50 +4,49 @@
         <Transition name="fade">
             <div
                 v-if="pageLoading"
-                class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-100/50 backdrop-blur-md"
+                class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-100/50 dark:bg-zinc-950/70 backdrop-blur-md"
                 aria-live="polite"
             >
                 <div class="flex flex-col items-center gap-3">
                     <div class="w-10 h-10 rounded-full border-4 border-slate-300 border-t-blue-600 animate-spin"></div>
-                    <p class="text-sm font-semibold text-slate-600">Loading onboarding...</p>
+                    <p class="text-sm font-semibold text-slate-600 dark:text-zinc-300">Loading onboarding...</p>
                 </div>
             </div>
         </Transition>
 
-        <div class="flex min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
-            <div class="flex-1 p-6 lg:p-8 text-slate-900 font-sans min-w-0 relative">
-                <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
-
+        <div class="flex min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
+            <div class="flex-1 p-6 lg:p-8 text-slate-900 dark:text-zinc-100 font-sans min-w-0 relative">
                 <!-- HEADER -->
                 <header class="mb-6 relative">
-                    <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
-                        <Link :href="route('hrm.onboarding.status.index')" class="hover:text-slate-700 cursor-pointer transition-colors inline-flex items-center gap-1">
+                    <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-zinc-300 mb-3">
+                        <Link :href="route('hrm.onboarding.status.index')" class="hover:text-slate-700 dark:text-zinc-200 cursor-pointer transition-colors inline-flex items-center gap-1">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
                             </svg>
                             Onboarding
                         </Link>
-                        <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <svg class="w-3 h-3 text-slate-400 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
                         </svg>
-                        <span class="text-slate-800 font-semibold">{{ onboarding.name }}</span>
+                        <span class="text-slate-800 dark:text-zinc-100 font-semibold">{{ onboarding.name }}</span>
                     </nav>
 
                     <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
                         <div class="flex items-center gap-4">
-                            <div class="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                            <div class="relative w-14 h-14 shrink-0 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
                                 {{ initials }}
+                                <img v-if="profile?.photo" :src="profile.photo" :alt="profile.full_name || onboarding.name" class="absolute inset-0 h-14 w-14 rounded-full border-2 border-white object-cover shadow-lg" @error="$event.target.remove()" />
                             </div>
                             <div>
-                                <h1 class="text-2xl lg:text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">{{ onboarding.name }}</h1>
+                                <h1 class="text-2xl lg:text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">{{ onboarding.name }}</h1>
                                 <div class="flex flex-wrap items-center gap-2 mt-1">
-                                    <span class="text-xs text-slate-500">{{ onboarding.position }}</span>
+                                    <span class="text-xs text-slate-500 dark:text-zinc-300">{{ onboarding.position }}</span>
                                     <span class="text-[10px] text-slate-300">•</span>
-                                    <span class="text-xs text-slate-500">{{ onboarding.department }}</span>
-                                    <span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-semibold border shadow-sm" :class="onboarding.status_badge">
+                                    <span class="text-xs text-slate-500 dark:text-zinc-300">{{ onboarding.department }}</span>
+                                    <span class="onboarding-status-pill inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-semibold border shadow-sm" :class="onboarding.status_badge">
                                         {{ onboarding.status }}
                                     </span>
-                                    <span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-semibold border bg-slate-50 text-slate-600 border-slate-200">
+                                    <span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-semibold border bg-slate-50 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700">
                                         Application: {{ onboarding.application_status }}
                                     </span>
                                 </div>
@@ -57,7 +56,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                             <button
                                 @click="openModal('details')"
-                                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold transition-all duration-200 shadow-sm hover:shadow-md"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-xl text-xs font-semibold transition-all duration-200 shadow-sm hover:shadow-md"
                             >
                                 <Pencil class="w-3.5 h-3.5" /> Edit Details
                             </button>
@@ -65,11 +64,11 @@
                                 v-if="!alreadyHired"
                                 @click="confirmComplete"
                                 :disabled="!canComplete"
-                                :title="!canComplete ? 'Complete all required items and mandatory activities first.' : ''"
+                                :title="!canComplete ? 'Complete all required applicant documents first.' : ''"
                                 class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 shadow-lg"
                                 :class="canComplete
                                     ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white shadow-emerald-500/25'
-                                    : 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                    : 'bg-slate-200 text-slate-500 dark:text-zinc-300 cursor-not-allowed'
                                 "
                             >
                                 <CheckCircle2 class="w-3.5 h-3.5" /> Complete Onboarding
@@ -77,13 +76,23 @@
                             <button
                                 v-if="!alreadyHired"
                                 @click="confirmCreateEmployee"
-                                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold transition-all duration-200 shadow-lg hover:shadow-xl"
+                                :disabled="onboarding.status !== 'Completed'"
+                                :title="onboarding.status !== 'Completed' ? 'Complete onboarding before creating the employee record.' : ''"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 shadow-lg"
+                                :class="onboarding.status === 'Completed' ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white hover:shadow-xl' : 'bg-slate-200 text-slate-500 dark:text-zinc-300 cursor-not-allowed'"
                             >
                                 <UserPlus class="w-3.5 h-3.5" /> Create Employee
                             </button>
+                            <button
+                                v-if="onboarding.status === 'Completed' && agencyReferralApplicationId && !employeeAccount?.email"
+                                @click="confirmAgencyReferral"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all duration-200 shadow-lg"
+                            >
+                                <Send class="w-3.5 h-3.5" /> Create Agency Referral
+                            </button>
                             <div
-                                v-else
-                                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold"
+                                v-if="alreadyHired"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold"
                             >
                                 <CheckCircle2 class="w-3.5 h-3.5" /> Employee Record Created
                             </div>
@@ -91,256 +100,298 @@
                     </div>
 
                     <!-- Missing items warning -->
-                    <div v-if="missing.length > 0" class="mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                        <p class="text-xs font-bold text-amber-800 mb-1">Not yet ready to complete onboarding:</p>
-                        <ul class="list-disc list-inside text-[11px] text-amber-700 space-y-0.5">
+                    <div v-if="missing.length > 0" class="mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
+                        <p class="text-xs font-bold text-amber-800 dark:text-amber-200 mb-1">Not yet ready to complete onboarding:</p>
+                        <ul class="list-disc list-inside text-[11px] text-amber-700 dark:text-amber-300 space-y-0.5">
                             <li v-for="m in missing" :key="m">{{ m }}</li>
                         </ul>
                     </div>
                 </header>
 
                 <!-- PROGRESS -->
-                <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm p-4 mb-5 relative">
+                <div class="bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm p-4 mb-5 relative">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold text-slate-600">Overall Onboarding Progress</span>
-                        <span class="text-sm font-bold text-blue-600">{{ progress }}%</span>
+                        <span class="text-xs font-bold text-slate-600 dark:text-zinc-300">Overall Onboarding Progress</span>
+                        <span class="text-sm font-bold text-blue-600 dark:text-blue-300">{{ progress }}%</span>
                     </div>
-                    <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                    <div class="w-full h-3 bg-slate-100 dark:bg-zinc-700 rounded-full overflow-hidden shadow-inner">
                         <div class="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-700" :style="{ width: progress + '%' }"></div>
                     </div>
                 </div>
 
                 <!-- FINAL REVIEW -->
-                <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden mb-5 relative">
-                    <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center gap-2">
+                <div class="bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden mb-5 relative">
+                    <div class="px-4 py-3 border-b border-slate-100 dark:border-zinc-800 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center gap-2">
                         <ClipboardCheck class="w-4 h-4 text-blue-600" />
-                        <h2 class="text-sm font-bold text-slate-800">Final Review</h2>
-                        <span class="ml-auto text-[10px] font-semibold text-slate-400">{{ displayTemplate || 'Template not set' }}</span>
+                        <h2 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Final Review</h2>
+                        <span class="ml-auto text-[10px] font-semibold text-slate-400 dark:text-zinc-400">{{ displayTemplate || 'Template not set' }}</span>
                     </div>
 
                     <!-- Ready banner -->
                     <div
                         v-if="readiness.completed"
-                        class="mx-4 mt-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-3"
+                        class="mx-4 mt-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 flex items-center gap-3"
                     >
                         <CheckCircle2 class="w-5 h-5 text-emerald-600 shrink-0" />
                         <div>
-                            <p class="text-xs font-bold text-emerald-800">Onboarding Completed</p>
-                            <p class="text-[11px] text-emerald-700">The employee record can now be created. All required items and mandatory activities are done.</p>
+                            <p class="text-xs font-bold text-emerald-800 dark:text-emerald-200">Onboarding Completed</p>
+                            <p class="text-[11px] text-emerald-700 dark:text-emerald-300">The employee record can now be created. All required applicant documents are complete.</p>
                         </div>
                     </div>
                     <div
                         v-else-if="readiness.ready"
-                        class="mx-4 mt-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-3"
+                        class="mx-4 mt-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 flex items-center gap-3"
                     >
                         <CheckCircle2 class="w-5 h-5 text-emerald-600 shrink-0" />
                         <div>
-                            <p class="text-xs font-bold text-emerald-800">Ready for Completion</p>
-                            <p class="text-[11px] text-emerald-700">All required items and mandatory activities are done. You can complete the onboarding now.</p>
+                            <p class="text-xs font-bold text-emerald-800 dark:text-emerald-200">Ready for Completion</p>
+                            <p class="text-[11px] text-emerald-700 dark:text-emerald-300">All required applicant documents are complete. You can complete the onboarding now.</p>
                         </div>
                     </div>
                     <div
                         v-else
-                        class="mx-4 mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3"
+                        class="mx-4 mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 flex items-center gap-3"
                     >
                         <X class="w-5 h-5 text-amber-600 shrink-0" />
                         <div>
-                            <p class="text-xs font-bold text-amber-800">Not Yet Ready for Completion</p>
-                            <p class="text-[11px] text-amber-700">Complete every required item and mandatory activity to unlock the onboarding completion.</p>
+                            <p class="text-xs font-bold text-amber-800 dark:text-amber-200">Not Yet Ready for Completion</p>
+                            <p class="text-[11px] text-amber-700 dark:text-amber-300">Complete every required applicant document to unlock onboarding completion.</p>
                         </div>
                     </div>
 
                     <!-- Readiness counts -->
-                    <div class="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <div class="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+                    <div class="p-4 grid grid-cols-2 gap-3">
+                        <div class="rounded-xl border border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/50 p-3">
                             <div class="flex items-center justify-between">
-                                <FileText class="w-3.5 h-3.5 text-slate-400" />
-                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Required Items</span>
+                                <FileText class="w-3.5 h-3.5 text-slate-400 dark:text-zinc-400" />
+                                <span class="text-[9px] font-bold text-slate-400 dark:text-zinc-400 uppercase tracking-wider">Required Items</span>
                             </div>
-                            <p class="text-xl font-bold text-slate-800 mt-1.5">{{ readiness.required_items_done }}<span class="text-xs text-slate-400 font-semibold"> / {{ readiness.required_items_total }}</span></p>
-                            <p class="text-[10px] text-slate-400 mt-0.5">verified or completed</p>
-                        </div>
-                        <div class="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
-                            <div class="flex items-center justify-between">
-                                <CalendarDays class="w-3.5 h-3.5 text-slate-400" />
-                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Mandatory Activities</span>
-                            </div>
-                            <p class="text-xl font-bold text-slate-800 mt-1.5">{{ readiness.required_activities_done }}<span class="text-xs text-slate-400 font-semibold"> / {{ readiness.required_activities_total }}</span></p>
-                            <p class="text-[10px] text-slate-400 mt-0.5">completed</p>
+                            <p class="text-xl font-bold text-slate-800 dark:text-zinc-100 mt-1.5">{{ readiness.required_items_done }}<span class="text-xs text-slate-400 dark:text-zinc-400 font-semibold"> / {{ readiness.required_items_total }}</span></p>
+                            <p class="text-[10px] text-slate-400 dark:text-zinc-400 mt-0.5">verified or completed</p>
                         </div>
                         <div class="rounded-xl border border-rose-100 bg-rose-50/40 p-3">
                             <div class="flex items-center justify-between">
                                 <X class="w-3.5 h-3.5 text-rose-400" />
                                 <span class="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Rejected Required Items</span>
                             </div>
-                            <p class="text-xl font-bold text-slate-800 mt-1.5">{{ readiness.rejected_items }}</p>
-                            <p class="text-[10px] text-slate-400 mt-0.5">awaiting resubmission</p>
-                        </div>
-                        <div class="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
-                            <div class="flex items-center justify-between">
-                                <StickyNote class="w-3.5 h-3.5 text-slate-400" />
-                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Blocked Items</span>
-                            </div>
-                            <p class="text-xl font-bold text-slate-800 mt-1.5">{{ readiness.blocked_items }}</p>
-                            <p class="text-[10px] text-slate-400 mt-0.5">need unblocking</p>
+                            <p class="text-xl font-bold text-slate-800 dark:text-zinc-100 mt-1.5">{{ readiness.rejected_items }}</p>
+                            <p class="text-[10px] text-slate-400 dark:text-zinc-400 mt-0.5">awaiting resubmission</p>
                         </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-5 relative">
+                <nav class="mx-4 mt-4 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 dark:border-zinc-700 bg-slate-100/80 dark:bg-zinc-800/80 p-1.5 pb-3 shadow-inner" role="tablist" aria-label="Onboarding details">
+                    <button type="button" role="tab" :aria-selected="activeDetailTab === 'personal'" @click="activeDetailTab = 'personal'" :class="tabClass('personal')">
+                        <User class="h-4 w-4" /><span>Personal &amp; Employment</span>
+                    </button>
+                    <button type="button" role="tab" :aria-selected="activeDetailTab === 'items'" @click="activeDetailTab = 'items'" :class="tabClass('items')">
+                        <ClipboardCheck class="h-4 w-4" /><span>Onboarding Items</span>
+                    </button>
+                    <button type="button" role="tab" :aria-selected="activeDetailTab === 'account'" @click="activeDetailTab = 'account'" :class="tabClass('account')">
+                        <UserPlus class="h-4 w-4" /><span>Employee Account Details</span>
+                    </button>
+                </nav>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 relative">
                     <!-- LEFT COLUMN -->
-                    <div class="space-y-5">
+                    <div class="contents">
                         <!-- PERSONAL INFO -->
-                        <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center gap-2">
+                        <div v-if="activeDetailTab === 'personal'" class="bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 dark:border-zinc-800 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center gap-2">
                                 <User class="w-4 h-4 text-blue-600" />
-                                <h3 class="text-sm font-bold text-slate-800">Personal Information</h3>
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Personal Information</h3>
                             </div>
                             <div class="p-4 space-y-3">
                                 <div v-if="profile?.photo" class="flex justify-center mb-2">
                                     <img :src="profile.photo" alt="Profile" class="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg" />
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Full Name</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ profile?.full_name || onboarding.name }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Full Name</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ profile?.full_name || onboarding.name }}</span>
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Email</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ profile?.email || onboarding.email }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Email</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ profile?.email || onboarding.email }}</span>
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Phone</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ profile?.phone || onboarding.phone }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Phone</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ profile?.phone || onboarding.phone }}</span>
                                 </div>
-                                <div v-if="profile?.birth_date" class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Birth Date</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ formatDate(profile.birth_date) }}</span>
+                                <div v-if="profile?.birth_date" class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Birth Date</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ formatDate(profile.birth_date) }}</span>
                                 </div>
-                                <div v-if="profile?.gender" class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Gender</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ profile.gender }}</span>
+                                <div v-if="profile?.gender" class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Gender</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ profile.gender }}</span>
                                 </div>
-                                <div v-if="profile?.civil_status" class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Civil Status</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ profile.civil_status }}</span>
+                                <div v-if="profile?.civil_status" class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Civil Status</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ profile.civil_status }}</span>
                                 </div>
-                                <div v-if="profile?.address" class="flex justify-between gap-3 border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400 shrink-0">Address</span>
-                                    <span class="text-xs font-medium text-slate-700 text-right">{{ profile.address }} {{ profile.zip_code }}</span>
+                                <div v-if="profile?.address" class="flex justify-between gap-3 border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400 shrink-0">Address</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200 text-right">{{ profile.address }} {{ profile.zip_code }}</span>
                                 </div>
-                                <div v-if="profile?.education" class="flex justify-between gap-3 border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400 shrink-0">Education</span>
-                                    <span class="text-xs font-medium text-slate-700 text-right">{{ profile.education }}</span>
+                                <div v-if="profile?.education" class="flex justify-between gap-3 border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400 shrink-0">Education</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200 text-right">{{ profile.education }}</span>
                                 </div>
-                                <div v-if="profile?.emergency_contact" class="flex justify-between gap-3 border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400 shrink-0">Emergency</span>
-                                    <span class="text-xs font-medium text-slate-700 text-right">
+                                <div v-if="profile?.emergency_contact" class="flex justify-between gap-3 border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400 shrink-0">Emergency</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200 text-right">
                                         {{ profile.emergency_contact.name }}
-                                        <span class="block text-[10px] text-slate-400">{{ profile.emergency_contact.relationship }} · {{ profile.emergency_contact.phone }}</span>
+                                        <span class="block text-[10px] text-slate-400 dark:text-zinc-400">{{ profile.emergency_contact.relationship }} · {{ profile.emergency_contact.phone }}</span>
                                     </span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- EMPLOYMENT DETAILS -->
-                        <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center gap-2">
+                        <div v-if="activeDetailTab === 'personal'" class="bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 dark:border-zinc-800 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center gap-2">
                                 <Briefcase class="w-4 h-4 text-blue-600" />
-                                <h3 class="text-sm font-bold text-slate-800">Employment Details</h3>
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Employment Details</h3>
                             </div>
                             <div class="p-4 space-y-3">
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Position</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ onboarding.position }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Position</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ onboarding.position }}</span>
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Department</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ onboarding.department }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Department</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ onboarding.department }}</span>
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Employment Type</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ onboarding.employment_type || '—' }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Employment Type</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ onboarding.employment_type || '—' }}</span>
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Work Mode</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ onboarding.work_mode || '—' }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Work Mode</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ onboarding.work_mode || '—' }}</span>
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Onboarding Template</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ displayTemplate || '—' }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Onboarding Template</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ displayTemplate || '—' }}</span>
                                 </div>
-                                <div v-if="onboarding.salary" class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Salary Range</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ onboarding.salary }}</span>
+                                <div v-if="onboarding.salary" class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Salary Range</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ onboarding.salary }}</span>
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Start Date</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ formatDate(onboarding.start_date) }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Start Date</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ formatDate(onboarding.start_date) }}</span>
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Work Location</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ onboarding.work_location || '—' }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Work Location</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ onboarding.work_location || '—' }}</span>
                                 </div>
-                                <div class="flex justify-between border-b border-slate-50 pb-2">
-                                    <span class="text-[11px] text-slate-400">Work Schedule</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ onboarding.work_schedule || '—' }}</span>
+                                <div class="flex justify-between border-b border-slate-50 dark:border-zinc-800 pb-2">
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Work Schedule</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ onboarding.work_schedule || '—' }}</span>
                                 </div>
                                 <div class="flex justify-between pb-2">
-                                    <span class="text-[11px] text-slate-400">Assigned Manager</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ onboarding.assigned_manager || 'Unassigned' }}</span>
+                                    <span class="text-[11px] text-slate-400 dark:text-zinc-400">Assigned Manager</span>
+                                    <span class="text-xs font-medium text-slate-700 dark:text-zinc-200">{{ onboarding.assigned_manager || 'Unassigned' }}</span>
                                 </div>
+                            </div>
+                        </div>
+                        <div v-if="activeDetailTab === 'account'" class="md:col-span-2 bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 dark:border-zinc-800 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center gap-2">
+                                    <User class="w-4 h-4 text-blue-600" />
+                                    <h3 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Employee Account Details</h3>
+                            </div>
+                            <div v-if="employeeAccount" class="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                                <div v-for="field in [
+                                    ['Employee ID', employeeAccount.employee_id],
+                                    ['Full Name', employeeAccount.name],
+                                    ['Company Email', employeeAccount.email],
+                                    ['Account Status', employeeAccount.account_status],
+                                    ['System Role', employeeAccount.role],
+                                    ['System Position', employeeAccount.system_position],
+                                    ['Job Position', employeeAccount.position],
+                                    ['Department', employeeAccount.department],
+                                    ['Employment Type', employeeAccount.employment_type],
+                                    ['Employment Status', employeeAccount.employment_status],
+                                    ['Start Date', employeeAccount.start_date],
+                                    ['Reporting Manager', employeeAccount.reporting_manager],
+                                    ['Work Location', employeeAccount.work_location],
+                                    ['Work Arrangement', employeeAccount.work_mode],
+                                    ['Shift', employeeAccount.shift],
+                                    ['Work Schedule', employeeAccount.work_schedule],
+                                    ['Salary Type', employeeAccount.salary_type],
+                                    ['Basic Salary', employeeAccount.basic_salary ? peso(employeeAccount.basic_salary) : null],
+                                    ['Pay Frequency', employeeAccount.pay_frequency],
+                                    ['Payroll Group', employeeAccount.payroll_group],
+                                    ['Training Duration', employeeAccount.training_duration_weeks ? `${employeeAccount.training_duration_weeks} weeks` : null],
+                                    ['Training Start Date', employeeAccount.training_start_date],
+                                    ['Training End Date', employeeAccount.training_end_date],
+                                    ['Probation Duration', employeeAccount.probation_duration_months ? `${employeeAccount.probation_duration_months} month(s)` : null],
+                                    ['Probation Evaluation Interval', employeeAccount.probation_evaluation_interval_months ? `Every ${employeeAccount.probation_evaluation_interval_months} month(s)` : null],
+                                    ['Probation End Date', employeeAccount.probation_end_date],
+                                    ['Personal Email', employeeAccount.personal_email],
+                                    ['Mobile Number', employeeAccount.mobile_number],
+                                    ['Emergency Contact', employeeAccount.emergency_contact_name],
+                                    ['Emergency Contact Number', employeeAccount.emergency_contact_number],
+                                ]" :key="field[0]" class="rounded-lg border border-slate-100 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-800/50 p-3">
+                                    <span class="block text-[10px] text-slate-400 dark:text-zinc-400">{{ field[0] }}</span>
+                                    <span class="mt-1 block break-words text-xs font-medium text-slate-700 dark:text-zinc-200">{{ field[1] || '—' }}</span>
+                                </div>
+                            </div>
+                            <div v-else class="p-4 text-xs text-slate-500 dark:text-zinc-300">
+                                Employee account has not been created yet.
                             </div>
                         </div>
                     </div>
 
                     <!-- RIGHT 2 COLUMNS -->
-                    <div class="xl:col-span-2 space-y-5">
+                    <div class="contents">
                         <!-- UNIFIED ONBOARDING ITEMS -->
-                        <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center justify-between">
+                        <div v-if="activeDetailTab === 'items'" class="md:col-span-2 bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-visible">
+                            <div class="px-4 py-3 border-b border-slate-100 dark:border-zinc-800 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-between">
                                 <div class="flex items-center gap-2">
                                     <ClipboardCheck class="w-4 h-4 text-blue-600" />
-                                    <h3 class="text-sm font-bold text-slate-800">Onboarding Items</h3>
+                                    <h3 class="text-sm font-bold text-slate-800 dark:text-zinc-100">Onboarding Items</h3>
                                 </div>
-                                <span class="text-[10px] text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60">Eligible items for this template snapshot</span>
+                                <span class="text-[10px] text-slate-500 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-800 px-2.5 py-1 rounded-lg border border-slate-200/60">Eligible items for this template snapshot</span>
                             </div>
                             <div class="p-4 space-y-6" v-if="hasSnapshot">
                                 <div v-for="(items, section) in sections" :key="section">
-                                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <h4 class="text-[10px] font-bold text-slate-400 dark:text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-2">
                                         <span class="w-1 h-3.5 rounded-full" :class="sectionColor(section)"></span>{{ section }}
-                                        <span class="text-[9px] font-semibold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">{{ items.length }}</span>
+                                        <span class="text-[9px] font-semibold text-slate-400 dark:text-zinc-400 bg-slate-50 dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-slate-100 dark:border-zinc-800">{{ items.length }}</span>
                                     </h4>
                                     <div class="space-y-2">
                                         <div
                                             v-for="item in items"
                                             :key="item.id"
-                                            class="p-3 rounded-xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/20 transition-all"
+                                            class="p-3 rounded-xl border border-slate-100 dark:border-zinc-800 hover:border-blue-100 hover:bg-blue-50/20 transition-all"
                                         >
                                             <div class="flex flex-col md:flex-row md:items-start gap-3">
                                                 <div class="flex-1 min-w-0">
-                                                    <div class="text-xs font-medium text-slate-700 flex flex-wrap items-center gap-2">
+                                                    <div class="text-xs font-medium text-slate-700 dark:text-zinc-200 flex flex-wrap items-center gap-2">
                                                         {{ item.name }}
-                                                        <span :class="item.is_required ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-slate-50 text-slate-400 border-slate-200'" class="px-1.5 py-0.5 rounded text-[9px] font-bold border">
-                                                            {{ item.is_required ? 'REQUIRED' : 'OPTIONAL' }}
+                                                        <span :class="section === 'HR Processing' || section === 'Company Preparation' ? 'bg-violet-50 text-violet-600 border-violet-200' : item.is_required ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-400 border-slate-200 dark:border-zinc-700'" class="px-1.5 py-0.5 rounded text-[9px] font-bold border">
+                                                            {{ section === 'HR Processing' || section === 'Company Preparation' ? 'HR TASK' : item.is_required ? 'REQUIRED' : 'OPTIONAL' }}
                                                         </span>
-                                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border bg-indigo-50 text-indigo-600 border-indigo-200">{{ item.input_type }}</span>
-                                                        <span v-if="!item.applicant_visible" class="px-1.5 py-0.5 rounded text-[9px] font-bold border bg-slate-50 text-slate-500 border-slate-200">INTERNAL</span>
-                                                        <span :class="['px-2 py-0.5 rounded-full text-[9px] font-bold border', item.status_badge]">
-                                                            {{ item.status }}
+                                                        <span v-if="section !== 'HR Processing'" class="px-1.5 py-0.5 rounded text-[9px] font-bold border bg-indigo-50 text-indigo-600 border-indigo-200">{{ item.input_type }}</span>
+                                                        <span v-if="!item.applicant_visible" class="px-1.5 py-0.5 rounded text-[9px] font-bold border bg-slate-50 dark:bg-zinc-800 text-slate-500 dark:text-zinc-300 border-slate-200 dark:border-zinc-700">INTERNAL</span>
+                                                        <span v-if="section !== 'HR Processing'" :class="['px-2 py-0.5 rounded-full text-[9px] font-bold border', item.status_badge]">
+                                                            {{ section === 'HR Processing' || section === 'Company Preparation' ? item.status : itemStatusLabel(item.status) }}
                                                         </span>
                                                     </div>
-                                                    <p v-if="item.description && section !== 'HR Processing'" class="text-[10px] text-slate-400 mt-0.5">{{ item.description }}</p>
+                                                    <p v-if="item.description && section !== 'HR Processing'" class="text-[10px] text-slate-400 dark:text-zinc-400 mt-0.5">{{ item.description }}</p>
                                                     <!-- HR task: parent name on top, contents as an organized list below -->
-                                                    <div v-else-if="item.description" class="mt-1.5 rounded-lg bg-slate-50/80 border border-slate-100 px-3 py-2">
-                                                        <p v-if="descHead(item.description)" class="text-[10px] text-slate-400">{{ descHead(item.description) }}</p>
+                                                    <div v-else-if="item.description" class="mt-1.5 rounded-lg bg-slate-50/80 dark:bg-zinc-800/80 border border-slate-100 dark:border-zinc-800 px-3 py-2">
+                                                        <p v-if="descHead(item.description)" class="text-[10px] text-slate-400 dark:text-zinc-400">{{ descHead(item.description) }}</p>
                                                         <ul v-if="descBullets(item.description).length" class="mt-1 space-y-1">
-                                                            <li v-for="(line, li) in descBullets(item.description)" :key="li" class="flex items-start gap-1.5 text-[10px] text-slate-500">
+                                                            <li v-for="(line, li) in descBullets(item.description)" :key="li" class="flex items-start gap-1.5 text-[10px] text-slate-500 dark:text-zinc-300">
                                                                 <span class="mt-1 w-1 h-1 rounded-full bg-violet-400 shrink-0"></span>
                                                                 <span>{{ line }}</span>
                                                             </li>
                                                         </ul>
                                                     </div>
-                                                    <div class="flex flex-wrap items-center gap-2 mt-1.5 text-[9px] text-slate-400">
+                                                    <div class="flex flex-wrap items-center gap-2 mt-1.5 text-[9px] text-slate-400 dark:text-zinc-400">
                                                         <span v-if="section !== 'HR Processing' && section !== 'Company Preparation'">Owner: {{ item.responsible_party }}</span>
                                                         <span v-if="item.due_date">· Due: {{ formatDate(item.due_date) }}</span>
                                                         <span v-if="item.submitted_at">· Submitted: {{ formatDateTime(item.submitted_at) }}</span>
@@ -356,10 +407,10 @@
                                                         >
                                                             <Download class="w-3 h-3" /> {{ item.latest_submission.original_name }}
                                                         </a>
-                                                        <span v-if="item.latest_submission.value" class="text-[10px] text-slate-600 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 max-w-xs truncate">
+                                                        <span v-if="item.latest_submission.value" class="text-[10px] text-slate-600 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-slate-100 dark:border-zinc-800 max-w-xs truncate">
                                                             {{ displayValue(item.latest_submission.value) }}
                                                         </span>
-                                                        <span v-if="item.latest_submission.submitted_at" class="text-[9px] text-slate-400">Submitted {{ formatDateTime(item.latest_submission.submitted_at) }}</span>
+                                                        <span v-if="item.latest_submission.submitted_at" class="text-[9px] text-slate-400 dark:text-zinc-400">Submitted {{ formatDateTime(item.latest_submission.submitted_at) }}</span>
                                                     </div>
 
                                                     <div v-if="item.status === 'Rejected'" class="mt-1.5 text-[10px] font-semibold text-rose-600 bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-100">
@@ -368,12 +419,12 @@
 
                                                     <!-- Submission history -->
                                                     <div v-if="item.submissions && item.submissions.length > 1" class="mt-2">
-                                                        <button class="text-[9px] font-bold text-slate-400 hover:text-slate-600" @click="toggleHistory(item.id)">
+                                                        <button class="text-[9px] font-bold text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:text-zinc-300" @click="toggleHistory(item.id)">
                                                         History ({{ item.submissions.length }})
                                                     </button>
                                                         <div v-if="expandedHistory[item.id]" class="mt-1.5 space-y-1">
-                                                            <div v-for="(sub, i) in item.submissions.slice(1)" :key="sub.id" class="flex items-center gap-2 text-[9px] text-slate-500">
-                                                                <span class="px-1.5 py-0.5 rounded bg-slate-50 border border-slate-100">{{ sub.status }}</span>
+                                                            <div v-for="(sub, i) in item.submissions.slice(1)" :key="sub.id" class="flex items-center gap-2 text-[9px] text-slate-500 dark:text-zinc-300">
+                                                                <span class="px-1.5 py-0.5 rounded bg-slate-50 dark:bg-zinc-800 border border-slate-100 dark:border-zinc-800">{{ sub.status }}</span>
                                                                 <span v-if="sub.original_name" class="truncate max-w-[180px]">{{ sub.original_name }}</span>
                                                                 <span v-if="sub.value" class="truncate max-w-[180px]">{{ displayValue(sub.value) }}</span>
                                                                 <span>{{ formatDateTime(sub.submitted_at) }}</span>
@@ -384,26 +435,28 @@
                                                 </div>
 
                                                 <!-- Actions -->
-                                                <div class="flex items-center gap-2 shrink-0">
+                                                <div :class="['relative flex items-center gap-2 shrink-0', statusEditorItemId === item.id ? 'z-30' : '']">
                                                     <button
-                                                        @click="openItemModal(item, section)"
-                                                        class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-[10px] font-bold transition-all duration-200"
+                                                        @click="toggleItemActions(item)"
+                                                        class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 rounded-lg text-[10px] font-bold transition-all duration-200"
                                                     >
-                                                        Details
+                                                        Action
                                                     </button>
-                                                    <!-- Task / Verification: HR sets status directly -->
-                                                    <div v-if="item.is_task">
-                                                        <select
-                                                            :value="item.status"
-                                                            @change="updateTaskStatus(item, $event.target.value)"
-                                                            :class="['px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold focus:ring-2 focus:ring-blue-500', itemStatusSelect(item.status)]"
+                                                    <div v-if="statusEditorItemId === item.id" class="absolute right-0 top-full z-30 mt-1 flex w-40 flex-col gap-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 shadow-lg">
+                                                        <button
+                                                            v-for="s in (item.is_task ? taskStatuses.filter(status => status !== 'Blocked') : itemStatuses)"
+                                                            :key="s"
+                                                            type="button"
+                                                            @click="selectItemStatus(item, s)"
+                                                            :disabled="saving"
+                                                            :class="['rounded-md border px-2 py-1 text-[10px] font-semibold transition-colors disabled:opacity-50', item.status === s ? itemStatusSelect(s) : 'border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-300 hover:border-blue-300 hover:bg-blue-50']"
                                                         >
-                                                            <option v-for="s in taskStatuses" :key="s" :value="s">{{ s }}</option>
-                                                        </select>
+                                                            {{ s }}
+                                                        </button>
                                                     </div>
 
                                                     <!-- Applicant item: review workflow -->
-                                                    <template v-else>
+                                                    <template v-if="section !== 'HR Processing' && !item.is_task">
                                                         <button
                                                             v-if="canReview(item)"
                                                             @click="reviewItem(item, 'approve')"
@@ -414,7 +467,7 @@
                                                         <button
                                                             v-if="canReview(item)"
                                                             @click="openRejectModal(item)"
-                                                            class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg text-[10px] font-bold transition-all duration-200"
+                                                            class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg text-[10px] font-bold transition-all duration-200"
                                                         >
                                                             <X class="w-3 h-3" /> Reject
                                                         </button>
@@ -424,12 +477,6 @@
                                                         >
                                                             <Check class="w-3 h-3" /> Verified
                                                         </span>
-                                                        <span
-                                                            v-if="!item.latest_submission && section !== 'HR Processing' && section !== 'Company Preparation'"
-                                                            class="inline-flex items-center px-2.5 py-1.5 text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg"
-                                                        >
-                                                            Awaiting submission
-                                                        </span>
                                                     </template>
                                                 </div>
                                             </div>
@@ -438,15 +485,15 @@
                                 </div>
                             </div>
                             <div v-else class="p-8 text-center">
-                                <p class="text-xs text-slate-400">No onboarding items yet. Edit Details to choose a template (or contact HR).</p>
+                                <p class="text-xs text-slate-400 dark:text-zinc-400">No onboarding items yet. Edit Details to choose a template (or contact HR).</p>
                             </div>
                         </div>
 
                         <!-- HR NOTES -->
-                        <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center gap-2">
+                        <div class="md:col-span-2 bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 dark:border-zinc-800 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center gap-2">
                                 <StickyNote class="w-4 h-4 text-blue-600" />
-                                <h3 class="text-sm font-bold text-slate-800">HR Notes <span class="text-[9px] font-medium text-slate-400">(private — not visible to the applicant)</span></h3>
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-zinc-100">HR Notes <span class="text-[9px] font-medium text-slate-400 dark:text-zinc-400">(private — not visible to the applicant)</span></h3>
                             </div>
                             <div class="p-4 space-y-3">
                                 <form @submit.prevent="storeNote" class="space-y-2">
@@ -454,10 +501,10 @@
                                         v-model="noteForm.content"
                                         rows="3"
                                         placeholder="Add an internal note about this new hire..."
-                                        class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
+                                        class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
                                     ></textarea>
                                     <div class="flex items-center justify-between">
-                                        <label class="flex items-center gap-2 text-[10px] text-slate-500 cursor-pointer">
+                                        <label class="flex items-center gap-2 text-[10px] text-slate-500 dark:text-zinc-300 cursor-pointer">
                                             <input v-model="noteForm.is_hr_private" type="checkbox" class="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                                             Private note (HR only)
                                         </label>
@@ -471,17 +518,17 @@
                                 </form>
 
                                 <div v-if="notes.length === 0" class="text-center py-4">
-                                    <p class="text-xs text-slate-400">No notes yet.</p>
+                                    <p class="text-xs text-slate-400 dark:text-zinc-400">No notes yet.</p>
                                 </div>
                                 <div v-else class="space-y-2 max-h-72 overflow-y-auto pr-1">
-                                    <div v-for="note in notes" :key="note.id" class="flex gap-3 p-3 rounded-xl bg-slate-50/70 border border-slate-100">
+                                    <div v-for="note in notes" :key="note.id" class="flex gap-3 p-3 rounded-xl bg-slate-50/70 border border-slate-100 dark:border-zinc-800">
                                         <div class="w-8 h-8 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-white font-bold text-[10px] shrink-0">
                                             {{ note.user ? note.user.email.charAt(0).toUpperCase() : 'HR' }}
                                         </div>
                                         <div class="flex-1 min-w-0">
-                                            <p class="text-[11px] text-slate-600 leading-relaxed">{{ note.content }}</p>
+                                            <p class="text-[11px] text-slate-600 dark:text-zinc-300 leading-relaxed">{{ note.content }}</p>
                                             <div class="flex items-center gap-2 mt-1">
-                                                <span class="text-[9px] text-slate-400">{{ note.user?.email || 'HR' }} · {{ formatDateTime(note.created_at) }}</span>
+                                                <span class="text-[9px] text-slate-400 dark:text-zinc-400">{{ note.user?.email || 'HR' }} · {{ formatDateTime(note.created_at) }}</span>
                                                 <span v-if="note.is_hr_private" class="text-[9px] font-bold text-violet-500 bg-violet-50 px-1.5 py-0.5 rounded">PRIVATE</span>
                                             </div>
                                         </div>
@@ -499,177 +546,132 @@
 
         <!-- ============ MODALS ============ -->
         <div v-if="activeModal" class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeModal">
-            <div :class="['bg-white rounded-2xl border border-slate-200/60 w-full overflow-hidden shadow-2xl', activeModal === 'create-employee' ? 'max-w-3xl max-h-[92vh] flex flex-col' : 'max-w-2xl']">
+            <div :class="['bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 w-full overflow-hidden shadow-2xl', activeModal === 'create-employee' ? 'max-w-3xl max-h-[92vh] flex flex-col' : activeModal === 'status-reject' ? 'max-w-md' : 'max-w-2xl']">
+                <template v-if="activeModal === 'complete-confirm'">
+                    <div class="p-5 border-b border-slate-100 dark:border-zinc-800 flex items-start gap-3">
+                        <div class="rounded-xl bg-emerald-50 p-2 text-emerald-700"><CheckCircle2 class="w-5 h-5" /></div>
+                        <div class="flex-1">
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-zinc-100">Complete Onboarding?</h3>
+                            <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-300">This marks onboarding as complete. HR processing tasks can continue separately.</p>
+                        </div>
+                        <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 dark:text-zinc-400"><X class="w-4 h-4" /></button>
+                    </div>
+                    <div class="p-5 flex justify-end gap-2">
+                        <button @click="closeModal" class="px-4 py-2 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">Cancel</button>
+                        <button @click="submitComplete" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">Yes, Complete Onboarding</button>
+                    </div>
+                </template>
+                <template v-else-if="activeModal === 'create-employee-confirm'">
+                    <div class="p-5 border-b border-slate-100 dark:border-zinc-800 flex items-start gap-3">
+                        <div class="rounded-xl bg-blue-50 p-2 text-blue-700"><UserPlus class="w-5 h-5" /></div>
+                        <div class="flex-1">
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-zinc-100">Create Employee Record?</h3>
+                            <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-300">You’ll review the employee details before creating the record and updating the application to Hired.</p>
+                        </div>
+                        <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 dark:text-zinc-400"><X class="w-4 h-4" /></button>
+                    </div>
+                    <div class="p-5 flex justify-end gap-2">
+                        <button @click="closeModal" class="px-4 py-2 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">Cancel</button>
+                        <button @click="proceedToCreateEmployee" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">Continue</button>
+                    </div>
+                </template>
+                <template v-else-if="activeModal === 'agency-referral-confirm'">
+                    <div class="p-5 border-b border-slate-100 dark:border-zinc-800 flex items-start gap-3">
+                        <div class="rounded-xl bg-amber-50 p-2 text-amber-700"><Send class="w-5 h-5" /></div>
+                        <div class="flex-1">
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-zinc-100">Create Agency Referral?</h3>
+                            <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-zinc-300">Are you sure you want to refer {{ onboarding.name }} to an agency? You’ll continue to Agency Referrals to choose an agency and submit the referral.</p>
+                        </div>
+                        <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 dark:text-zinc-400"><X class="w-4 h-4" /></button>
+                    </div>
+                    <div class="p-5 flex justify-end gap-2">
+                        <button @click="closeModal" class="px-4 py-2 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">Cancel</button>
+                        <button @click="proceedToAgencyReferral" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold">Yes, Continue</button>
+                    </div>
+                </template>
+                <template v-else-if="activeModal === 'status-reject'">
+                    <div class="p-4 border-b border-slate-100 dark:border-zinc-800 flex items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-zinc-100">Reject {{ statusRejectItem?.name || 'Onboarding Item' }}?</h3>
+                            <p class="mt-1 text-xs text-slate-500 dark:text-zinc-300">Add a reason for the applicant if helpful. This field is optional.</p>
+                        </div>
+                        <button @click="closeModal" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 dark:text-zinc-400"><X class="w-4 h-4" /></button>
+                    </div>
+                    <div class="p-4">
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Reason (optional)</label>
+                        <textarea v-model="statusRejectReason" rows="3" placeholder="Enter a reason, or leave blank." class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-rose-500 focus:border-transparent"></textarea>
+                    </div>
+                    <div class="p-3 border-t border-slate-100 dark:border-zinc-800 flex justify-end gap-2">
+                        <button @click="closeModal" class="px-3 py-2 border border-slate-200 dark:border-zinc-700 rounded-lg text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700">Cancel</button>
+                        <button @click="confirmStatusRejection" :disabled="saving" class="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold disabled:opacity-50">{{ saving ? 'Saving...' : 'Confirm Rejection' }}</button>
+                    </div>
+                </template>
                 <!-- Details Modal -->
                 <template v-if="activeModal === 'details'">
-                    <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-transparent">
+                    <div class="p-5 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900">
                         <div>
-                            <h3 class="text-sm font-bold text-slate-900">Edit Onboarding Details</h3>
-                            <p class="text-xs text-slate-500 mt-0.5">Update start date, manager, template (before items exist), location and schedule.</p>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-zinc-100">Edit Onboarding Details</h3>
+                            <p class="text-xs text-slate-500 dark:text-zinc-300 mt-0.5">Update start date, manager, template (before items exist), location and schedule.</p>
                         </div>
-                        <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-all">
+                        <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:text-zinc-300 transition-all">
                             <X class="w-4 h-4" />
                         </button>
                     </div>
                     <div class="p-5 space-y-4">
                         <div v-if="!hasSnapshot" class="bg-blue-50/60 border border-blue-100 rounded-xl p-3">
-                            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Onboarding Template</label>
-                            <select v-model="detailsForm.template_id" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm">
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Onboarding Template</label>
+                            <select v-model="detailsForm.template_id" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm">
                                 <option value="">-- Select template --</option>
                                 <option v-for="t in templates" :key="t.id" :value="t.id">
                                     {{ t.name }} ({{ t.code }} v{{ t.version }})
                                 </option>
                             </select>
-                            <p class="text-[10px] text-slate-500 mt-1">Selecting a template snapshots its items. Not shown once items already exist.</p>
+                            <p class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Selecting a template snapshots its items. Not shown once items already exist.</p>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Start Date</label>
-                                <input v-model="detailsForm.start_date" type="date" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Start Date</label>
+                                <input v-model="detailsForm.start_date" type="date" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Expected Start Date</label>
-                                <input v-model="detailsForm.expected_start_date" type="date" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Expected Start Date</label>
+                                <input v-model="detailsForm.expected_start_date" type="date" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Expected Completion Date</label>
-                                <input v-model="detailsForm.expected_completion_date" type="date" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Expected Completion Date</label>
+                                <input v-model="detailsForm.expected_completion_date" type="date" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Assigned Manager</label>
-                                <input v-model="detailsForm.assigned_manager" type="text" placeholder="e.g. HR Operations Manager" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Assigned Manager</label>
+                                <input v-model="detailsForm.assigned_manager" type="text" placeholder="e.g. HR Operations Manager" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Location</label>
-                                <input v-model="detailsForm.work_location" type="text" placeholder="e.g. Main Plant" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Location</label>
+                                <input v-model="detailsForm.work_location" type="text" placeholder="e.g. Main Plant" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Schedule</label>
-                                <input v-model="detailsForm.work_schedule" type="text" placeholder="e.g. Monday - Friday, 8:00 AM - 5:00 PM" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Schedule</label>
+                                <input v-model="detailsForm.work_schedule" type="text" placeholder="e.g. Monday - Friday, 8:00 AM - 5:00 PM" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm" />
                             </div>
                         </div>
                     </div>
-                    <div class="p-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center justify-end gap-3">
-                        <button @click="closeModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all">Cancel</button>
+                    <div class="p-4 border-t border-slate-100 dark:border-zinc-800 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-end gap-3">
+                        <button @click="closeModal" class="px-5 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-semibold transition-all">Cancel</button>
                         <button @click="saveDetails" :disabled="saving" class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg">
                             {{ saving ? 'Saving...' : 'Save Changes' }}
                         </button>
                     </div>
                 </template>
 
-                <!-- Reject Modal -->
-                <template v-if="activeModal === 'reject'">
-                    <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-rose-50 to-transparent">
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-900">Reject Submission</h3>
-                            <p class="text-xs text-slate-500 mt-0.5">Let the applicant know why this submission was rejected.</p>
-                        </div>
-                        <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-all">
-                            <X class="w-4 h-4" />
-                        </button>
-                    </div>
-                    <div class="p-5">
-                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Rejection Reason</label>
-                        <textarea
-                            v-model="rejectForm.reason"
-                            rows="3"
-                            placeholder="e.g. The document is unclear. Please upload a clearer scan."
-                            class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-rose-500 focus:border-transparent shadow-sm"
-                        ></textarea>
-                    </div>
-                    <div class="p-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center justify-end gap-3">
-                        <button @click="closeModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all">Cancel</button>
-                        <button @click="submitReject" :disabled="saving" class="px-5 py-2.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg">
-                            {{ saving ? 'Rejecting...' : 'Reject Submission' }}
-                        </button>
-                    </div>
-                </template>
-
-                <!-- Per-item modal: details + full status lifecycle -->
-                <template v-if="activeModal === 'item' && selectedItem">
-                    <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-50 to-transparent">
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-900">{{ selectedItem.name }}</h3>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                {{ selectedItem.is_required ? 'Required' : 'Optional' }} · {{ selectedItem.input_type }} · Owner: {{ selectedItem.responsible_party }}
-                            </p>
-                        </div>
-                        <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-all">
-                            <X class="w-4 h-4" />
-                        </button>
-                    </div>
-                    <div class="p-5 space-y-4">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span :class="['px-2 py-0.5 rounded-full text-[9px] font-bold border', selectedItem.status_badge]">{{ selectedItem.status }}</span>
-                            <span v-if="!selectedItem.applicant_visible" class="px-1.5 py-0.5 rounded text-[9px] font-bold border bg-slate-50 text-slate-500 border-slate-200">INTERNAL</span>
-                            <span v-if="selectedItem.due_date" class="text-[10px] text-slate-400">Due: {{ formatDate(selectedItem.due_date) }}</span>
-                            <span v-if="selectedItem.submitted_at" class="text-[10px] text-slate-400">Submitted: {{ formatDateTime(selectedItem.submitted_at) }}</span>
-                        </div>
-                        <p v-if="selectedItem.description && selectedSection !== 'HR Processing'" class="text-xs text-slate-500">{{ selectedItem.description }}</p>
-                        <div v-else-if="selectedItem.description" class="rounded-lg bg-slate-50/80 border border-slate-100 px-3 py-2">
-                            <p v-if="descHead(selectedItem.description)" class="text-xs text-slate-500">{{ descHead(selectedItem.description) }}</p>
-                            <ul v-if="descBullets(selectedItem.description).length" class="mt-1 space-y-1">
-                                <li v-for="(line, li) in descBullets(selectedItem.description)" :key="li" class="flex items-start gap-1.5 text-xs text-slate-500">
-                                    <span class="mt-1.5 w-1 h-1 rounded-full bg-violet-400 shrink-0"></span>
-                                    <span>{{ line }}</span>
-                                </li>
-                            </ul>
-                        </div>
-                        <div v-if="selectedItem.latest_submission?.file_url" class="flex items-center gap-2">
-                            <a :href="selectedItem.latest_submission.file_url" target="_blank"
-                                class="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
-                                <Download class="w-3 h-3" /> {{ selectedItem.latest_submission.original_name }}
-                            </a>
-                        </div>
-                        <div v-if="selectedItem.status === 'Rejected'" class="text-[10px] font-semibold text-rose-600 bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-100">
-                            Rejected: {{ selectedItem.rejection_reason || 'No reason provided.' }} — applicant may resubmit.
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Status</label>
-                            <select
-                                v-model="itemModalStatus"
-                                :class="['w-full px-3 py-2.5 rounded-xl border text-xs font-semibold focus:ring-2 focus:ring-blue-500 shadow-sm', itemStatusSelect(itemModalStatus)]"
-                            >
-                                <option v-for="s in itemStatuses" :key="s" :value="s">{{ s }}</option>
-                            </select>
-                        </div>
-                        <div v-if="itemModalRejecting">
-                            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Rejection Reason</label>
-                            <textarea
-                                v-model="itemModalReason"
-                                rows="3"
-                                placeholder="e.g. The document is unclear. Please upload a clearer scan."
-                                class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-rose-500 focus:border-transparent shadow-sm"
-                            ></textarea>
-                        </div>
-                    </div>
-                    <div class="p-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center justify-end gap-2 flex-wrap">
-                        <button @click="saveItemModalStatus" :disabled="saving" class="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all disabled:opacity-50">
-                            {{ saving ? 'Saving...' : 'Save Status' }}
-                        </button>
-                        <template v-if="canReview(selectedItem)">
-                            <button @click="approveFromItemModal" :disabled="saving" class="inline-flex items-center gap-1 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-lg disabled:opacity-50">
-                                <Check class="w-3.5 h-3.5" /> {{ saving ? 'Working...' : 'Approve' }}
-                            </button>
-                            <button v-if="!itemModalRejecting" @click="itemModalRejecting = true" class="inline-flex items-center gap-1 px-4 py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold transition-all">
-                                <X class="w-3.5 h-3.5" /> Reject
-                            </button>
-                            <button v-else @click="rejectFromItemModal" :disabled="saving" class="px-4 py-2.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white rounded-xl text-xs font-bold transition-all shadow-lg disabled:opacity-50">
-                                {{ saving ? 'Rejecting...' : 'Confirm Reject' }}
-                            </button>
-                        </template>
-                    </div>
-                </template>
-
                 <!-- CREATE EMPLOYEE conversion modal (after confirmation) -->
                 <template v-if="activeModal === 'create-employee'">
-                    <div class="p-5 border-b border-slate-200 bg-white shrink-0">
+                    <div class="p-5 border-b border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shrink-0">
                         <div class="flex items-start justify-between gap-3">
                             <div>
-                                <h3 class="text-base font-bold tracking-tight text-slate-900">CREATE EMPLOYEE</h3>
-                                <p class="text-xs text-slate-500 mt-0.5">Convert the selected applicant into an employee. Information from the application is shown automatically.</p>
+                                <h3 class="text-base font-bold tracking-tight text-slate-900 dark:text-zinc-100">CREATE EMPLOYEE</h3>
+                                <p class="text-xs text-slate-500 dark:text-zinc-300 mt-0.5">Convert the selected applicant into an employee. Information from the application is shown automatically.</p>
                             </div>
-                            <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-all">
+                            <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:text-zinc-300 transition-all">
                                 <X class="w-4 h-4" />
                             </button>
                         </div>
@@ -678,29 +680,29 @@
                     <div class="p-5 space-y-6 overflow-y-auto">
                         <!-- 1. APPLICANT INFORMATION -->
                         <section>
-                            <h4 class="text-xs font-bold text-slate-900 tracking-wide">1. APPLICANT INFORMATION</h4>
-                            <div class="border-t border-slate-200 mt-1 mb-3"></div>
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-zinc-100 tracking-wide">1. APPLICANT INFORMATION</h4>
+                            <div class="border-t border-slate-200 dark:border-zinc-700 mt-1 mb-3"></div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400">Applicant</span><span class="font-bold text-slate-800">{{ conversion?.applicant?.name || onboarding.name }}</span></div>
-                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400">Application</span><span class="font-semibold text-slate-700">{{ conversion?.applicant?.position_applied || onboarding.position }}</span></div>
-                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400">Job Posting</span><span class="font-semibold text-slate-700">{{ (conversion?.job_posting?.title || '—') + ' — ' + (conversion?.job_posting?.department || '') }}</span></div>
-                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400">Application Status</span><span class="font-semibold text-emerald-600">✓ {{ conversion?.application?.status || conversion?.applicant?.status || 'Selected' }}</span></div>
-                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400">Application ID</span><span class="font-mono font-semibold text-slate-700">{{ conversion?.application?.code || conversion?.applicant?.code || '—' }}</span></div>
+                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400 dark:text-zinc-400">Applicant</span><span class="font-bold text-slate-800 dark:text-zinc-100">{{ conversion?.applicant?.name || onboarding.name }}</span></div>
+                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400 dark:text-zinc-400">Application</span><span class="font-semibold text-slate-700 dark:text-zinc-200">{{ conversion?.applicant?.position_applied || onboarding.position }}</span></div>
+                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400 dark:text-zinc-400">Job Posting</span><span class="font-semibold text-slate-700 dark:text-zinc-200">{{ (conversion?.job_posting?.title || '—') + ' — ' + (conversion?.job_posting?.department || '') }}</span></div>
+                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400 dark:text-zinc-400">Application Status</span><span class="font-semibold text-emerald-600">✓ {{ conversion?.application?.status || conversion?.applicant?.status || 'Selected' }}</span></div>
+                                <div class="flex justify-between border-b border-slate-50 py-1.5"><span class="text-slate-400 dark:text-zinc-400">Application ID</span><span class="font-mono font-semibold text-slate-700 dark:text-zinc-200">{{ conversion?.application?.code || conversion?.applicant?.code || '—' }}</span></div>
                             </div>
                         </section>
 
                         <!-- 2. EMPLOYMENT ASSIGNMENT -->
                         <section>
-                            <h4 class="text-xs font-bold text-slate-900 tracking-wide">2. EMPLOYMENT ASSIGNMENT</h4>
-                            <div class="border-t border-slate-200 mt-1 mb-3"></div>
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-zinc-100 tracking-wide">2. EMPLOYMENT ASSIGNMENT</h4>
+                            <div class="border-t border-slate-200 dark:border-zinc-700 mt-1 mb-3"></div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Position *</label>
-                                    <input v-model="hireForm.position" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 shadow-sm cursor-not-allowed" />
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Position *</label>
+                                    <input v-model="hireForm.position" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-700 dark:text-zinc-200 shadow-sm cursor-not-allowed" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">System Position * (users.position)</label>
-                                    <select v-model="hireForm.position_rank" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">System Position * (users.position)</label>
+                                    <select v-model="hireForm.position_rank" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <option value="trainee">Trainee</option>
                                         <option value="staff">Staff</option>
                                         <option value="supervisor">Supervisor</option>
@@ -709,62 +711,69 @@
                                         <option value="special_officer">Special Officer</option>
                                         <option value="vice_president">Vice-President</option>
                                     </select>
-                                    <p class="text-[10px] text-slate-500 mt-1">Controls login access rank. Job title above stays as org title.</p>
+                                    <p class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Controls login access rank. Job title above stays as org title.</p>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Department *</label>
-                                    <input v-model="hireForm.department" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 shadow-sm cursor-not-allowed" />
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Department *</label>
+                                    <input v-model="hireForm.department" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-700 dark:text-zinc-200 shadow-sm cursor-not-allowed" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">System Role * (users.role)</label>
-                                    <select v-model="hireForm.role" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
-                                        <option value="" disabled>Select role</option>
-                                        <option v-for="r in roleOptions" :key="r" :value="r">{{ r }}</option>
-                                    </select>
-                                    <p class="text-[10px] text-slate-500 mt-1">Written to the employee record. Prefilled from department — confirm it.</p>
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Employment Type *</label>
+                                    <input v-model="hireForm.employment_type" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-700 dark:text-zinc-200 shadow-sm cursor-not-allowed" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Employment Type *</label>
-                                    <input v-model="hireForm.employment_type" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 shadow-sm cursor-not-allowed" />
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Deployment start date *</label>
+                                    <input v-model="hireForm.start_date" type="date" @change="recalcTrainingEnd(); recalcProbationEnd()" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <p v-if="conversion?.defaults?.start_date_hint" class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">{{ conversion.defaults.start_date_hint }}</p>
+                                </div>
+                                <div v-if="probationaryHire">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Probation duration (months) *</label>
+                                    <input :value="1" type="number" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-700 dark:text-zinc-200 shadow-sm" />
+                                    <p class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Probation lasts one month.</p>
+                                </div>
+                                <div v-if="probationaryHire">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Evaluation interval (months) *</label>
+                                    <input :value="1" type="number" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-700 dark:text-zinc-200 shadow-sm" />
+                                    <p class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Final evaluation is due at the end of the month.</p>
+                                </div>
+                                <div v-if="probationaryHire">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Probation end date</label>
+                                    <input v-model="hireForm.probation_end_date" type="date" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-700 dark:text-zinc-200 shadow-sm" />
+                                </div>
+                                <div v-if="conversion?.job_posting?.training_required">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Training duration (weeks) *</label>
+                                    <input :value="hireForm.training_duration_weeks" type="number" min="1" max="4" @input="onTrainingDurationInput" @change="recalcTrainingEnd" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <p class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Maximum training duration is 4 weeks.</p>
+                                </div>
+                                <div v-if="conversion?.job_posting?.training_required">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Training end date *</label>
+                                    <input v-model="hireForm.training_end_date" type="date" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <p class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Auto-set from start + duration — editable calendar.</p>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Deployment start date *</label>
-                                    <input v-model="hireForm.start_date" type="date" @change="recalcTrainingEnd" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
-                                    <p v-if="conversion?.defaults?.start_date_hint" class="text-[10px] text-slate-500 mt-1">{{ conversion.defaults.start_date_hint }}</p>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Training duration (weeks) *</label>
-                                    <input v-model.number="hireForm.training_duration_weeks" type="number" min="1" max="52" @change="recalcTrainingEnd" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Training end date *</label>
-                                    <input v-model="hireForm.training_end_date" type="date" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
-                                    <p class="text-[10px] text-slate-500 mt-1">Auto-set from start + duration — editable calendar.</p>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Reporting Manager *</label>
-                                    <select v-model="hireForm.reporting_manager" @change="syncReportingManagerId" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Reporting Manager *</label>
+                                    <select v-model="hireForm.reporting_manager" @change="syncReportingManagerId" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <option value="">-- Select manager --</option>
                                         <option v-for="m in (managers || [])" :key="m.id" :value="m.name">{{ m.name }} — {{ m.department || m.role }} · {{ caps(m.seat || m.position) }}</option>
                                         <option v-if="hireForm.reporting_manager && !(managers || []).some((m) => m.name === hireForm.reporting_manager)" :value="hireForm.reporting_manager">{{ hireForm.reporting_manager }}</option>
                                     </select>
-                                    <p v-if="(conversion?.reporting?.chain || []).length" class="text-[10px] text-slate-500 mt-1">Position chain: {{ conversion.reporting.chain.join(' → ') }}</p>
+                                    <p v-if="(conversion?.reporting?.chain || []).length" class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Position chain: {{ conversion.reporting.chain.join(' → ') }}</p>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Employee Status</label>
-                                    <input v-model="hireForm.employee_status" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 shadow-sm cursor-not-allowed" />
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Employee Status</label>
+                                    <input v-model="hireForm.employee_status" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-700 dark:text-zinc-200 shadow-sm cursor-not-allowed" />
                                 </div>
                             </div>
                         </section>
 
                         <!-- 3. WORK ASSIGNMENT -->
                         <section>
-                            <h4 class="text-xs font-bold text-slate-900 tracking-wide">3. WORK ASSIGNMENT</h4>
-                            <div class="border-t border-slate-200 mt-1 mb-3"></div>
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-zinc-100 tracking-wide">3. WORK ASSIGNMENT</h4>
+                            <div class="border-t border-slate-200 dark:border-zinc-700 mt-1 mb-3"></div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Location *</label>
-                                    <select v-model="hireForm.work_location" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Location *</label>
+                                    <select v-model="hireForm.work_location" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <option>Main Manufacturing Plant</option>
                                         <option>Annex Facility</option>
                                         <option>Head Office</option>
@@ -772,14 +781,14 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Arrangement</label>
-                                    <input v-model="hireForm.work_mode" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 shadow-sm cursor-not-allowed" />
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Arrangement</label>
+                                    <input v-model="hireForm.work_mode" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-700 dark:text-zinc-200 shadow-sm cursor-not-allowed" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Shift *</label>
-                                    <select v-model="hireForm.shift" @change="applyShiftHours" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Shift *</label>
+                                    <select v-model="hireForm.shift" @change="applyShiftHours" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <template v-if="(shifts || []).length">
-                                            <option v-for="sh in shifts" :key="sh.id" :value="sh.name">{{ sh.name }}{{ sh.code ? ' (' + sh.code + ')' : '' }}</option>
+                                            <option v-for="sh in shifts" :key="sh.id" :value="sh.name">{{ sh.name }}</option>
                                         </template>
                                         <template v-else>
                                             <option>Morning Shift</option>
@@ -791,54 +800,54 @@
                                     </select>
                                 </div>
                                 <div class="md:col-span-2">
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Schedule *</label>
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Schedule *</label>
                                     <div class="flex items-center gap-2">
-                                        <select v-model="hireForm.work_schedule_start" class="w-36 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                        <select v-model="hireForm.work_schedule_start" class="w-36 px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                             <option v-for="d in workDays" :key="'s-' + d" :value="d">{{ d }}</option>
                                         </select>
-                                        <span class="text-xs text-slate-400 font-semibold">to</span>
-                                        <select v-model="hireForm.work_schedule_end" class="w-36 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                        <span class="text-xs text-slate-400 dark:text-zinc-400 font-semibold">to</span>
+                                        <select v-model="hireForm.work_schedule_end" class="w-36 px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                             <option v-for="d in workDays" :key="'e-' + d" :value="d">{{ d }}</option>
                                         </select>
                                     </div>
                                 </div>
                                 <div class="md:col-span-2">
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Work Hours</label>
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Hours</label>
                                     <div class="flex items-center gap-2">
-                                        <select v-model="hireForm.work_hours_start" class="w-36 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                        <select v-model="hireForm.work_hours_start" class="w-36 px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                             <option v-for="t in workHourOptions" :key="'hs-' + t" :value="t">{{ t }}</option>
                                         </select>
-                                        <span class="text-xs text-slate-400 font-semibold">to</span>
-                                        <select v-model="hireForm.work_hours_end" class="w-36 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                        <span class="text-xs text-slate-400 dark:text-zinc-400 font-semibold">to</span>
+                                        <select v-model="hireForm.work_hours_end" class="w-36 px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                             <option v-for="t in workHourOptions" :key="'he-' + t" :value="t">{{ t }}</option>
                                         </select>
                                     </div>
-                                    <p v-if="shiftHours[hireForm.shift] || (shifts || []).some((sh) => sh.name === hireForm.shift)" class="text-[10px] text-slate-500 mt-1">Suggested for {{ hireForm.shift }} — editable</p>
+                                    <p v-if="shiftHours[hireForm.shift] || (shifts || []).some((sh) => sh.name === hireForm.shift)" class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Suggested for {{ hireForm.shift }} — editable</p>
                                 </div>
                             </div>
                         </section>
 
                         <!-- 4. COMPENSATION -->
                         <section>
-                            <h4 class="text-xs font-bold text-slate-900 tracking-wide">4. COMPENSATION</h4>
-                            <div class="border-t border-slate-200 mt-1 mb-3"></div>
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-zinc-100 tracking-wide">4. COMPENSATION</h4>
+                            <div class="border-t border-slate-200 dark:border-zinc-700 mt-1 mb-3"></div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Salary Type</label>
-                                    <select v-model="hireForm.salary_type" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Salary Type</label>
+                                    <select v-model="hireForm.salary_type" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <option>Monthly</option>
                                         <option>Daily</option>
                                         <option>Hourly</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Basic Salary *</label>
-                                    <input v-model="hireForm.basic_salary" type="number" min="0" step="0.01" placeholder="18000.00" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
-                                    <p v-if="hireForm.basic_salary !== ''" class="text-[10px] text-slate-500 mt-1">[ {{ peso(hireForm.basic_salary) }} ]</p>
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Basic Salary *</label>
+                                    <input v-model="hireForm.basic_salary" type="number" min="0" step="0.01" placeholder="18000.00" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <p v-if="hireForm.basic_salary !== ''" class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">[ {{ peso(hireForm.basic_salary) }} ]</p>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Pay Frequency</label>
-                                    <select v-model="hireForm.pay_frequency" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Pay Frequency</label>
+                                    <select v-model="hireForm.pay_frequency" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <option>Monthly</option>
                                         <option>Semi-Monthly</option>
                                         <option>Weekly</option>
@@ -849,57 +858,57 @@
 
                         <!-- 5. EMPLOYEE ACCOUNT -->
                         <section>
-                            <h4 class="text-xs font-bold text-slate-900 tracking-wide">5. EMPLOYEE ACCOUNT</h4>
-                            <div class="border-t border-slate-200 mt-1 mb-3"></div>
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-zinc-100 tracking-wide">5. EMPLOYEE ACCOUNT</h4>
+                            <div class="border-t border-slate-200 dark:border-zinc-700 mt-1 mb-3"></div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Company Email</label>
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Company Email</label>
                                     <div class="flex items-center gap-2">
-                                        <input v-model="hireForm.company_email" type="email" :disabled="!hireForm.create_account" placeholder="juan.delacruz@monti.com" class="flex-1 min-w-0 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed" />
-                                        <button type="button" @click="suggestCompanyEmail(true)" :disabled="!hireForm.create_account" title="Auto-generate from applicant name" class="shrink-0 px-3 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">Generate</button>
+                                        <input v-model="hireForm.company_email" type="email" :disabled="!hireForm.create_account" placeholder="juan.delacruz@monti.com" class="flex-1 min-w-0 px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-50 dark:bg-zinc-800 disabled:text-slate-400 dark:text-zinc-400 disabled:cursor-not-allowed" />
+                                        <button type="button" @click="suggestCompanyEmail(true)" :disabled="!hireForm.create_account" title="Auto-generate from applicant name" class="shrink-0 px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 rounded-xl text-xs font-bold text-slate-600 dark:text-zinc-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed">Generate</button>
                                     </div>
                                 </div>
                                 <div class="flex items-end gap-4 pb-1">
-                                    <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                                    <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-zinc-200 cursor-pointer">
                                         <input v-model="hireForm.create_account" type="checkbox" @change="onToggleCreateAccount" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                                         Create Company Account ✓ Yes
                                     </label>
                                 </div>
-                                <div class="md:col-span-2 text-xs text-slate-500">Account Status: <span class="font-bold text-amber-600">Pending Activation</span> — a company email is auto-generated when left blank, and a temporary password plus the training schedule are emailed to the employee's personal email.</div>
+                                <div class="md:col-span-2 text-xs text-slate-500 dark:text-zinc-300">Account Status: <span class="font-bold text-amber-600">Pending Activation</span> — a company email is auto-generated when left blank, and a temporary password plus the training schedule are emailed to the employee's personal email.</div>
                             </div>
                         </section>
 
                         <!-- 6. EMERGENCY CONTACT -->
                         <section>
-                            <h4 class="text-xs font-bold text-slate-900 tracking-wide">6. EMERGENCY CONTACT</h4>
-                            <div class="border-t border-slate-200 mt-1 mb-3"></div>
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-zinc-100 tracking-wide">6. EMERGENCY CONTACT</h4>
+                            <div class="border-t border-slate-200 dark:border-zinc-700 mt-1 mb-3"></div>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Emergency Contact</label>
-                                    <input v-model="hireForm.emergency_contact_name" type="text" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Emergency Contact</label>
+                                    <input v-model="hireForm.emergency_contact_name" type="text" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Relationship</label>
-                                    <input v-model="hireForm.emergency_contact_relationship" type="text" placeholder="Mother" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Relationship</label>
+                                    <input v-model="hireForm.emergency_contact_relationship" type="text" placeholder="Mother" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Contact Number</label>
-                                    <input v-model="hireForm.emergency_contact_number" type="text" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
+                                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Contact Number</label>
+                                    <input v-model="hireForm.emergency_contact_number" type="text" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
                                 </div>
                             </div>
                         </section>
 
                         <!-- 7. INITIAL REQUIREMENTS -->
                         <section>
-                            <h4 class="text-xs font-bold text-slate-900 tracking-wide">7. INITIAL REQUIREMENTS</h4>
-                            <div class="border-t border-slate-200 mt-1 mb-3"></div>
-                            <p class="text-xs font-semibold text-slate-600 mt-4 mb-2">Required Documents</p>
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-zinc-100 tracking-wide">7. INITIAL REQUIREMENTS</h4>
+                            <div class="border-t border-slate-200 dark:border-zinc-700 mt-1 mb-3"></div>
+                            <p class="text-xs font-semibold text-slate-600 dark:text-zinc-300 mt-4 mb-2">Required Documents</p>
                             <div class="space-y-1.5 text-xs">
                                 <div v-for="docItem in (conversion?.documents || [])" :key="'doc-' + docItem.id" class="flex items-center gap-2">
-                                    <span :class="docItem.completed ? 'text-emerald-600' : 'text-slate-400'">{{ docItem.completed ? '✓' : '○' }}</span>
-                                    <span :class="docItem.completed ? 'text-slate-800 font-semibold' : 'text-slate-500'">{{ docItem.name }}</span>
+                                    <span :class="docItem.completed ? 'text-emerald-600' : 'text-slate-400 dark:text-zinc-400'">{{ docItem.completed ? '✓' : '○' }}</span>
+                                    <span :class="docItem.completed ? 'text-slate-800 dark:text-zinc-100 font-semibold' : 'text-slate-500 dark:text-zinc-300'">{{ docItem.name }}</span>
                                 </div>
-                                <div v-if="!(conversion?.documents || []).length" class="text-[11px] text-slate-400">No required documents on this onboarding.</div>
+                                <div v-if="!(conversion?.documents || []).length" class="text-[11px] text-slate-400 dark:text-zinc-400">No required documents on this onboarding.</div>
                             </div>
                         </section>
 
@@ -907,8 +916,8 @@
                         <!-- Review moved to its own confirmation modal after [ Create Employee ]. -->
                     </div>
 
-                    <div class="p-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center justify-end gap-3 shrink-0">
-                        <button @click="closeModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all">Cancel</button>
+                    <div class="p-4 border-t border-slate-100 dark:border-zinc-800 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-end gap-3 shrink-0">
+                        <button @click="closeModal" class="px-5 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-semibold transition-all">Cancel</button>
                         <button @click="submitHire" :disabled="saving" class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg">
                             {{ saving ? 'Creating...' : 'Create Employee' }}
                         </button>
@@ -917,39 +926,42 @@
 
                 <!-- REVIEW confirmation modal (opens after [ Create Employee ]) -->
                 <template v-if="activeModal === 'hire-review'">
-                    <div class="p-5 border-b border-slate-200 bg-white shrink-0">
+                    <div class="p-5 border-b border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shrink-0">
                         <div class="flex items-start justify-between gap-3">
                             <div>
-                                <h3 class="text-base font-bold tracking-tight text-slate-900">REVIEW — CREATE EMPLOYEE</h3>
-                                <p class="text-xs text-slate-500 mt-0.5">Please review the details before creating the employee record.</p>
+                                <h3 class="text-base font-bold tracking-tight text-slate-900 dark:text-zinc-100">REVIEW — CREATE EMPLOYEE</h3>
+                                <p class="text-xs text-slate-500 dark:text-zinc-300 mt-0.5">Please review the details before creating the employee record.</p>
                             </div>
-                            <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-all">
+                            <button @click="closeModal" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:text-zinc-300 transition-all">
                                 <X class="w-4 h-4" />
                             </button>
                         </div>
                     </div>
 
                     <div class="p-5 overflow-y-auto">
-                        <section class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                        <section class="bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl p-4">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Employee</span><span class="font-bold text-slate-800">{{ conversion?.applicant?.name || onboarding.name }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Position</span><span class="font-semibold">{{ hireForm.position || '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">System Position</span><span class="font-semibold">{{ hireForm.position_rank || '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Department</span><span class="font-semibold">{{ hireForm.department || '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Reporting Manager</span><span class="font-semibold">{{ hireForm.reporting_manager || '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Employment Type</span><span class="font-semibold">{{ hireForm.employment_type || '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Deployment start date</span><span class="font-semibold">{{ hireForm.start_date || '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Training duration</span><span class="font-semibold">{{ hireForm.training_duration_weeks ? hireForm.training_duration_weeks + ' weeks' : '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Training end date</span><span class="font-semibold">{{ hireForm.training_end_date || '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Work Location</span><span class="font-semibold">{{ hireForm.work_location || '—' }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Work Schedule</span><span class="font-semibold">{{ hireScheduleLabel }}</span></div>
-                                <div class="flex justify-between py-1"><span class="text-slate-400">Employment Status</span><span class="font-semibold">{{ hireForm.employee_status || '—' }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Employee</span><span class="font-bold text-slate-800 dark:text-zinc-100">{{ conversion?.applicant?.name || onboarding.name }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Position</span><span class="font-semibold">{{ hireForm.position || '—' }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">System Position</span><span class="font-semibold">{{ hireForm.position_rank || '—' }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Department</span><span class="font-semibold">{{ hireForm.department || '—' }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Reporting Manager</span><span class="font-semibold">{{ hireForm.reporting_manager || '—' }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Employment Type</span><span class="font-semibold">{{ hireForm.employment_type || '—' }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Deployment start date</span><span class="font-semibold">{{ hireForm.start_date || '—' }}</span></div>
+                                <div v-if="trainingRequired" class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Training duration</span><span class="font-semibold">{{ hireForm.training_duration_weeks ? hireForm.training_duration_weeks + ' weeks' : '—' }}</span></div>
+                                <div v-if="trainingRequired" class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Training end date</span><span class="font-semibold">{{ hireForm.training_end_date || '—' }}</span></div>
+                                <div v-if="probationaryHire" class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Probation duration</span><span class="font-semibold">{{ hireForm.probation_duration_months }} months</span></div>
+                                <div v-if="probationaryHire" class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Evaluation interval</span><span class="font-semibold">Every {{ hireForm.probation_evaluation_interval_months }} months</span></div>
+                                <div v-if="probationaryHire" class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Probation end date</span><span class="font-semibold">{{ hireForm.probation_end_date || '—' }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Work Location</span><span class="font-semibold">{{ hireForm.work_location || '—' }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Work Schedule</span><span class="font-semibold">{{ hireScheduleLabel }}</span></div>
+                                <div class="flex justify-between py-1"><span class="text-slate-400 dark:text-zinc-400">Employment Status</span><span class="font-semibold">{{ hireForm.employee_status || '—' }}</span></div>
                             </div>
                         </section>
                     </div>
 
-                    <div class="p-4 border-t border-slate-100 bg-gradient-to-r from-slate-50 to-transparent flex items-center justify-end gap-3 shrink-0">
-                        <button @click="backToHireForm" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all">Back</button>
+                    <div class="p-4 border-t border-slate-100 dark:border-zinc-800 bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-end gap-3 shrink-0">
+                        <button @click="backToHireForm" class="px-5 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-semibold transition-all">Back</button>
                         <button @click="confirmHireSubmit" :disabled="saving" class="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg">
                             {{ saving ? 'Creating...' : 'Confirm Create' }}
                         </button>
@@ -967,7 +979,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { dialog } from '@/lib/feedback';
 import { toast } from '@/lib/feedback';
 import {
-    Pencil, CheckCircle2, UserPlus, User, Briefcase, ClipboardCheck, FileText,
+    Pencil, CheckCircle2, UserPlus, User, Briefcase, ClipboardCheck, FileText, Send,
     CalendarDays, StickyNote, Check, X, Plus, Download, Trash2,
 } from 'lucide-vue-next';
 
@@ -982,6 +994,8 @@ const props = defineProps({
     readiness: { type: Object, default: () => ({}) },
     progress: { type: Number, default: 0 },
     alreadyHired: { type: Boolean, default: false },
+    employeeAccount: { type: Object, default: null },
+    agencyReferralApplicationId: { type: [Number, String], default: null },
     templates: { type: Array, default: () => [] },
     templateName: { type: String, default: '' },
     conversion: { type: Object, default: null },
@@ -997,6 +1011,10 @@ const pageLoading = ref(true);
 const saving = ref(false);
 const activeModal = ref(null);
 const expandedHistory = ref({});
+const activeDetailTab = ref('personal');
+const tabClass = (tab) => activeDetailTab.value === tab
+    ? 'inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-2.5 text-xs font-bold text-slate-800 dark:text-zinc-100 shadow-sm transition-all duration-200'
+    : 'inline-flex shrink-0 items-center gap-2 rounded-xl border border-transparent px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-zinc-300 transition-all duration-200 hover:border-blue-100 hover:bg-white dark:bg-zinc-900 hover:text-blue-700 hover:shadow-sm';
 
 onMounted(() => {
     setTimeout(() => { pageLoading.value = false; }, 150);
@@ -1017,6 +1035,8 @@ watch(() => page.props.errors, (errors) => {
 }, { deep: true });
 
 const displayTemplate = computed(() => props.templateName || props.onboarding.template || '');
+const trainingRequired = computed(() => props.conversion?.job_posting?.training_required === true);
+const probationaryHire = computed(() => String(hireForm.value.employment_type || '').toLowerCase().includes('probation'));
 
 const initials = computed(() => {
     const parts = props.onboarding.name.trim().split(/\s+/);
@@ -1030,6 +1050,9 @@ const hasSnapshot = computed(() =>
 );
 
 const taskStatuses = ['Pending', 'In Progress', 'Completed', 'Blocked'];
+const statusEditorItemId = ref(null);
+const statusRejectItem = ref(null);
+const statusRejectReason = ref('');
 
 const sectionColor = (section) =>
     ({
@@ -1037,6 +1060,17 @@ const sectionColor = (section) =>
         'HR Processing': 'bg-violet-500',
         'Company Preparation': 'bg-emerald-500',
     })[section] || 'bg-slate-400';
+
+const itemStatusLabel = (status) => ({
+    Pending: 'Awaiting submission',
+    Submitted: 'Submitted for review',
+    Resubmitted: 'Submitted for review',
+    'Under Review': 'Under review by HR',
+    Completed: 'Approved',
+    Verified: 'Approved',
+    Rejected: 'Rejected – Resubmission required',
+    'Requires Resubmission': 'Please resubmit document',
+})[status] || status;
 
 const toggleHistory = (id) => {
     expandedHistory.value[id] = !expandedHistory.value[id];
@@ -1086,92 +1120,72 @@ const saveDetails = () => {
 
 // ============ ITEMS ============
 const updateTaskStatus = (item, status) => {
+    if (saving.value) return;
+    saving.value = true;
     router.patch(route('hrm.onboarding.items.status', { onboarding: props.onboarding.id, item: item.id }), { status }, {
         preserveScroll: true,
-        onSuccess: () => toast.success('Task status updated.'),
-        onError: () => toast.error('Failed to update task status.'),
-    });
-};
-
-const itemStatusSelect = (status) =>
-    ({
-        Pending: 'bg-slate-50 text-slate-500 border-slate-200',
-        Submitted: 'bg-blue-50 text-blue-600 border-blue-200',
-        Resubmitted: 'bg-indigo-50 text-indigo-600 border-indigo-200',
-        'Under Review': 'bg-amber-50 text-amber-700 border-amber-200',
-        'In Progress': 'bg-amber-50 text-amber-700 border-amber-200',
-        Verified: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        Completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        Rejected: 'bg-rose-50 text-rose-600 border-rose-200',
-        Blocked: 'bg-rose-50 text-rose-600 border-rose-200',
-    })[status] || 'bg-slate-50 text-slate-500 border-slate-200';
-
-const rejectForm = ref({ item: null, reason: '' });
-
-// Per-item modal: full lifecycle statuses (Pending, Submitted, Resubmitted,
-// Under Review, In Progress, Completed, Verified, Rejected, Blocked) with
-// approve / reject shortcuts for reviewable submissions.
-const itemStatuses = ['Pending', 'Submitted', 'Resubmitted', 'Under Review', 'In Progress', 'Completed', 'Verified', 'Rejected', 'Blocked'];
-const selectedItem = ref(null);
-const selectedSection = ref('');
-const itemModalStatus = ref('Pending');
-const itemModalReason = ref('');
-const itemModalRejecting = ref(false);
-
-const openItemModal = (item, section = '') => {
-    selectedItem.value = item;
-    selectedSection.value = section;
-    itemModalStatus.value = item.status;
-    itemModalReason.value = '';
-    itemModalRejecting.value = false;
-    activeModal.value = 'item';
-};
-
-const saveItemModalStatus = () => {
-    if (!selectedItem.value || saving.value) return;
-    saving.value = true;
-    router.patch(route('hrm.onboarding.items.status', { onboarding: props.onboarding.id, item: selectedItem.value.id }), { status: itemModalStatus.value }, {
-        preserveScroll: true,
         onSuccess: () => {
-            closeModal();
-            toast.success(`Item marked as ${itemModalStatus.value}.`);
+            statusEditorItemId.value = null;
+            toast.success('Item status updated.');
         },
         onError: () => toast.error('Failed to update item status.'),
         onFinish: () => { saving.value = false; },
     });
 };
 
-const approveFromItemModal = () => {
-    if (!selectedItem.value || saving.value) return;
+const toggleItemActions = (item) => {
+    statusEditorItemId.value = statusEditorItemId.value === item.id ? null : item.id;
+};
+
+const selectItemStatus = (item, status) => {
+    if (status === 'Rejected') {
+        statusRejectItem.value = item;
+        statusRejectReason.value = '';
+        activeModal.value = 'status-reject';
+        return;
+    }
+    updateTaskStatus(item, status);
+};
+
+const confirmStatusRejection = () => {
+    const item = statusRejectItem.value;
+    if (!item || saving.value) return;
     saving.value = true;
-    router.post(route('hrm.onboarding.items.review', { onboarding: props.onboarding.id, item: selectedItem.value.id }), { decision: 'approve' }, {
+    router.post(route('hrm.onboarding.items.review', { onboarding: props.onboarding.id, item: item.id }), {
+        decision: 'reject',
+        reason: statusRejectReason.value.trim() || null,
+    }, {
         preserveScroll: true,
         onSuccess: () => {
-            closeModal();
-            toast.success('Submission approved.');
+            activeModal.value = null;
+            statusEditorItemId.value = null;
+            statusRejectItem.value = null;
+            statusRejectReason.value = '';
+            toast.success('Item rejected.');
         },
-        onError: () => toast.error('Failed to approve submission.'),
+        onError: () => toast.error('Failed to reject item.'),
         onFinish: () => { saving.value = false; },
     });
 };
 
-const rejectFromItemModal = () => {
-    if (!selectedItem.value || saving.value) return;
-    if (!itemModalReason.value.trim()) {
-        toast.error('Please provide a rejection reason.');
-        return;
-    }
-    saving.value = true;
-    router.post(route('hrm.onboarding.items.review', { onboarding: props.onboarding.id, item: selectedItem.value.id }), { decision: 'reject', reason: itemModalReason.value }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            closeModal();
-            toast.success('Submission rejected. The applicant can resubmit.');
-        },
-        onError: () => toast.error('Failed to reject submission.'),
-        onFinish: () => { saving.value = false; },
-    });
-};
+const itemStatusSelect = (status) =>
+    ({
+        Pending: 'bg-slate-50 dark:bg-zinc-800 text-slate-500 dark:text-zinc-300 border-slate-200 dark:border-zinc-700',
+        Submitted: 'bg-blue-50 text-blue-600 border-blue-200',
+        Resubmitted: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+                        'Under Review': 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+                        'In Progress': 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+                        Verified: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+                        Completed: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+                        Rejected: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+                        'Requires Resubmission': 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+                        Blocked: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+    })[status] || 'bg-slate-50 dark:bg-zinc-800 text-slate-500 dark:text-zinc-300 border-slate-200 dark:border-zinc-700';
+
+const rejectForm = ref({ item: null, reason: '' });
+
+// Keep the editable status list focused on the states used by HR here.
+const itemStatuses = ['Pending', 'Resubmitted', 'Completed', 'Rejected', 'In Progress'];
 
 const openRejectModal = (item) => {
     rejectForm.value = { item, reason: '' };
@@ -1249,9 +1263,10 @@ const deleteNote = (note) => {
 // ============ COMPLETE / CREATE EMPLOYEE ============
 const confirmComplete = () => {
     if (!props.canComplete) {
-        toast.error('Complete all required items and mandatory activities first.');
+        toast.error('Complete all required applicant documents first.');
         return;
     }
+<<<<<<< HEAD
     dialog.fire({
         title: 'Complete Onboarding?',
         text: 'This marks the onboarding as completed. You can then create the employee record.',
@@ -1269,6 +1284,17 @@ const confirmComplete = () => {
                 onError: () => toast.error('Failed to complete onboarding.'),
             });
         }
+=======
+    activeModal.value = 'complete-confirm';
+};
+
+const submitComplete = () => {
+    closeModal();
+    router.post(route('hrm.onboarding.complete', props.onboarding.id), {}, {
+        preserveScroll: true,
+        onSuccess: () => toast.success('Onboarding completed.'),
+        onError: () => toast.error('Failed to complete onboarding.'),
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     });
 };
 
@@ -1322,6 +1348,7 @@ const applyShiftHours = () => {
 const hireForm = ref({
     position: '', position_rank: 'staff', department: '', role: '', employment_type: 'Regular', employment_type_id: '',
     start_date: '', training_duration_weeks: '', training_end_date: '', reporting_manager: '', reporting_manager_id: '', employee_status: 'Pending Training',
+    probation_duration_months: '', probation_evaluation_interval_months: '', probation_end_date: '',
     work_location: 'Main Manufacturing Plant', work_mode: 'Onsite',
     shift: 'Morning Shift', work_schedule: 'Monday – Friday',
     work_schedule_start: 'Monday', work_schedule_end: 'Friday',
@@ -1334,15 +1361,63 @@ const hireForm = ref({
 
 // Training end = deployment start + duration weeks (calendar stays editable).
 // Blank duration stays blank — no auto default.
+const onTrainingDurationInput = (e) => {
+    const raw = e.target.value;
+    if (raw === '') {
+        hireForm.value.training_duration_weeks = '';
+        return;
+    }
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1 || n > 4) {
+        e.target.value = hireForm.value.training_duration_weeks ?? '';
+        return;
+    }
+    hireForm.value.training_duration_weeks = n;
+    recalcTrainingEnd();
+};
+
 const recalcTrainingEnd = () => {
     const weeks = Number(hireForm.value.training_duration_weeks);
-    if (!weeks || weeks < 1 || weeks > 52) return;
+    if (!weeks || weeks < 1 || weeks > 4) return;
     const start = hireForm.value.start_date;
     if (!start) return;
     const d = new Date(start + 'T00:00:00');
     if (isNaN(d)) return;
     d.setDate(d.getDate() + weeks * 7);
     hireForm.value.training_end_date = d.toISOString().slice(0, 10);
+};
+
+const onProbationDurationInput = (e) => {
+    const raw = e.target.value;
+    if (raw === '') {
+        hireForm.value.probation_duration_months = '';
+        hireForm.value.probation_evaluation_interval_months = '';
+        hireForm.value.probation_end_date = '';
+        return;
+    }
+    const months = Number(raw);
+    if (!Number.isInteger(months) || months < 1 || months > 6) {
+        e.target.value = hireForm.value.probation_duration_months || '';
+        return;
+    }
+    hireForm.value.probation_duration_months = months;
+    hireForm.value.probation_evaluation_interval_months = Math.max(1, Math.floor(months / 2));
+    recalcProbationEnd();
+};
+
+const recalcProbationEnd = () => {
+    const months = Number(hireForm.value.probation_duration_months);
+    const start = hireForm.value.start_date;
+    if (!probationaryHire.value || !start || !Number.isInteger(months) || months < 1 || months > 6) {
+        hireForm.value.probation_end_date = '';
+        return;
+    }
+    const [year, month, day] = start.split('-').map(Number);
+    const targetMonth = month - 1 + months;
+    const targetYear = year + Math.floor(targetMonth / 12);
+    const normalizedMonth = targetMonth % 12;
+    const finalDay = Math.min(day, new Date(targetYear, normalizedMonth + 1, 0).getDate());
+    hireForm.value.probation_end_date = `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`;
 };
 
 const hireScheduleLabel = computed(() =>
@@ -1408,16 +1483,22 @@ const openHireModal = () => {
     const d = c.defaults || {};
     const range = parseScheduleRange(d.work_schedule || props.onboarding.work_schedule);
     const hours = parseHoursRange(props.onboarding.work_schedule);
+    const employmentType = d.employment_type || props.onboarding.employment_type || 'Regular';
+    const isProbationary = String(employmentType).toLowerCase().includes('probation');
+    const probationMonths = isProbationary ? 1 : '';
     hireForm.value = {
         position: d.position || props.onboarding.position || '',
         position_rank: d.position_rank || 'staff',
         department: d.department || props.onboarding.department || '',
         role: d.role || guessHireRole(d.department || props.onboarding.department || ''),
-        employment_type: d.employment_type || props.onboarding.employment_type || 'Regular',
+        employment_type: employmentType,
         employment_type_id: '',
         start_date: d.start_date || new Date().toISOString().slice(0, 10),
         training_duration_weeks: '',
         training_end_date: '',
+        probation_duration_months: probationMonths,
+        probation_evaluation_interval_months: isProbationary ? 1 : '',
+        probation_end_date: d.probation_end_date || '',
         reporting_manager: d.reporting_manager || props.onboarding.assigned_manager || '',
         reporting_manager_id: d.reporting_manager_id || '',
         employee_status: 'Pending Training',
@@ -1441,6 +1522,7 @@ const openHireModal = () => {
     // change), so Morning opens at 8:00 AM – 5:00 PM right away. Still editable.
     // Duration stays blank — end is set once HR types start + duration.
     applyShiftHours();
+    recalcProbationEnd();
     // Pre-select matching employment-type id when names line up.
     const match = (props.employmentTypes || []).find((t) => t.name === hireForm.value.employment_type);
     if (match) hireForm.value.employment_type_id = match.id;
@@ -1453,6 +1535,7 @@ const confirmCreateEmployee = () => {
         toast.error('The onboarding must be completed before creating the employee record.');
         return;
     }
+<<<<<<< HEAD
     dialog.fire({
         title: 'Create Employee Record?',
         html: 'This will generate an employee record from the verified applicant data, update the application to <b>Hired</b>, and finalize onboarding.',
@@ -1465,7 +1548,34 @@ const confirmCreateEmployee = () => {
     }).then((result) => {
         // After confirmation, show the full CREATE EMPLOYEE conversion modal.
         if (result.isConfirmed) openHireModal();
+=======
+    activeModal.value = 'create-employee-confirm';
+};
+
+const proceedToCreateEmployee = () => {
+    openHireModal();
+};
+
+const confirmAgencyReferral = () => {
+    if (props.employeeAccount?.email) {
+        toast.error('This applicant already has an employee account and cannot be referred to an agency.');
+        return;
+    }
+    activeModal.value = 'agency-referral-confirm';
+};
+
+const proceedToAgencyReferral = () => {
+    if (props.employeeAccount?.email) {
+        closeModal();
+        toast.error('This applicant already has an employee account and cannot be referred to an agency.');
+        return;
+    }
+    const referralUrl = route('hrm.recruitment.agency-referrals.index', {
+        applicant_job_application_id: props.agencyReferralApplicationId,
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     });
+    closeModal();
+    router.visit(referralUrl);
 };
 
 const hireTrainingDone = computed(() =>
@@ -1485,8 +1595,11 @@ const submitHire = () => {
     if (!f.department?.trim()) { toast.error('Department is required.'); return; }
     if (!f.role) { toast.error('System Role is required.'); return; }
     if (!f.start_date) { toast.error('Start date is required.'); return; }
-    if (!f.training_duration_weeks || Number(f.training_duration_weeks) < 1) { toast.error('Training duration is required.'); return; }
-    if (!f.training_end_date) { toast.error('Training end date is required.'); return; }
+    if (probationaryHire.value && Number(f.probation_duration_months) !== 1) { toast.error('Probation duration is fixed at one month.'); return; }
+    if (probationaryHire.value && Number(f.probation_evaluation_interval_months) !== 1) { toast.error('The final evaluation is due after one month.'); return; }
+    if (trainingRequired.value && (!f.training_duration_weeks || Number(f.training_duration_weeks) < 1)) { toast.error('Training duration is required.'); return; }
+    if (trainingRequired.value && Number(f.training_duration_weeks) > 4) { toast.error('Training duration cannot exceed 4 weeks.'); return; }
+    if (trainingRequired.value && !f.training_end_date) { toast.error('Training end date is required.'); return; }
     if (f.basic_salary !== '' && isNaN(parseFloat(f.basic_salary))) { toast.error('Basic salary must be numeric.'); return; }
     // Open the review step as its own modal — actual creation happens on confirm.
     activeModal.value = 'hire-review';
@@ -1540,10 +1653,30 @@ const openModal = (type) => {
 };
 
 const closeModal = () => {
+    if (activeModal.value === 'create-employee') {
+        Swal.fire({
+            title: 'Discard employee data?',
+            text: 'Your changes will be lost if you close this form.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Discard',
+            cancelButtonText: 'Keep editing',
+            confirmButtonColor: '#e11d48',
+            customClass: { popup: 'rounded-[2rem]' },
+        }).then((result) => {
+            if (result.isConfirmed && activeModal.value === 'create-employee') {
+                dismissModal();
+            }
+        });
+        return;
+    }
+    dismissModal();
+};
+
+const dismissModal = () => {
     activeModal.value = null;
-    selectedItem.value = null;
-    selectedSection.value = '';
-    itemModalRejecting.value = false;
+    statusRejectItem.value = null;
+    statusRejectReason.value = '';
 };
 
 const formatDate = (value) => {
@@ -1565,5 +1698,21 @@ const formatDateTime = (value) => {
 .bg-grid-slate-100 {
     background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
     background-size: 24px 24px;
+}
+:global(html.dark) .onboarding-status-pill {
+    background-color: #27272a !important;
+    border-color: #52525b !important;
+    color: #e4e4e7 !important;
+}
+:global(html.dark) input,
+:global(html.dark) textarea,
+:global(html.dark) select {
+    background-color: #27272a !important;
+    border-color: #52525b !important;
+    color: #f4f4f5 !important;
+}
+:global(html.dark) input::placeholder,
+:global(html.dark) textarea::placeholder {
+    color: #a1a1aa !important;
 }
 </style>

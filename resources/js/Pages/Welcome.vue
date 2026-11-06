@@ -430,8 +430,13 @@ const handleKeydown = (event: KeyboardEvent) => {
 
         <!-- HEADER -->
         <header class="w-full border-b border-white/10 shrink-0 sticky top-0 bg-black/20 backdrop-blur-md z-20">
+<<<<<<< HEAD
             <div class="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5 sm:py-3">
                 <div class="order-1 flex items-center gap-3 group cursor-pointer" @click="switchPage('home')">
+=======
+            <div class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-4 py-3">
+                <div class="flex items-center gap-3 group cursor-pointer" @click="switchPage('home')">
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                     <div class="p-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/20 shadow-lg group-hover:scale-105 transition-transform duration-300">
                         <img src="/images/applogo.png" alt="Logo" class="h-7 w-7 sm:h-8 sm:w-8 object-contain" />
                     </div>
@@ -539,7 +544,11 @@ const handleKeydown = (event: KeyboardEvent) => {
         </header>
 
         <!-- Main Content -->
+<<<<<<< HEAD
         <div class="relative z-10 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex flex-col min-h-screen">
+=======
+        <div class="relative z-10 mx-auto w-full max-w-7xl flex flex-col min-h-screen px-4 sm:px-6 lg:px-8">
+>>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 
             <!-- HOME PAGE -->
             <div v-if="activePage === 'home'" class="flex-1 flex flex-col py-5 sm:py-8">

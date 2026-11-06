@@ -62,7 +62,8 @@ class ReapplyCooldown
         $stage = static::normalizeStage($stage);
 
         $query = ApplicantJobApplication::where('applicant_id', $applicantId)
-            ->whereNotIn('status', ['Withdrawn', 'Rejected']);
+            ->whereNotIn('status', ['Withdrawn', 'Rejected'])
+            ->notOnHold();
         if ($jobPostingId) {
             $query->where('job_posting_id', $jobPostingId);
         }
@@ -167,7 +168,8 @@ class ReapplyCooldown
 
         if ($applicant) {
             $query = ApplicantJobApplication::where('applicant_id', $applicant->id)
-                ->whereNotIn('status', ['Withdrawn', 'Rejected']);
+                ->whereNotIn('status', ['Withdrawn', 'Rejected'])
+                ->notOnHold();
             if ($postingId) {
                 $query->where('job_posting_id', $postingId);
             }

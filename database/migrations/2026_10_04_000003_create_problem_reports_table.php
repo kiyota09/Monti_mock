@@ -13,6 +13,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Some installations already have this table from an earlier/manual
+        // setup, while the migration ledger does not contain this migration.
+        // Preserve that table and let Laravel record this migration as run.
+        if (Schema::hasTable('problem_reports')) {
+            return;
+        }
+
         Schema::create('problem_reports', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
