@@ -8,21 +8,13 @@ use App\Models\Logistics\Driver;
 use App\Models\War\WarehousePackage;
 use App\Models\Logistics\Delivery;
 use Inertia\Inertia;
-use Illuminate\Support\Facades\Auth;
 
 class LogisticsDashboardController extends Controller
 {
     public function index()
     {
-        $user = Auth::user();
         // NOTE (overseer model): executive oversight runs through the CEO
         // module (reports, audit, approvals) — no direct logistics access.
-        $hasAccess = \DB::table('logistics_access')->where('user_id', $user->id)->value('can_access_logistics');
-
-        if (!$hasAccess && $user->role !== 'LOG') {
-            abort(403);
-        }
-
         $stats = [
             'pendingPackages' => WarehousePackage::where('status', 'pushed_to_logistics')->count(),
             'dispatchedDeliveries' => Delivery::where('status', 'dispatched')->count(),

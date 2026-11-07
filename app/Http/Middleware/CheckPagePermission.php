@@ -198,6 +198,17 @@ class CheckPagePermission
             abort(403, "The '{$page}' page in the {$module} module requires '{$requiredLevel}' permission; this account only has '{$grantedLevel}'.");
         }
 
+        // Department staff management is a native page for the Knitting,
+        // Dyeing, and Finishing supervisors. IT may still explicitly disable
+        // it with a page row (handled above), but existing supervisors do not
+        // need a separate grant just to open their own department roster.
+        if ($module === 'MAN'
+            && strtolower($page) === 'staff'
+            && $user->is_manufacturing_supervisor
+            && in_array($user->supervisor_department, ['knitting', 'dyeing', 'finishing'], true)) {
+            return $next($request);
+        }
+
         abort(403, "You do not have permission to access the '{$page}' page in the {$module} module.");
     }
 

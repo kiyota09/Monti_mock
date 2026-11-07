@@ -494,7 +494,7 @@ onMounted(() => {
     // Reflect the theme the user picked (stored choice, else OS preference) so
     // the messenger surfaces, text, borders and accents follow it. The page
     // renders as a standalone layout, so it must initialise the theme itself.
-    initTheme();
+    initTheme(page.props.themeSettings);
     loadThreads();
     pollTimer = setInterval(() => {
         if (activeThread.value) pollActive();

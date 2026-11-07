@@ -149,7 +149,7 @@ const riskClass = (r) => ({
                             </td>
                             <td data-label="Status" class="px-4 sm:px-6 py-3 sm:py-4"><span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', statusClass(c.status)]">{{ c.status.replace('_', ' ') }}</span></td>
                             <td data-label="Actions" class="px-4 sm:px-6 py-3 sm:py-4 text-right whitespace-nowrap">
-                                <template v-if="isManager && canEditChanges && ['draft', 'pending_approval'].includes(c.status)">
+                                <template v-if="canEditChanges && ['draft', 'pending_approval'].includes(c.status)">
                                     <button @click="approve(c.id)" title="Approve" class="p-2.5 sm:p-1.5 text-slate-400 hover:text-emerald-600"><Check class="w-4 h-4" /></button>
                                     <button @click="reject(c.id)" title="Reject" class="p-2.5 sm:p-1.5 text-slate-400 hover:text-red-500"><Ban class="w-4 h-4" /></button>
                                 </template>
@@ -159,7 +159,7 @@ const riskClass = (r) => ({
                                     <button @click="advance(c.id, 'completed')" class="px-3 py-2 sm:py-1.5 text-xs font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg">Complete</button>
                                     <button @click="advance(c.id, 'rolled_back')" class="px-3 py-2 sm:py-1.5 text-xs font-bold text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg">Roll back</button>
                                 </template>
-                                <button v-if="isManager && canEditChanges && ['draft', 'rejected'].includes(c.status)" @click="remove(c.id)" class="p-2.5 sm:p-1.5 text-slate-400 hover:text-red-500"><Trash2 class="w-4 h-4" /></button>
+                                <button v-if="canEditChanges && ['draft', 'rejected'].includes(c.status)" @click="remove(c.id)" class="p-2.5 sm:p-1.5 text-slate-400 hover:text-red-500"><Trash2 class="w-4 h-4" /></button>
                             </td>
                         </tr>
                     </tbody>

@@ -161,6 +161,7 @@ return [
         'access_control' => 'Org Access Control',
         'location'       => 'Geolocation',
         'access_logs'    => 'Access Logs',
+        'appearance'     => 'Appearance',
     ],
 
     'fin' => [

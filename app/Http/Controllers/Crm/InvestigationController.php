@@ -21,11 +21,8 @@ class InvestigationController extends Controller
     {
         $user = Auth::user();
         
-        // The middleware already checks page permission, so we don't need role checks here,
-        // but we keep the business logic for staff vs manager view.
-        if (!in_array($user->role, ['CRM', 'CEO', 'COO'], true)) {
-            abort(403, 'Unauthorized access.');
-        }
+        // Route page.permission middleware handles access; keep only the CRM
+        // staff-specific data scoping below.
 
         // Fetch CRM staff for assignment dropdown
         $staff = User::where('role', 'CRM')

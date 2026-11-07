@@ -24,10 +24,6 @@ class CustomerProfileController extends Controller
     {
         $user = Auth::user();
 
-        if (!in_array($user->role, ['CRM', 'CEO', 'COO'], true)) {
-            abort(403, 'Unauthorized access.');
-        }
-
         if ($user->role === 'CRM' && $user->position === 'staff') {
             // Staff sees only assigned clients
             $assignments = CrmClientAssignment::with('client.logo')->where('staff_id', $user->id)->get();
@@ -79,8 +75,6 @@ class CustomerProfileController extends Controller
             if (!$isAssigned) {
                 abort(403, 'You are not assigned to this client.');
             }
-        } elseif (!in_array($user->role, ['CRM', 'CEO', 'COO'], true)) {
-            abort(403, 'Unauthorized access.');
         }
 
         $client->load([

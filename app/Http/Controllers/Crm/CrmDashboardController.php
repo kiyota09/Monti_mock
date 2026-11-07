@@ -24,9 +24,8 @@ class CrmDashboardController extends Controller
 
         // Allow CRM users (any position) plus the President (CEO)
         // and the Vice President (COO / vice_president) — full access.
-        if (!in_array($user->role, ['CRM', 'CEO', 'COO'], true)) {
-            abort(403, 'Unauthorized access.');
-        }
+        // Route page.permission middleware is the source of truth for access.
+        // Explicit IT grants may give this dashboard to an employee outside CRM.
 
         $stats = [
             'total_clients' => Client::where('status', 'active')->count(),

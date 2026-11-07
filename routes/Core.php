@@ -10,6 +10,8 @@ use App\Http\Controllers\Users\AppController;
 use App\Http\Controllers\Users\ClockController;
 use App\Http\Controllers\Users\LeaveController as UserLeaveController;
 use App\Http\Controllers\Users\MessengerController;
+use App\Http\Controllers\ThemePreferenceController;
+use App\Support\ThemePolicy;
 use App\Http\Controllers\Users\TopbarController;
 use App\Models\Crm\CrmPost;
 use App\Models\Inv\Product;
@@ -21,6 +23,13 @@ Route::get('/system/realtime/version', function () {
         'version' => (string) Cache::get('erp:realtime:data-version', 0),
     ])->header('Cache-Control', 'no-store, private');
 })->name('system.realtime.version');
+
+Route::post('/theme-preference', [ThemePreferenceController::class, 'update'])
+    ->name('theme.preference.update');
+
+Route::get('/system/theme-settings', fn () => response()->json(ThemePolicy::forRequest())
+    ->header('Cache-Control', 'no-store, private'))
+    ->name('system.theme-settings');
 
 Route::get('/', function () {
     $publicMedia = fn (array $media) => collect($media)->map(function ($item) {

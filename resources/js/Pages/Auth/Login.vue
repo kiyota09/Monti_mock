@@ -160,37 +160,39 @@ const identityPlaceholder = computed(() => "Email address or employee ID");
 <template>
     <AuthLayout
         title="Unified Portal"
-        highlight="Access"
+        highlight="Portal"
         subtitle="Sign in with your email or employee ID. Monti Textile will open the portal linked to your account."
         badge="Unified Portal Access"
         accent="blue"
+        variant="warm"
+        hide-home-link
     >
         <Head title="ERP Secure Authorization | Monti Corp" />
 
                         <div v-if="status"
-                            class="auth-status mb-6 p-4 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-sm font-medium text-emerald-200 backdrop-blur-sm">
+                            class="auth-status mb-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-sm font-medium text-emerald-700">
                             {{ status }}
                         </div>
 
                         <form @submit.prevent="submit" class="space-y-6">
                             <div>
-                                <InputLabel for="identity" value="Identification" class="text-white/90" />
+                                <InputLabel for="identity" value="Identification" class="font-semibold text-slate-700" />
                                 <TextInput id="identity" type="text"
                                     class="auth-input mt-1 block w-full"
                                     v-model="form.identity" required autofocus autocomplete="username"
                                     :placeholder="identityPlaceholder" @keypress="blockInvalidChars"
                                     @paste="sanitizePaste" aria-describedby="identity-warning" spellcheck="false" />
                                 <p v-if="inputWarnings.identity" id="identity-warning"
-                                    class="text-xs text-red-300 font-bold mt-1 ml-1 animate-pulse">{{
+                                    class="text-xs text-red-600 font-bold mt-1 ml-1 animate-pulse">{{
                                         inputWarnings.identity }}</p>
-                                <InputError class="mt-1 text-red-300" :message="form.errors.identity || (form.errors as any).email || (form.errors as any).employee_id" />
+                                <InputError class="mt-1 text-red-600" :message="form.errors.identity || (form.errors as any).email || (form.errors as any).employee_id" />
                             </div>
 
                             <div>
                                 <div class="flex justify-between items-baseline mb-1">
-                                    <InputLabel for="password" value="Password" class="text-white/90" />
+                                    <InputLabel for="password" value="Password" class="font-semibold text-slate-700" />
                                     <button type="button" @click="showForgot = true"
-                                        class="text-sm text-blue-300 hover:text-blue-200 font-medium transition-colors">
+                                        class="text-sm text-[#C2410C] hover:text-[#9A3412] font-semibold transition-colors">
                                         Forgot password?
                                     </button>
                                 </div>
@@ -202,7 +204,7 @@ const identityPlaceholder = computed(() => "Email address or employee ID");
                                         placeholder="••••••••" />
 
                                     <button type="button" @click="togglePassword"
-                                        class="absolute inset-y-0 right-4 flex items-center text-slate-300 hover:text-white transition-colors">
+                                        class="absolute inset-y-0 right-4 flex items-center text-slate-500 hover:text-slate-800 transition-colors">
                                         <svg v-if="!showPassword" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
                                             stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -215,14 +217,14 @@ const identityPlaceholder = computed(() => "Email address or employee ID");
                                         </svg>
                                     </button>
                                 </div>
-                                <InputError class="mt-1 text-red-300" :message="form.errors.password" />
+                                <InputError class="mt-1 text-red-600" :message="form.errors.password" />
                             </div>
 
                             <div class="flex items-center">
                                 <label class="flex items-center cursor-pointer group">
                                     <input type="checkbox" v-model="form.remember" class="sr-only peer" />
                                     <div
-                                        class="w-5 h-5 border border-white/30 bg-white/15 rounded flex items-center justify-center transition-all duration-200 peer-checked:bg-blue-600 peer-checked:border-blue-600">
+                                        class="w-5 h-5 border border-slate-300 bg-white rounded flex items-center justify-center transition-all duration-200 peer-checked:bg-[#1A1A1A] peer-checked:border-[#1A1A1A]">
                                         <svg v-if="form.remember" class="h-3.5 w-3.5 text-white" fill="currentColor"
                                             viewBox="0 0 20 20">
                                             <path fill-rule="evenodd"
@@ -231,17 +233,17 @@ const identityPlaceholder = computed(() => "Email address or employee ID");
                                         </svg>
                                     </div>
                                     <span
-                                        class="ml-3 text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
+                                        class="ml-3 text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors">
                                         Remember me
                                     </span>
                                 </label>
                             </div>
 
-                            <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-white/10 mt-6">
-                                <div class="text-sm font-medium text-slate-300">
+                            <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-slate-200 mt-6">
+                                <div class="text-sm font-medium text-slate-600">
                                     Want to be part of MontiTextile?
                                     <Link :href="route('applicant.register')"
-                                        class="text-white hover:text-blue-300 font-semibold ml-1.5 transition-colors">
+                                        class="text-[#C2410C] hover:text-[#9A3412] font-semibold ml-1.5 transition-colors">
                                         Apply Now
                                     </Link>
                                 </div>

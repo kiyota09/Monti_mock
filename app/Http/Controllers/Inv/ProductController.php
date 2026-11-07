@@ -44,7 +44,14 @@ class ProductController extends Controller
             ->values()
             ->toArray();
 
-        $products = Product::with(['images', 'yarnMaterials'])
+        // Bulk inquiries are conversation records, not catalog products.
+        // Exclude legacy placeholder rows while retaining them for older
+        // inquiries that may still reference their product IDs.
+        $products = Product::query()
+            ->whereRaw('LOWER(TRIM(name)) <> ?', ['bulk inquiry'])
+            ->whereRaw('UPPER(TRIM(COALESCE(sku, ?))) <> ?', ['', 'BULK-SKU'])
+            ->where(fn ($query) => $query->whereNull('product_id')->orWhere('product_id', 'not like', 'BULK-%'))
+            ->with(['images', 'yarnMaterials'])
             ->orderBy('id', 'desc')
             ->get()
             ->map(function (Product $p) {

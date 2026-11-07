@@ -53,15 +53,9 @@ const reloadPage = () => {
         <MobileSidebar v-if="!hasError" />
         <div class="md:pl-64 pt-16 md:pt-0 flex flex-col flex-1 h-[100dvh] overflow-hidden transition-all duration-300">
             <TopBar v-if="!hasError" />
-<<<<<<< HEAD
             <main class="flex-1 min-h-0 overflow-hidden bg-gray-50 dark:bg-zinc-900">
                 <div class="h-full w-full">
                     <div class="app-viewport h-full w-full overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-5 bg-slate-50 dark:bg-zinc-950">
-=======
-            <main>
-                <div>
-                    <div class="agency-motion bg-slate-50 dark:bg-zinc-900 rounded-2xl p-4 sm:p-6 min-h-[400px]">
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                         <slot />
                     </div>
                 </div>
@@ -73,7 +67,6 @@ const reloadPage = () => {
     </div>
 </template>
 
-<<<<<<< HEAD
 <style>
 /* Agency workspace: pages fill the viewport and scroll internally. Wrapper
    min-height / centered max-width clamps are neutralised at the outer two
@@ -87,52 +80,5 @@ const reloadPage = () => {
     max-width: none !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
-=======
-<style scoped>
-.agency-motion :deep(button),
-.agency-motion :deep(a),
-.agency-motion :deep(input),
-.agency-motion :deep(select),
-.agency-motion :deep(textarea),
-.agency-motion :deep(tr) {
-    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
-    transition-duration: 280ms;
-    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.agency-motion :deep(button:not(:disabled):hover) {
-    transform: translateY(-1px);
-}
-
-.agency-motion :deep(button:not(:disabled):active) {
-    transform: translateY(0) scale(0.985);
-}
-
-.agency-motion :deep(.fixed.inset-0) {
-    animation: agency-overlay-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.agency-motion :deep(.fixed.inset-0 > section),
-.agency-motion :deep(.fixed.inset-0 > div) {
-    animation: agency-panel-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes agency-overlay-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes agency-panel-in {
-    from { opacity: 0; transform: translateY(10px) scale(0.99); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .agency-motion :deep(*) {
-        animation-duration: 0.01ms !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-    }
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 }
 </style>

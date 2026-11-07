@@ -151,14 +151,27 @@ class CrmInquiryController extends Controller
             ->get();
         $selectionPricing = [];
         $productSelections = $inquiry->product_selections ?? [];
-        if (! empty($productSelections['yarns']) && ! empty($productSelections['pantones'])) {
-            $selectionPricing = EcoProductVariantPrice::query()
-                ->where('product_id', $productSelections['product_id'] ?? $inquiry->product_id)
-                ->whereIn('material_id', collect($productSelections['yarns'])->pluck('id'))
-                ->whereIn('color_group', collect($productSelections['pantones'])->pluck('color_category')->filter()->unique())
-                ->get(['material_id', 'color_group', 'price'])
-                ->mapWithKeys(fn ($price) => [$price->material_id.':'.$price->color_group => $price->price === null ? null : (float) $price->price])
-                ->all();
+        $selectionSets = collect($productSelections['products'] ?? []);
+        if ($selectionSets->isEmpty() && ! empty($productSelections['yarns']) && ! empty($productSelections['pantones'])) {
+            $selectionSets = collect([[
+                ...$productSelections,
+                'product_id' => $productSelections['product_id'] ?? $inquiry->product_id,
+            ]]);
+        }
+        foreach ($selectionSets as $selectionSet) {
+            if (empty($selectionSet['yarns']) || empty($selectionSet['pantones'])) continue;
+            $productId = (int) ($selectionSet['product_id'] ?? 0);
+            $prices = EcoProductVariantPrice::query()
+                ->where('product_id', $productId)
+                ->whereIn('material_id', collect($selectionSet['yarns'])->pluck('id'))
+                ->whereIn('color_group', collect($selectionSet['pantones'])->pluck('color_category')->filter()->unique())
+                ->get(['material_id', 'color_group', 'price']);
+            foreach ($prices as $price) {
+                $selectionPricing[$productId.':'.$price->material_id.':'.$price->color_group] = $price->price === null ? null : (float) $price->price;
+                if ($selectionSets->count() === 1) {
+                    $selectionPricing[$price->material_id.':'.$price->color_group] = $price->price === null ? null : (float) $price->price;
+                }
+            }
         }
         $acceptedFabricOptions = $quotations
             ->where('status', 'accepted')
@@ -349,7 +362,8 @@ class CrmInquiryController extends Controller
     public function issueQuotation(Request $request, Inquiry $inquiry)
     {
         $selections = $inquiry->product_selections ?? [];
-        $specificSelectionQuote = ! empty($selections['pantones']) && ! empty($selections['yarns']);
+        $specificSelectionQuote = (! empty($selections['pantones']) && ! empty($selections['yarns']))
+            || collect($selections['products'] ?? [])->contains(fn ($set) => ! empty($set['pantones']) && ! empty($set['yarns']));
         $rules = [
             'items'               => 'required|array|min:1',
             'items.*.product_id'  => 'nullable|integer|exists:products,id',
@@ -395,22 +409,30 @@ class CrmInquiryController extends Controller
         }
 
         if ($specificSelectionQuote) {
-            $allowedPantones = collect($selections['pantones'])->keyBy(fn ($pantone) => (int) $pantone['id']);
-            $allowedYarns = collect($selections['yarns'])->keyBy(fn ($yarn) => (int) $yarn['id']);
-            $actualPairs = collect($validated['items'])->map(function ($item) use ($allowedPantones, $allowedYarns, $selections) {
+            $quoteSelectionSets = collect($selections['products'] ?? []);
+            if ($quoteSelectionSets->isEmpty()) {
+                $quoteSelectionSets = collect([[...$selections, 'product_id' => $selections['product_id'] ?? $inquiry->product_id]]);
+            }
+            $allowedSelectionsByProduct = $quoteSelectionSets->keyBy(fn ($set) => (int) $set['product_id']);
+            $actualPairs = collect($validated['items'])->map(function ($item) use ($allowedSelectionsByProduct) {
                 $pantoneId = (int) $item['pantone_id'];
                 $yarnId = (int) $item['fabric_type_id'];
-                if (! $allowedPantones->has($pantoneId) || ! $allowedYarns->has($yarnId)
-                    || (int) ($item['product_id'] ?? 0) !== (int) ($selections['product_id'] ?? 0)) {
+                $productId = (int) ($item['product_id'] ?? 0);
+                $selectionSet = $allowedSelectionsByProduct->get($productId);
+                $allowedPantones = collect($selectionSet['pantones'] ?? [])->keyBy(fn ($pantone) => (int) $pantone['id']);
+                $allowedYarns = collect($selectionSet['yarns'] ?? [])->keyBy(fn ($yarn) => (int) $yarn['id']);
+                if (! $selectionSet || ! $allowedPantones->has($pantoneId) || ! $allowedYarns->has($yarnId)) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'items' => 'Quotation lines must use the product, Pantone colors, and yarn types selected by the client.',
                     ]);
                 }
 
-                return $pantoneId.':'.$yarnId;
+                return $productId.':'.$pantoneId.':'.$yarnId;
             });
-            $expectedPairs = $allowedPantones->keys()->crossJoin($allowedYarns->keys())
-                ->map(fn ($pair) => $pair[0].':'.$pair[1]);
+            $expectedPairs = $quoteSelectionSets->flatMap(function ($set) {
+                return collect($set['pantones'] ?? [])->crossJoin(collect($set['yarns'] ?? []))
+                    ->map(fn ($pair) => (int) $set['product_id'].':'.(int) $pair[0]['id'].':'.(int) $pair[1]['id']);
+            });
             if ($actualPairs->unique()->count() !== $actualPairs->count()
                 || $actualPairs->sort()->values()->all() !== $expectedPairs->sort()->values()->all()) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
@@ -452,12 +474,13 @@ class CrmInquiryController extends Controller
                 $kilos = (float) $item['kilos'];
 
                 if ($specificSelectionQuote) {
-                    $pantone = $allowedPantones->get((int) $item['pantone_id']);
+                    $selectionSet = $allowedSelectionsByProduct->get((int) ($item['product_id'] ?? 0));
+                    $pantone = collect($selectionSet['pantones'] ?? [])->first(fn ($color) => (int) $color['id'] === (int) $item['pantone_id']);
                     $unitPrice = (float) $item['unit_price'];
                     $itemTotal = round($kilos * $unitPrice * $vatMultiplier, 2);
                     $grandTotal += $itemTotal;
                     $quotation->items()->create([
-                        'product_id' => $selections['product_id'],
+                        'product_id' => $item['product_id'],
                         'fabric' => $item['fabric'],
                         'fabric_type_id' => $item['fabric_type_id'],
                         'fabric_type' => $fabricTypes->get((int) $item['fabric_type_id'])?->display_name,
@@ -712,14 +735,27 @@ class CrmInquiryController extends Controller
     {
         $validated = $request->validate(['notes' => 'nullable|string|max:2000']);
         $selection = $inquiry->product_selections ?? [];
-        $pantones = collect($selection['pantones'] ?? []);
-        $yarns = collect($selection['yarns'] ?? []);
-        $productId = (int) (($selection['product_id'] ?? null) ?: $inquiry->product_id);
-        abort_unless($productId && $pantones->isNotEmpty() && $yarns->isNotEmpty(), 422, 'This inquiry has no selected Pantone colors and yarns.');
-        $product = \App\Models\Inv\Product::findOrFail($productId);
+        $selectionRows = collect($selection['products'] ?? []);
+        if ($selectionRows->isEmpty() && ! empty($selection['pantones']) && ! empty($selection['yarns'])) {
+            $selectionRows = collect([[...$selection, 'product_id' => $selection['product_id'] ?? $inquiry->product_id]]);
+        }
+        $selectionSets = $selectionRows->map(function ($row) {
+            return [
+                'selection' => $row,
+                'pantones' => collect($row['pantones'] ?? []),
+                'yarns' => collect($row['yarns'] ?? []),
+                'product' => \App\Models\Inv\Product::find((int) ($row['product_id'] ?? 0)),
+            ];
+        })->values();
+        abort_unless($selectionSets->isNotEmpty() && $selectionSets->every(fn ($set) => $set['product'] && $set['pantones']->isNotEmpty() && $set['yarns']->isNotEmpty()), 422, 'This inquiry has no complete product, Pantone, and yarn selections.');
         $created = [];
 
-        DB::transaction(function () use ($inquiry, $pantones, $yarns, $product, $validated, &$created) {
+        DB::transaction(function () use ($inquiry, $selectionSets, $validated, &$created) {
+            foreach ($selectionSets as $selectionSet) {
+            $selection = $selectionSet['selection'];
+            $pantones = $selectionSet['pantones'];
+            $yarns = $selectionSet['yarns'];
+            $product = $selectionSet['product'];
             foreach ($pantones as $pantone) {
                 $pantoneId = (int) ($pantone['id'] ?? 0);
                 $reference = \App\Models\Man\PantoneReference::find($pantoneId);
@@ -729,6 +765,7 @@ class CrmInquiryController extends Controller
                     $material = Material::query()->whereKey($yarnId)->where('category', 'Yarn')->first();
                     abort_unless($material, 422, 'A selected yarn type is no longer available.');
                     $alreadyRequested = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
+                        ->where('product_id', $product->id)
                         ->whereNotIn('status', [FabricSampleRequest::STATUS_CANCELLED])
                         ->get()->first(fn ($sample) => collect($sample->pantone_colors ?? [])->contains(fn ($color) =>
                             (int) ($color['pantone_reference_id'] ?? 0) === $pantoneId
@@ -749,8 +786,8 @@ class CrmInquiryController extends Controller
                         'code' => $code, 'inquiry_id' => $inquiry->id, 'client_id' => $inquiry->client_id,
                         'product_id' => $product->id, 'fabric_name' => 'Yarn: '.$material->display_name.' · '.$product->name.' · '.$reference->name,
                         'request_method' => 'pantone', 'color_description' => $reference->name,
-                        'texture' => $inquiry->product_selections['texture'] ?? null,
-                        'gsm' => $inquiry->product_selections['gsm'] ?? null,
+                        'texture' => $selection['texture'] ?? null,
+                        'gsm' => $selection['gsm'] ?? null,
                         'pantone_reference_id' => $reference->id, 'pantone_colors' => [$color],
                         'notes' => trim(implode("\n", array_filter([
                             'Client request: '.mb_substr((string) $inquiry->initial_message, 0, 1400),
@@ -770,6 +807,7 @@ class CrmInquiryController extends Controller
                     ));
                     $created[] = $sample->id;
                 }
+            }
             }
             $inquiry->update(['last_message_at' => now()]);
         });
@@ -824,11 +862,18 @@ class CrmInquiryController extends Controller
         $samples = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
             ->where('status', FabricSampleRequest::STATUS_APPROVED)->whereNotNull('recipe_id')->get();
         $selections = $inquiry->product_selections ?? [];
-        foreach (collect($selections['pantones'] ?? [])->crossJoin(collect($selections['yarns'] ?? [])) as [$pantone, $yarn]) {
-            $isApproved = $samples->contains(fn ($sample) => collect($sample->pantone_colors ?? [])->contains(fn ($color) =>
+        $selectionSets = collect($selections['products'] ?? []);
+        if ($selectionSets->isEmpty() && ! empty($selections['pantones']) && ! empty($selections['yarns'])) {
+            $selectionSets = collect([[...$selections, 'product_id' => $selections['product_id'] ?? $inquiry->product_id]]);
+        }
+        foreach ($selectionSets as $selectionSet) {
+            foreach (collect($selectionSet['pantones'] ?? [])->crossJoin(collect($selectionSet['yarns'] ?? [])) as [$pantone, $yarn]) {
+            $isApproved = $samples->contains(fn ($sample) => (int) $sample->product_id === (int) ($selectionSet['product_id'] ?? 0)
+                && collect($sample->pantone_colors ?? [])->contains(fn ($color) =>
                 (int) ($color['pantone_reference_id'] ?? 0) === (int) ($pantone['id'] ?? 0)
                 && (int) ($color['yarn_material_id'] ?? 0) === (int) ($yarn['id'] ?? 0)));
             abort_unless($isApproved, 422, 'Every client-selected color and yarn combination must have an approved recipe before pushing this order.');
+            }
         }
 
         $purchaseOrder->load(['items.product', 'items.quotationItem.quotation']);

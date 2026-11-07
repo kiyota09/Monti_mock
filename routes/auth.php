@@ -11,8 +11,6 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\Auth\UnifiedLoginController;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth; // Added for custom logout logic
 use Illuminate\Support\Facades\Route;
 
 // ✅ Updated to include both web and client guards
@@ -95,35 +93,9 @@ Route::middleware('auth:web,client')->group(function () {
     // Forced password change (first login / after a recovery password).
     Route::post('password/force', [ForcedPasswordController::class, 'employee'])
         ->name('password.force');
-<<<<<<< HEAD
-
-    // ✅ Unified Logout Logic
-    // Logs out of EVERY guard (web, client, supplier, applicant, agency). Logging
-    // out a single guard leaves the other guards' remember-me cookies alive,
-    // so the next request silently re-authenticates and the user appears to
-    // still be logged in ("log out twice" bug).
-    Route::post('logout', function (Request $request) {
-        foreach (['web', 'client', 'supplier', 'applicant', 'agency'] as $guard) {
-            Auth::guard($guard)->logout();
-        }
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect('/');
-    })->name('logout');
-=======
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 });
 
-// Clear every guard even if auth middleware no longer recognizes the current one.
-Route::post('logout', function (Request $request) {
-    foreach (['web', 'client', 'supplier', 'applicant'] as $guard) {
-        Auth::guard($guard)->logout();
-    }
-
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
-
-    return redirect('/');
-})->name('logout');
+// Keep the employee logout on the same guarded cleanup path as the portal
+// logout controllers, so session and remember-token handling have one owner.
+Route::post('logout', [\App\Http\Controllers\Auth\AuthenticatedSessionController::class, 'destroy'])
+    ->name('logout');

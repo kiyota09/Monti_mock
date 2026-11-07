@@ -6,7 +6,7 @@
             <div class="flex h-full w-full flex-col overflow-hidden p-2 pt-9 sm:p-3 sm:pt-9 lg:p-4 lg:pt-9 gap-2 sm:gap-3">
 
                 <!-- Page header -->
-                <div class="flex flex-wrap items-end justify-between gap-4 shrink-0">
+                <div data-erp-page-banner="fallback" class="flex flex-wrap items-end justify-between gap-4 shrink-0">
                     <div>
                         <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">Client inquiries</h1>
                         <p class="mt-1 text-sm text-stone-500 dark:text-zinc-400">
@@ -16,7 +16,7 @@
                     </div>
 
                     <!-- Stats as a compact strip -->
-                    <div class="flex items-stretch divide-x divide-stone-200 dark:divide-zinc-800 rounded-2xl bg-white dark:bg-zinc-900 ring-1 ring-stone-200 dark:ring-zinc-800">
+                    <div class="flex items-stretch divide-x divide-white/20 rounded-2xl bg-white/10 ring-1 ring-white/15">
                         <div v-for="stat in stats" :key="stat.label" class="flex items-center gap-3 px-4 py-2.5">
                             <span :class="stat.dot" class="h-2.5 w-2.5 rounded-full"></span>
                             <div>
@@ -25,7 +25,7 @@
                             </div>
                         </div>
                         <button @click="refreshData" aria-label="Refresh inquiries"
-                            class="flex items-center px-4 text-stone-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-r-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 transition-colors">
+                            class="flex items-center px-4 text-white/75 hover:text-white rounded-r-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-white transition-colors">
                             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': refreshing }" />
                         </button>
                     </div>

@@ -370,13 +370,17 @@ class ClientConversationController extends Controller
                 ->firstOrFail();
 
             $selections = $inquiry->product_selections ?? [];
-            $pantones = collect($selections['pantones'] ?? []);
-            $yarns = collect($selections['yarns'] ?? []);
-            if ($pantones->isNotEmpty() && $yarns->isNotEmpty()) {
-                $requiredPairs = $pantones->flatMap(fn ($pantone) => $yarns->map(fn ($yarn) => [(int) ($pantone['id'] ?? 0), (int) ($yarn['id'] ?? 0)]));
+            $selectionSets = collect($selections['products'] ?? []);
+            if ($selectionSets->isEmpty() && ! empty($selections['pantones']) && ! empty($selections['yarns'])) {
+                $selectionSets = collect([[...$selections, 'product_id' => $selections['product_id'] ?? $inquiry->product_id]]);
+            }
+            if ($selectionSets->isNotEmpty()) {
+                $requiredPairs = $selectionSets->flatMap(fn ($set) => collect($set['pantones'] ?? [])->flatMap(fn ($pantone) => collect($set['yarns'] ?? [])->map(fn ($yarn) => [
+                    (int) ($set['product_id'] ?? 0), (int) ($pantone['id'] ?? 0), (int) ($yarn['id'] ?? 0),
+                ])));
                 $approvedPairs = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
                     ->where('status', FabricSampleRequest::STATUS_APPROVED)->get()->flatMap(fn ($sample) => collect($sample->pantone_colors ?? [])->map(fn ($color) => [
-                        (int) ($color['pantone_reference_id'] ?? 0), (int) ($color['yarn_material_id'] ?? 0),
+                        (int) $sample->product_id, (int) ($color['pantone_reference_id'] ?? 0), (int) ($color['yarn_material_id'] ?? 0),
                     ]));
                 $missing = $requiredPairs->contains(fn ($pair) => ! $approvedPairs->contains(fn ($approved) => $approved === $pair));
                 if ($missing) {

@@ -8,6 +8,7 @@ class AppSetting extends Model
 {
     /** When enabled, the driver portal shows a "Simulate delivery now" test control. */
     public const LOGISTICS_DELIVERY_SIMULATION = 'logistics.delivery_simulation';
+    public const ENABLED_COLOR_THEMES = 'appearance.enabled_color_themes';
 
     protected $fillable = ['key', 'value'];
 

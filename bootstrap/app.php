@@ -68,6 +68,40 @@ return Application::configure(basePath: dirname(__DIR__))
         });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Duplicate or expired logout submissions can carry the old CSRF token
+        // after the first request invalidated its session. Treat logout as
+        // idempotent and return to the public page. A stale token on an ordinary
+        // form must never log out otherwise valid accounts in every portal.
+        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+            if ($request->expectsJson()) {
+                return null;
+            }
+
+            if ($request->routeIs('logout', 'client.logout', 'supplier.logout', 'applicant.logout', 'agency.logout')) {
+                foreach (['web', 'client', 'supplier', 'applicant', 'agency'] as $guard) {
+                    Auth::guard($guard)->logout();
+                }
+
+                if ($request->hasSession()) {
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                }
+
+                return redirect('/')->setStatusCode(303);
+            }
+
+            // An expired anonymous session should land on the welcome page.
+            // If the account is still authenticated, preserve Laravel's normal
+            // 419 response so stale forms cannot silently alter auth state.
+            foreach (['web', 'client', 'supplier', 'applicant', 'agency'] as $guard) {
+                if (Auth::guard($guard)->check()) {
+                    return null;
+                }
+            }
+
+            return redirect('/')->setStatusCode(303);
+        });
+
         // A 403 for an account that holds NO usable grant at all (every page
         // still 'disabled' by IT) becomes the friendly waiting page instead
         // of a raw error — this covers stale sidebar links/bookmarks held by

@@ -220,7 +220,7 @@ html[data-theme='light'] .app-viewport [data-erp-page-banner] div[class*='backdr
 html[data-theme='light'] .app-viewport [data-erp-page-banner] .text-white:not(button):not(a) {
   color: #ffffff !important;
 }
-html[data-theme='light'] .app-viewport [data-erp-page-banner] :is(h1, h2, h3, h4, p, span, small, label, strong, em, li):not(button *):not(a *) {
+html[data-theme='light'] .app-viewport [data-erp-page-banner]:not(.it-page-hero) :is(h1, h2, h3, h4, p, span, small, label, strong, em, li):not(button *):not(a *) {
   color: #f5f5f5 !important;
   -webkit-text-fill-color: #f5f5f5 !important;
 }
@@ -238,7 +238,6 @@ html[data-theme='light'] .app-viewport [data-erp-page-banner] :is(
   color: #171717 !important;
   -webkit-text-fill-color: #171717 !important;
 }
-
 /* Textile inspired trim for page-authored dialogs that use ARIA modal roles. */
 :is([role='dialog'], [role='alertdialog'])[aria-modal='true'] > div[class*='rounded-']:not([class*='fabric-']),
 :is([role='dialog'], [role='alertdialog'])[aria-modal='true'] > section:not([class*='fabric-']),
@@ -2502,6 +2501,42 @@ html[data-theme='green'] .crm-opportunities-page .dark\:border-zinc-800 {
 }
 
 /* CRM Dashboard: keep its metrics, task queue and account list in the active theme. */
+html[data-theme='light'] .crm-dashboard {
+  --crm-page: #f8fafc; --crm-panel: #ffffff; --crm-ink: #1e293b; --crm-muted: #64748b;
+  --crm-line: #e2e8f0; --crm-accent: #111827; --crm-accent-dark: #030712;
+  --crm-accent-soft: #f1f5f9; --crm-accent-ink: #111827; --crm-banner-chip-border: #64748b;
+  --crm-blue-soft: #eff6ff; --crm-blue: #1d4ed8; --crm-danger-soft: #fff0ed; --crm-danger: #a84235;
+  --crm-status-bg: #f1f5f9; --crm-status-ink: #475569;
+  --crm-soft-green: #ecfdf5; --crm-green: #047857; --crm-green-ink: #065f46;
+  --crm-warning: #fffbeb; --crm-warning-ink: #92400e;
+}
+html[data-theme='dark'] .crm-dashboard {
+  --crm-page: #09090b; --crm-panel: #18181b; --crm-ink: #f4f4f5; --crm-muted: #a1a1aa;
+  --crm-line: #3f3f46; --crm-accent: #818cf8; --crm-accent-dark: #6366f1;
+  --crm-accent-soft: #27272a; --crm-accent-ink: #c7d2fe; --crm-banner-chip-border: #a5b4fc;
+  --crm-blue-soft: #172554; --crm-blue: #bfdbfe; --crm-danger-soft: #3f1d24; --crm-danger: #fda4af;
+  --crm-status-bg: #27272a; --crm-status-ink: #d4d4d8;
+  --crm-soft-green: #123326; --crm-green: #6ee7b7; --crm-green-ink: #a7f3d0;
+  --crm-warning: #3b2b12; --crm-warning-ink: #fcd34d;
+}
+html[data-theme='blue'] .crm-dashboard {
+  --crm-page: #eff6ff; --crm-panel: #ffffff; --crm-ink: #172554; --crm-muted: #52638b;
+  --crm-line: #cbdcf2; --crm-accent: #2563eb; --crm-accent-dark: #1e40af;
+  --crm-accent-soft: #dbeafe; --crm-accent-ink: #1e3a8a; --crm-banner-chip-border: #93c5fd;
+  --crm-blue-soft: #dbeafe; --crm-blue: #1d4ed8; --crm-danger-soft: #ffe4e6; --crm-danger: #be123c;
+  --crm-status-bg: #dbeafe; --crm-status-ink: #1e3a8a;
+  --crm-soft-green: #dcfce7; --crm-green: #15803d; --crm-green-ink: #166534;
+  --crm-warning: #fef3c7; --crm-warning-ink: #92400e;
+}
+html[data-theme='red'] .crm-dashboard {
+  --crm-page: #fff1f2; --crm-panel: #ffffff; --crm-ink: #4c0519; --crm-muted: #754451;
+  --crm-line: #f3cdd4; --crm-accent: #be123c; --crm-accent-dark: #881337;
+  --crm-accent-soft: #ffe4e6; --crm-accent-ink: #9f1239; --crm-banner-chip-border: #fda4af;
+  --crm-blue-soft: #e0e7ff; --crm-blue: #3730a3; --crm-danger-soft: #ffe4e6; --crm-danger: #9f1239;
+  --crm-status-bg: #ffe4e6; --crm-status-ink: #881337;
+  --crm-soft-green: #dcfce7; --crm-green: #15803d; --crm-green-ink: #166534;
+  --crm-warning: #fef3c7; --crm-warning-ink: #92400e;
+}
 html[data-theme='green'] .crm-dashboard {
   --crm-page: #F1F8F3;
   --crm-panel: #FDFFFE;
@@ -2517,6 +2552,13 @@ html[data-theme='green'] .crm-dashboard {
   --crm-green-ink: #17623D;
   --crm-warning: #FBF4E4;
   --crm-warning-ink: #795B20;
+  --crm-banner-chip-border: #95D5B2;
+  --crm-blue-soft: #E4EEF8;
+  --crm-blue: #315A84;
+  --crm-danger-soft: #FBE8E5;
+  --crm-danger: #A84235;
+  --crm-status-bg: #E6F2E9;
+  --crm-status-ink: #315A42;
 }
 
 /* Welcome login/register popovers: pair readable ink with the light-theme panel. */
@@ -2911,7 +2953,7 @@ html[data-theme='light'] .app-viewport :is(
   [class*="from-blue-"], [class*="from-indigo-"], [class*="from-sky-"],
   [class*="from-violet-"], [class*="bg-blue-"], [class*="bg-indigo-"],
   [class*="bg-sky-"], [class*="bg-violet-"]
-) {
+):not(.it-page-hero) {
   background: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
   background-image: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
   border-color: #303030 !important;
@@ -2926,7 +2968,7 @@ html[data-theme='light'] .app-viewport :is(
   [class*="from-blue-"], [class*="from-indigo-"], [class*="from-sky-"],
   [class*="from-violet-"], [class*="bg-blue-"], [class*="bg-indigo-"],
   [class*="bg-sky-"], [class*="bg-violet-"]
-) :is(h1, h2, h3, h4, p, span, small, label, strong, em, li):not(button *):not(a *) {
+):not(.it-page-hero) :is(h1, h2, h3, h4, p, span, small, label, strong, em, li):not(button *):not(a *) {
   color: #f5f5f5 !important;
   -webkit-text-fill-color: #f5f5f5 !important;
 }
@@ -2943,7 +2985,7 @@ html[data-theme='light'] .app-viewport :is(
   [class*="bg-indigo-"]:has(:is(h1, h2)),
   [class*="bg-sky-"]:has(:is(h1, h2)),
   [class*="bg-violet-"]:has(:is(h1, h2))
-) {
+):not(.it-page-hero) {
   background: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
   background-image: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
   border-color: #303030 !important;
@@ -2957,7 +2999,7 @@ html[data-theme='light'] .app-viewport :is(
   [class*="bg-indigo-"]:has(:is(h1, h2)),
   [class*="bg-sky-"]:has(:is(h1, h2)),
   [class*="bg-violet-"]:has(:is(h1, h2))
-) :is(h1, h2, h3, h4, p, span, small, label, strong, em, li, a):not(button *) {
+):not(.it-page-hero) :is(h1, h2, h3, h4, p, span, small, label, strong, em, li, a):not(button *) {
   color: #f5f5f5 !important;
   -webkit-text-fill-color: #f5f5f5 !important;
   background-image: none !important;
@@ -2970,4 +3012,51 @@ html[data-theme='light'] .app-viewport [data-erp-page-banner] :is(
 ) {
   color: #171717 !important;
   -webkit-text-fill-color: #171717 !important;
+}
+
+/* Keep IT page headers on their own ERP theme palette after generic banner
+   corrections. Light mode follows the black Appearance banner. */
+html[data-theme='light'] .app-viewport .it-page-hero.it-page-hero {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
+  background-image: linear-gradient(135deg, #050505 0%, #171717 58%, #303030 100%) !important;
+  border-color: rgba(0, 0, 0, 0.22) !important;
+}
+html[data-theme='light'] .app-viewport .it-page-hero.it-page-hero h1,
+html[data-theme='light'] .app-viewport .it-page-hero.it-page-hero h2,
+html[data-theme='light'] .app-viewport .it-page-hero.it-page-hero h3 {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+html[data-theme='light'] .app-viewport .it-page-hero.it-page-hero h1 span {
+  color: #bfdbfe !important;
+  -webkit-text-fill-color: #bfdbfe !important;
+}
+html[data-theme='light'] .app-viewport .it-page-hero.it-page-hero p {
+  color: #e5e5e5 !important;
+  -webkit-text-fill-color: #e5e5e5 !important;
+}
+html[data-theme='dark'] .app-viewport .it-page-hero.it-page-hero {
+  color: #f4f4f5 !important;
+  background: linear-gradient(125deg, #18181b 0%, #27272a 58%, #312e81 100%) !important;
+  background-image: linear-gradient(125deg, #18181b 0%, #27272a 58%, #312e81 100%) !important;
+  border-color: rgba(161, 161, 170, 0.2) !important;
+}
+html[data-theme='blue'] .app-viewport .it-page-hero.it-page-hero {
+  color: #ffffff !important;
+  background: linear-gradient(125deg, #102a43 0%, #1d4ed8 58%, #3730a3 100%) !important;
+  background-image: linear-gradient(125deg, #102a43 0%, #1d4ed8 58%, #3730a3 100%) !important;
+  border-color: rgba(191, 219, 254, 0.26) !important;
+}
+html[data-theme='red'] .app-viewport .it-page-hero.it-page-hero {
+  color: #fffafa !important;
+  background: linear-gradient(125deg, #4c0519 0%, #881337 58%, #be123c 100%) !important;
+  background-image: linear-gradient(125deg, #4c0519 0%, #881337 58%, #be123c 100%) !important;
+  border-color: rgba(255, 228, 230, 0.24) !important;
+}
+html[data-theme='green'] .app-viewport .it-page-hero.it-page-hero {
+  color: #f4faf6 !important;
+  background: linear-gradient(125deg, #1b4332 0%, #2d6a4f 58%, #40916c 100%) !important;
+  background-image: linear-gradient(125deg, #1b4332 0%, #2d6a4f 58%, #40916c 100%) !important;
+  border-color: rgba(183, 228, 199, 0.3) !important;
 }

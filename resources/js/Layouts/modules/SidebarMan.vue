@@ -2,7 +2,7 @@
 import {
     Factory, LayoutDashboard, ClipboardList, XCircle, Boxes, CheckCircle2,
     Eye, Award, FileText, Sparkles, Palette, Wrench, History, Cog, Flag, FlaskConical,
-    ClipboardCheck, ArrowRightLeft, Leaf, HardHat, Flame, Layers, Package, Scissors, Waves,
+    ClipboardCheck, ArrowRightLeft, Leaf, HardHat, Flame, Layers, Package, Scissors, Waves, UserCheck,
 } from 'lucide-vue-next'
 
 // Static config for the "single manufacturing role" staff view (Case 2 below)
@@ -143,6 +143,7 @@ export const manModule = {
 
         const managerChildren = [
             { label: 'Dashboard', href: route('man.manager.dashboard'), icon: Factory, permKey: 'dashboard' },
+            { label: 'Staff', href: route('man.manager.staff'), icon: UserCheck, permKey: 'staff' },
             { label: 'Production Orders', href: route('man.manager.production'), icon: ClipboardList, permKey: 'production' },
             { label: 'JO Assignments', href: route('man.assignments.index'), icon: ClipboardCheck, permKey: 'assignments' },
             { label: 'Recipes', href: route('man.recipes'), icon: Layers, permKey: 'recipes' },

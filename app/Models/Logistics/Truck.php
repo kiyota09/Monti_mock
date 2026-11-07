@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Truck extends Model
 {
-    protected $fillable = ['truck_number', 'plate_number', 'model', 'year', 'mileage', 'status', 'max_packages', 'max_load_kg', 'remarks'];
+    protected $fillable = ['truck_number', 'plate_number', 'model', 'year', 'mileage', 'status', 'max_packages', 'max_load_kg', 'remarks', 'image_path'];
 
     protected $casts = [
         'mileage' => 'decimal:2',

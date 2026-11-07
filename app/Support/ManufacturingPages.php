@@ -35,6 +35,7 @@ class ManufacturingPages
     public const SUPERVISOR_ACCOUNT_PAGES = [
         'knitting' => [
             'dashboard' => 'Dashboard',
+            'staff' => 'Department Staff',
             'production' => 'Production Orders',
             'assignments' => 'Job Order Assignments',
             'reject' => 'Rejected Items',
@@ -44,6 +45,7 @@ class ManufacturingPages
         ],
         'dyeing' => [
             'dashboard' => 'Dashboard',
+            'staff' => 'Department Staff',
             'production' => 'Production Orders',
             'assignments' => 'Job Order Assignments',
             'reject' => 'Rejected Items',
@@ -54,6 +56,7 @@ class ManufacturingPages
         ],
         'finishing' => [
             'dashboard' => 'Dashboard',
+            'staff' => 'Department Staff',
             'production' => 'Production Orders',
             'assignments' => 'Job Order Assignments',
             'reject' => 'Rejected Items',

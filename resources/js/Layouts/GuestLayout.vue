@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import { onMounted } from 'vue';
 import { initTheme } from '@/composables/useTheme';
 
+const page = usePage();
 onMounted(() => {
-    initTheme();
+    initTheme(page.props.themeSettings);
 });
 </script>
 

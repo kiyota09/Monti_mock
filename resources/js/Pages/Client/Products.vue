@@ -25,7 +25,7 @@
                                 {{ selectedProducts.length }} selected
                             </span>
                             <button
-                                v-if="selectedProducts.length > 0"
+                                v-if="selectedProducts.length >= 2"
                                 @click="openBulkInquiryModal"
                                 class="rounded-full bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-indigo-700 shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5"
                             >
@@ -86,7 +86,7 @@
                                 @click.stop
                                 :value="product.id"
                                 v-model="selectedProducts"
-                                class="w-5 h-5 rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 shadow-lg cursor-pointer"
+                                class="bulk-product-checkbox h-5 w-5 cursor-pointer shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
                             />
                         </div>
 
@@ -297,47 +297,67 @@
         <!-- Bulk Inquiry Modal -->
         <Teleport to="body">
             <Transition name="modal">
-                <div v-if="showBulkModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showBulkModal = false">
-                    <div class="bg-white dark:bg-zinc-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+                <div v-if="showBulkModal" class="fixed inset-0 z-[60] flex items-center justify-center p-3 bg-black/60 backdrop-blur-sm sm:p-5" @click.self="closeBulkInquiryModal">
+                    <div class="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900">
                         <div class="bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 p-5 relative overflow-hidden">
                             <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15 blur-2xl" />
                             <div class="relative flex items-center gap-3">
                                 <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30"><Send class="w-5 h-5 text-white" /></span>
-                                <div>
-                                    <h3 class="font-black text-white">Confirm Bulk Inquiry</h3>
-                                    <p class="text-[11px] text-blue-100">{{ selectedProducts.length }} product(s) selected</p>
+                                <div class="min-w-0 flex-1">
+                                    <h3 class="font-black text-white">Bulk fabric inquiry</h3>
+                                    <p class="text-[11px] text-blue-100">Configure Pantone colors, compatible yarns, GSM, and texture for each of your {{ selectedProducts.length }} selected designs.</p>
                                 </div>
+                                <button type="button" aria-label="Close bulk inquiry" @click="closeBulkInquiryModal" class="rounded-xl bg-white/15 p-2 text-white hover:bg-white/25"><X class="h-4 w-4" /></button>
                             </div>
                         </div>
-                        <div class="p-6">
-                            <ul class="text-left text-sm text-gray-700 dark:text-gray-300 list-disc list-inside max-h-40 overflow-y-auto space-y-1">
-                                <li v-for="pid in selectedProducts" :key="pid">
-                                    {{ getProductName(pid) }}
-                                </li>
-                            </ul>
-                            <p class="mt-3 text-sm text-gray-500">Our ECO team will contact you within 24 hours.</p>
-                            <!-- Optional notes field -->
-                            <div class="mt-4 text-left">
-                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">
-                                    Additional Notes <span class="font-medium normal-case text-gray-400">(optional)</span>
-                                </label>
-                                <textarea
-                                    v-model="bulkNotes"
-                                    rows="3"
-                                    placeholder="e.g. preferred delivery date, volume requirements, special instructions..."
-                                    class="w-full px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-zinc-800 border border-transparent focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 outline-none text-sm transition resize-none"
-                                ></textarea>
-                            </div>
+                        <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+                            <article v-for="product in selectedProductRecords" :key="product.id" class="rounded-2xl border border-slate-200 p-4 dark:border-zinc-700">
+                                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+                                    <div class="min-w-0"><h4 class="truncate text-sm font-black text-slate-900 dark:text-white">{{ product.name }}</h4><p class="text-[10px] text-slate-500 dark:text-zinc-400">{{ product.sku }}<span v-if="product.category"> · {{ product.category }}</span></p></div>
+                                    <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{{ bulkSelections[product.id]?.pantoneIds.length || 0 }} colors · {{ bulkSelections[product.id]?.yarnIds.length || 0 }} yarns</span>
+                                </div>
+                                <div class="grid gap-4 lg:grid-cols-2">
+                                    <section class="min-w-0 rounded-xl bg-violet-50/60 p-3 dark:bg-violet-950/20">
+                                        <div class="mb-2 flex items-center justify-between"><h5 class="text-xs font-black text-slate-800 dark:text-zinc-100">Pantone colors <span class="font-normal text-slate-500">(select one or more)</span></h5><span class="text-[10px] text-slate-500">{{ getBulkPantones(product).length }}</span></div>
+                                        <input v-model="bulkSelections[product.id].pantoneSearch" type="search" placeholder="Search colors by name or hex" class="mb-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
+                                        <div class="max-h-44 space-y-1 overflow-y-auto">
+                                            <label v-for="pantone in filteredBulkPantones(product)" :key="pantone.pantone_id" class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 bg-white p-2 hover:bg-violet-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-violet-950/30">
+                                                <input v-model="bulkSelections[product.id].pantoneIds" type="checkbox" :value="Number(pantone.pantone_id)" class="bulk-option-checkbox" />
+                                                <span class="h-6 w-6 shrink-0 rounded-md border border-black/10" :style="{ backgroundColor: pantone.hex }" />
+                                                <span class="min-w-0 flex-1 truncate text-[11px] font-bold text-slate-800 dark:text-zinc-100">{{ pantone.name }}</span>
+                                                <span class="text-[9px] text-slate-400">{{ inquiryCategoryLabel(pantone.color_category) }}</span>
+                                            </label>
+                                            <p v-if="!getBulkPantones(product).length" class="rounded-lg border border-dashed border-slate-200 p-3 text-center text-[11px] text-slate-500 dark:border-zinc-700">No Pantone colorways are available for this design.</p>
+                                            <p v-else-if="!filteredBulkPantones(product).length" class="p-3 text-center text-[11px] text-slate-500">No colors match your search.</p>
+                                        </div>
+                                    </section>
+                                    <section class="min-w-0 rounded-xl bg-blue-50/60 p-3 dark:bg-blue-950/20">
+                                        <div class="mb-2 flex items-center justify-between"><h5 class="text-xs font-black text-slate-800 dark:text-zinc-100">Compatible yarns <span class="font-normal text-slate-500">(select one or more)</span></h5><span class="text-[10px] text-slate-500">{{ product.yarnMaterials?.length || 0 }}</span></div>
+                                        <div class="max-h-52 space-y-1 overflow-y-auto">
+                                            <label v-for="yarn in product.yarnMaterials || []" :key="yarn.id" class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 bg-white p-2 hover:bg-blue-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-blue-950/30">
+                                                <input v-model="bulkSelections[product.id].yarnIds" type="checkbox" :value="Number(yarn.id)" class="bulk-option-checkbox" />
+                                                <span class="min-w-0 flex-1"><span class="block truncate text-[11px] font-bold text-slate-800 dark:text-zinc-100">{{ yarn.display_name || yarn.name }}</span><span class="block text-[9px] text-slate-400">{{ yarn.mat_id }} · {{ yarn.yarn_tier || 'Yarn' }}</span></span>
+                                            </label>
+                                            <p v-if="!product.yarnMaterials?.length" class="rounded-lg border border-dashed border-slate-200 p-3 text-center text-[11px] text-slate-500 dark:border-zinc-700">No compatible yarns are assigned to this design.</p>
+                                        </div>
+                                    </section>
+                                    <label class="text-xs font-bold text-slate-700 dark:text-zinc-200">GSM <span class="font-normal text-slate-400">(optional)</span><input v-model="bulkSelections[product.id].gsm" type="number" min="1" max="10000" step="1" placeholder="e.g. 180" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" /></label>
+                                    <label class="text-xs font-bold text-slate-700 dark:text-zinc-200">Fabric texture <span class="font-normal text-slate-400">(optional)</span><select v-model="bulkSelections[product.id].texture" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"><option value="">Choose texture</option><option value="Hard">Hard</option><option value="Medium">Medium</option><option value="Soft">Soft</option></select></label>
+                                </div>
+                                <p v-if="!bulkSelections[product.id].pantoneIds.length || !bulkSelections[product.id].yarnIds.length" class="mt-3 text-[10px] font-semibold text-amber-700 dark:text-amber-300">Choose at least one available Pantone color and yarn for this design.</p>
+                            </article>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-zinc-200">Note for the sales team <span class="font-normal text-slate-400">(optional)</span><textarea v-model="bulkNotes" rows="2" maxlength="1000" placeholder="Quantity, delivery needs, or other details" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" /></label>
+                            <p v-if="bulkError" class="text-xs font-semibold text-rose-600">{{ bulkError }}</p>
                         </div>
-                        <div class="p-4 bg-gray-50 dark:bg-zinc-800/50 flex gap-3 border-t border-gray-100 dark:border-zinc-800">
-                            <button @click="showBulkModal = false" :disabled="bulkSubmitting" class="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-500 font-bold text-sm hover:bg-gray-200 active:scale-95 transition">
+                        <div class="flex flex-shrink-0 gap-3 border-t border-slate-100 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/50">
+                            <button type="button" @click="closeBulkInquiryModal" :disabled="bulkSubmitting" class="flex-1 rounded-xl bg-white py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:bg-zinc-900 dark:text-zinc-300">
                                 Cancel
                             </button>
-                            <button @click="submitBulkInquiry" :disabled="bulkSubmitting" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-black text-sm shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex justify-center items-center gap-2">
-                                <span v-if="bulkSubmitting" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                            <button type="button" @click="submitBulkInquiry" :disabled="bulkSubmitting || !canSubmitBulkInquiry" class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-500/30 transition-all hover:shadow-xl disabled:opacity-50">
+                                <Loader2 v-if="bulkSubmitting" class="h-4 w-4 animate-spin" />
                                 <template v-else>
-                                    <Send class="w-4 h-4" />
-                                    <span>Send Inquiry</span>
+                                    <Send class="h-4 w-4" />
+                                    <span>Send bulk inquiry</span>
                                 </template>
                             </button>
                         </div>
@@ -403,6 +423,9 @@ const selectedCategory = ref('All');
 
 // Selection state
 const selectedProducts = ref([]);
+const selectedProductRecords = computed(() => selectedProducts.value
+    .map((id) => props.products.find((product) => Number(product.id) === Number(id)))
+    .filter(Boolean));
 
 // Modal states
 const showSingleModal = ref(false);
@@ -420,6 +443,8 @@ const inquiryGsm = ref('');
 const inquiryTexture = ref('');
 const inquiryError = ref('');
 const bulkSubmitting = ref(false);
+const bulkSelections = ref({});
+const bulkError = ref('');
 const showInquiryNotice = ref(false);
 const inquiryConversationUrl = ref('');
 const toast = ref({ show: false, type: 'success', message: '' });
@@ -447,6 +472,19 @@ const getProductName = (id) => {
     const product = props.products.find(p => p.id === id);
     return product ? product.name : 'Unknown product';
 };
+
+const getBulkPantones = (product) => getParsedColors(product?.colors).filter((color) => color?.pantone_id);
+const filteredBulkPantones = (product) => {
+    const query = bulkSelections.value[product.id]?.pantoneSearch?.trim().toLowerCase() || '';
+    const pantones = getBulkPantones(product);
+    return (query ? pantones.filter((color) => `${color.name} ${color.hex}`.toLowerCase().includes(query)) : pantones).slice(0, 150);
+};
+const canSubmitBulkInquiry = computed(() => selectedProductRecords.value.length >= 2
+    && selectedProductRecords.value.length === selectedProducts.value.length
+    && selectedProductRecords.value.every((product) => {
+        const selection = bulkSelections.value[product.id];
+        return selection?.pantoneIds?.length && selection?.yarnIds?.length;
+    }));
 
 const filteredInquiryPantones = computed(() => {
     const query = pantoneSearch.value.trim().toLowerCase();
@@ -519,18 +557,38 @@ const submitSingleInquiry = async () => {
 const bulkNotes = ref('');
 
 const openBulkInquiryModal = () => {
-    if (selectedProducts.value.length === 0) return;
+    if (selectedProducts.value.length < 2) return;
     bulkNotes.value = '';
+    bulkError.value = '';
+    bulkSelections.value = Object.fromEntries(selectedProductRecords.value.map((product) => [product.id, {
+        pantoneIds: [],
+        yarnIds: [],
+        pantoneSearch: '',
+        gsm: '',
+        texture: '',
+    }]));
     showBulkModal.value = true;
 };
 
+const closeBulkInquiryModal = () => {
+    if (bulkSubmitting.value) return;
+    showBulkModal.value = false;
+    bulkError.value = '';
+};
+
 const submitBulkInquiry = async () => {
-    if (selectedProducts.value.length === 0) return;
+    if (!canSubmitBulkInquiry.value || bulkSubmitting.value) return;
     bulkSubmitting.value = true;
-    // Only send `message` when the client typed an optional note. When empty,
-    // the backend builds the full detailed product message.
+    bulkError.value = '';
     router.post(route('client.products.bulk-inquire'), {
         product_ids: selectedProducts.value,
+        selections: selectedProductRecords.value.map((product) => ({
+            product_id: Number(product.id),
+            pantone_ids: bulkSelections.value[product.id].pantoneIds,
+            yarn_material_ids: bulkSelections.value[product.id].yarnIds,
+            gsm: bulkSelections.value[product.id].gsm === '' ? null : Number(bulkSelections.value[product.id].gsm),
+            texture: bulkSelections.value[product.id].texture || null,
+        })),
         ...(bulkNotes.value.trim() ? { message: bulkNotes.value.trim() } : {}),
     }, {
         preserveScroll: true,
@@ -538,10 +596,13 @@ const submitBulkInquiry = async () => {
             showBulkModal.value = false;
             selectedProducts.value = [];
             bulkNotes.value = '';
+            bulkSelections.value = {};
             inquiryConversationUrl.value = page.props.flash?.inquiry_redirect_url || '';
             showInquiryNotice.value = true;
         },
-        onError: () => showToast('error', 'Failed to send bulk inquiry. Please try again.'),
+        onError: (errors) => {
+            bulkError.value = Object.values(errors)[0] || 'Failed to send bulk inquiry. Please review each product and try again.';
+        },
         onFinish: () => { bulkSubmitting.value = false; },
     });
 };
@@ -559,6 +620,29 @@ const showToast = (type, message) => {
 </script>
 
 <style scoped>
+.bulk-product-checkbox,
+.bulk-option-checkbox {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: none;
+    border: 2px solid #64748b;
+    border-radius: 0.35rem;
+    background-color: #fff;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.bulk-product-checkbox:checked,
+.bulk-option-checkbox:checked {
+    border-color: #15803d;
+    background-color: #15803d;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 8 3.2 3.2L13 4.5' fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2'/%3E%3C/svg%3E");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 85%;
+}
+.bulk-option-checkbox { width: 1rem; height: 1rem; }
+.bulk-product-checkbox:focus-visible,
+.bulk-option-checkbox:focus-visible { outline: 2px solid #16a34a; outline-offset: 2px; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
 @keyframes pop { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }

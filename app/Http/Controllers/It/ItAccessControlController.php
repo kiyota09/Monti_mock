@@ -14,6 +14,7 @@ use App\Support\ManufacturingRoles;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 /**
@@ -181,6 +182,11 @@ class ItAccessControlController extends Controller
                 'id' => $u->id,
                 'name' => $u->name,
                 'email' => $u->email,
+                'photo_url' => $u->profile_photo_path
+                    ? (str_starts_with($u->profile_photo_path, 'http://') || str_starts_with($u->profile_photo_path, 'https://')
+                        ? $u->profile_photo_path
+                        : Storage::disk('public')->url(ltrim(str_replace('/storage/', '', $u->profile_photo_path), '/')))
+                    : null,
                 'employee_id' => $u->employee_id,
                 'role' => $u->role,
                 'position' => $u->position,

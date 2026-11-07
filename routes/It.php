@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\It\AssetController;
+use App\Http\Controllers\It\AppearanceController;
 use App\Http\Controllers\It\ChangeController;
 use App\Http\Controllers\It\GeolocationController;
 use App\Http\Controllers\It\ItAccessController;
@@ -22,6 +23,11 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::prefix('dashboard/it')->name('it.')->middleware(['auth', 'verified', 'module.access:IT'])->group(function () {
+    Route::get('/appearance', [AppearanceController::class, 'index'])
+        ->middleware('page.permission:appearance,view')->name('appearance');
+    Route::post('/appearance', [AppearanceController::class, 'update'])
+        ->middleware('page.permission:appearance,edit')->name('appearance.update');
+
     // Operations dashboard (role-aware: manager overview / staff queue)
     Route::get('/', [ItDashboardController::class, 'index'])
         ->middleware('page.permission:dashboard,view')->name('dashboard');
@@ -80,13 +86,13 @@ Route::prefix('dashboard/it')->name('it.')->middleware(['auth', 'verified', 'mod
     Route::post('/changes', [ChangeController::class, 'store'])
         ->middleware('page.permission:changes,edit')->name('changes.store');
     Route::post('/changes/{change}/approve', [ChangeController::class, 'approve'])
-        ->middleware(['position:manager', 'page.permission:changes,edit'])->name('changes.approve');
+        ->middleware('page.permission:changes,edit')->name('changes.approve');
     Route::post('/changes/{change}/reject', [ChangeController::class, 'reject'])
-        ->middleware(['position:manager', 'page.permission:changes,edit'])->name('changes.reject');
+        ->middleware('page.permission:changes,edit')->name('changes.reject');
     Route::post('/changes/{change}/status', [ChangeController::class, 'setStatus'])
         ->middleware('page.permission:changes,edit')->name('changes.status');
     Route::delete('/changes/{change}', [ChangeController::class, 'destroy'])
-        ->middleware(['position:manager', 'page.permission:changes,edit'])->name('changes.destroy');
+        ->middleware('page.permission:changes,edit')->name('changes.destroy');
 
     // Access control (page grants)
     Route::get('/access', [ItAccessController::class, 'index'])
@@ -96,25 +102,23 @@ Route::prefix('dashboard/it')->name('it.')->middleware(['auth', 'verified', 'mod
 
     // Organization-wide access control (org chart: accounts, promotion, per-page view/edit)
     Route::get('/access-control', [ItAccessControlController::class, 'index'])
-        ->middleware(['role:IT', 'page.permission:access_control,view'])->name('access-control');
-    // Access Control writes are protected by the IT module gate inherited
-    // from this group and the manager position check. Requiring this page's
-    // own editable grant here is self-referential and can lock IT managers
-    // out of the controls they administer.
+        ->middleware('page.permission:access_control,view')->name('access-control');
+    // Specific employees may be delegated Access Control administration.
+    // Require the page's edit grant instead of a hard-coded IT role check.
     Route::post('/access-control/status', [ItAccessControlController::class, 'setStatus'])
-        ->middleware('role:IT')->name('access-control.status');
+        ->middleware('page.permission:access_control,edit')->name('access-control.status');
     Route::post('/access-control/position', [ItAccessControlController::class, 'updatePosition'])
-        ->middleware('role:IT')->name('access-control.position');
+        ->middleware('page.permission:access_control,edit')->name('access-control.position');
     Route::post('/access-control/modules', [ItAccessControlController::class, 'updateModules'])
-        ->middleware('role:IT')->name('access-control.modules');
+        ->middleware('page.permission:access_control,edit')->name('access-control.modules');
     Route::post('/access-control/pages', [ItAccessControlController::class, 'updatePages'])
-        ->middleware('role:IT')->name('access-control.pages');
+        ->middleware('page.permission:access_control,edit')->name('access-control.pages');
     Route::post('/access-control/save', [ItAccessControlController::class, 'updateAccess'])
-        ->middleware('role:IT')->name('access-control.save');
+        ->middleware('page.permission:access_control,edit')->name('access-control.save');
     Route::post('/access-control/supervisor-staff-pages', [ItAccessControlController::class, 'updateSupervisorStaffPages'])
-        ->middleware('role:IT')->name('access-control.supervisor-staff-pages');
+        ->middleware('page.permission:access_control,edit')->name('access-control.supervisor-staff-pages');
     Route::post('/access-control/requests/{id}/reject', [ItAccessControlController::class, 'rejectRequest'])
-        ->middleware('role:IT')->name('access-control.requests.reject');
+        ->middleware('page.permission:access_control,edit')->name('access-control.requests.reject');
 
     // Strategic geolocation hub — multiple company sites (HQ, warehouses, branches)
     Route::get('/location', [GeolocationController::class, 'index'])
@@ -130,5 +134,5 @@ Route::prefix('dashboard/it')->name('it.')->middleware(['auth', 'verified', 'mod
 
     // Audit trail of access-control changes
     Route::get('/access-logs', [ItAccessControlController::class, 'logs'])
-        ->middleware(['role:IT', 'page.permission:access_logs,view'])->name('access-logs');
+        ->middleware('page.permission:access_logs,view')->name('access-logs');
 });

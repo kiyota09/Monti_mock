@@ -3,13 +3,8 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
-<<<<<<< HEAD
 import { toast } from '@/lib/feedback';
-=======
 import { ArrowRight, BriefcaseBusiness, CalendarDays, Check, Clock3, MapPin, ShieldCheck, Users, UserPlus } from 'lucide-vue-next';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 
 const props = defineProps<{
     request: {

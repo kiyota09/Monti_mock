@@ -12,7 +12,7 @@
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-zinc-400 mb-2" aria-label="Breadcrumb">
-                <span class="hover:text-slate-700 dark:hover:text-zinc-200 cursor-pointer transition-colors">Dashboard</span>
+                <span>Dashboard</span>
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                 </svg>

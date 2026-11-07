@@ -163,72 +163,74 @@ const submit = () => {
         badge="Partner Registration"
         accent="sky"
         wide
+        variant="warm"
+        hide-home-link
     >
         <Head title="Monti Textile - Partner Registration" />
 
         <form @submit.prevent="submit" class="space-y-6">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <InputLabel for="company_name" value="Company Name" class="text-white/90" />
+                                    <InputLabel for="company_name" value="Company Name" class="font-semibold text-slate-700" />
                                     <TextInput id="company_name" type="text"
                                         class="auth-input mt-1 block w-full"
                                         v-model="form.company_name" required
                                         @keypress="blockNumbersAndSpecial($event, 'company_name')"
                                         placeholder="Your Company Name" />
-                                    <InputError class="mt-1 text-red-300" :message="form.errors.company_name" />
-                                    <p v-if="inputWarnings.company_name" class="mt-1 text-xs text-red-300">{{
+                                    <InputError class="mt-1 text-red-600" :message="form.errors.company_name" />
+                                    <p v-if="inputWarnings.company_name" class="mt-1 text-xs text-red-600">{{
                                         inputWarnings.company_name }}</p>
                                 </div>
 
                                 <div>
-                                    <InputLabel for="business_type" value="Business Type" class="text-white/90" />
+                                    <InputLabel for="business_type" value="Business Type" class="font-semibold text-slate-700" />
                                     <TextInput id="business_type" type="text"
                                         class="auth-input mt-1 block w-full"
                                         v-model="form.business_type" required
                                         @keypress="blockNumbersAndSpecial($event, 'business_type')"
                                         placeholder="e.g. Garment Manufacturer, Retailer, Exporter" />
-                                    <InputError class="mt-1 text-red-300" :message="form.errors.business_type" />
-                                    <p v-if="inputWarnings.business_type" class="mt-1 text-xs text-red-300">{{
+                                    <InputError class="mt-1 text-red-600" :message="form.errors.business_type" />
+                                    <p v-if="inputWarnings.business_type" class="mt-1 text-xs text-red-600">{{
                                         inputWarnings.business_type }}</p>
                                 </div>
 
                                 <div>
-                                    <InputLabel for="tin_number" value="TIN Number" class="text-white/90" />
+                                    <InputLabel for="tin_number" value="TIN Number" class="font-semibold text-slate-700" />
                                     <TextInput id="tin_number" type="text"
                                         class="auth-input mt-1 block w-full"
                                         v-model="form.tin_number" maxlength="15" placeholder="000-000-000-000"
                                         @keypress="blockNonNumeric($event, 'tin_number')" />
-                                    <InputError class="mt-1 text-red-300" :message="form.errors.tin_number" />
-                                    <p v-if="inputWarnings.tin_number" class="mt-1 text-xs text-red-300">{{
+                                    <InputError class="mt-1 text-red-600" :message="form.errors.tin_number" />
+                                    <p v-if="inputWarnings.tin_number" class="mt-1 text-xs text-red-600">{{
                                         inputWarnings.tin_number }}</p>
                                 </div>
 
                                 <div>
-                                    <InputLabel for="contact_person" value="Contact Person" class="text-white/90" />
+                                    <InputLabel for="contact_person" value="Contact Person" class="font-semibold text-slate-700" />
                                     <TextInput id="contact_person" type="text"
                                         class="auth-input mt-1 block w-full"
                                         v-model="form.contact_person" required
                                         @keypress="blockNumbersAndSpecial($event, 'contact_person')"
                                         placeholder="Full Name" />
-                                    <InputError class="mt-1 text-red-300" :message="form.errors.contact_person" />
-                                    <p v-if="inputWarnings.contact_person" class="mt-1 text-xs text-red-300">{{
+                                    <InputError class="mt-1 text-red-600" :message="form.errors.contact_person" />
+                                    <p v-if="inputWarnings.contact_person" class="mt-1 text-xs text-red-600">{{
                                         inputWarnings.contact_person }}</p>
                                 </div>
 
                                 <div>
-                                    <InputLabel for="email" value="Business Email" class="text-white/90" />
+                                    <InputLabel for="email" value="Business Email" class="font-semibold text-slate-700" />
                                     <TextInput id="email" type="email"
                                         class="auth-input mt-1 block w-full"
                                         v-model="form.email" required autocomplete="username"
                                         placeholder="company@example.com" />
-                                    <InputError class="mt-1 text-red-300" :message="form.errors.email" />
+                                    <InputError class="mt-1 text-red-600" :message="form.errors.email" />
                                 </div>
 
                                 <div>
-                                    <InputLabel for="phone_raw" value="Phone Number" class="text-white/90" />
+                                    <InputLabel for="phone_raw" value="Phone Number" class="font-semibold text-slate-700" />
                                     <div class="flex">
                                         <span
-                                            class="inline-flex items-center px-4 py-2 bg-white/10 border border-r-0 border-white/20 rounded-l-lg text-sm text-white">
+                                            class="auth-field-addon inline-flex items-center px-4 py-2 border border-r-0 border-transparent rounded-l-full text-sm font-semibold text-slate-700">
                                             {{ form.phone_country }}
                                         </span>
                                         <TextInput id="phone_raw" type="tel"
@@ -237,48 +239,48 @@ const submit = () => {
                                             v-model="form.phone_raw" @keypress="blockNonNumeric($event, 'phone_raw')"
                                             placeholder="9171234567" maxlength="10" minlength="10" />
                                     </div>
-                                    <InputError class="mt-1 text-red-300" :message="form.errors.phone" />
-                                    <p v-if="inputWarnings.phone_raw" class="mt-1 text-xs text-red-300">{{
+                                    <InputError class="mt-1 text-red-600" :message="form.errors.phone" />
+                                    <p v-if="inputWarnings.phone_raw" class="mt-1 text-xs text-red-600">{{
                                         inputWarnings.phone_raw }}</p>
-                                    <p :class="form.phone_raw.length === 10 ? 'text-emerald-300' : 'text-slate-300'"
+                                    <p :class="form.phone_raw.length === 10 ? 'text-emerald-600' : 'text-slate-500'"
                                         class="mt-1 text-xs font-bold transition-colors">{{ form.phone_raw.length }} / 10 digits</p>
                                 </div>
 
                                 <div class="md:col-span-2">
-                                    <InputLabel for="company_address" value="Company Address" class="text-white/90" />
+                                    <InputLabel for="company_address" value="Company Address" class="font-semibold text-slate-700" />
                                     <TextInput id="company_address" type="text"
                                         class="auth-input mt-1 block w-full"
                                         v-model="form.company_address" required @keypress="blockSpecialForAddress"
                                         placeholder="Full company address" />
-                                    <InputError class="mt-1 text-red-300" :message="form.errors.company_address" />
+                                    <InputError class="mt-1 text-red-600" :message="form.errors.company_address" />
                                 </div>
 
                                 <div class="md:col-span-2">
-                                    <InputLabel for="logo" value="Company Logo (optional)" class="text-white/90" />
+                                    <InputLabel for="logo" value="Company Logo (optional)" class="font-semibold text-slate-700" />
                                     <div class="mt-1 flex items-center gap-4">
-                                        <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/10 border border-white/20">
+                                        <div class="auth-field-addon flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200">
                                             <img v-if="logoPreview" :src="logoPreview" alt="Logo preview" class="h-full w-full object-cover" />
-                                            <span v-else class="text-xs font-bold text-slate-300">Logo</span>
+                                            <span v-else class="text-xs font-bold text-slate-400">Logo</span>
                                         </div>
                                         <input id="logo" type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
                                             @change="handleLogoChange"
-                                            class="block w-full text-sm text-slate-200 file:mr-4 file:rounded-lg file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-sky-500 file:transition" />
+                                            class="block w-full text-sm text-slate-600 file:mr-4 file:rounded-full file:border-0 file:bg-[#1A1A1A] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-black file:transition" />
                                     </div>
-                                    <p class="mt-1 text-xs text-slate-300">PNG, JPG, WEBP or SVG · max 5MB. Shown on your partner profile across MontiERP.</p>
-                                    <InputError class="mt-1 text-red-300" :message="form.errors.logo" />
+                                    <p class="mt-1 text-xs text-slate-500">PNG, JPG, WEBP or SVG · max 5MB. Shown on your partner profile across MontiERP.</p>
+                                    <InputError class="mt-1 text-red-600" :message="form.errors.logo" />
                                 </div>
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
                                 <div>
-                                    <InputLabel for="password" value="Password" class="text-white/90" />
+                                    <InputLabel for="password" value="Password" class="font-semibold text-slate-700" />
                                     <div class="relative">
                                         <TextInput id="password" :type="showPassword ? 'text' : 'password'"
                                             class="auth-input mt-1 block w-full pr-12"
                                             v-model="form.password" required autocomplete="new-password"
                                             placeholder="••••••••" />
                                         <button type="button" @click="togglePassword"
-                                            class="absolute inset-y-0 right-4 flex items-center text-slate-300 hover:text-white">
+                                            class="absolute inset-y-0 right-4 flex items-center text-slate-500 hover:text-slate-800">
                                             <svg v-if="!showPassword" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
                                                 stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -291,12 +293,12 @@ const submit = () => {
                                             </svg>
                                         </button>
                                     </div>
-                                    <InputError class="mt-1 text-red-300" :message="form.errors.password" />
+                                    <InputError class="mt-1 text-red-600" :message="form.errors.password" />
                                 </div>
 
                                 <div>
                                     <InputLabel for="password_confirmation" value="Confirm Password"
-                                        class="text-white/90" />
+                                        class="font-semibold text-slate-700" />
                                     <div class="relative">
                                         <TextInput id="password_confirmation"
                                             :type="showConfirmPassword ? 'text' : 'password'"
@@ -304,7 +306,7 @@ const submit = () => {
                                             v-model="form.password_confirmation" required placeholder="••••••••"
                                             autocomplete="new-password" />
                                         <button type="button" @click="toggleConfirmPassword"
-                                            class="absolute inset-y-0 right-4 flex items-center text-slate-300 hover:text-white">
+                                            class="absolute inset-y-0 right-4 flex items-center text-slate-500 hover:text-slate-800">
                                             <svg v-if="!showConfirmPassword" class="h-5 w-5" fill="none"
                                                 viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -317,14 +319,14 @@ const submit = () => {
                                             </svg>
                                         </button>
                                     </div>
-                                    <InputError class="mt-1 text-red-300"
+                                    <InputError class="mt-1 text-red-600"
                                         :message="form.errors.password_confirmation" />
                                 </div>
                             </div>
 
-                            <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-white/10 mt-6">
+                            <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-slate-200 mt-6">
                                 <Link :href="route('client.login')"
-                                    class="group text-sm font-medium text-slate-300 hover:text-white transition-colors flex items-center">
+                                    class="group text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors flex items-center">
                                     <svg class="w-4 h-4 mr-2 transform group-hover:-translate-x-1 transition-transform"
                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round"

@@ -1,10 +1,10 @@
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import {
     Search, X, ShieldCheck, ShieldOff, PauseCircle, RotateCcw, Save, Users, Bell,
-    Ban, Truck, ChevronDown, ChevronsUpDown, Lock, Layers,
+    Ban, Truck, ChevronDown, ChevronsUpDown, Lock, Layers, CheckCircle2,
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -32,11 +32,8 @@ const showNotifications = ref(false);
 const commandButton = ref(null);
 const commandMenuStyle = ref({});
 const selectedRequestId = ref(null);
-<<<<<<< HEAD
-=======
 const confirmPosition = ref(null);
 const showModuleConfirm = ref(false);
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 
 const statusForm = useForm({ user_id: '', action: '', suspended_until: '' });
 const positionForm = useForm({ user_id: '', position: '', role: '', supervisor_department: '' });
@@ -347,9 +344,6 @@ const savePosition = () => {
     positionForm.clearErrors();
     positionForm.post(route('it.access-control.position'), {
         preserveScroll: true,
-<<<<<<< HEAD
-        onSuccess: () => { managing.value = null; },
-=======
         onSuccess: () => { managing.value = null; confirmPosition.value = null; },
     });
 };
@@ -370,7 +364,6 @@ const confirmSaveModules = () => {
     showModuleConfirm.value = false;
     modulesForm.post(route('it.access-control.modules'), {
         preserveScroll: true,
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     });
 };
 
@@ -648,8 +641,9 @@ onUnmounted(() => {
                         <tr v-for="u in filteredUsers" :key="u.id" class="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors">
                             <td data-label="Employee" class="px-4 sm:px-6 py-3 sm:py-3.5">
                                 <div class="flex items-center gap-3">
-                                    <span class="w-9 h-9 shrink-0 rounded-full bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-black">
+                                    <span class="relative w-9 h-9 shrink-0 overflow-hidden rounded-full bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-black">
                                         {{ initials(u.name) }}
+                                        <img v-if="u.photo_url" :src="u.photo_url" :alt="`${u.name} profile photo`" class="absolute inset-0 h-full w-full object-cover" @error="$event.target.style.display = 'none'" />
                                     </span>
                                     <div class="min-w-0">
                                         <p class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
@@ -1015,9 +1009,6 @@ onUnmounted(() => {
         </div>
         </Teleport>
 
-<<<<<<< HEAD
-
-=======
         <!-- Final confirmation modal for position commands (teleported with
              the drawer so it always renders above it, fully in view) -->
         <Teleport to="body">
@@ -1063,6 +1054,5 @@ onUnmounted(() => {
             </div>
         </div>
         </Teleport>
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     </AuthenticatedLayout>
 </template>

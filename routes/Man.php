@@ -8,6 +8,7 @@ use App\Http\Controllers\Man\Manager\DyeingWorkflowController;
 use App\Http\Controllers\Man\Manager\DyeingProductionRecipeController;
 use App\Http\Controllers\Man\Manager\FinishingWorkflowController;
 use App\Http\Controllers\Man\Manager\ManufacturingManagerController;
+use App\Http\Controllers\Man\Manager\ManStaffController;
 use App\Http\Controllers\Man\ManDashboardController;
 use App\Http\Controllers\Man\ManufacturingInventoryController;
 use App\Http\Controllers\Man\Staff\CheckerQualityController;
@@ -64,6 +65,16 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
         // Manufacturing Manager Dashboard & Functions
         Route::get('/', [ManufacturingManagerController::class, 'index'])
             ->middleware('page.permission:dashboard,view')->name('manager.dashboard');
+        Route::get('/department-staff', [ManStaffController::class, 'index'])
+            ->middleware('page.permission:staff,view')->name('manager.staff');
+        Route::post('/staff/transfer-requests', [ManStaffController::class, 'requestTransfer'])
+            ->middleware('page.permission:staff,edit')->name('manager.staff.transfer-requests.store');
+        Route::post('/staff/transfer-requests/{transferRequest}/decision', [ManStaffController::class, 'decideTransfer'])
+            ->middleware('page.permission:staff,edit')->name('manager.staff.transfer-requests.decision');
+        Route::post('/staff/transfer-requests/bulk-decision', [ManStaffController::class, 'bulkDecideTransfers'])
+            ->middleware('page.permission:staff,edit')->name('manager.staff.transfer-requests.bulk-decision');
+        Route::post('/staff/transfer-requests/{transferRequest}/cancel', [ManStaffController::class, 'cancelTransfer'])
+            ->middleware('page.permission:staff,edit')->name('manager.staff.transfer-requests.cancel');
         Route::get('/production', [ManufacturingManagerController::class, 'production'])
             ->middleware('page.permission:production,view')->name('manager.production');
         Route::post('/production/dyeing-stages/{record}/review', [DyeingWorkflowController::class, 'review'])

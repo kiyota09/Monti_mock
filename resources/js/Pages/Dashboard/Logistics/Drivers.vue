@@ -1,56 +1,59 @@
 <template>
     <Head title="Drivers Management" />
     <AuthenticatedLayout>
-        <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
-            <div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 pb-16">
+        <div class="min-h-screen bg-gray-100 dark:bg-zinc-950">
+            <div class="mx-auto max-w-7xl space-y-4 p-4 pb-16 sm:p-6">
 
-                <!-- Hero header -->
-                <div class="animate-fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 sm:p-8 text-white shadow-xl shadow-indigo-500/20">
-                    <div class="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-float" />
-                    <div class="absolute -bottom-24 -left-10 h-64 w-64 rounded-full bg-fuchsia-400/20 blur-3xl animate-float-delayed" />
-                    <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 22px 22px;" />
-                    <div class="relative flex flex-wrap items-center gap-4">
-                        <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur ring-1 ring-white/30 shadow-lg animate-pop">
+                <!-- Theme-aware banner styled like Fleet -->
+                <div data-erp-page-banner="fallback" class="relative flex flex-wrap items-center justify-between gap-5">
+                    <div class="relative flex min-w-0 flex-1 items-center gap-4">
+                        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
                             <Users class="h-7 w-7" />
                         </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">
-                                <Sparkles class="h-3.5 w-3.5" /> Logistics · Personnel Registry
-                            </p>
-                            <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Drivers &amp; Conductors <span v-if="!canEditDrivers" class="ml-2 inline-block rounded-full bg-amber-400/90 px-3 py-1 align-middle text-xs font-black uppercase tracking-widest text-amber-950">View only</span></h1>
-                            <p class="text-sm text-blue-100/90">{{ filteredDrivers.length }} of {{ drivers.length }} driver{{ drivers.length !== 1 ? 's' : '' }} showing</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold ring-1 ring-white/25 backdrop-blur flex items-center gap-1.5">
-                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" /> {{ availableCount }} available
-                            </span>
-                            <button v-if="canEditDrivers" @click="openCreateModal"
-                                class="rounded-full bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-indigo-700 shadow-lg hover:bg-indigo-50 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5">
-                                <Plus class="h-4 w-4" /> Add Driver
-                            </button>
+                        <div class="min-w-0">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-white/75">Logistics · Personnel registry</p>
+                            <h1 class="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
+                                Drivers &amp; Conductors
+                                <span v-if="!canEditDrivers" class="ml-2 inline-flex rounded-full bg-white/15 px-2.5 py-1 align-middle text-[10px] font-bold uppercase tracking-wider ring-1 ring-white/20">View only</span>
+                            </h1>
+                            <p class="mt-1 text-sm text-white/80">{{ filteredDrivers.length }} of {{ drivers.length }} drivers shown.</p>
                         </div>
                     </div>
+                    <div class="relative flex flex-wrap items-center gap-3">
+                        <div class="rounded-2xl bg-white/10 px-4 py-2.5 text-center ring-1 ring-white/20">
+                            <p class="text-xl font-black leading-none">{{ drivers.length }}</p>
+                            <p class="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/75">drivers</p>
+                        </div>
+                        <div class="rounded-2xl bg-white/10 px-4 py-2.5 text-center ring-1 ring-white/20">
+                            <p class="text-xl font-black leading-none">{{ availableCount }}</p>
+                            <p class="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/75">available</p>
+                        </div>
+                        <button v-if="canEditDrivers" @click="openCreateModal"
+                            class="flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-bold text-slate-900 shadow-lg transition hover:bg-slate-100 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                            <Plus class="h-4 w-4" /> Add Driver
+                        </button>
+                    </div>
+                </div>
 
-                    <!-- Search + filters -->
-                    <div class="relative mt-6 flex flex-col sm:flex-row gap-3">
-                        <div class="relative flex-1">
-                            <Search class="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                            <input v-model="searchTerm" type="text" placeholder="Search by name, license, or email..."
-                                class="w-full rounded-2xl border-0 bg-white/95 py-3 pl-11 pr-4 text-sm font-medium text-gray-900 shadow-lg placeholder:text-gray-400 focus:ring-2 focus:ring-white/70 outline-none transition" />
-                        </div>
-                        <div class="flex gap-2">
-                            <button v-for="key in ['all','available','unavailable']" :key="key" @click="availabilityFilter = key"
-                                :class="availabilityFilter === key ? 'bg-white text-indigo-700 shadow-lg scale-105' : 'bg-white/15 text-white hover:bg-white/25'"
-                                class="rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide backdrop-blur transition-all duration-200 active:scale-95">
-                                {{ key === 'unavailable' ? 'On Trip' : key }}
-                            </button>
-                        </div>
+                <!-- Search and availability filters -->
+                <div class="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm dark:bg-zinc-900 sm:flex-row sm:items-center">
+                    <div class="relative min-w-0 flex-1">
+                        <Search class="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <input v-model="searchTerm" type="text" placeholder="Search by name, license, or email..."
+                            class="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button v-for="key in ['all','available','unavailable']" :key="key" @click="availabilityFilter = key"
+                            :class="availabilityFilter === key ? 'bg-slate-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-zinc-800 dark:text-gray-300 dark:hover:bg-zinc-700'"
+                            class="rounded-full px-4 py-2 text-xs font-semibold capitalize transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
+                            {{ key === 'unavailable' ? 'On Trip' : key }}
+                        </button>
                     </div>
                 </div>
 
                 <!-- Stats Summary -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="animate-fade-up group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all duration-300 p-5 overflow-hidden" style="animation-delay:80ms">
+                    <div class="animate-fade-up group relative flex flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-800" style="animation-delay:80ms">
                         <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-indigo-500 to-fuchsia-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
                         <div class="flex items-center gap-3">
@@ -63,7 +66,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="animate-fade-up group relative flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/15 hover:-translate-y-1.5 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all duration-300 p-5 overflow-hidden" style="animation-delay:160ms">
+                    <div class="animate-fade-up group relative flex flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800" style="animation-delay:160ms">
                         <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-emerald-400/20 to-teal-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-emerald-500 to-teal-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
                         <div class="flex items-center gap-3">
@@ -76,84 +79,81 @@
                             </div>
                         </div>
                     </div>
-                    <div class="animate-fade-up group relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 via-orange-600 to-rose-600 p-5 text-white shadow-lg shadow-orange-500/20 hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300" style="animation-delay:240ms">
+                    <div class="animate-fade-up group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 text-gray-900 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" style="animation-delay:240ms">
                         <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl group-hover:scale-125 transition-transform duration-500" />
-                        <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 22px 22px;" />
                         <div class="relative flex items-center gap-3">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30 backdrop-blur group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-100 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20">
                                 <Star class="h-6 w-6" />
                             </div>
                             <div>
-                                <p class="text-[10px] font-black uppercase tracking-widest text-amber-100">Average Rating</p>
-                                <h3 class="text-3xl font-black leading-none">{{ avgRating }} ★</h3>
+                                <p class="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Average Rating</p>
+                                <h3 class="text-3xl font-black leading-none text-gray-900 dark:text-white">{{ avgRating }} ★</h3>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Drivers Table -->
-                <div class="animate-fade-up bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden hover:shadow-xl transition-shadow duration-300" style="animation-delay:120ms">
-                    <div class="p-6 border-b border-gray-100 dark:border-zinc-800 bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-900/20 flex items-center gap-2">
+                <!-- Driver cards styled to match Fleet -->
+                <div class="animate-fade-up overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow duration-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900" style="animation-delay:120ms">
+                    <div class="flex items-center gap-2 border-b border-gray-100 bg-gray-50 p-5 dark:border-zinc-800 dark:bg-zinc-800/50">
                         <Users class="h-5 w-5 text-indigo-600" />
                         <h2 class="text-sm font-black uppercase tracking-widest">Driver Roster</h2>
                         <span class="ml-auto rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[11px] font-black px-2.5 py-1">{{ filteredDrivers.length }}</span>
                     </div>
 
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
-                            <thead class="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-zinc-800">
-                                <tr>
-                                    <th class="px-6 py-4">Driver</th>
-                                    <th class="px-6 py-4">License #</th>
-                                    <th class="px-6 py-4">Contact</th>
-                                    <th class="px-6 py-4 text-center">Rating</th>
-                                    <th class="px-6 py-4 text-center">Status</th>
-                                    <th class="px-6 py-4 text-center">Total Trips</th>
-                                    <th class="px-6 py-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <TransitionGroup name="card" tag="tbody" class="divide-y divide-gray-50 dark:divide-zinc-800">
-                                <tr v-for="(driver, i) in filteredDrivers" :key="driver.id" :style="{ transitionDelay: `${Math.min(i * 40, 400)}ms` }" class="group text-sm hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
-                                    <td class="px-6 py-3">
-                                        <div class="flex items-center gap-3">
-                                            <div class="h-10 w-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-600 to-fuchsia-600 flex items-center justify-center text-white text-sm font-black shadow-lg uppercase group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-                                                {{ driver.user?.name?.charAt(0) || '?' }}
-                                            </div>
-                                            <div class="min-w-0">
-                                                <p class="font-black text-gray-900 dark:text-white truncate">{{ driver.user?.name }}</p>
-                                                <p class="text-[10px] text-gray-400 truncate">{{ driver.user?.email }}</p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-3 font-mono text-sm text-gray-500 dark:text-gray-400">{{ driver.license_number }}</td>
-                                    <td class="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{{ driver.user?.phone || '—' }}</td>
-                                    <td class="px-6 py-3 text-center">
-                                        <div class="flex items-center justify-center gap-1">
-                                            <Star class="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                                            <span class="font-bold text-gray-900 dark:text-white">{{ driver.rating }}</span>
-                                            <span class="text-[10px] text-gray-400">/5</span>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-3 text-center">
-                                        <span :class="driver.is_available ? 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30'"
-                                            class="px-3 py-1 rounded-full ring-1 text-[9px] font-black uppercase inline-flex items-center gap-1">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-                                            {{ driver.is_available ? 'Available' : 'On Trip' }}
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-3 text-center font-bold text-gray-900 dark:text-white">{{ driver.deliveries_count || 0 }}</td>
-                                    <td class="px-6 py-3 text-right">
-                                        <button @click="viewDetails(driver)" class="flex h-8 w-8 ml-auto items-center justify-center rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-400 hover:bg-indigo-600 hover:text-white transition-all">
-                                            <Eye class="h-4 w-4" />
-                                        </button>
-                                    </td>
-                                 </tr>
-                            </TransitionGroup>
-                        </table>
-                        <div v-if="filteredDrivers.length === 0" class="px-6 py-12 text-center">
+                    <div v-if="filteredDrivers.length" class="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3 sm:p-5">
+                        <TransitionGroup name="card" tag="div" class="contents">
+                            <article v-for="(driver, i) in filteredDrivers" :key="driver.id" :style="{ transitionDelay: `${Math.min(i * 35, 350)}ms` }"
+                                :class="driverCardTheme(driver).background"
+                                class="group relative flex min-h-[22rem] flex-col overflow-hidden rounded-3xl p-5 text-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
+                                <div class="pointer-events-none absolute -right-12 -top-14 h-44 w-44 rounded-full bg-white/10 blur-2xl transition-transform duration-500 group-hover:scale-125" />
+                                <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-black/25" />
+
+                                <div class="relative flex items-start justify-between gap-3">
+                                    <span class="inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/15 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-white" />{{ driver.is_available ? 'Available' : 'On Trip' }}
+                                    </span>
+                                    <span class="rounded-xl border border-white/20 bg-black/15 px-3 py-1.5 text-center backdrop-blur-sm">
+                                        <span class="block text-lg font-black leading-none">{{ driver.deliveries_count || 0 }}</span>
+                                        <span class="mt-1 block text-[9px] font-semibold uppercase tracking-wider text-white/75">trips</span>
+                                    </span>
+                                </div>
+
+                                <div class="relative flex flex-1 flex-col items-center justify-center py-5 text-center">
+                                    <div class="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-white/30 bg-white/15 text-3xl font-black uppercase shadow-lg backdrop-blur-sm transition-transform duration-300 group-hover:rotate-3 group-hover:scale-105">
+                                        <span>{{ driver.user?.name?.charAt(0) || '?' }}</span>
+                                        <img v-if="driver.photo_url" :src="driver.photo_url" :alt="`${driver.user?.name || 'Driver'} profile photo`" class="absolute inset-0 h-full w-full object-cover" @error="$event.target.style.display = 'none'" />
+                                    </div>
+                                    <h3 class="mt-4 max-w-full truncate text-xl font-black tracking-tight drop-shadow">{{ driver.user?.name || 'Unnamed driver' }}</h3>
+                                    <p class="mt-1 max-w-full truncate text-xs text-white/75">{{ driver.user?.email || 'No email on file' }}</p>
+                                    <div class="mt-3 flex items-center gap-1.5 rounded-full border border-white/20 bg-black/15 px-3 py-1.5 backdrop-blur-sm">
+                                        <Star class="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
+                                        <span class="text-xs font-bold">{{ Number(driver.rating || 0).toFixed(1) }}</span>
+                                        <span class="text-[10px] text-white/65">/ 5</span>
+                                    </div>
+                                </div>
+
+                                <div class="relative space-y-2 rounded-2xl border border-white/20 bg-black/15 p-3.5 text-xs backdrop-blur-sm">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span class="text-white/70">License</span>
+                                        <span class="truncate font-mono font-semibold">{{ driver.license_number || 'Not set' }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span class="text-white/70">Phone</span>
+                                        <span class="truncate font-semibold">{{ driver.user?.phone || 'Not set' }}</span>
+                                    </div>
+                                </div>
+
+                                <button @click="viewDetails(driver)" :class="driverCardTheme(driver).button"
+                                    class="relative mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white shadow-md transition active:scale-[0.98]">
+                                    <Eye class="h-4 w-4" /> View driver details
+                                </button>
+                            </article>
+                        </TransitionGroup>
+                    </div>
+                    <div v-else class="px-6 py-12 text-center">
                             <Users class="mx-auto h-10 w-10 text-gray-200 dark:text-zinc-700 animate-bounce-soft" />
                             <p class="mt-2 text-sm font-bold text-gray-400">No drivers found. Click "Add Driver" to register.</p>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -163,12 +163,10 @@
         <Teleport to="body">
             <Transition name="modal">
                 <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeCreateModal">
-                    <div class="modal-panel bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
-                        <div class="sticky top-0 z-10 relative overflow-hidden px-6 py-5 bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 text-white flex justify-between items-center">
-                            <div class="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-                            <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 18px 18px;" />
-                            <h3 class="relative font-black text-lg">Register New Driver</h3>
-                            <button @click="closeCreateModal" class="relative p-1.5 hover:bg-white/20 rounded-xl transition"><X class="h-5 w-5" /></button>
+                    <div class="modal-panel bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+                        <div class="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900">
+                            <h3 class="text-sm font-bold text-gray-900 dark:text-white">Register New Driver</h3>
+                            <button @click="closeCreateModal" class="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 dark:hover:bg-zinc-800"><X class="h-4 w-4" /></button>
                         </div>
 
                         <form @submit.prevent="submitDriver" class="p-6 space-y-5">
@@ -235,12 +233,10 @@
         <Teleport to="body">
             <Transition name="modal">
                 <div v-if="showDetailModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeDetailModal">
-                    <div class="modal-panel bg-white dark:bg-zinc-900 w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
-                        <div class="sticky top-0 z-10 relative overflow-hidden px-6 py-5 bg-gradient-to-br from-indigo-600 via-violet-700 to-fuchsia-700 text-white flex justify-between items-center">
-                            <div class="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-                            <div class="absolute inset-0 opacity-[0.15]" style="background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0); background-size: 18px 18px;" />
-                            <h3 class="relative font-black text-lg">Driver Details</h3>
-                            <button @click="closeDetailModal" class="relative p-1.5 hover:bg-white/20 rounded-xl transition"><X class="h-5 w-5" /></button>
+                    <div class="modal-panel bg-white dark:bg-zinc-900 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+                        <div class="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900">
+                            <h3 class="text-sm font-bold text-gray-900 dark:text-white">Driver Details</h3>
+                            <button @click="closeDetailModal" class="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 dark:hover:bg-zinc-800"><X class="h-4 w-4" /></button>
                         </div>
 
                         <div v-if="selectedDriver" class="p-6 space-y-6">
@@ -331,7 +327,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
-import { Users, Plus, Search, Eye, X, Loader2, Star, Truck, Info, Sparkles, CheckCircle2 } from 'lucide-vue-next';
+import { Users, Plus, Search, Eye, X, Loader2, Star, Truck, Info, CheckCircle2 } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
@@ -388,6 +384,16 @@ const avgRating = computed(() => {
     const sum = props.drivers.reduce((acc, d) => acc + (d.rating || 0), 0);
     return (sum / props.drivers.length).toFixed(1);
 });
+
+const driverCardTheme = (driver) => driver.is_available
+    ? {
+        background: 'bg-gradient-to-br from-[#386641] via-[#2d6a4f] to-[#173b2c]',
+        button: 'bg-[#24563f] hover:bg-[#1b4332]',
+    }
+    : {
+        background: 'bg-gradient-to-br from-[#52647f] via-[#394b66] to-[#202d42]',
+        button: 'bg-[#34445f] hover:bg-[#26364f]',
+    };
 
 const statusBadge = (status) => {
     const map = {
@@ -449,13 +455,27 @@ const submitDriver = () => {
 };
 
 const viewDetails = async (driver) => {
-    // Fetch full details including deliveries
+    selectedDriver.value = driver;
+    showDetailModal.value = true;
     try {
-        const response = await fetch(route('logistics.drivers.show', driver.id));
+        const response = await fetch(route('logistics.drivers.show', driver.id), {
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error(`Driver details request failed (${response.status}).`);
         const data = await response.json();
-        selectedDriver.value = data.driver;
-        showDetailModal.value = true;
+        if (!data.driver) throw new Error('Driver details were not returned.');
+        selectedDriver.value = {
+            ...data.driver,
+            deliveries: Array.isArray(data.deliveries)
+                ? data.deliveries
+                : (Array.isArray(data.driver.deliveries) ? data.driver.deliveries : []),
+        };
     } catch (error) {
+        showDetailModal.value = false;
         showToast('error', 'Failed to load driver details.');
     }
 };

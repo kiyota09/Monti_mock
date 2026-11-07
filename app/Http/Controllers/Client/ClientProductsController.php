@@ -8,7 +8,10 @@ use App\Models\Man\PantoneReference;
 use App\Models\Eco\Inquiry;
 use App\Models\Eco\ConversationMessage;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class ClientProductsController extends Controller
@@ -17,6 +20,9 @@ class ClientProductsController extends Controller
     {
         $pantoneReferences = PantoneReference::query()->get(['id', 'color_category'])->keyBy('id');
         $products = Product::where('status', 'Active')
+            ->where('name', '<>', 'Bulk Inquiry')
+            ->where('sku', '<>', 'BULK-SKU')
+            ->where(fn ($query) => $query->whereNull('product_id')->orWhere('product_id', 'not like', 'BULK-%'))
             ->with(['images', 'yarnMaterials'])
             ->get()
             ->map(function ($p) use ($pantoneReferences) {
@@ -160,25 +166,88 @@ class ClientProductsController extends Controller
      */
     public function bulkInquire(Request $request)
     {
-        $request->validate([
-            'product_ids'   => 'required|array|min:1',
-            'product_ids.*' => 'exists:products,id',
-            'message'       => 'nullable|string|max:1000',
+        $validated = $request->validate([
+            'product_ids' => ['required', 'array', 'min:2'],
+            'product_ids.*' => ['required', 'integer', 'distinct', 'exists:products,id'],
+            'selections' => ['required', 'array', 'min:2'],
+            'selections.*.product_id' => ['required', 'integer', 'distinct', 'exists:products,id'],
+            'selections.*.pantone_ids' => ['required', 'array', 'min:1'],
+            'selections.*.pantone_ids.*' => ['required', 'integer', 'exists:pantone_references,id'],
+            'selections.*.yarn_material_ids' => ['required', 'array', 'min:1'],
+            'selections.*.yarn_material_ids.*' => ['required', 'integer', Rule::exists('materials', 'id')->where(fn ($query) => $query->where('category', 'Yarn'))],
+            'selections.*.gsm' => ['nullable', 'integer', 'min:1', 'max:10000'],
+            'selections.*.texture' => ['nullable', 'in:Hard,Medium,Soft'],
+            'message' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $client   = Auth::guard('client')->user();
-        $products = Product::whereIn('id', $request->product_ids)->get();
+        $productIds = collect($validated['product_ids'])->map(fn ($id) => (int) $id)->unique()->values();
+        $selectionRows = collect($validated['selections'])->keyBy(fn ($row) => (int) $row['product_id']);
+        if ($selectionRows->keys()->map(fn ($id) => (int) $id)->sort()->values()->all() !== $productIds->sort()->values()->all()) {
+            return back()->withErrors(['selections' => 'Configure each selected product exactly once.']);
+        }
 
-        // Create or retrieve a sentinel product for bulk inquiries
-        $bulkProduct = Product::firstOrCreate(
-            ['name' => 'Bulk Inquiry'],
-            [
-                'product_id' => 'BULK-' . strtoupper(uniqid()),
-                'sku'        => 'BULK-SKU',
-                'status'     => 'Active',
-                'category'   => 'Bulk',
-            ]
-        );
+        $client = Auth::guard('client')->user();
+        $products = Product::query()->with('yarnMaterials')->whereIn('id', $productIds)->get()->keyBy('id');
+        $pantonesById = PantoneReference::query()
+            ->whereIn('id', $selectionRows->flatMap(fn ($row) => $row['pantone_ids'])->unique())
+            ->get(['id', 'name', 'hex', 'color_category'])
+            ->keyBy('id');
+        $selectionsByProduct = [];
+        $selectionLines = $productIds->map(function ($productId) use ($products, $selectionRows, $pantonesById, &$selectionsByProduct) {
+            $product = $products->get($productId);
+            $row = $selectionRows->get($productId);
+            abort_unless($product && $row, 422, 'A selected product is no longer available.');
+
+            $availablePantoneIds = collect($product->colors ?? [])->pluck('pantone_id')->filter()->map(fn ($id) => (int) $id);
+            $selectedPantoneIds = collect($row['pantone_ids'])->map(fn ($id) => (int) $id);
+            if ($selectedPantoneIds->unique()->count() !== $selectedPantoneIds->count()) {
+                throw ValidationException::withMessages(['selections' => "Choose each Pantone color once for {$product->name}."]);
+            }
+            if ($selectedPantoneIds->diff($availablePantoneIds)->isNotEmpty()) {
+                throw ValidationException::withMessages(['selections' => "Choose Pantone colors available for {$product->name}."]);
+            }
+
+            $availableYarnIds = $product->yarnMaterials->pluck('id')->map(fn ($id) => (int) $id);
+            $selectedYarnIds = collect($row['yarn_material_ids'])->map(fn ($id) => (int) $id);
+            if ($selectedYarnIds->unique()->count() !== $selectedYarnIds->count()) {
+                throw ValidationException::withMessages(['selections' => "Choose each yarn once for {$product->name}."]);
+            }
+            if ($selectedYarnIds->diff($availableYarnIds)->isNotEmpty()) {
+                throw ValidationException::withMessages(['selections' => "Choose yarns available for {$product->name}."]);
+            }
+
+            $yarnsById = $product->yarnMaterials->keyBy('id');
+            $selection = [
+                'product_id' => (int) $product->id,
+                'name' => $product->name,
+                'sku' => $product->sku,
+                'category' => $product->category,
+                'minimum_order_quantity' => $product->minimum_order_quantity,
+                'gsm' => $row['gsm'] ?? null,
+                'texture' => $row['texture'] ?? null,
+                'pantones' => $selectedPantoneIds->map(fn ($id) => $pantonesById->get($id))->filter()->map(fn (PantoneReference $pantone) => [
+                    'id' => (int) $pantone->id,
+                    'name' => $pantone->name,
+                    'hex' => $pantone->hex,
+                    'color_category' => $pantone->color_category,
+                ])->values()->all(),
+                'yarns' => $selectedYarnIds->map(fn ($id) => $yarnsById->get($id))->filter()->map(fn ($yarn) => [
+                    'id' => (int) $yarn->id,
+                    'name' => $yarn->display_name,
+                    'base_name' => $yarn->name,
+                    'mat_id' => $yarn->mat_id,
+                    'yarn_tier' => $yarn->yarn_tier,
+                ])->values()->all(),
+            ];
+            $selectionsByProduct[] = $selection;
+
+            $pantoneNames = collect($selection['pantones'])->pluck('name')->implode(', ');
+            $yarnNames = collect($selection['yarns'])->pluck('name')->implode(', ');
+            $details = ["Pantone colors: {$pantoneNames}", "Yarns: {$yarnNames}"];
+            if ($selection['gsm']) $details[] = "GSM: {$selection['gsm']}";
+            if ($selection['texture']) $details[] = "Texture: {$selection['texture']}";
+            return "• {$product->name} | SKU: {$product->sku}\n  ".implode(' | ', $details);
+        });
 
         // ── Build a detailed, human-readable product list ──────────────────
         $productLines = $products->map(function ($p) {
@@ -212,7 +281,7 @@ class ClientProductsController extends Controller
         $footer = "Please provide pricing, availability, and estimated delivery timeline for the above products.";
 
         // Compose the full initial message
-        $initialMessage = "{$header}\n\n{$productLines}";
+        $initialMessage = "{$header}\n\n{$selectionLines->implode("\n\n")}";
 
         // Append the client's optional personal note (if any)
         if (!empty($request->message)) {
@@ -222,19 +291,24 @@ class ClientProductsController extends Controller
         $initialMessage .= "\n\n{$footer}";
         // ───────────────────────────────────────────────────────────────────
 
-        $inquiry = Inquiry::create([
-            'client_id'       => $client->id,
-            'product_id'      => $bulkProduct->id,
-            'initial_message' => $initialMessage,
-            'status'          => 'open',
-            'last_message_at' => now(),
-        ]);
+        $inquiry = DB::transaction(function () use ($client, $initialMessage, $selectionsByProduct) {
+            $inquiry = Inquiry::create([
+                'client_id' => $client->id,
+                'product_id' => null,
+                'initial_message' => $initialMessage,
+                'product_selections' => ['products' => $selectionsByProduct],
+                'status' => 'open',
+                'last_message_at' => now(),
+            ]);
 
-        ConversationMessage::create([
-            'inquiry_id'  => $inquiry->id,
-            'sender_type' => 'client',
-            'message'     => $initialMessage,
-        ]);
+            ConversationMessage::create([
+                'inquiry_id' => $inquiry->id,
+                'sender_type' => 'client',
+                'message' => $initialMessage,
+            ]);
+
+            return $inquiry;
+        });
 
         return redirect()->route('client.products')
             ->with('success', 'Bulk inquiry sent. Our team will contact you shortly.')

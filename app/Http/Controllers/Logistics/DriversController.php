@@ -14,7 +14,16 @@ class DriversController extends Controller
 {
     public function index()
     {
-        $drivers = Driver::with('user')->get();
+        $drivers = Driver::with('user')->withCount('deliveries')->get()->map(function (Driver $driver) {
+            $photoPath = $driver->user?->profile_photo_path;
+            $driver->setAttribute('photo_url', $photoPath
+                ? (str_starts_with($photoPath, 'http://') || str_starts_with($photoPath, 'https://')
+                    ? $photoPath
+                    : Storage::disk('public')->url(ltrim(str_replace('/storage/', '', $photoPath), '/')))
+                : null);
+
+            return $driver;
+        });
         return inertia('Dashboard/Logistics/Drivers', ['drivers' => $drivers]);
     }
 
@@ -59,9 +68,14 @@ class DriversController extends Controller
 
     public function show(Driver $driver)
     {
-        $deliveries = Delivery::where('driver_id', $driver->id)->with(['packages', 'route'])->get();
-        return inertia('Dashboard/Logistics/DriverDetail', [
-            'driver' => $driver->load('user'),
+        $deliveries = $driver->deliveries()
+            ->with(['packages', 'route'])
+            ->latest('created_at')
+            ->get();
+        $driver->load('user')->setRelation('deliveries', $deliveries);
+
+        return response()->json([
+            'driver' => $driver,
             'deliveries' => $deliveries,
         ]);
     }

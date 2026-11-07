@@ -236,6 +236,30 @@
                         class="w-full lg:w-[400px] xl:w-[460px] flex-shrink-0 overflow-y-auto space-y-5 pr-0.5 pb-2">
 
                         <!-- Client-selected product colorways and yarns -->
+                        <section v-if="inquiry.product_selections?.products?.length" aria-label="Client bulk product selections"
+                            class="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm dark:border-violet-900/50 dark:bg-zinc-900">
+                            <div class="border-b border-violet-100 px-5 py-3 dark:border-violet-900/50">
+                                <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Bulk product specifications</h2>
+                                <p class="text-xs text-slate-500 dark:text-zinc-400">Pantone, yarn, GSM, and texture selections for each requested design.</p>
+                            </div>
+                            <div class="space-y-3 p-3">
+                                <article v-for="product in inquiry.product_selections.products" :key="product.product_id" class="rounded-xl border border-slate-100 p-3 dark:border-zinc-800">
+                                    <h3 class="text-xs font-bold text-slate-900 dark:text-white">{{ product.name }}<span v-if="product.sku" class="ml-1 font-mono text-[10px] text-slate-400">· {{ product.sku }}</span></h3>
+                                    <div v-if="product.pantones?.length" class="mt-2 flex flex-wrap gap-1.5">
+                                        <span v-for="pantone in product.pantones" :key="pantone.id" class="inline-flex items-center gap-1.5 rounded-lg border border-violet-100 bg-violet-50 px-2 py-1 text-[10px] dark:border-violet-900/40 dark:bg-violet-950/30">
+                                            <span class="h-3.5 w-3.5 rounded border border-black/10" :style="{ backgroundColor: pantone.hex }" />{{ pantone.name }}
+                                        </span>
+                                    </div>
+                                    <div v-if="product.yarns?.length" class="mt-2 flex flex-wrap gap-1.5">
+                                        <span v-for="yarn in product.yarns" :key="yarn.id" class="rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">{{ yarn.name }}</span>
+                                    </div>
+                                    <div v-if="product.gsm || product.texture" class="mt-2 flex gap-1.5">
+                                        <span v-if="product.gsm" class="rounded-lg bg-slate-100 px-2 py-1 text-[10px] dark:bg-zinc-800">{{ product.gsm }} GSM</span>
+                                        <span v-if="product.texture" class="rounded-lg bg-slate-100 px-2 py-1 text-[10px] dark:bg-zinc-800">{{ product.texture }} texture</span>
+                                    </div>
+                                </article>
+                            </div>
+                        </section>
                         <section v-if="inquiry.product_selections?.pantones?.length || inquiry.product_selections?.yarns?.length" aria-label="Client product selections"
                             class="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm dark:border-violet-900/50 dark:bg-zinc-900">
                             <div class="border-b border-violet-100 px-5 py-3 dark:border-violet-900/50">
@@ -338,7 +362,7 @@
                                     :disabled="creatingRecipes"
                                     class="group w-full flex items-center gap-3 p-3 rounded-xl text-left hover:bg-emerald-50 disabled:opacity-50 dark:hover:bg-emerald-500/10 transition active:scale-[0.99]">
                                     <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white flex-shrink-0"><FlaskConical class="h-5 w-5" /></span>
-                                    <span class="min-w-0"><span class="block text-sm font-semibold text-slate-900 dark:text-white">{{ creatingRecipes ? 'Sending to lab…' : 'Create Recipe' }}</span><span class="block text-xs text-slate-500 dark:text-zinc-400">Send {{ productSelections.pantones.length }} colors × {{ productSelections.yarns.length }} yarns to Dyeing Lab</span></span>
+                                    <span class="min-w-0"><span class="block text-sm font-semibold text-slate-900 dark:text-white">{{ creatingRecipes ? 'Sending to lab…' : 'Create Recipe' }}</span><span class="block text-xs text-slate-500 dark:text-zinc-400">{{ recipeRequestSummary }}</span></span>
                                 </button>
                                 <button v-if="canEditInquiry" @click="openQuotationModal" type="button"
                                     class="group w-full flex items-center gap-3 p-3 rounded-xl text-left hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition active:scale-[0.99]">
@@ -1415,8 +1439,21 @@ const quotationPriceTiers = [
 const quotationFabricName = (id) => props.quotationFabrics.find((fabric) => Number(fabric.id) === Number(id))?.name || 'Fabric type';
 const productSelections = computed(() => props.inquiry.product_selections || {});
 const hasClientProductSelections = computed(() => Boolean(
-    productSelections.value.pantones?.length && productSelections.value.yarns?.length
+    (productSelections.value.pantones?.length && productSelections.value.yarns?.length)
+    || productSelections.value.products?.some((product) => product.pantones?.length && product.yarns?.length)
 ));
+const recipeRequestSummary = computed(() => {
+    const bulkProducts = Array.isArray(productSelections.value.products) ? productSelections.value.products : [];
+    const selectionSets = bulkProducts.length ? bulkProducts : [productSelections.value];
+    const combinations = selectionSets.reduce((total, product) =>
+        total + (product.pantones ?? []).length * (product.yarns ?? []).length, 0);
+
+    if (bulkProducts.length) {
+        return `Send ${combinations} color × yarn combinations across ${bulkProducts.length} products to Dyeing Lab`;
+    }
+
+    return `Send ${(productSelections.value.pantones ?? []).length} colors × ${(productSelections.value.yarns ?? []).length} yarns to Dyeing Lab`;
+});
 const creatingRecipes = ref(false);
 const showRecipesCreated = ref(false);
 const createSelectedRecipes = async () => {
@@ -1522,33 +1559,41 @@ const minimumOrderFor = (item) => {
 
 const selectedProductQuoteItems = () => {
     const selections = productSelections.value;
-    const productId = Number(selections.product_id || props.inquiry.product_id);
-    const productName = props.inquiry.product?.name || '';
+    const selectionSets = selections.products?.length
+        ? selections.products
+        : [{ ...selections, product_id: selections.product_id || props.inquiry.product_id }];
 
-    return (selections.pantones || []).flatMap((pantone) => (selections.yarns || []).map((yarn) => {
-        const priceKey = `${yarn.id}:${pantone.color_category}`;
-        const presetPrice = Object.prototype.hasOwnProperty.call(props.selectionPricing, priceKey)
-            ? props.selectionPricing[priceKey]
-            : null;
-        return {
-            product_id: productId,
-            fabric: productName,
-            design: '',
-            kilos: Number(props.selectedProductMinimumOrderQuantity ?? props.inquiry.selected_product_minimum_order_quantity ?? props.inquiry.product?.minimum_order_quantity ?? 0),
-            pantone_id: Number(pantone.id),
-            pantone_name: pantone.name,
-            pantone_hex: pantone.hex,
-            color_category: pantone.color_category,
-            color: pantone.name,
-            fabric_type_id: Number(yarn.id),
-            fabric_type_name: yarn.name,
-            unit_price: presetPrice,
-            default_unit_price: presetPrice,
-            fabric_type_ids: [],
-            fabric_prices: {},
-            isDefault: true,
-        };
-    }));
+    return selectionSets.flatMap((selection) => {
+        const productId = Number(selection.product_id || props.inquiry.product_id);
+        const product = (props.allProducts || []).find((item) => Number(item.id) === productId)
+            || (props.parsedProducts || []).find((item) => Number(item.id) === productId)
+            || props.inquiry.product;
+        return (selection.pantones || []).flatMap((pantone) => (selection.yarns || []).map((yarn) => {
+            const priceKey = `${productId}:${yarn.id}:${pantone.color_category}`;
+            const legacyPriceKey = `${yarn.id}:${pantone.color_category}`;
+            const presetPrice = Object.prototype.hasOwnProperty.call(props.selectionPricing, priceKey)
+                ? props.selectionPricing[priceKey]
+                : (Object.prototype.hasOwnProperty.call(props.selectionPricing, legacyPriceKey) ? props.selectionPricing[legacyPriceKey] : null);
+            return {
+                product_id: productId,
+                fabric: selection.name || product?.name || '',
+                design: '',
+                kilos: Number(selection.minimum_order_quantity ?? product?.minimum_order_quantity ?? props.selectedProductMinimumOrderQuantity ?? 0),
+                pantone_id: Number(pantone.id),
+                pantone_name: pantone.name,
+                pantone_hex: pantone.hex,
+                color_category: pantone.color_category,
+                color: pantone.name,
+                fabric_type_id: Number(yarn.id),
+                fabric_type_name: yarn.name,
+                unit_price: presetPrice,
+                default_unit_price: presetPrice,
+                fabric_type_ids: [],
+                fabric_prices: {},
+                isDefault: true,
+            };
+        }));
+    });
 };
 
 const openQuotationModal = () => {

@@ -70,7 +70,7 @@ const metrics = computed(() => [
                         <p class="mt-1 text-sm crm-muted">{{ greeting }}, {{ user?.name }}. Here’s your team’s current pipeline and next actions.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-3">
-                        <span class="crm-date"><Clock3 class="h-4 w-4" /> {{ today }}</span>
+                        <span class="crm-date"><Clock3 class="h-4 w-4" />{{ today }}</span>
                         <Link v-if="canView('opportunities')" :href="route('crm.opportunities')" class="crm-primary-link">
                             Open pipeline <ArrowRight class="h-4 w-4" />
                         </Link>
@@ -111,8 +111,8 @@ const metrics = computed(() => [
                                     <span class="font-medium">{{ stage.name }} <span class="crm-muted font-normal">· {{ stage.count }}</span></span>
                                     <span class="font-semibold tabular-nums">{{ peso(stage.value) }}</span>
                                 </div>
-                                <div class="h-2 overflow-hidden rounded-full bg-emerald-50">
-                                    <div class="h-full rounded-full bg-gradient-to-r from-emerald-800 to-emerald-500 transition-all" :style="{ width: `${Math.max(stage.value > 0 ? 4 : 0, stage.value / stageMaximum * 100)}%` }" />
+                                <div class="crm-stage-track h-2 overflow-hidden rounded-full">
+                                    <div class="crm-stage-fill h-full rounded-full transition-all" :style="{ width: `${Math.max(stage.value > 0 ? 4 : 0, stage.value / stageMaximum * 100)}%` }" />
                                 </div>
                                 <p class="text-right text-[11px] crm-muted">Weighted {{ peso(stage.forecast) }}</p>
                             </div>
@@ -133,7 +133,7 @@ const metrics = computed(() => [
                             </div>
                             <Link v-if="canView('activities')" :href="route('crm.activities')" class="crm-text-link">All activities <ArrowRight class="h-3.5 w-3.5" /></Link>
                         </div>
-                        <div v-if="upcomingActivities.length" class="mt-3 divide-y divide-emerald-50">
+                        <div v-if="upcomingActivities.length" class="crm-divider mt-3 divide-y">
                             <div v-for="activity in upcomingActivities" :key="activity.id" class="flex gap-3 py-3">
                                 <span class="crm-activity-icon" :class="activity.overdue ? 'is-overdue' : ''">
                                     <CircleAlert v-if="activity.overdue" class="h-4 w-4" />
@@ -161,7 +161,7 @@ const metrics = computed(() => [
                             </div>
                             <Link v-if="canView('leads')" :href="route('crm.lead')" class="crm-text-link">Lead list <ArrowRight class="h-3.5 w-3.5" /></Link>
                         </div>
-                        <div v-if="recentLeads.length" class="divide-y divide-emerald-50">
+                        <div v-if="recentLeads.length" class="crm-divider divide-y">
                             <div v-for="lead in recentLeads" :key="lead.id" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 sm:px-6">
                                 <div class="flex min-w-0 items-center gap-3">
                                     <span class="crm-lead-avatar">{{ (lead.company_name || '?').slice(0, 1).toUpperCase() }}</span>
@@ -206,11 +206,11 @@ const metrics = computed(() => [
 </template>
 
 <style scoped>
-.crm-dashboard { --crm-page: #f8fafc; --crm-panel: #fff; --crm-ink: #1e293b; --crm-muted: #64748b; --crm-line: #e2e8f0; --crm-accent: #4f46e5; --crm-accent-dark: #3730a3; --crm-accent-soft: #eef2ff; --crm-accent-ink: #4338ca; --crm-soft-green: #ecfdf5; --crm-green: #047857; --crm-green-ink: #065f46; --crm-warning: #fffbeb; --crm-warning-ink: #92400e; color: var(--crm-ink); background: var(--crm-page); }
+.crm-dashboard { --crm-page: #f8fafc; --crm-panel: #fff; --crm-ink: #1e293b; --crm-muted: #64748b; --crm-line: #e2e8f0; --crm-accent: #111827; --crm-accent-dark: #030712; --crm-accent-soft: #f1f5f9; --crm-accent-ink: #111827; --crm-banner-chip-border: #64748b; --crm-blue-soft: #eff6ff; --crm-blue: #1d4ed8; --crm-danger-soft: #fff0ed; --crm-danger: #a84235; --crm-soft-green: #ecfdf5; --crm-green: #047857; --crm-green-ink: #065f46; --crm-warning: #fffbeb; --crm-warning-ink: #92400e; color: var(--crm-ink); background: var(--crm-page); }
 .crm-eyebrow, .crm-label { color: var(--crm-muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
 .crm-muted { color: var(--crm-muted); }
 .crm-date, .crm-nav-link, .crm-primary-link, .crm-text-link { display: inline-flex; align-items: center; gap: 0.5rem; }
-.crm-date { color: var(--crm-muted); font-size: 0.8rem; }
+.crm-date { color: #fff !important; -webkit-text-fill-color: #fff !important; background: var(--crm-accent) !important; border: 1px solid var(--crm-banner-chip-border); border-radius: 999px; padding: 0.45rem 0.7rem; font-size: 0.8rem; font-weight: 700; }
 .crm-primary-link { border-radius: 0.8rem; background: var(--crm-accent); color: #fff; padding: 0.65rem 0.9rem; font-size: 0.8rem; font-weight: 700; transition: background .15s ease; }
 .crm-primary-link:hover { background: var(--crm-accent-dark); }
 .crm-nav-link { border: 1px solid var(--crm-line); border-radius: 999px; background: var(--crm-panel); color: var(--crm-accent-ink); padding: 0.48rem 0.78rem; font-size: 0.75rem; font-weight: 600; transition: background .15s ease, border-color .15s ease; }
@@ -221,9 +221,12 @@ const metrics = computed(() => [
 .crm-metric-icon, .crm-activity-icon, .crm-lead-avatar { display: flex; flex: none; align-items: center; justify-content: center; }
 .crm-metric-icon { width: 2.5rem; height: 2.5rem; border-radius: .8rem; background: var(--crm-accent-soft); color: var(--crm-accent); }
 .crm-metric-icon.is-mint { background: var(--crm-soft-green); color: var(--crm-green); }
-.crm-metric-icon.is-blue { background: #eff6ff; color: #2563eb; }
+.crm-metric-icon.is-blue { background: var(--crm-blue-soft); color: var(--crm-blue); }
 .crm-metric-icon.is-gold { background: var(--crm-warning); color: var(--crm-warning-ink); }
 .crm-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.crm-stage-track { background: var(--crm-accent-soft); }
+.crm-stage-fill { background: linear-gradient(90deg, var(--crm-accent-dark), var(--crm-accent)); }
+.crm-divider > :not([hidden]) ~ :not([hidden]) { border-color: var(--crm-line); }
 .crm-text-link { color: var(--crm-accent-ink); font-size: .75rem; font-weight: 650; white-space: nowrap; }
 .crm-text-link:hover { color: var(--crm-accent-dark); }
 .crm-empty-state { display: flex; min-height: 8rem; align-items: center; justify-content: center; gap: .7rem; color: var(--crm-muted); font-size: .8rem; }
@@ -233,11 +236,11 @@ const metrics = computed(() => [
 .crm-activity-icon { width: 2rem; height: 2rem; border-radius: .65rem; background: var(--crm-soft-green); color: var(--crm-green); }
 .crm-activity-icon.is-overdue { background: #fff0ed; color: #b54736; }
 .crm-lead-avatar { width: 2.3rem; height: 2.3rem; border-radius: .7rem; background: var(--crm-accent-soft); color: var(--crm-accent-ink); font-size: .85rem; font-weight: 700; }
-.crm-status-pill { border-radius: 999px; background: #f1f5f9; padding: .25rem .55rem; color: #475569; font-size: .65rem; font-weight: 650; text-transform: capitalize; }
-.crm-status-pill.status-inquiry { background: #eff6ff; color: #1d4ed8; }
+.crm-status-pill { border-radius: 999px; background: var(--crm-status-bg); padding: .25rem .55rem; color: var(--crm-status-ink); font-size: .65rem; font-weight: 650; text-transform: capitalize; }
+.crm-status-pill.status-inquiry { background: var(--crm-blue-soft); color: var(--crm-blue); }
 .crm-status-pill.status-negotiation, .crm-status-pill.status-approval-sent { background: var(--crm-warning); color: var(--crm-warning-ink); }
 .crm-status-pill.status-closed-won, .crm-status-pill.status-converted { background: var(--crm-soft-green); color: var(--crm-green-ink); }
-.crm-status-pill.status-lost, .crm-status-pill.status-archived { background: #fff0ed; color: #a84235; }
+.crm-status-pill.status-lost, .crm-status-pill.status-archived { background: var(--crm-danger-soft); color: var(--crm-danger); }
 .crm-pulse-tile { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .5rem .6rem; border: 1px solid var(--crm-line); border-radius: .8rem; background: var(--crm-page); padding: .8rem; color: var(--crm-muted); }
 .crm-pulse-tile span { font-size: .72rem; }
 .crm-pulse-tile strong { grid-column: 2; color: var(--crm-ink); font-size: 1.2rem; font-weight: 650; }

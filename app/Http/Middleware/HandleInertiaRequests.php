@@ -10,6 +10,8 @@ use App\Models\Core\UserModuleAccess;
 use App\Models\Crm\CrmClientAssignment;
 use App\Support\ClientAccess;
 use App\Support\ManufacturingPages;
+use App\Support\ManufacturingRoles;
+use App\Support\ThemePolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -153,6 +155,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'realtime_version' => fn () => (string) Cache::get('erp:realtime:data-version', 0),
+            'themeSettings' => fn () => ThemePolicy::forRequest(),
             'auth' => [
                 'user'                => $userData,
                 'page_permissions'    => $pagePermissionsList,
@@ -310,6 +313,23 @@ class HandleInertiaRequests extends Middleware
         // overwritten; other modules are untouched (overseer model).
         $module = strtoupper($user->role);
         $position = $user->position;
+
+        // The new department roster is available to the three production
+        // supervisors by default. An explicit IT row, including Disabled,
+        // remains authoritative.
+        if ($module === 'MAN'
+            && $user->is_manufacturing_supervisor
+            && in_array($user->supervisor_department, ManufacturingRoles::PRODUCTION_DEPARTMENTS, true)
+            && ! collect($explicitPermissions)->contains(fn ($perm) =>
+                strtoupper((string) ($perm['module'] ?? '')) === 'MAN'
+                && strtolower((string) ($perm['page'] ?? '')) === 'staff'
+            )) {
+            $result[] = [
+                'module' => 'MAN',
+                'page' => 'staff',
+                'permission_level' => 'edit',
+            ];
+        }
 
         if ($module === 'IT' && in_array($position, ['manager', 'staff'], true)) {
             $itPages = $this->getModulePages('IT');

@@ -1,5 +1,5 @@
 <script>
-import { LayoutDashboard, LifeBuoy, MonitorSmartphone, Activity, BookOpen, GitPullRequest, ShieldCheck, Users, ScrollText, MapPin } from 'lucide-vue-next'
+import { LayoutDashboard, LifeBuoy, MonitorSmartphone, Activity, BookOpen, GitPullRequest, ShieldCheck, Users, ScrollText, MapPin, Palette } from 'lucide-vue-next'
 
 export const itModule = {
     key: 'IT',
@@ -22,6 +22,7 @@ export const itModule = {
             { label: 'Changes', href: route('it.changes'), icon: GitPullRequest, permKey: 'changes' },
             { label: 'Access Control', href: route('it.access-control'), icon: Users, permKey: 'access_control' },
             { label: 'Access Logs', href: route('it.access-logs'), icon: ScrollText, permKey: 'access_logs' },
+            { label: 'Appearance', href: route('it.appearance'), icon: Palette, permKey: 'appearance' },
         ]
         if (isCEO) {
             all.push({ label: 'Access Control', href: route('it.access'), icon: ShieldCheck, permKey: 'access' })

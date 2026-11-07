@@ -21,7 +21,10 @@ Route::prefix('dashboard/pro')->name('pro.')->middleware(['auth', 'verified'])->
     Route::get('/interview', [InterviewController::class, 'index'])->name('interview.index');
     Route::get('/trainee', [TraineeController::class, 'index'])->name('trainee.index');
 
-    Route::middleware(['module.access:PRO', 'position:manager'])->prefix('manager')->name('manager.')->group(function () {
+    // Page-level grants are managed in IT Access Control. Requiring the
+    // manager position here blocked explicitly assigned employees before
+    // page.permission could validate their specific grant.
+    Route::middleware(['module.access:PRO'])->prefix('manager')->name('manager.')->group(function () {
         Route::get('/', [ProDashboardController::class, 'managerDashboard'])
             ->middleware('page.permission:dashboard,view')->name('dashboard');
         Route::get('/material-requests', [ProcurementController::class, 'materialRequests'])

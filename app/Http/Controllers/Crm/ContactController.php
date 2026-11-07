@@ -30,8 +30,6 @@ class ContactController extends Controller
                 CrmClientAssignment::where('client_id', $client->id)->where('staff_id', $user->id)->exists(),
                 403, 'You are not assigned to this client.'
             );
-        } elseif (! in_array($user->role, ['CRM', 'CEO', 'COO'], true)) {
-            abort(403, 'Unauthorized access.');
         }
 
         return $client;
@@ -39,8 +37,6 @@ class ContactController extends Controller
 
     protected function prospect(CrmLead $lead): CrmLead
     {
-        abort_unless(in_array(Auth::user()->role, ['CRM', 'CEO', 'COO'], true), 403, 'Unauthorized access.');
-
         return $lead;
     }
 

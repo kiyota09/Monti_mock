@@ -307,12 +307,36 @@ abstract class ManufacturingStaffController extends Controller
         }
 
         return $query->latest()->get()
-            ->map(function (ManTaskAssignment $assignment) use ($processStage) {
+            ->map(function (ManTaskAssignment $assignment) use ($processStage, $department) {
                 $order = $assignment->manufacturingOrder ?: $assignment->fabric?->manufacturingOrder;
                 $salesOrder = $assignment->salesOrder ?: $order?->salesOrder ?: $assignment->fabric?->salesOrder;
                 $manufacturingOrderId = $assignment->manufacturing_order_id ?: $order?->id;
                 $salesOrderId = $assignment->sales_order_id ?: $salesOrder?->id;
                 $fabricId = $assignment->fabric_id;
+
+                // A Dyeing assignment remains active until a manager closes it in
+                // some workflows. Do not leave a completed JO on a staff work page
+                // just because that assignment row was not closed at the same time.
+                if ($department === 'dyeing') {
+                    if (strtolower((string) $order?->status) === 'completed'
+                        || strtolower((string) $salesOrder?->status) === 'completed') {
+                        return null;
+                    }
+
+                    $dyeingItems = DyeingBatchFabric::query()
+                        ->whereHas('fabric', function ($fabricQuery) use ($manufacturingOrderId, $salesOrderId, $fabricId) {
+                            $fabricQuery->where(function ($ids) use ($manufacturingOrderId, $salesOrderId, $fabricId) {
+                                if ($manufacturingOrderId) $ids->where('manufacturing_order_id', $manufacturingOrderId);
+                                if ($salesOrderId) $ids->{$manufacturingOrderId ? 'orWhere' : 'where'}('sales_order_id', $salesOrderId);
+                                if ($fabricId && ! $manufacturingOrderId && ! $salesOrderId) $ids->whereKey($fabricId);
+                            });
+                        })->get(['status']);
+
+                    if ($dyeingItems->isNotEmpty() && $dyeingItems->every(fn ($item) => $item->status === 'completed')) {
+                        return null;
+                    }
+                }
+
                 $productionWeight = $this->dyeingProductionWeight($order, $salesOrder);
                 $recipe = $salesOrder?->recipe;
                 $recipeMaterials = $recipe?->materials ?? [];
@@ -461,7 +485,7 @@ abstract class ManufacturingStaffController extends Controller
                             ? 'Bleaching → Pre Treatment → Color → Post Treatment'
                             : 'Pre Treatment → Color → Post Treatment'),
                 ];
-            })->values()->all();
+            })->filter()->values()->all();
     }
 
     /** Resolve the role workspace currently being viewed by a supervisor. */

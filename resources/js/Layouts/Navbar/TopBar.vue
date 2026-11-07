@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { usePage, Link, router, useForm } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import axios from 'axios';
-import { useTheme, initTheme, THEMES } from '@/composables/useTheme';
+import { useTheme, initTheme, applyThemeSettings, THEMES } from '@/composables/useTheme';
 import {
     MessageSquare, Megaphone, Bell, Settings, X, Send, Search,
     User, LogOut, Palette, Check, ChevronLeft, Plus, CheckCheck,
@@ -11,7 +11,6 @@ import {
     PanelLeft, ChevronRight, LifeBuoy, Info, KeyRound, Clock, Maximize2,
 } from 'lucide-vue-next';
 import { useSidebarToggle } from '@/Layouts/composables/useSidebarToggle';
-import FabricInquiryNotice from '@/Components/FabricInquiryNotice.vue';
 import FabricModalArtwork from '@/Components/FabricModalArtwork.vue';
 
 const page = usePage();
@@ -84,6 +83,8 @@ const logoutHref = computed(() => {
 // red = Rose & Wine, green = Soft Sage & Eucalyptus — all ERP-wide,
 // crafted from the IT-module base via data-theme CSS.
 const { currentTheme, setTheme } = useTheme();
+const visibleThemes = computed(() => THEMES.filter((theme) => page.props.themeSettings?.enabledThemes?.includes(theme.key) ?? true));
+watch(() => page.props.themeSettings, (settings) => initTheme(settings), { deep: true });
 
 // Keep the active portal scope available for layout rules; theme colors remain
 // ERP-wide and are driven separately through html[data-theme].
@@ -102,85 +103,18 @@ watch(currentUrl, syncModuleScope);
 
 // ─── Logout confirmation ────────────────────────────────────────
 const showLogoutConfirm = ref(false);
-const showLogoutSuccess = ref(false);
-const logoutDestination = ref('/');
 const loggingOut = ref(false);
-<<<<<<< HEAD
 const logoutForm = ref(null);
-const logoutRetryStorageKey = 'monti.logout.csrf-retry';
-const logoutRetriedStorageKey = 'monti.logout.csrf-retried';
-const readLogoutStorage = (key) => {
-    try { return sessionStorage.getItem(key); } catch { return null; }
-};
-const writeLogoutStorage = (key, value) => {
-    try { sessionStorage.setItem(key, value); } catch { /* native form remains available */ }
-};
-const clearLogoutStorage = (key) => {
-    try { sessionStorage.removeItem(key); } catch { /* storage may be disabled */ }
-};
-=======
 const csrfToken = ref('');
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
-
-const refreshCsrfToken = () => {
-    csrfToken.value = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || csrfToken.value;
-};
-
-<<<<<<< HEAD
-// Logout via fetch (instead of a raw native submit) so a stale CSRF token /
-// expired CSRF token (HTTP 419) reloads once and automatically retries with
-// the refreshed token, avoiding a second manual click. Falls back to the
-// native form submit if the request itself cannot be made (offline…).
-const submitLogout = async () => {
+// Use one browser POST/redirect flow. Retrying after a fetch error can send a
+// second POST even if the first request already invalidated the session.
+const submitLogout = () => {
     if (loggingOut.value) return;
-    loggingOut.value = true;
-    refreshCsrfToken();
-    try {
-        const res = await fetch(logoutHref.value, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': csrfToken.value, 'Accept': 'text/html' },
-            credentials: 'same-origin',
-            redirect: 'follow',
-        });
-        if (res.ok) {
-            clearLogoutStorage(logoutRetryStorageKey);
-            clearLogoutStorage(logoutRetriedStorageKey);
-            showLogoutConfirm.value = false;
-            logoutDestination.value = res.url || '/';
-            showLogoutSuccess.value = true;
-            return;
-        }
-        if (res.status === 419) {
-            if (readLogoutStorage(logoutRetriedStorageKey) === logoutHref.value) {
-                clearLogoutStorage(logoutRetriedStorageKey);
-                throw new Error('The refreshed logout request was rejected.');
-            }
-            writeLogoutStorage(logoutRetryStorageKey, logoutHref.value);
-            window.location.reload();
-            return;
-        }
-        throw new Error(`Logout failed with status ${res.status}`);
-    } catch {
-        // Last resort: plain native submit (previous behavior).
-        logoutForm.value?.submit();
-    } finally {
-        loggingOut.value = false;
-=======
-// Let the browser submit directly so Laravel's redirect is handled normally.
-const prepareLogout = (event) => {
-    if (loggingOut.value) {
-        event.preventDefault();
-        return;
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
-    }
-    refreshCsrfToken();
-    const tokenInput = event.currentTarget.querySelector('input[name="_token"]');
+    csrfToken.value = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || csrfToken.value;
+    const tokenInput = logoutForm.value?.querySelector('input[name="_token"]');
     if (tokenInput) tokenInput.value = csrfToken.value;
     loggingOut.value = true;
-};
-
-const finishLogout = () => {
-    window.location.href = logoutDestination.value || '/';
+    if (logoutForm.value) HTMLFormElement.prototype.submit.call(logoutForm.value);
 };
 
 // ─── Change password (partner portal) ───────────────────────────────
@@ -749,15 +683,18 @@ const createThread = async () => {
 
 // ─── Lifecycle ──────────────────────────────────────────────────────
 let msgTimer = null;
+let themePolicyTimer = null;
+const refreshThemePolicy = async () => {
+    try {
+        const response = await fetch('/system/theme-settings', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        if (response.ok) applyThemeSettings(await response.json());
+    } catch { /* Keep the current theme when policy refresh is unavailable. */ }
+};
 onMounted(() => {
     csrfToken.value = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    if (readLogoutStorage(logoutRetryStorageKey) === logoutHref.value) {
-        clearLogoutStorage(logoutRetryStorageKey);
-        writeLogoutStorage(logoutRetriedStorageKey, logoutHref.value);
-        showLogoutConfirm.value = true;
-        nextTick(() => submitLogout());
-    }
-    initTheme();
+    initTheme(page.props.themeSettings);
+    refreshThemePolicy();
+    themePolicyTimer = window.setInterval(refreshThemePolicy, 30000);
     syncModuleScope();
     document.addEventListener('click', closeSettingsOnOutsideClick);
     if (isInternal.value) {
@@ -774,6 +711,7 @@ onMounted(() => {
     }
 });
 onBeforeUnmount(() => {
+    if (themePolicyTimer) window.clearInterval(themePolicyTimer);
     document.removeEventListener('click', closeSettingsOnOutsideClick);
     if (clockTimer) clearInterval(clockTimer);
     if (pollTimer) clearInterval(pollTimer);
@@ -821,11 +759,9 @@ const humanizeSeg = (s) => s.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.to
 const breadcrumbs = computed(() => {
     const path = (currentUrl.value || '/').split('?')[0].split('#')[0];
     const crumbs = [];
-    let href = '';
     for (const seg of path.split('/').filter(Boolean)) {
-        href += `/${seg}`;
-        if (/^\d+$/.test(seg)) continue; // skip bare IDs, keep path for links
-        crumbs.push({ label: CRUMB_LABELS[seg.toLowerCase()] || humanizeSeg(seg), href });
+        if (/^\d+$/.test(seg)) continue; // skip bare IDs
+        crumbs.push({ label: CRUMB_LABELS[seg.toLowerCase()] || humanizeSeg(seg) });
     }
     return crumbs;
 });
@@ -863,14 +799,13 @@ onMounted(() => {
                 </button>
                 <!-- Breadcrumbs -->
                 <nav class="flex min-w-0 flex-1 items-center gap-1 text-sm" aria-label="Breadcrumb">
-                    <template v-for="(c, i) in breadcrumbs" :key="c.href + i">
+                    <template v-for="(c, i) in breadcrumbs" :key="c.label + i">
                         <span :class="['flex min-w-0 items-center gap-1', i < breadcrumbs.length - 1 ? 'hidden md:flex' : 'flex']">
                             <ChevronRight class="h-3.5 w-3.5 shrink-0 text-gray-300 dark:text-zinc-600" />
-                            <Link v-if="i < breadcrumbs.length - 1" :href="c.href"
-                                class="truncate whitespace-nowrap text-[13px] font-semibold text-gray-500 transition hover:text-indigo-600 dark:text-gray-400">
-                                {{ c.label }}
-                            </Link>
-                            <span v-else class="truncate text-[13px] font-bold text-gray-900 dark:text-white">
+                            <span :aria-current="i === breadcrumbs.length - 1 ? 'page' : undefined"
+                                :class="i === breadcrumbs.length - 1
+                                    ? 'truncate text-[13px] font-bold text-gray-900 dark:text-white'
+                                    : 'truncate whitespace-nowrap text-[13px] font-semibold text-gray-500 dark:text-gray-400'">
                                 {{ c.label }}
                             </span>
                         </span>
@@ -881,7 +816,7 @@ onMounted(() => {
                     <div class="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 dark:border-zinc-700 dark:bg-zinc-800">
                         <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                         <span class="font-mono text-sm font-black tabular-nums text-gray-800 dark:text-zinc-100">{{ clockTime }}</span>
-                        <span class="hidden text-[11px] font-bold uppercase tracking-widest text-gray-400 lg:inline">{{ clockDate }}</span>
+                        <span class="hidden text-[11px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 lg:inline">{{ clockDate }}</span>
                     </div>
                 </div>
                 <div class="flex min-w-0 flex-1 items-center justify-center sm:hidden" title="Server time">
@@ -992,7 +927,7 @@ onMounted(() => {
                                 <Palette class="h-3.5 w-3.5" /> Theme
                             </p>
                             <div class="mt-2 space-y-1">
-                                <button v-for="t in THEMES" :key="t.key" @click="setTheme(t.key)"
+                                <button v-for="t in visibleThemes" :key="t.key" @click="setTheme(t.key)"
                                     class="flex w-full items-center gap-3 rounded-xl px-2.5 py-1.5 text-sm font-bold transition hover:bg-gray-100 dark:hover:bg-zinc-800"
                                     :class="currentTheme === t.key ? 'text-gray-900 dark:text-white ring-1 ring-inset ring-indigo-500/40 bg-indigo-50/60 dark:bg-indigo-900/20' : 'text-gray-700 dark:text-gray-200'">
                                     <span class="h-4 w-4 shrink-0 rounded-full ring-1 ring-inset ring-black/10" :style="{ backgroundColor: t.dot }" />
@@ -1413,23 +1348,12 @@ onMounted(() => {
                      renders from any tab — it previously only existed while
                      the messenger panel was open) -->
                 <Teleport to="body">
-<<<<<<< HEAD
                     <div v-if="showLogoutConfirm" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showLogoutConfirm = false">
                         <div class="fabric-logout-confirm w-full max-w-xs overflow-hidden rounded-3xl bg-white text-center shadow-2xl dark:bg-zinc-900">
                             <FabricModalArtwork kind="info" label="Blue fabric swatches" />
                             <div class="px-6 pb-2 pt-4">
                                 <h4 class="text-base font-black text-gray-900 dark:text-white">Log out?</h4>
                                 <p class="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-=======
-                    <div v-show="showLogoutConfirm" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showLogoutConfirm = false">
-                        <div class="w-full max-w-xs overflow-hidden rounded-3xl bg-white text-center shadow-2xl dark:bg-zinc-900">
-                            <div class="px-6 pb-2 pt-6">
-                                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 dark:bg-rose-900/30">
-                                    <LogOut class="h-6 w-6 text-rose-600" />
-                                </div>
-                                <h4 class="mt-3 text-base font-black text-gray-900 dark:text-white">Log out?</h4>
-                                <p class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                                     Are you sure you want to sign out of your account{{ displayName ? `, ${displayName}` : '' }}?
                                 </p>
                             </div>
@@ -1439,7 +1363,7 @@ onMounted(() => {
                                     Cancel
                                 </button>
                                 <!-- Standard CSRF-protected logout POST. -->
-                                <form :action="logoutHref" method="POST" class="flex-1" @submit="prepareLogout">
+                                <form ref="logoutForm" :action="logoutHref" method="POST" class="flex-1" @submit.prevent="submitLogout">
                                     <input type="hidden" name="_token" :value="csrfToken" />
                                     <button type="submit" :disabled="loggingOut"
                                         class="w-full rounded-xl bg-rose-600 py-2.5 text-xs font-black uppercase text-white hover:bg-rose-700 active:scale-95 disabled:opacity-60">
@@ -1450,14 +1374,6 @@ onMounted(() => {
                         </div>
                     </div>
                 </Teleport>
-                <FabricInquiryNotice
-                    v-model="showLogoutSuccess"
-                    title="Logged out successfully"
-                    message="You have been signed out of your account."
-                    button-text="Continue"
-                    @close="finishLogout"
-                />
-
                 <!-- Change password (partner portal) -->
                 <Teleport to="body">
                     <div v-if="showPasswordModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="closePasswordModal">
