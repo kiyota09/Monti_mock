@@ -1,12 +1,6 @@
 <script setup>
-<<<<<<< HEAD
-import { showNotice } from '@/lib/feedback';
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
-import { computed, ref, onMounted, watch } from 'vue';
-=======
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch, nextTick } from 'vue';
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { CheckCircle2, Search, X } from 'lucide-vue-next';
 
@@ -72,20 +66,12 @@ const selectedEmployees = computed(() => {
 
 const openConfirm = () => {
     if (!form.employee_ids.length) {
-<<<<<<< HEAD
-        showNotice('Please select at least one employee.');
-        return;
-    }
-    if (activeMeta.value?.is_current) {
-        showNotice('Cannot generate payroll for the current period. Please select a past period.');
-=======
         missingEmployees.value = true;
         showConfirm.value = true;
         return;
     }
     if (activeMeta.value?.locked) {
         alert('This pay period is locked because all payroll records are Paid.');
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
         return;
     }
     missingEmployees.value = false;

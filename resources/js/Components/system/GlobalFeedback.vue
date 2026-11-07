@@ -88,7 +88,7 @@ function close(confirmed) {
     if (confirmed && typeof action === 'function') action();
 }
 function keyHandler(event) { if (event.key === 'Escape' && dialog.value?.kind !== 'session') close(false); }
-function handleStart() { clearTimeout(slowTimer); slowTimer = setTimeout(() => setSlow(true), 5000); }
+function handleStart() { clearTimeout(slowTimer); slowTimer = setTimeout(() => setSlow(true), 10000); }
 function handleFinish() { clearTimeout(slowTimer); setSlow(false); }
 
 watch(dialog, (next) => { inputValue.value = next?.input ? (next.input.value || '') : ''; });

@@ -138,9 +138,9 @@ const submit = () => {
         return;
     }
 
-    form.post(route('register'), {
+    form.post(route('register.store'), {
         onSuccess: () => {
-            toast.success('Account registered successfully!');
+            toast.success('Registration submitted. Please wait for HR approval before signing in.');
         },
         onError: (errors) => {
             const errorMsg = Object.values(errors)[0] || 'Registration failed. Please check your inputs.';

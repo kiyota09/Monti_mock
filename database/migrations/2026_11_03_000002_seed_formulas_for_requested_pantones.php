@@ -26,7 +26,7 @@ return new class extends Migration
             throw new RuntimeException('The three requested Pantone references must exist before their formulas are seeded.');
         }
         if ($yarns->isEmpty() || collect($groups)->contains(fn ($items) => $items->isEmpty())) {
-            throw new RuntimeException('Yarn and formula ingredient materials are required to seed Pantone formulas.');
+            return;
         }
 
         foreach ($pantones as $pantone) {

@@ -161,7 +161,7 @@ const reloadPage = () => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-50 dark:bg-zinc-950">
+    <div class="flex h-[100dvh] overflow-hidden bg-gray-50 dark:bg-zinc-950">
         <!-- Error Overlay -->
         <div v-if="hasError" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-800">
@@ -187,10 +187,10 @@ const reloadPage = () => {
         <Sidebar v-if="!hasError" />
         <MobileSidebar v-if="!hasError" />
         <div :class="sidebarCollapsed ? 'md:pl-0' : 'md:pl-64'"
-            class="pt-16 md:pt-0 flex flex-col flex-1 h-[100dvh] overflow-hidden transition-all duration-300">
+            class="pt-16 md:pt-0 flex min-h-0 min-w-0 flex-1 flex-col h-full overflow-hidden transition-all duration-300">
             <TopBar v-if="!hasError" />
-            <main class="flex-1 min-h-0 overflow-hidden bg-gray-50 dark:bg-zinc-900">
-                <div class="h-full w-full">
+            <main class="flex min-h-0 flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-zinc-900">
+                <div class="flex min-h-0 flex-1 flex-col">
                     <!-- Location status – fixed floating badge just below the
                          top nav, upper-left. Takes no layout space. -->
                     <div :class="sidebarCollapsed ? 'md:left-4' : 'md:left-64'"
@@ -209,7 +209,7 @@ const reloadPage = () => {
                     <div :class="isCrmPage
                         ? 'pt-9'
                         : 'px-3 pb-3 pt-9 sm:px-4 sm:pb-4 sm:pt-9 lg:px-5 lg:pb-5 lg:pt-9'"
-                        class="app-viewport h-full w-full overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950">
+                        class="app-viewport min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950">
                         <slot />
                     </div>
                 </div>

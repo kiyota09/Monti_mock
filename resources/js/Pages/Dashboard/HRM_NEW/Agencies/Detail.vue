@@ -127,17 +127,6 @@ function submitUserCreate() {
     });
 }
 
-<<<<<<< HEAD
-async function resetPassword(u: any) {
-    if (!await confirmModal(`Reset the password for ${u.name}? A new temporary password will be shown once.`)) return;
-    router.post(route('hrm.agencies.users.reset-password', { agency: props.agency.id, user: u.id }), {}, { preserveScroll: true });
-}
-
-async function toggleUser(u: any) {
-    const verb = u.is_active ? 'deactivate' : 'reactivate';
-    if (!await confirmModal(`${verb === 'deactivate' ? 'Deactivate' : 'Reactivate'} the login for ${u.name}?`)) return;
-    router.post(route('hrm.agencies.users.toggle-status', { agency: props.agency.id, user: u.id }), {}, { preserveScroll: true });
-=======
 function resetPassword(u: any) {
     confirmUserAction.value = { type: 'reset', user: u };
 }
@@ -158,7 +147,6 @@ function submitUserAction() {
         onSuccess: () => { confirmUserAction.value = null; },
         onFinish: () => { userActionProcessing.value = false; },
     });
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 }
 
 function actionLabel(a: string): string {

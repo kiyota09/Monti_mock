@@ -2,13 +2,8 @@
   <AuthenticatedLayout>
     <div class="flex min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 dark:from-zinc-950 dark:via-zinc-950 dark:to-indigo-950/30">
 
-<<<<<<< HEAD
-      <div class="flex-1 p-8 text-slate-900 font-sans min-w-0 relative flex flex-col">
-
-=======
       <div class="flex-1 p-8 text-slate-900 dark:text-zinc-100 font-sans min-w-0 relative flex flex-col">
         
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
         <!-- Subtle Background Pattern -->
         <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
 
@@ -64,13 +59,8 @@
 
         <!-- KPI METRICS ROW - All 7 Metrics -->
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 mb-4 shrink-0">
-<<<<<<< HEAD
-          <div v-for="metric in metrics" :key="metric.label"
-               class="group bg-white rounded-xl border border-slate-200/60 p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-blue-200/60 shadow-md backdrop-blur-sm cursor-pointer"
-=======
           <div v-for="metric in metrics" :key="metric.label" 
                class="group bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 dark:border-zinc-800 p-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-blue-200/60 shadow-md backdrop-blur-sm cursor-pointer"
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                @click="quickFilter(metric.filter)">
             <div class="flex items-center justify-between mb-1">
               <span class="text-[9px] font-semibold text-slate-500 dark:text-zinc-300 uppercase tracking-wider">{{ metric.label }}</span>
@@ -123,13 +113,8 @@
         </div>
 
         <!-- TABLE VIEW SECTION - FULL HEIGHT -->
-<<<<<<< HEAD
-        <div class="bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden flex-1 flex flex-col min-h-0">
-
-=======
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-slate-200/60 dark:border-zinc-800 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden flex-1 flex flex-col min-h-0">
           
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
           <!-- Job Postings Table - Scrollable -->
           <div class="flex-1 overflow-auto">
             <table class="w-full min-w-[980px] text-left border-collapse">
@@ -145,19 +130,11 @@
                   <th class="py-2.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-<<<<<<< HEAD
-              <tbody class="divide-y divide-slate-100">
-                <tr
-                  v-for="posting in filteredPostings"
-                  :key="posting.id"
-                  class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all duration-200 group"
-=======
               <tbody class="divide-y divide-slate-100 dark:divide-zinc-800">
                 <tr 
                   v-for="posting in filteredPostings" 
                   :key="posting.id" 
                   class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent dark:hover:from-zinc-800 dark:hover:to-zinc-800 transition-all duration-200 group"
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                 >
                   <td class="py-2.5 px-4">
                     <div class="flex items-center gap-2">
@@ -209,13 +186,8 @@
                     <div class="flex items-center justify-end gap-1">
                       <button
                         v-if="!posting.archived_at"
-<<<<<<< HEAD
-                        @click="openModal('edit', posting)"
-                        class="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-all"
-=======
                         @click="openModal('edit', posting)" 
                         class="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 dark:text-zinc-400 hover:text-blue-600 transition-all"
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                         title="Edit"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -288,28 +260,11 @@
                             </svg>
                             Reopen
                           </button>
-<<<<<<< HEAD
-                          <button
-                            @click="duplicatePosting(posting)"
-                            class="w-full text-left px-4 py-2 text-xs text-purple-600 hover:bg-purple-50 flex items-center gap-2 transition-colors"
-                          >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.75v-1.5a1.125 1.125 0 00-1.125-1.125H18m0 0v-1.5a1.125 1.125 0 00-1.125-1.125H14.25"/>
-                            </svg>
-                            Duplicate
-                          </button>
-                          <hr class="my-1 border-slate-100" />
-                          <button
-                            v-if="!posting.archived_at"
-                            @click="archivePosting(posting.id)"
-                            class="w-full text-left px-4 py-2 text-xs text-slate-500 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-=======
                           <hr class="my-1 border-slate-100" />
                           <button 
                             v-if="!posting.archived_at" 
                             @click="archivePosting(posting.id)" 
                             class="w-full text-left px-4 py-2 text-xs text-slate-500 dark:text-zinc-300 hover:bg-slate-50 flex items-center gap-2 transition-colors"
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                               <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
@@ -445,13 +400,8 @@
 
         <!-- CREATE/EDIT MODAL -->
         <div v-if="activeModal" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-<<<<<<< HEAD
-          <div class="bg-white rounded-2xl border border-slate-200/60 w-full max-w-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
-
-=======
           <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 dark:border-zinc-700 w-full max-w-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
             
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
             <!-- Modal Header -->
             <div class="p-6 border-b border-slate-100 dark:border-zinc-700 flex items-center justify-between bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 shrink-0">
               <div>
@@ -1057,15 +1007,6 @@ const todayDate = (() => {
     return `${d.getFullYear()}-${m}-${day}`;
 })();
 
-<<<<<<< HEAD
-const getStatusBadgeClass = (s) => ({
-  'Draft':'bg-amber-50 text-amber-700 border-amber-200',
-  'Published':'bg-emerald-50 text-emerald-700 border-emerald-200',
-  'Closed':'bg-slate-50 text-slate-500 border-slate-200',
-  'Filled':'bg-blue-50 text-blue-700 border-blue-200',
-  'Cancelled':'bg-rose-50 text-rose-700 border-rose-200',
-  'Archived':'bg-slate-50 text-slate-400 border-slate-200'
-=======
 const getStatusBadgeClass = (s) => ({ 
   'Draft':'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
   'Published':'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
@@ -1073,7 +1014,6 @@ const getStatusBadgeClass = (s) => ({
   'Filled':'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
   'Cancelled':'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
   'Archived':'bg-slate-50 dark:bg-zinc-800 text-slate-400 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
 }[s]||'');
 
 // Initialize postings from props

@@ -9,9 +9,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('pantone_fabric_formulas', function (Blueprint $table) {
-            $table->boolean('is_demo_data')->default(false)->after('combinations');
-        });
+        if (! Schema::hasColumn('pantone_fabric_formulas', 'is_demo_data')) {
+            Schema::table('pantone_fabric_formulas', function (Blueprint $table) {
+                $table->boolean('is_demo_data')->default(false)->after('combinations');
+            });
+        }
 
         $materials = DB::table('materials')->orderBy('id')->get(['id', 'mat_id', 'name', 'category', 'unit']);
         $catalog = [
@@ -20,12 +22,6 @@ return new class extends Migration
             'basic_chemicals' => $materials->filter(fn ($m) => mb_strtolower($m->category) === 'basic chemicals')->values(),
             'post_treatment' => $materials->filter(fn ($m) => mb_strtolower($m->category) === 'post-treatment')->values(),
         ];
-
-        foreach ($catalog as $group => $items) {
-            if ($items->isEmpty()) {
-                throw new RuntimeException("Cannot create Pantone demo formulas: no materials exist for {$group}.");
-            }
-        }
 
         foreach (DB::table('pantone_fabric_formulas')->orderBy('id')->get() as $formula) {
             $seed = ($formula->pantone_reference_id * 17) + ($formula->yarn_material_id * 11);
@@ -40,6 +36,10 @@ return new class extends Migration
             foreach ($counts as $group => $count) {
                 $available = $catalog[$group];
                 $rows = [];
+                if ($available->isEmpty()) {
+                    $combinations[$group] = $rows;
+                    continue;
+                }
                 $start = $seed % $available->count();
 
                 for ($i = 0; $i < min($count, $available->count()); $i++) {

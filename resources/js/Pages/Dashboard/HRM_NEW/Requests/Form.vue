@@ -13,6 +13,15 @@ const props = defineProps<{
     shifts: Array<{ id: number; code: string; name: string; start_time: string | null; end_time: string | null }>;
 }>();
 
+type PositionOption = {
+    id: number;
+    name: string;
+    department_id: number | null;
+    approved_headcount?: number;
+    filled_positions?: number;
+    available_headcount?: number;
+};
+
 const isEdit = !!props.request;
 const isDraft = !isEdit || props.request?.stored_status === 'Draft';
 const today = (() => {
@@ -97,7 +106,7 @@ const departmentOptions = computed(() => {
     return list;
 });
 
-const filteredPositions = computed(() => {
+const filteredPositions = computed<PositionOption[]>(() => {
     // No department chosen → position list stays empty.
     if (!form.department) {
         return [];

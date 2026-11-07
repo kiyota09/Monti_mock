@@ -15,13 +15,8 @@ const props = defineProps<{
 const withdrawing = ref(false);
 const showWithdrawConfirm = ref(false);
 
-<<<<<<< HEAD
-const withdraw = async () => {
-    if (!await confirmModal(`Withdraw your application for "${props.application?.job_title}"?`)) return;
-=======
 const withdraw = () => {
     showWithdrawConfirm.value = false;
->>>>>>> 4a5038e28b6a55ea65129e3176825edb8849a073
     withdrawing.value = true;
     router.post(route('applicant.applications.withdraw', props.application.id), {}, {
         onSuccess: () => toast.success('Application cancelled.'),

@@ -51,11 +51,11 @@ const reloadPage = () => {
         <!-- Normal Layout -->
         <Sidebar v-if="!hasError" />
         <MobileSidebar v-if="!hasError" />
-        <div class="md:pl-64 pt-16 md:pt-0 flex flex-col flex-1 h-[100dvh] overflow-hidden transition-all duration-300">
+        <div class="md:pl-64 pt-16 md:pt-0 flex min-h-0 min-w-0 flex-col flex-1 h-[100dvh] overflow-hidden transition-all duration-300">
             <TopBar v-if="!hasError" />
             <main class="flex-1 min-h-0 overflow-hidden bg-gray-50 dark:bg-zinc-900">
                 <div class="h-full w-full">
-                    <div class="app-viewport h-full w-full overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-5 bg-slate-50 dark:bg-zinc-950">
+                    <div class="agency-motion app-viewport h-full w-full overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-5 bg-slate-50 dark:bg-zinc-950">
                         <slot />
                     </div>
                 </div>
@@ -80,5 +80,20 @@ const reloadPage = () => {
     max-width: none !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
+}
+.agency-motion button,
+.agency-motion a,
+.agency-motion input,
+.agency-motion select,
+.agency-motion textarea,
+.agency-motion tr {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: 280ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.agency-motion button:not(:disabled):hover { transform: translateY(-1px); }
+.agency-motion button:not(:disabled):active { transform: translateY(0) scale(0.985); }
+@media (prefers-reduced-motion: reduce) {
+    .agency-motion * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 </style>
