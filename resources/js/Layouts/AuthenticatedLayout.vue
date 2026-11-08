@@ -206,10 +206,11 @@ const reloadPage = () => {
 
                     <!-- Page content owns the full viewport and scrolls internally.
                          CRM pages already provide their own padding. -->
-                    <div :class="isCrmPage
-                        ? 'pt-9'
-                        : 'px-3 pb-3 pt-9 sm:px-4 sm:pb-4 sm:pt-9 lg:px-5 lg:pb-5 lg:pt-9'"
-                        class="app-viewport min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950">
+                    <div :class="[
+                        'app-viewport min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950',
+                        isCrmPage ? 'pt-9' : 'px-3 pb-3 pt-9 sm:px-4 sm:pb-4 sm:pt-9 lg:px-5 lg:pb-5 lg:pt-9',
+                        { 'hrm-natural-sections': (page.url || '').startsWith('/dashboard/hrm') },
+                    ]">
                         <slot />
                     </div>
                 </div>
@@ -232,17 +233,18 @@ const reloadPage = () => {
    so neutralise those at the outer two levels only. Only centered wrappers
    (mx-auto) are widened, and fixed/dialog elements (modals) are excluded so
    they keep their designed width and are never stretched. */
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
+.app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
     min-height: 100% !important;
 }
 /* IT and supplier pages render sibling sections in the layout slot. Let each
    section follow its content instead of assigning every sibling a viewport height. */
 html[data-module="it"] .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]),
-html[data-module="supplier"] .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]) {
+html[data-module="supplier"] .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]),
+.app-viewport.hrm-natural-sections > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]) {
     min-height: 0 !important;
 }
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
+.app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
+.app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
     > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"] {
     max-width: none !important;
     margin-left: 0 !important;
