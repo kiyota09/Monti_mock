@@ -1,4 +1,5 @@
 import { Config } from 'ziggy-js';
+import type { ThemeSettings } from '@/composables/useTheme';
 
 export interface User {
     id: number;
@@ -27,4 +28,9 @@ export type PageProps<
         user: User;
     };
     ziggy: Config & { location: string };
+    themeSettings?: ThemeSettings | null;
+    flash?: {
+        success?: string;
+        [key: string]: unknown;
+    };
 };
