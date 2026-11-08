@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Client;
 use App\Http\Controllers\Controller;
 use App\Models\Eco\ConversationMessage;
 use App\Models\Eco\Inquiry;
+use App\Models\Core\Notification;
 use App\Models\Inv\Product;
 use App\Models\Ord\PurchaseOrder;
 use App\Models\Logistics\Delivery;
@@ -77,6 +78,11 @@ class ClientDashboardController extends Controller
             'sender_type' => 'client',
             'message' => $data['message'],
         ]);
+
+        Notification::notifyPage(
+            'CRM', 'inquiry', 'client_inquiry', 'New client order inquiry',
+            "A client submitted an order inquiry for {$product->name}.", 'crm.inquiries'
+        );
 
         return redirect()->route('client.conversation.show', $inquiry)
             ->with('success', "Order request for {$product->name} sent. You can now continue the conversation.");

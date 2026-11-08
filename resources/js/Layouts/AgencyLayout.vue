@@ -68,10 +68,15 @@ const reloadPage = () => {
 </template>
 
 <style>
-/* Agency workspace: pages fill the viewport and scroll internally. Wrapper
-   min-height / centered max-width clamps are neutralised at the outer two
-   levels only, and modals are excluded so they keep their designed width. */
+/* Agency workspace: pages scroll internally. Sections follow their content so
+   sibling sections are not each stretched to a full viewport; a page with a
+   single root wrapper still fills the viewport. Centered max-width clamps are
+   neutralised at the outer two levels only, and modals are excluded so they
+   keep their designed width. */
 .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]) {
+    min-height: 0 !important;
+}
+.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):only-child {
     min-height: 100% !important;
 }
 .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],

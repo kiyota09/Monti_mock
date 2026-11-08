@@ -20,6 +20,13 @@ const user = computed(() => page.props.auth.user)
 // document. CRM pages already follow this pattern, so they only need the
 // shared padding removed (their own pages provide it).
 const isCrmPage = computed(() => (page.url || '').startsWith('/dashboard/crm'))
+// IT and Applicant portal pages render several sibling sections in the slot.
+// Forcing every direct child to viewport height stretched each section, so let
+// their sections follow content instead.
+const isNoStretchPage = computed(() => {
+    const url = page.url || ''
+    return url.startsWith('/dashboard/it') || url.startsWith('/applicant')
+})
 const isLocating = ref(true)
 const locationReady = ref(false)
 let locationWatchId = null
@@ -209,7 +216,10 @@ const reloadPage = () => {
                     <div :class="[
                         'app-viewport min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950',
                         isCrmPage ? 'pt-9' : 'px-3 pb-3 pt-9 sm:px-4 sm:pb-4 sm:pt-9 lg:px-5 lg:pb-5 lg:pt-9',
-                        { 'hrm-natural-sections': (page.url || '').startsWith('/dashboard/hrm') },
+                        {
+                            'hrm-natural-sections': (page.url || '').startsWith('/dashboard/hrm'),
+                            'no-stretch-sections': isNoStretchPage,
+                        },
                     ]">
                         <slot />
                     </div>
@@ -249,5 +259,15 @@ html[data-module="supplier"] .app-viewport > *:not(.fixed):not([role="dialog"]):
     max-width: none !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
+}
+
+/* IT and Applicant portal pages: sections follow their content instead of each
+   being stretched to a full viewport. A page with a single root wrapper still
+   fills the viewport. */
+.app-viewport.no-stretch-sections > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
+    min-height: 0 !important;
+}
+.app-viewport.no-stretch-sections > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero):only-child {
+    min-height: 100% !important;
 }
 </style>

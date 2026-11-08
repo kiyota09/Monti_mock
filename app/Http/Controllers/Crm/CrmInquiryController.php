@@ -18,6 +18,7 @@ use App\Models\Ord\PurchaseOrder;
 use App\Models\Inv\Material;
 use App\Support\ConversationRealtime;
 use App\Support\InquiryHash;
+use App\Support\InquiryColorwayPairs;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -226,7 +227,7 @@ class CrmInquiryController extends Controller
         $sampleRecipes = FabricSampleRequest::with(['recipe.product', 'product'])
             ->where('inquiry_id', $inquiry->id)
             ->whereNotNull('recipe_id')
-            ->whereNotIn('status', [FabricSampleRequest::STATUS_CANCELLED])
+            ->whereNotIn('status', [FabricSampleRequest::STATUS_CANCELLED, FabricSampleRequest::STATUS_DISCARDED])
             ->latest()
             ->get()
             ->map(fn ($s) => [
@@ -363,7 +364,8 @@ class CrmInquiryController extends Controller
     {
         $selections = $inquiry->product_selections ?? [];
         $specificSelectionQuote = (! empty($selections['pantones']) && ! empty($selections['yarns']))
-            || collect($selections['products'] ?? [])->contains(fn ($set) => ! empty($set['pantones']) && ! empty($set['yarns']));
+            || ! empty($selections['colorways'])
+            || collect($selections['products'] ?? [])->contains(fn ($set) => (! empty($set['pantones']) || ! empty($set['colorways'])) && ! empty($set['yarns']));
         $rules = [
             'items'               => 'required|array|min:1',
             'items.*.product_id'  => 'nullable|integer|exists:products,id',
@@ -414,14 +416,14 @@ class CrmInquiryController extends Controller
                 $quoteSelectionSets = collect([[...$selections, 'product_id' => $selections['product_id'] ?? $inquiry->product_id]]);
             }
             $allowedSelectionsByProduct = $quoteSelectionSets->keyBy(fn ($set) => (int) $set['product_id']);
-            $actualPairs = collect($validated['items'])->map(function ($item) use ($allowedSelectionsByProduct) {
+            $allowedPairs = collect(InquiryColorwayPairs::fromSelections($selections, (int) $inquiry->product_id))
+                ->map(fn ($pair) => $pair['product_id'].':'.$pair['pantone_id'].':'.$pair['yarn_id']);
+            $actualPairs = collect($validated['items'])->map(function ($item) use ($allowedSelectionsByProduct, $allowedPairs) {
                 $pantoneId = (int) $item['pantone_id'];
                 $yarnId = (int) $item['fabric_type_id'];
                 $productId = (int) ($item['product_id'] ?? 0);
                 $selectionSet = $allowedSelectionsByProduct->get($productId);
-                $allowedPantones = collect($selectionSet['pantones'] ?? [])->keyBy(fn ($pantone) => (int) $pantone['id']);
-                $allowedYarns = collect($selectionSet['yarns'] ?? [])->keyBy(fn ($yarn) => (int) $yarn['id']);
-                if (! $selectionSet || ! $allowedPantones->has($pantoneId) || ! $allowedYarns->has($yarnId)) {
+                if (! $selectionSet || ! $allowedPairs->contains($productId.':'.$pantoneId.':'.$yarnId)) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'items' => 'Quotation lines must use the product, Pantone colors, and yarn types selected by the client.',
                     ]);
@@ -429,10 +431,8 @@ class CrmInquiryController extends Controller
 
                 return $productId.':'.$pantoneId.':'.$yarnId;
             });
-            $expectedPairs = $quoteSelectionSets->flatMap(function ($set) {
-                return collect($set['pantones'] ?? [])->crossJoin(collect($set['yarns'] ?? []))
-                    ->map(fn ($pair) => (int) $set['product_id'].':'.(int) $pair[0]['id'].':'.(int) $pair[1]['id']);
-            });
+            $expectedPairs = collect(InquiryColorwayPairs::fromSelections($selections, (int) $inquiry->product_id))
+                ->map(fn ($pair) => $pair['product_id'].':'.$pair['pantone_id'].':'.$pair['yarn_id']);
             if ($actualPairs->unique()->count() !== $actualPairs->count()
                 || $actualPairs->sort()->values()->all() !== $expectedPairs->sort()->values()->all()) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
@@ -476,6 +476,10 @@ class CrmInquiryController extends Controller
                 if ($specificSelectionQuote) {
                     $selectionSet = $allowedSelectionsByProduct->get((int) ($item['product_id'] ?? 0));
                     $pantone = collect($selectionSet['pantones'] ?? [])->first(fn ($color) => (int) $color['id'] === (int) $item['pantone_id']);
+                    if (! $pantone) {
+                        $pantone = \App\Models\Man\PantoneReference::query()->find((int) $item['pantone_id'])?->only(['id', 'name', 'hex', 'color_category']);
+                    }
+                    abort_unless($pantone, 422, 'A quoted Pantone color is no longer available.');
                     $unitPrice = (float) $item['unit_price'];
                     $itemTotal = round($kilos * $unitPrice * $vatMultiplier, 2);
                     $grandTotal += $itemTotal;
@@ -727,50 +731,66 @@ class CrmInquiryController extends Controller
 
         $inquiry->update(['last_message_at' => now()]);
 
+        Notification::notifyPage(
+            'MAN', 'dyeing_lab_chemist', 'manufacturing', 'New fabric sample request',
+            "{$sample->code}: prepare a sample for {$product->name} ({$validated['color_description']}).",
+            'man.staff.dyeing-lab-chemist.page', [], Auth::id(), 'dyeing_lab_chemist'
+        );
+
         return back()->with('success', "Sample request {$sample->code} sent to the dyeing lab.");
     }
 
-    /** Send every client-selected Pantone × yarn combination to the lab queue. */
+    /** Send selected client Pantone × yarn combinations to the lab queue. */
     public function createSelectedRecipes(Request $request, Inquiry $inquiry)
     {
-        $validated = $request->validate(['notes' => 'nullable|string|max:2000']);
+        $validated = $request->validate([
+            'notes' => 'nullable|string|max:2000',
+            'pairs' => ['required', 'array', 'min:1', 'max:200'],
+            'pairs.*.product_id' => ['required', 'integer'],
+            'pairs.*.pantone_id' => ['required', 'integer'],
+            'pairs.*.yarn_id' => ['required', 'integer'],
+        ]);
         $selection = $inquiry->product_selections ?? [];
         $selectionRows = collect($selection['products'] ?? []);
-        if ($selectionRows->isEmpty() && ! empty($selection['pantones']) && ! empty($selection['yarns'])) {
+        if ($selectionRows->isEmpty() && (! empty($selection['pantones']) || ! empty($selection['colorways']))) {
             $selectionRows = collect([[...$selection, 'product_id' => $selection['product_id'] ?? $inquiry->product_id]]);
         }
-        $selectionSets = $selectionRows->map(function ($row) {
-            return [
-                'selection' => $row,
-                'pantones' => collect($row['pantones'] ?? []),
-                'yarns' => collect($row['yarns'] ?? []),
-                'product' => \App\Models\Inv\Product::find((int) ($row['product_id'] ?? 0)),
-            ];
-        })->values();
-        abort_unless($selectionSets->isNotEmpty() && $selectionSets->every(fn ($set) => $set['product'] && $set['pantones']->isNotEmpty() && $set['yarns']->isNotEmpty()), 422, 'This inquiry has no complete product, Pantone, and yarn selections.');
+        $selectionSets = $selectionRows->keyBy(fn ($row) => (int) ($row['product_id'] ?? 0));
+        $allowedPairs = InquiryColorwayPairs::fromSelections($selection, (int) $inquiry->product_id);
+        $allowedKeys = collect($allowedPairs)->map(fn ($pair) => implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']]));
+        $pairs = collect($validated['pairs'])->map(fn ($pair) => [
+            'product_id' => (int) $pair['product_id'],
+            'pantone_id' => (int) $pair['pantone_id'],
+            'yarn_id' => (int) $pair['yarn_id'],
+        ]);
+        $pairKeys = $pairs->map(fn ($pair) => implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']]));
+        if ($pairKeys->unique()->count() !== $pairKeys->count() || $pairKeys->diff($allowedKeys)->isNotEmpty()) {
+            throw ValidationException::withMessages(['pairs' => 'Select only unique Pantone and yarn combinations from this inquiry.']);
+        }
+        abort_unless($pairs->isNotEmpty() && $selectionSets->every(fn ($row, $productId) => \App\Models\Inv\Product::whereKey($productId)->exists()), 422, 'This inquiry has no complete product, Pantone, and yarn selections.');
         $created = [];
 
-        DB::transaction(function () use ($inquiry, $selectionSets, $validated, &$created) {
-            foreach ($selectionSets as $selectionSet) {
-            $selection = $selectionSet['selection'];
-            $pantones = $selectionSet['pantones'];
-            $yarns = $selectionSet['yarns'];
-            $product = $selectionSet['product'];
-            foreach ($pantones as $pantone) {
-                $pantoneId = (int) ($pantone['id'] ?? 0);
+        DB::transaction(function () use ($inquiry, $selectionSets, $pairs, $validated, &$created) {
+            Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+            foreach ($pairs as $pair) {
+                $productId = (int) $pair['product_id'];
+                $pantoneId = (int) $pair['pantone_id'];
+                $yarnId = (int) $pair['yarn_id'];
+                $selection = $selectionSets->get($productId, []);
+                $product = \App\Models\Inv\Product::findOrFail($productId);
                 $reference = \App\Models\Man\PantoneReference::find($pantoneId);
                 abort_unless($reference, 422, 'A selected Pantone color is no longer available.');
-                foreach ($yarns as $yarn) {
-                    $yarnId = (int) ($yarn['id'] ?? 0);
-                    $material = Material::query()->whereKey($yarnId)->where('category', 'Yarn')->first();
-                    abort_unless($material, 422, 'A selected yarn type is no longer available.');
-                    $alreadyRequested = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
-                        ->where('product_id', $product->id)
-                        ->whereNotIn('status', [FabricSampleRequest::STATUS_CANCELLED])
-                        ->get()->first(fn ($sample) => collect($sample->pantone_colors ?? [])->contains(fn ($color) =>
-                            (int) ($color['pantone_reference_id'] ?? 0) === $pantoneId
-                            && (int) ($color['yarn_material_id'] ?? 0) === $yarnId));
-                    if ($alreadyRequested) continue;
+                $material = Material::query()->whereKey($yarnId)->where('category', 'Yarn')->first();
+                abort_unless($material, 422, 'A selected yarn type is no longer available.');
+                $alreadyRequested = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
+                    ->where('product_id', $product->id)
+                    ->whereNotIn('status', [FabricSampleRequest::STATUS_CANCELLED, FabricSampleRequest::STATUS_DISCARDED])
+                    ->get()->first(fn ($sample) => collect($sample->pantone_colors ?? [])->contains(fn ($color) =>
+                        (int) ($color['pantone_reference_id'] ?? 0) === $pantoneId
+                        && (int) ($color['yarn_material_id'] ?? 0) === $yarnId));
+                if ($alreadyRequested) {
+                    throw ValidationException::withMessages(['pairs' => "{$reference->name} for {$material->display_name} already has an active recipe request."]);
+                }
 
                     $formula = \App\Models\Man\PantoneFabricFormula::query()
                         ->where('pantone_reference_id', $pantoneId)->where('yarn_material_id', $yarnId)->first();
@@ -800,21 +820,17 @@ class CrmInquiryController extends Controller
                         'message' => "Recipe and swatch requested for {$product->name} · {$reference->name} · {$material->display_name} ({$code}).",
                         'is_system_event' => true, 'visible_to_client' => false, 'sample_request_id' => $sample->id,
                     ]);
-                    User::query()->where('manufacturing_role', 'dyeing_lab_chemist')->pluck('id')->each(fn ($userId) => Notification::notify(
-                        (int) $userId, 'manufacturing', 'New client recipe request',
+                    Notification::notifyPage(
+                        'MAN', 'dyeing_lab_chemist', 'manufacturing', 'New client recipe request',
                         "{$code}: formulate {$reference->name} for {$material->display_name} ({$product->name}).",
-                        'man.staff.dyeing-lab-chemist.page', Auth::id()
-                    ));
-                    $created[] = $sample->id;
-                }
-            }
+                        'man.staff.dyeing-lab-chemist.page', [], Auth::id(), 'dyeing_lab_chemist'
+                    );
+                $created[] = $sample->id;
             }
             $inquiry->update(['last_message_at' => now()]);
         });
 
-        return back()->with('success', $created
-            ? count($created).' Pantone and yarn recipe request(s) sent to the Dyeing Lab Chemist.'
-            : 'All requested Pantone and yarn combinations already have active lab requests.');
+        return back()->with('success', count($created).' Pantone and yarn recipe request(s) sent to the Dyeing Lab Chemist.');
     }
 
     /** Save an approved lab recipe on each matching client PO line. */
@@ -862,18 +878,12 @@ class CrmInquiryController extends Controller
         $samples = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
             ->where('status', FabricSampleRequest::STATUS_APPROVED)->whereNotNull('recipe_id')->get();
         $selections = $inquiry->product_selections ?? [];
-        $selectionSets = collect($selections['products'] ?? []);
-        if ($selectionSets->isEmpty() && ! empty($selections['pantones']) && ! empty($selections['yarns'])) {
-            $selectionSets = collect([[...$selections, 'product_id' => $selections['product_id'] ?? $inquiry->product_id]]);
-        }
-        foreach ($selectionSets as $selectionSet) {
-            foreach (collect($selectionSet['pantones'] ?? [])->crossJoin(collect($selectionSet['yarns'] ?? [])) as [$pantone, $yarn]) {
-            $isApproved = $samples->contains(fn ($sample) => (int) $sample->product_id === (int) ($selectionSet['product_id'] ?? 0)
+        foreach (InquiryColorwayPairs::fromSelections($selections, (int) $inquiry->product_id) as $pair) {
+            $isApproved = $samples->contains(fn ($sample) => (int) $sample->product_id === (int) $pair['product_id']
                 && collect($sample->pantone_colors ?? [])->contains(fn ($color) =>
-                (int) ($color['pantone_reference_id'] ?? 0) === (int) ($pantone['id'] ?? 0)
-                && (int) ($color['yarn_material_id'] ?? 0) === (int) ($yarn['id'] ?? 0)));
+                (int) ($color['pantone_reference_id'] ?? 0) === (int) $pair['pantone_id']
+                && (int) ($color['yarn_material_id'] ?? 0) === (int) $pair['yarn_id']));
             abort_unless($isApproved, 422, 'Every client-selected color and yarn combination must have an approved recipe before pushing this order.');
-            }
         }
 
         $purchaseOrder->load(['items.product', 'items.quotationItem.quotation']);

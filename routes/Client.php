@@ -70,6 +70,7 @@ Route::middleware(['auth:client', 'client.access'])->prefix('partner')->name('cl
     // CORRECTED: send-po route name
     Route::post('/conversation/{inquiry}/send-po', [ClientConversationController::class, 'sendPO'])->name('conversation.send-po');
     Route::post('/conversations/{inquiry}/sample-requests', [ClientConversationController::class, 'requestFabricSample'])->name('conversation.sample-request');
+    Route::post('/conversations/{inquiry}/colors', [ClientConversationController::class, 'addInquiryColor'])->name('conversation.colors.store');
 
     // NEW: Attachment approval by client
     Route::post('/conversation/attachment/{attachment}/approve', [ClientConversationController::class, 'approveAttachment'])

@@ -11,9 +11,11 @@ use App\Models\Eco\ConversationMessage;
 use App\Models\Eco\Inquiry;
 use App\Models\Eco\EcoQuotation;
 use App\Models\Eco\EcoQuotationItem;
+use App\Models\Man\PantoneReference;
 use App\Models\Ord\PurchaseOrder;
 use App\Support\ConversationRealtime;
 use App\Services\Ord\OrderLifecycleService;
+use App\Support\InquiryColorwayPairs;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -141,7 +143,79 @@ class ClientConversationController extends Controller
             'quotations' => $quotations,
             'fabricOptions' => $fabricOptions,
             'sampleRequests' => $sampleRequests,
+            'pantoneReferences' => PantoneReference::query()->orderBy('name')->get(['id', 'name', 'hex', 'color_category']),
         ]);
+    }
+
+    public function addInquiryColor(Request $request, Inquiry $inquiry)
+    {
+        $this->authorizeClient($inquiry);
+        $data = $request->validate([
+            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'pantone_id' => ['required', 'integer', 'exists:pantone_references,id'],
+            'yarn_ids' => ['required', 'array', 'min:1'],
+            'yarn_ids.*' => ['required', 'integer', 'distinct', 'exists:materials,id'],
+        ]);
+
+        $selections = $inquiry->product_selections ?? [];
+        $rows = collect($selections['products'] ?? []);
+        if ($rows->isEmpty()) {
+            $rows = collect([[...$selections, 'product_id' => $selections['product_id'] ?? $inquiry->product_id]]);
+        }
+        $rowIndex = $rows->search(fn ($row) => (int) ($row['product_id'] ?? 0) === (int) $data['product_id']);
+        if ($rowIndex === false) {
+            throw ValidationException::withMessages(['product_id' => 'Choose a product included in this inquiry.']);
+        }
+
+        $row = $rows->get($rowIndex);
+        $availableYarnIds = collect($row['yarns'] ?? [])->pluck('id')->map(fn ($id) => (int) $id);
+        $yarnIds = collect($data['yarn_ids'])->map(fn ($id) => (int) $id)->unique()->values();
+        if ($yarnIds->diff($availableYarnIds)->isNotEmpty()) {
+            throw ValidationException::withMessages(['yarn_ids' => 'Choose yarn types already included in this product inquiry.']);
+        }
+        $validYarnIds = \App\Models\Inv\Material::query()->where('category', 'Yarn')->whereIn('id', $yarnIds)->pluck('id')->map(fn ($id) => (int) $id);
+        if ($validYarnIds->count() !== $yarnIds->count()) {
+            throw ValidationException::withMessages(['yarn_ids' => 'One or more selected yarn types are no longer available.']);
+        }
+
+        $pantone = PantoneReference::findOrFail($data['pantone_id']);
+        $row['colorways'] = $row['colorways'] ?? [];
+        $existingPantones = collect($row['pantones'] ?? [])->pluck('id')->map(fn ($id) => (int) $id);
+        $colorwayIndex = collect($row['colorways'])->search(fn ($colorway) => (int) ($colorway['pantone']['id'] ?? $colorway['pantone_id'] ?? 0) === (int) $pantone->id);
+        if ($existingPantones->contains((int) $pantone->id)) {
+            throw ValidationException::withMessages(['pantone_id' => 'That Pantone is already included for every yarn selected on this product.']);
+        }
+        if ($colorwayIndex !== false && collect($row['colorways'][$colorwayIndex]['yarn_ids'] ?? [])->map(fn ($id) => (int) $id)->intersect($yarnIds)->isNotEmpty()) {
+            throw ValidationException::withMessages(['pantone_id' => 'That Pantone is already requested for one or more selected yarns.']);
+        }
+        if ($colorwayIndex === false) {
+            $row['colorways'][] = [
+                'pantone' => $pantone->only(['id', 'name', 'hex', 'color_category']),
+                'yarn_ids' => $yarnIds->all(),
+            ];
+        } else {
+            $colorway = $row['colorways'][$colorwayIndex];
+            $colorway['yarn_ids'] = collect($colorway['yarn_ids'] ?? [])->merge($yarnIds)->map(fn ($id) => (int) $id)->unique()->values()->all();
+            $row['colorways'][$colorwayIndex] = $colorway;
+        }
+
+        $rows[$rowIndex] = $row;
+        if (isset($selections['products'])) {
+            $selections['products'] = $rows->values()->all();
+        } else {
+            $selections = $row;
+        }
+        $inquiry->update(['product_selections' => $selections]);
+
+        $product = \App\Models\Inv\Product::find($data['product_id']);
+        $yarnNames = collect($row['yarns'] ?? [])->filter(fn ($yarn) => $yarnIds->contains((int) ($yarn['id'] ?? 0)))->pluck('name')->filter()->join(', ');
+        Notification::notifyPage(
+            'CRM', 'inquiry', 'client_color_request', 'Client added a Pantone color',
+            "{$pantone->name} added for {$product?->name} · yarn: {$yarnNames}.",
+            'crm.inquiries', [], null
+        );
+
+        return back()->with('success', 'Pantone color added to the inquiry and sent to CRM.');
     }
 
     public function requestFabricSample(Request $request, Inquiry $inquiry)
@@ -261,6 +335,11 @@ class ClientConversationController extends Controller
         ]);
         $inquiry->update(['last_message_at' => now()]);
 
+        Notification::notifyPage(
+            'CRM', 'inquiry', 'fabric_sample_request', 'New client fabric sample request',
+            "A client requested samples for {$fabricNames} ({$created->count()} sample(s)).", 'crm.inquiries'
+        );
+
         return back()->with('success', 'Fabric sample request sent to the CRM team.');
     }
 
@@ -306,6 +385,11 @@ class ClientConversationController extends Controller
 
         // Client just sent something → no longer "typing".
         ConversationRealtime::clearTyping($inquiry->id, 'client');
+        Notification::notifyPage(
+            'CRM', 'inquiry', 'client_message', 'New client inquiry message',
+            \Illuminate\Support\Str::limit(trim(strip_tags((string) $request->message)) ?: 'The client sent an attachment.', 180),
+            'crm.inquiries'
+        );
 
         $message->load('attachments');
 
@@ -375,14 +459,13 @@ class ClientConversationController extends Controller
                 $selectionSets = collect([[...$selections, 'product_id' => $selections['product_id'] ?? $inquiry->product_id]]);
             }
             if ($selectionSets->isNotEmpty()) {
-                $requiredPairs = $selectionSets->flatMap(fn ($set) => collect($set['pantones'] ?? [])->flatMap(fn ($pantone) => collect($set['yarns'] ?? [])->map(fn ($yarn) => [
-                    (int) ($set['product_id'] ?? 0), (int) ($pantone['id'] ?? 0), (int) ($yarn['id'] ?? 0),
-                ])));
+                $requiredPairs = InquiryColorwayPairs::fromSelections($selections, (int) $inquiry->product_id);
                 $approvedPairs = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
                     ->where('status', FabricSampleRequest::STATUS_APPROVED)->get()->flatMap(fn ($sample) => collect($sample->pantone_colors ?? [])->map(fn ($color) => [
-                        (int) $sample->product_id, (int) ($color['pantone_reference_id'] ?? 0), (int) ($color['yarn_material_id'] ?? 0),
+                        'product_id' => (int) $sample->product_id, 'pantone_id' => (int) ($color['pantone_reference_id'] ?? 0), 'yarn_id' => (int) ($color['yarn_material_id'] ?? 0),
                     ]));
-                $missing = $requiredPairs->contains(fn ($pair) => ! $approvedPairs->contains(fn ($approved) => $approved === $pair));
+                $approvedKeys = $approvedPairs->map(fn ($pair) => implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']]));
+                $missing = collect($requiredPairs)->contains(fn ($pair) => ! $approvedKeys->contains(implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']])));
                 if ($missing) {
                     throw ValidationException::withMessages(['items' => 'Approve every requested Pantone color and yarn swatch before sending a purchase order.']);
                 }
@@ -492,6 +575,11 @@ class ClientConversationController extends Controller
             $inquiry->update(['last_message_at' => now()]);
             return $order->po_number;
         }, 3);
+
+        Notification::notifyPage(
+            'CRM', 'inquiry', 'client_purchase_order', 'Client submitted a purchase order',
+            "Purchase order {$poNumber} was submitted from an inquiry and is ready for review.", 'crm.inquiries'
+        );
 
         return back()->with('success', "Purchase order {$poNumber} submitted for review.");
     }
@@ -681,22 +769,27 @@ class ClientConversationController extends Controller
             ]);
 
             $chemistId = $sampleRequest->formulations()->latest('version')->value('submitted_by');
-            if ($chemistId) {
-                Notification::notify(
-                    (int) $chemistId,
+            $sentToOwner = $chemistId && Notification::notifyUserOnPage(
+                (int) $chemistId,
+                'MAN',
+                'dyeing_lab_chemist',
+                'manufacturing',
+                'Client requested a fabric adjustment',
+                "{$sampleRequest->code}: {$validated['notes']}",
+                'man.staff.dyeing-lab-chemist.page'
+            );
+            if (! $sentToOwner) {
+                Notification::notifyPage(
+                    'MAN',
+                    'dyeing_lab_chemist',
                     'manufacturing',
                     'Client requested a fabric adjustment',
                     "{$sampleRequest->code}: {$validated['notes']}",
-                    'man.staff.dyeing-lab-chemist.page'
+                    'man.staff.dyeing-lab-chemist.page',
+                    [],
+                    null,
+                    'dyeing_lab_chemist'
                 );
-            } else {
-                \App\Models\Core\User::query()->where('manufacturing_role', 'dyeing_lab_chemist')->pluck('id')->each(fn ($userId) => Notification::notify(
-                    (int) $userId,
-                    'manufacturing',
-                    'Client requested a fabric adjustment',
-                    "{$sampleRequest->code}: {$validated['notes']}",
-                    'man.staff.dyeing-lab-chemist.page'
-                ));
             }
 
             $inquiry->update(['last_message_at' => now()]);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Applicants\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Models\Core\Notification;
 use App\Models\Hrm\ApplicantJobApplication;
 use App\Models\Hrm\ApplicantStatusHistory;
 use App\Models\Hrm\HrmEmploymentType;
@@ -226,6 +227,12 @@ class JobsController extends Controller
             'to_status' => 'Submitted', 'changed_by' => null,
             'reason' => 'Applied for ' . $job->title . ' via portal',
         ]);
+
+        Notification::notifyPage(
+            'HRM', 'application', 'job_application', 'New job application received',
+            ($applicant->name ?: trim($applicant->first_name.' '.$applicant->last_name))." applied for {$job->title}.",
+            'hrm.recruitment.applications.index'
+        );
 
         return back()->with('success', 'Application submitted for ' . $job->title . '.');
     }

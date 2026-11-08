@@ -114,7 +114,7 @@ const maxWidthClass = computed(() => {
             >
                 <div
                     v-show="show"
-                    class="fabric-generic-modal transform overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-xl transition-all sm:mx-auto sm:w-full dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40"
+                    class="fabric-generic-modal transform w-full overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-xl transition-all sm:mx-auto dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40"
                     :class="maxWidthClass"
                 >
                     <FabricModalArtwork kind="info" label="Blue fabric swatches" />

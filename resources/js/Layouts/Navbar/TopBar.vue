@@ -700,7 +700,10 @@ onMounted(() => {
     document.addEventListener('click', closeSettingsOnOutsideClick);
     if (isInternal.value) {
         fetchSummary();
-        pollTimer = setInterval(fetchSummary, 30000);
+        pollTimer = setInterval(() => {
+            fetchSummary();
+            if (openPanel.value === 'notif') loadNotifs();
+        }, 30000);
     }
     if (isAgency.value) {
         loadAgencyNotifs();

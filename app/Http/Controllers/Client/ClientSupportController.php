@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
 use App\Models\Crm\CrmFeedback;
+use App\Models\Core\Notification;
 use App\Traits\StoresFeedbackAttachments;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -38,6 +39,11 @@ class ClientSupportController extends Controller
         ]);
         // Previously the uploaded file was silently dropped — it is now stored.
         $this->storeFeedbackFiles($feedback, $this->collectFeedbackFiles($validated));
+
+        Notification::notifyPage(
+            'CRM', 'cases', 'client_feedback', 'New client '.($feedback->type === 'complaint' ? 'complaint' : 'feedback'),
+            "{$feedback->subject} was submitted by a client.", 'crm.cases'
+        );
 
         return back()->with('success', 'Your feedback has been sent to CRM.');
     }

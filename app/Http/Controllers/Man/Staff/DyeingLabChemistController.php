@@ -110,9 +110,9 @@ class DyeingLabChemistController extends ManufacturingStaffController
             ->get(['id', 'jo_number', 'color', 'design', 'yarn_type']);
 
         $sampleRequests = FabricSampleRequest::with(['inquiry.client', 'product', 'parent', 'pantoneReference', 'requester:id,name', 'formulations.submitter:id,name', 'formulations.reviewer:id,name'])
-            ->whereIn('status', [FabricSampleRequest::STATUS_REQUESTED, FabricSampleRequest::STATUS_IN_PROGRESS, FabricSampleRequest::STATUS_ADJUSTMENT_REQUESTED])
-            ->orderByRaw("FIELD(urgency, 'urgent', 'high', 'normal', 'low')")
-            ->orderBy('created_at', 'asc')
+            ->whereIn('status', [FabricSampleRequest::STATUS_REQUESTED, FabricSampleRequest::STATUS_IN_PROGRESS, FabricSampleRequest::STATUS_ADJUSTMENT_REQUESTED, FabricSampleRequest::STATUS_DISCARDED])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->get()
             ->each(function (FabricSampleRequest $sample) {
                 $colors = $this->pantoneColorEntries($sample);
@@ -408,6 +408,23 @@ class DyeingLabChemistController extends ManufacturingStaffController
         ]);
 
         return redirect()->back()->with('message', "Sample {$sampleRequest->code} started.");
+    }
+
+    public function discardSample(FabricSampleRequest $sampleRequest)
+    {
+        abort_unless(in_array($sampleRequest->status, [
+            FabricSampleRequest::STATUS_REQUESTED,
+            FabricSampleRequest::STATUS_IN_PROGRESS,
+            FabricSampleRequest::STATUS_ADJUSTMENT_REQUESTED,
+        ], true), 422, 'Only an active lab request can be discarded.');
+        abort_unless($sampleRequest->request_method === 'pantone'
+            && count($sampleRequest->pantone_colors ?? []) === 1
+            && ! empty(($sampleRequest->pantone_colors[0]['pantone_reference_id'] ?? null))
+            && ! empty(($sampleRequest->pantone_colors[0]['yarn_material_id'] ?? null)), 422, 'Only a single Pantone and yarn recipe request can be discarded here.');
+
+        $sampleRequest->update(['status' => FabricSampleRequest::STATUS_DISCARDED]);
+
+        return back()->with('message', "Color request {$sampleRequest->code} moved to Discarded.");
     }
 
     public function linkSamplePantone(Request $request, FabricSampleRequest $sampleRequest)

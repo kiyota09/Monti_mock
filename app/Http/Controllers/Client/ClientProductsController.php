@@ -7,6 +7,7 @@ use App\Models\Inv\Product;
 use App\Models\Man\PantoneReference;
 use App\Models\Eco\Inquiry;
 use App\Models\Eco\ConversationMessage;
+use App\Models\Core\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -153,6 +154,11 @@ class ClientProductsController extends Controller
             'sender_type' => 'client',
             'message' => $request->message,
         ]);
+
+        Notification::notifyPage(
+            'CRM', 'inquiry', 'client_inquiry', 'New client inquiry',
+            "A client submitted an inquiry for {$product->name}.", 'crm.inquiries'
+        );
 
         return redirect()->route('client.products')
             ->with('success', 'Inquiry sent. You can now continue the conversation.')
@@ -309,6 +315,11 @@ class ClientProductsController extends Controller
 
             return $inquiry;
         });
+
+        Notification::notifyPage(
+            'CRM', 'inquiry', 'client_inquiry', 'New bulk client inquiry',
+            "A client submitted a bulk inquiry covering {$products->count()} products.", 'crm.inquiries'
+        );
 
         return redirect()->route('client.products')
             ->with('success', 'Bulk inquiry sent. Our team will contact you shortly.')

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Eco;
 
 use App\Http\Controllers\Controller;
 use App\Models\Core\Notification;
-use App\Models\Core\User;
 use App\Models\Ord\OrderQueue;
 use App\Models\Ord\PurchaseOrder;
 use App\Models\Crm\Client;
@@ -182,22 +181,16 @@ class EcoPushController extends Controller
             ], 422);
         }
 
-        // Notify the procurement module: every active PRO account gets a
-        // bell notification linking straight to Material Requests. The
+        // Notify active users who can view PRO Material Requests. The
         // request itself flows through the normal pipeline
         // (SCM Procurement Orders → forwarded → PRO).
         $jo = $result['jo_number'] ?? $salesOrder->jo_number ?? ('JO-'.$salesOrder->id);
-        $proUsers = User::where('role', 'PRO')->where('is_active', true)->get(['id']);
-        foreach ($proUsers as $pro) {
-            Notification::notify(
-                (int) $pro->id,
-                'procurement',
-                "Procurement requested: {$result['material_name']} for {$jo}",
-                "Short {$result['shortage']}{$result['unit']} (needs {$result['required']}{$result['unit']}, ATP {$result['atp']}{$result['unit']}). Request {$result['req_number']} filed from the ECO Push Center.",
-                'pro.manager.material-requests',
-                auth()->id()
-            );
-        }
+        $notified = Notification::notifyPage(
+            'PRO', 'requests', 'procurement',
+            "Procurement requested: {$result['material_name']} for {$jo}",
+            "Short {$result['shortage']}{$result['unit']} (needs {$result['required']}{$result['unit']}, ATP {$result['atp']}{$result['unit']}). Request {$result['req_number']} filed from the ECO Push Center.",
+            'pro.manager.material-requests', [], auth()->id()
+        );
 
         return response()->json([
             'req_number' => $result['req_number'],
@@ -206,7 +199,7 @@ class EcoPushController extends Controller
             'material_name' => $result['material_name'],
             'shortage' => $result['shortage'],
             'unit' => $result['unit'],
-            'notified' => $proUsers->count(),
+            'notified' => $notified,
         ]);
     }
 

@@ -333,6 +333,8 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                 // CRM fabric sample requests (from inquiry conversations)
                 Route::patch('/sample-requests/{sampleRequest}/start', 'startSample')
                     ->middleware('page.permission:dyeing_lab_chemist,edit')->name('sample.start');
+                Route::patch('/sample-requests/{sampleRequest}/discard', 'discardSample')
+                    ->middleware('page.permission:dyeing_lab_chemist,edit')->name('sample.discard');
                 Route::post('/sample-requests/{sampleRequest}/formulate', 'formulateSample')
                     ->middleware('page.permission:dyeing_lab_chemist,edit')->name('sample.formulate');
                 Route::patch('/sample-requests/{sampleRequest}/pantone', 'linkSamplePantone')

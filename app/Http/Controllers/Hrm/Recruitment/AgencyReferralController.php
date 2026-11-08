@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Hrm\Recruitment;
 
 use App\Http\Controllers\Controller;
+use App\Models\Core\Notification;
 use App\Models\Hrm\Agency;
 use App\Models\Hrm\AgencyActivity;
 use App\Models\Hrm\AgencyReferral;
@@ -274,6 +275,12 @@ class AgencyReferralController extends Controller
             ]);
             $this->record($referral, 'Agency response received', $from, 'Awaiting Monti Decision', $request->user()->id, $data['feedback']);
         });
+
+        Notification::notifyModule(
+            'HRM', 'agency_referral_response', 'Agency responded to a referral',
+            'The agency submitted a response for referral AR-'.str_pad((string) $referral->id, 6, '0', STR_PAD_LEFT).'.',
+            'hrm.recruitment.agency-referrals.index'
+        );
 
         return back()->with('success', 'Agency response saved.');
     }

@@ -7,7 +7,7 @@
                 class="flex h-full w-full flex-col overflow-hidden p-2 pt-9 sm:p-3 sm:pt-9 lg:p-4 lg:pt-9 gap-2 sm:gap-3">
 
                 <!-- ── Header ──────────────────────────────────────────── -->
-                <header class="flex-shrink-0 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-sm px-4 sm:px-5 py-3.5">
+                <div class="flex-shrink-0 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-sm px-4 sm:px-5 py-3.5">
                     <div class="flex items-center gap-3">
                         <Link :href="route('crm.inquiries')" aria-label="Back to inquiries"
                             class="p-2 rounded-xl border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-slate-800 dark:hover:text-white transition flex-shrink-0">
@@ -39,13 +39,8 @@
                             <span class="h-1.5 w-1.5 rounded-full" :class="statusPill(inquiry.status).dot" />
                             {{ formatStatus(inquiry.status) }}
                         </span>
-                        <button v-if="canEditInquiry && inquiry.status !== 'rejected'" @click="openRejectModal" type="button"
-                            class="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-500/10 transition flex-shrink-0 active:scale-95">
-                            <XCircle class="h-4 w-4" />
-                            <span class="hidden sm:inline">Reject</span>
-                        </button>
                     </div>
-                </header>
+                </div>
 
                 <!-- ── Mobile tab bar ──────────────────────────────────── -->
                 <div class="flex lg:hidden rounded-xl bg-slate-200/60 dark:bg-zinc-900 p-1 flex-shrink-0" role="tablist">
@@ -250,6 +245,14 @@
                                             <span class="h-3.5 w-3.5 rounded border border-black/10" :style="{ backgroundColor: pantone.hex }" />{{ pantone.name }}
                                         </span>
                                     </div>
+                                    <div v-if="product.colorways?.length" class="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-2 dark:border-amber-900/50 dark:bg-amber-950/20">
+                                        <h4 class="mb-1.5 text-[10px] font-black uppercase tracking-wide text-amber-800 dark:text-amber-300">Additional colors from client</h4>
+                                        <div v-for="(colorway, index) in product.colorways" :key="`${colorway.pantone?.id || colorway.pantone_id}-${index}`" class="flex flex-wrap items-center gap-1.5 py-1 text-[10px]">
+                                            <span class="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-1 font-semibold text-slate-800 dark:bg-zinc-900 dark:text-zinc-100"><span class="h-3 w-3 rounded border border-black/10" :style="{ backgroundColor: colorway.pantone?.hex }" />{{ colorway.pantone?.name || 'Pantone' }}</span>
+                                            <span class="text-slate-500 dark:text-zinc-400">for</span>
+                                            <span v-for="yarnId in colorway.yarn_ids" :key="yarnId" class="rounded-md bg-blue-100 px-2 py-1 font-semibold text-blue-800 dark:bg-blue-950/50 dark:text-blue-200">{{ product.yarns?.find((yarn) => Number(yarn.id) === Number(yarnId))?.name || `Yarn ${yarnId}` }}</span>
+                                        </div>
+                                    </div>
                                     <div v-if="product.yarns?.length" class="mt-2 flex flex-wrap gap-1.5">
                                         <span v-for="yarn in product.yarns" :key="yarn.id" class="rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">{{ yarn.name }}</span>
                                     </div>
@@ -260,7 +263,7 @@
                                 </article>
                             </div>
                         </section>
-                        <section v-if="inquiry.product_selections?.pantones?.length || inquiry.product_selections?.yarns?.length" aria-label="Client product selections"
+                        <section v-if="inquiry.product_selections?.pantones?.length || inquiry.product_selections?.yarns?.length || inquiry.product_selections?.colorways?.length" aria-label="Client product selections"
                             class="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm dark:border-violet-900/50 dark:bg-zinc-900">
                             <div class="border-b border-violet-100 px-5 py-3 dark:border-violet-900/50">
                                 <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Client product selections</h2>
@@ -275,6 +278,14 @@
                                             <span class="truncate font-semibold text-slate-700 dark:text-zinc-200">{{ pantone.name }}</span>
                                             <span class="shrink-0 text-slate-400">{{ colorCategoryLabel(pantone.color_category) }}</span>
                                         </span>
+                                    </div>
+                                </div>
+                                <div v-if="inquiry.product_selections?.colorways?.length" class="rounded-xl border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                                    <h3 class="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300">Additional colors from client</h3>
+                                    <div v-for="(colorway, index) in inquiry.product_selections.colorways" :key="`${colorway.pantone?.id || colorway.pantone_id}-${index}`" class="flex flex-wrap items-center gap-1.5 py-1 text-[10px]">
+                                        <span class="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-1 font-semibold text-slate-800 dark:bg-zinc-900 dark:text-zinc-100"><span class="h-3 w-3 rounded border border-black/10" :style="{ backgroundColor: colorway.pantone?.hex }" />{{ colorway.pantone?.name || 'Pantone' }}</span>
+                                        <span class="text-slate-500 dark:text-zinc-400">for</span>
+                                        <span v-for="yarnId in colorway.yarn_ids" :key="yarnId" class="rounded-md bg-blue-100 px-2 py-1 font-semibold text-blue-800 dark:bg-blue-950/50 dark:text-blue-200">{{ inquiry.product_selections.yarns?.find((yarn) => Number(yarn.id) === Number(yarnId))?.name || `Yarn ${yarnId}` }}</span>
                                     </div>
                                 </div>
                                 <div v-if="inquiry.product_selections?.yarns?.length">
@@ -358,11 +369,11 @@
                                 <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Actions</h2>
                             </div>
                             <div class="p-3 space-y-1.5">
-                                <button v-if="canEditInquiry && hasClientProductSelections" type="button" @click="createSelectedRecipes"
-                                    :disabled="creatingRecipes"
+                                <button v-if="canEditInquiry && hasClientProductSelections" type="button" @click="openRecipeRequestPicker"
+                                    :disabled="creatingRecipes || refreshingRecipeStatus"
                                     class="group w-full flex items-center gap-3 p-3 rounded-xl text-left hover:bg-emerald-50 disabled:opacity-50 dark:hover:bg-emerald-500/10 transition active:scale-[0.99]">
                                     <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white flex-shrink-0"><FlaskConical class="h-5 w-5" /></span>
-                                    <span class="min-w-0"><span class="block text-sm font-semibold text-slate-900 dark:text-white">{{ creatingRecipes ? 'Sending to lab…' : 'Create Recipe' }}</span><span class="block text-xs text-slate-500 dark:text-zinc-400">{{ recipeRequestSummary }}</span></span>
+                                    <span class="min-w-0"><span class="block text-sm font-semibold text-slate-900 dark:text-white">{{ refreshingRecipeStatus ? 'Checking requests…' : 'Request for Recipe Creation' }}</span><span class="block text-xs text-slate-500 dark:text-zinc-400">{{ recipeRequestSummary }}</span></span>
                                 </button>
                                 <button v-if="canEditInquiry" @click="openQuotationModal" type="button"
                                     class="group w-full flex items-center gap-3 p-3 rounded-xl text-left hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition active:scale-[0.99]">
@@ -392,7 +403,7 @@
                                         <img v-if="sample.sample_image_path && !String(sample.sample_image_path).toLowerCase().endsWith('.pdf')" :src="`/storage/${sample.sample_image_path}`" alt="Fabric swatch sample" class="mt-2 max-h-28 w-full rounded-lg border border-slate-200 bg-white object-contain dark:border-zinc-700 dark:bg-zinc-900" />
                                         <a v-else-if="sample.sample_image_path" :href="`/storage/${sample.sample_image_path}`" target="_blank" class="mt-2 inline-flex text-xs font-semibold text-indigo-700 underline dark:text-indigo-300">Open sample PDF</a>
                                         <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
-                                            <span class="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">{{ sample.status === 'requested' ? 'Queued for Dyeing Lab' : sample.status === 'in_progress' ? 'Lab preparing sample' : sample.status === 'awaiting_crm_review' ? 'Ready to send' : sample.status === 'forwarded' ? (sample.client_received_at ? 'Client received swatch' : sample.client_noted_at ? 'Client noted delivery' : 'Sent to client') : 'Client requested an adjustment' }}</span>
+                                            <span class="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">{{ sample.status === 'requested' ? 'Queued for Dyeing Lab' : sample.status === 'in_progress' ? 'Lab preparing sample' : sample.status === 'awaiting_crm_review' ? 'Ready to send' : sample.status === 'forwarded' ? (sample.client_received_at ? 'Client received swatch' : sample.client_noted_at ? 'Client noted delivery' : 'Sent to client') : sample.status === 'discarded' ? 'Discarded by Dyeing Lab' : 'Client requested an adjustment' }}</span>
                                             <button v-if="canEditInquiry && sample.status === 'awaiting_crm_review'" type="button" @click="openDeliverSample(sample)" class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700">Received Sample Fabrics</button>
                                         </div>
                                     </article>
@@ -1240,6 +1251,38 @@
             title="Recipe request sent successfully!"
             message="Your selected color and yarn combinations have been sent to the Dyeing Lab for processing."
         />
+        <div v-if="recipeRequestModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" @click.self="recipeRequestModal = false">
+            <section class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-zinc-900" role="dialog" aria-modal="true" aria-labelledby="recipe-request-title">
+                <header class="flex items-start gap-3 border-b border-slate-100 p-5 dark:border-zinc-800">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white"><FlaskConical class="h-5 w-5" /></span>
+                    <div class="min-w-0 flex-1">
+                        <h2 id="recipe-request-title" class="text-lg font-bold text-slate-900 dark:text-white">Select colors for recipe creation</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Each product, Pantone, and yarn combination is tracked separately. Active requests cannot be submitted again.</p>
+                    </div>
+                    <button type="button" class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800" aria-label="Close" @click="recipeRequestModal = false"><X class="h-5 w-5" /></button>
+                </header>
+                <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+                    <label v-for="pair in recipeRequestOptions" :key="pair.key" class="flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition" :class="pair.alreadyRequested ? 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-75 dark:border-zinc-800 dark:bg-zinc-800/50' : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-zinc-700 dark:hover:border-emerald-800 dark:hover:bg-emerald-500/5'">
+                        <input v-model="selectedRecipePairKeys" type="checkbox" :value="pair.key" :disabled="pair.alreadyRequested" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50" />
+                        <span class="h-10 w-10 shrink-0 rounded-xl border border-black/10 shadow-inner" :style="{ backgroundColor: pair.pantoneHex || '#e2e8f0' }" />
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate text-sm font-semibold text-slate-900 dark:text-white">{{ pair.productName }} · {{ pair.pantoneName }}</span>
+                            <span class="block truncate text-xs text-slate-500 dark:text-zinc-400">Yarn: {{ pair.yarnName }}</span>
+                        </span>
+                        <span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold" :class="pair.alreadyRequested ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' : 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300'">{{ pair.alreadyRequested ? 'Already requested' : 'Not requested' }}</span>
+                    </label>
+                    <p v-if="!recipeRequestOptions.length" class="py-8 text-center text-sm text-slate-500 dark:text-zinc-400">No Pantone and yarn combinations were found on this inquiry.</p>
+                    <p v-if="recipeRequestError" class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">{{ recipeRequestError }}</p>
+                </div>
+                <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 p-4 dark:border-zinc-800">
+                    <p class="text-xs text-slate-500 dark:text-zinc-400">{{ selectedRecipePairKeys.length }} selected · {{ requestedRecipeCount }} already requested</p>
+                    <div class="flex gap-2">
+                        <button type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold dark:border-zinc-700" @click="recipeRequestModal = false">Cancel</button>
+                        <button type="button" :disabled="creatingRecipes || !selectedRecipePairKeys.length" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" @click="createSelectedRecipes">{{ creatingRecipes ? 'Sending…' : 'Send selected to lab' }}</button>
+                    </div>
+                </footer>
+            </section>
+        </div>
         <TemplateWidget page-key="inquiries" />
     </AuthenticatedLayout>
 </template>
@@ -1253,7 +1296,7 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { usePageAccess } from '@/composables/usePageAccess';
 import { useRealtimeConversation } from '@/composables/useRealtimeConversation';
 import { useSidebarToggle } from '@/Layouts/composables/useSidebarToggle';
-import { confirmModal, holdSuccessFeedback } from '@/lib/feedback';
+import { holdSuccessFeedback } from '@/lib/feedback';
 import {
     ArrowLeft, Send, Loader2, FileText, X, Package, Trash2,
     Plus, Paperclip, ClipboardList, XCircle, Calendar, ChevronDown, ChevronLeft, ChevronRight, FlaskConical
@@ -1438,36 +1481,83 @@ const quotationPriceTiers = [
 ];
 const quotationFabricName = (id) => props.quotationFabrics.find((fabric) => Number(fabric.id) === Number(id))?.name || 'Fabric type';
 const productSelections = computed(() => props.inquiry.product_selections || {});
+const recipeCombinations = computed(() => {
+    const sets = Array.isArray(productSelections.value.products) && productSelections.value.products.length ? productSelections.value.products : [productSelections.value];
+    const combinations = new Map();
+    sets.forEach((product) => {
+        const productId = Number(product.product_id || props.inquiry.product_id);
+        const productName = product.name || props.inquiry.product?.name || `Product ${productId}`;
+        const add = (pantone, yarn) => {
+            const pantoneId = Number(pantone?.id ?? pantone?.pantone_id ?? 0);
+            const yarnId = Number(yarn?.id ?? yarn ?? 0);
+            if (!productId || !pantoneId || !yarnId) return;
+            const key = `${productId}:${pantoneId}:${yarnId}`;
+            combinations.set(key, { key, product_id: productId, pantone_id: pantoneId, yarn_id: yarnId, productName, pantoneName: pantone.name || pantone.pantone_name || `Pantone ${pantoneId}`, pantoneHex: pantone.hex || pantone.color_hex || '', yarnName: yarn.name || product.yarns?.find((item) => Number(item.id) === yarnId)?.name || `Yarn ${yarnId}` });
+        };
+        (product.pantones ?? []).forEach((pantone) => (product.yarns ?? []).forEach((yarn) => add(pantone, yarn)));
+        (product.colorways ?? []).forEach((colorway) => (colorway.yarn_ids ?? []).forEach((yarnId) => add(colorway.pantone || colorway, yarnId)));
+    });
+    return [...combinations.values()];
+});
+const recipeCombinationKeys = computed(() => recipeCombinations.value.map((pair) => pair.key));
+const requestedRecipeKeys = computed(() => {
+    const keys = new Set();
+    (props.inquiry.sample_requests ?? []).forEach((sample) => {
+        if (['cancelled', 'discarded'].includes(sample.status)) return;
+        (sample.pantone_colors ?? []).forEach((color) => {
+            if (color.pantone_reference_id && color.yarn_material_id) keys.add(`${Number(sample.product_id)}:${Number(color.pantone_reference_id)}:${Number(color.yarn_material_id)}`);
+        });
+    });
+    return keys;
+});
+const recipeRequestOptions = computed(() => recipeCombinations.value.map((pair) => ({ ...pair, alreadyRequested: requestedRecipeKeys.value.has(pair.key) })));
+const requestedRecipeCount = computed(() => recipeRequestOptions.value.filter((pair) => pair.alreadyRequested).length);
+const requestableRecipeCount = computed(() => recipeRequestOptions.value.length - requestedRecipeCount.value);
 const hasClientProductSelections = computed(() => Boolean(
-    (productSelections.value.pantones?.length && productSelections.value.yarns?.length)
-    || productSelections.value.products?.some((product) => product.pantones?.length && product.yarns?.length)
+    recipeCombinationKeys.value.length
 ));
 const recipeRequestSummary = computed(() => {
     const bulkProducts = Array.isArray(productSelections.value.products) ? productSelections.value.products : [];
-    const selectionSets = bulkProducts.length ? bulkProducts : [productSelections.value];
-    const combinations = selectionSets.reduce((total, product) =>
-        total + (product.pantones ?? []).length * (product.yarns ?? []).length, 0);
+    const combinations = requestableRecipeCount.value;
 
     if (bulkProducts.length) {
-        return `Send ${combinations} color × yarn combinations across ${bulkProducts.length} products to Dyeing Lab`;
+        return `${combinations} not requested · ${requestedRecipeCount.value} already requested across ${bulkProducts.length} products`;
     }
 
-    return `Send ${(productSelections.value.pantones ?? []).length} colors × ${(productSelections.value.yarns ?? []).length} yarns to Dyeing Lab`;
+    return `${combinations} not requested · ${requestedRecipeCount.value} already requested`;
 });
 const creatingRecipes = ref(false);
+const refreshingRecipeStatus = ref(false);
+const recipeRequestModal = ref(false);
+const recipeRequestError = ref('');
+const selectedRecipePairKeys = ref([]);
 const showRecipesCreated = ref(false);
-const createSelectedRecipes = async () => {
-    if (creatingRecipes.value) return;
-    const confirmed = await confirmModal(
-        'Create recipes for all selected Pantone colors and yarn combinations and send them to the Dyeing Lab?',
-        { title: 'Create recipes?', confirmButtonText: 'Create recipes' },
-    );
-    if (!confirmed) return;
-
-    creatingRecipes.value = true;
-    router.post(route('crm.inquiry.create-recipes', props.inquiry.hash_key), {}, {
+const openRecipeRequestPicker = () => {
+    if (refreshingRecipeStatus.value || creatingRecipes.value) return;
+    refreshingRecipeStatus.value = true;
+    router.reload({
+        only: ['inquiry'],
         preserveScroll: true,
-        onSuccess: () => { showRecipesCreated.value = true; },
+        onSuccess: () => {
+            selectedRecipePairKeys.value = recipeRequestOptions.value.filter((pair) => !pair.alreadyRequested).map((pair) => pair.key);
+            recipeRequestError.value = '';
+            recipeRequestModal.value = true;
+        },
+        onFinish: () => { refreshingRecipeStatus.value = false; },
+    });
+};
+const createSelectedRecipes = () => {
+    if (creatingRecipes.value || !selectedRecipePairKeys.value.length) return;
+    const selected = recipeRequestOptions.value.filter((pair) => selectedRecipePairKeys.value.includes(pair.key));
+    if (!selected.length || selected.some((pair) => pair.alreadyRequested)) return;
+    creatingRecipes.value = true;
+    recipeRequestError.value = '';
+    router.post(route('crm.inquiry.create-recipes', props.inquiry.hash_key), {
+        pairs: selected.map(({ product_id, pantone_id, yarn_id }) => ({ product_id, pantone_id, yarn_id })),
+    }, {
+        preserveScroll: true,
+        onSuccess: () => { recipeRequestModal.value = false; showRecipesCreated.value = true; },
+        onError: (errors) => { recipeRequestError.value = Object.values(errors)[0] || 'Some selected colors already have active requests. Refresh and choose again.'; },
         onFinish: () => { creatingRecipes.value = false; },
     });
 };

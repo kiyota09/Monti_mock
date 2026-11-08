@@ -128,8 +128,8 @@ const rows = computed(() => props.articles.data || []);
                 </div>
             </div>
         </div>
-        <div v-if="rows.length === 0" class="py-12 text-center">
-            <BookOpen class="w-12 h-12 mx-auto mb-3 text-slate-300" />
+        <div v-if="rows.length === 0" class="py-16 flex flex-col items-center justify-center text-center">
+            <BookOpen class="w-12 h-12 mb-3 text-slate-300 dark:text-slate-600" />
             <p class="text-sm font-bold text-slate-400">No articles found.</p>
         </div>
         <ItPager class="mt-4 overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-700"

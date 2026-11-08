@@ -515,12 +515,12 @@
                             <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Actions</h2>
                         </div>
                         <div class="p-3 space-y-1.5">
-                            <button v-if="fabricOptions.length" type="button" @click="openSampleRequest"
-                                class="group flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left transition hover:bg-emerald-50 active:scale-[0.99] dark:hover:bg-emerald-500/10">
-                                <span class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
-                                    <FlaskConical class="h-4 w-4" />
+                            <button v-if="colorProductOptions.length" type="button" @click="openAddColor"
+                                class="group flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left transition hover:bg-violet-50 active:scale-[0.99] dark:hover:bg-violet-500/10">
+                                <span class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white">
+                                    <Plus class="h-4 w-4" />
                                 </span>
-                                <span class="min-w-0 flex-1 text-sm font-semibold text-slate-900 dark:text-white">Request fabric sample</span>
+                                <span class="min-w-0 flex-1 text-sm font-semibold text-slate-900 dark:text-white">Add another Color</span>
                                 <ChevronDown class="h-4 w-4 -rotate-90 text-slate-400 transition group-hover:translate-x-0.5" />
                             </button>
                             <button @click="openPoModal" type="button" :disabled="!canSendPurchaseOrder"
@@ -1158,6 +1158,68 @@
             message="The quotation has been accepted successfully. You can continue with your purchase order."
         />
 
+        <div v-if="addColorModal" class="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" @click.self="addColorModal = false">
+            <section class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900" role="dialog" aria-modal="true" aria-labelledby="add-color-title">
+                <div class="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                        <h2 id="add-color-title" class="text-lg font-bold text-slate-900 dark:text-white">Add another Color</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Choose a Pantone and the yarns it applies to. CRM will include these combinations when requesting recipes.</p>
+                    </div>
+                    <button type="button" class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800" aria-label="Close" @click="addColorModal = false"><X class="h-5 w-5" /></button>
+                </div>
+                <form class="space-y-4" @submit.prevent="submitAddColor">
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-zinc-200">Product / fabric design
+                        <select v-model="addColorForm.product_id" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm dark:border-zinc-700 dark:bg-zinc-800">
+                            <option v-for="product in colorProductOptions" :key="product.product_id" :value="String(product.product_id)">{{ product.name }}</option>
+                        </select>
+                    </label>
+                    <div class="relative">
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-zinc-200">Pantone color</label>
+                        <button type="button" class="mt-1.5 flex w-full items-center gap-3 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-left text-sm shadow-sm transition hover:border-violet-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-700 dark:bg-zinc-800" :aria-expanded="pantoneDropdownOpen" aria-haspopup="listbox" @click="pantoneDropdownOpen = !pantoneDropdownOpen; pantoneSearch = ''">
+                            <span v-if="selectedPantone" class="h-7 w-7 shrink-0 rounded-lg border border-black/10 shadow-inner" :style="{ backgroundColor: selectedPantone.hex || '#e5e7eb' }" />
+                            <span v-else class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-400 dark:border-zinc-600">?</span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate font-semibold text-slate-800 dark:text-zinc-100">{{ selectedPantone?.name || 'Select a Pantone' }}</span>
+                                <span v-if="selectedPantone?.color_category" class="block truncate text-xs font-normal text-slate-500 dark:text-zinc-400">{{ selectedPantone.color_category }}</span>
+                            </span>
+                            <ChevronDown class="h-4 w-4 shrink-0 text-slate-400 transition" :class="pantoneDropdownOpen ? 'rotate-180' : ''" />
+                        </button>
+                        <div v-if="pantoneDropdownOpen" class="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                            <div class="border-b border-slate-100 p-2.5 dark:border-zinc-800">
+                                <div class="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 dark:border-zinc-700 dark:bg-zinc-800">
+                                    <Search class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                                    <input v-model="pantoneSearch" type="search" autocomplete="off" placeholder="Search Pantone name or category…" class="w-full border-0 bg-transparent py-2 text-sm outline-none ring-0 placeholder:text-slate-400 focus:ring-0 dark:text-white" aria-label="Search Pantone colors" />
+                                </div>
+                            </div>
+                            <div class="max-h-60 overflow-y-auto p-1.5" role="listbox" aria-label="Pantone colors">
+                                <button v-for="pantone in filteredPantones" :key="pantone.id" type="button" role="option" :aria-selected="String(pantone.id) === String(addColorForm.pantone_id)" class="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-violet-50 focus:bg-violet-50 focus:outline-none dark:hover:bg-violet-500/10 dark:focus:bg-violet-500/10" @click="choosePantone(pantone)">
+                                    <span class="h-9 w-9 shrink-0 rounded-lg border border-black/10 shadow-inner" :style="{ backgroundColor: pantone.hex || '#e5e7eb' }" />
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block truncate text-sm font-semibold text-slate-800 dark:text-zinc-100">{{ pantone.name }}</span>
+                                        <span class="block truncate text-xs text-slate-500 dark:text-zinc-400">{{ pantone.color_category || 'Pantone reference' }}<span v-if="pantone.hex"> · {{ pantone.hex.toUpperCase() }}</span></span>
+                                    </span>
+                                    <Check v-if="String(pantone.id) === String(addColorForm.pantone_id)" class="h-4 w-4 shrink-0 text-violet-600" />
+                                </button>
+                                <p v-if="!filteredPantones.length" class="px-3 py-5 text-center text-sm text-slate-500 dark:text-zinc-400">No Pantone colors match your search.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <fieldset class="space-y-2">
+                        <legend class="text-sm font-semibold text-slate-700 dark:text-zinc-200">Apply to yarn types</legend>
+                        <label v-for="yarn in selectedColorProduct?.yarns || []" :key="yarn.id" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-700">
+                            <input v-model="addColorForm.yarn_ids" type="checkbox" :value="String(yarn.id)" class="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                            <span>{{ yarn.name }}<span v-if="yarn.yarn_tier" class="text-slate-400"> · {{ yarn.yarn_tier }}</span></span>
+                        </label>
+                        <p v-if="!selectedColorProduct?.yarns?.length" class="text-sm text-amber-600">No yarn types are recorded for this product inquiry.</p>
+                    </fieldset>
+                    <p v-if="addColorError" class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">{{ addColorError }}</p>
+                    <div class="flex justify-end gap-2 pt-1">
+                        <button type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold dark:border-zinc-700" @click="addColorModal = false">Cancel</button>
+                        <button type="submit" :disabled="addingColor || !addColorForm.pantone_id || !addColorForm.yarn_ids.length" class="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{{ addingColor ? 'Sending…' : 'Send to CRM' }}</button>
+                    </div>
+                </form>
+            </section>
+        </div>
     </AuthenticatedLayout>
 </template>
 
@@ -1168,9 +1230,70 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { useForm } from '@inertiajs/vue3';
 import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import { useRealtimeConversation } from '@/composables/useRealtimeConversation';
-import { ArrowLeft, Paperclip, Send, Loader2, FileText, X, Eye, Trash2, Package, Download, FlaskConical, ClipboardList, ChevronDown, Layers, Truck, ImagePlus, Palette, UploadCloud, Plus, Check } from 'lucide-vue-next';
+import { ArrowLeft, Paperclip, Send, Loader2, FileText, X, Eye, Trash2, Package, Download, FlaskConical, ClipboardList, ChevronDown, Layers, Truck, ImagePlus, Palette, UploadCloud, Plus, Check, Search } from 'lucide-vue-next';
 
-const props = defineProps({ inquiry: Object, quotations: Array, fabricOptions: { type: Array, default: () => [] }, sampleRequests: { type: Array, default: () => [] } });
+const props = defineProps({ inquiry: Object, quotations: Array, fabricOptions: { type: Array, default: () => [] }, sampleRequests: { type: Array, default: () => [] }, pantoneReferences: { type: Array, default: () => [] } });
+
+const colorProductOptions = computed(() => {
+    const selections = props.inquiry?.product_selections ?? {};
+    const rows = Array.isArray(selections.products) && selections.products.length
+        ? selections.products
+        : selections.product_id || props.inquiry?.product_id ? [{ ...selections, product_id: selections.product_id ?? props.inquiry.product_id, name: props.inquiry?.product?.name }] : [];
+    return rows.filter((row) => row.product_id && row.yarns?.length).map((row) => ({ ...row, name: row.name || props.inquiry?.product?.name || `Product ${row.product_id}` }));
+});
+const addColorModal = ref(false);
+const addingColor = ref(false);
+const addColorError = ref('');
+const addColorForm = ref({ product_id: '', pantone_id: '', yarn_ids: [] });
+const pantoneDropdownOpen = ref(false);
+const pantoneSearch = ref('');
+const selectedColorProduct = computed(() => colorProductOptions.value.find((product) => String(product.product_id) === String(addColorForm.value.product_id)) ?? colorProductOptions.value[0] ?? null);
+const availablePantones = computed(() => {
+    const requestedYarnIds = addColorForm.value.yarn_ids.map(Number);
+    return props.pantoneReferences.filter((pantone) => {
+        if ((selectedColorProduct.value?.pantones ?? []).some((color) => Number(color.id) === Number(pantone.id))) return false;
+        return !(selectedColorProduct.value?.colorways ?? []).some((colorway) =>
+            Number(colorway.pantone?.id ?? colorway.pantone_id) === Number(pantone.id)
+            && requestedYarnIds.some((id) => (colorway.yarn_ids ?? []).map(Number).includes(id))
+        );
+    });
+});
+const filteredPantones = computed(() => {
+    const query = pantoneSearch.value.trim().toLocaleLowerCase();
+    if (!query) return availablePantones.value;
+    return availablePantones.value.filter((pantone) => `${pantone.name ?? ''} ${pantone.color_category ?? ''} ${pantone.hex ?? ''}`.toLocaleLowerCase().includes(query));
+});
+const selectedPantone = computed(() => props.pantoneReferences.find((pantone) => String(pantone.id) === String(addColorForm.value.pantone_id)) ?? null);
+const choosePantone = (pantone) => {
+    addColorForm.value.pantone_id = String(pantone.id);
+    pantoneDropdownOpen.value = false;
+    pantoneSearch.value = '';
+};
+const openAddColor = () => {
+    const first = colorProductOptions.value[0];
+    addColorForm.value = { product_id: first ? String(first.product_id) : '', pantone_id: '', yarn_ids: [] };
+    addColorError.value = '';
+    pantoneDropdownOpen.value = false;
+    pantoneSearch.value = '';
+    addColorModal.value = true;
+};
+watch(() => addColorForm.value.product_id, () => { addColorForm.value.yarn_ids = []; addColorForm.value.pantone_id = ''; pantoneDropdownOpen.value = false; pantoneSearch.value = ''; });
+watch(() => [...addColorForm.value.yarn_ids], () => {
+    if (addColorForm.value.pantone_id && !availablePantones.value.some((pantone) => String(pantone.id) === String(addColorForm.value.pantone_id))) {
+        addColorForm.value.pantone_id = '';
+    }
+}, { deep: true });
+const submitAddColor = () => {
+    if (addingColor.value) return;
+    addingColor.value = true;
+    addColorError.value = '';
+    router.post(route('client.conversation.colors.store', props.inquiry.hash_key), addColorForm.value, {
+        preserveScroll: true,
+        onSuccess: () => { addColorModal.value = false; },
+        onError: (errors) => { addColorError.value = Object.values(errors)[0] || 'Could not send this Pantone request.'; },
+        onFinish: () => { addingColor.value = false; },
+    });
+};
 
 // ── Fabric sample request ───────────────────────────────────────
 let sampleFabricSetId = 0;
@@ -1327,11 +1450,22 @@ const showDialog = (type, title, message, onConfirm = null) => { dialog.value = 
 const handleDialogAction = () => { if (dialog.value.onConfirm) dialog.value.onConfirm(); dialog.value.show = false; };
 
 // A sent quote can be accepted by submitting the PO; accepted quotes can be ordered too.
-const hasRequestedColorways = computed(() => Boolean(props.inquiry?.product_selections?.pantones?.length && props.inquiry?.product_selections?.yarns?.length));
+const requestedColorwayKeys = computed(() => {
+    const selections = props.inquiry?.product_selections ?? {};
+    const rows = Array.isArray(selections.products) && selections.products.length ? selections.products : [selections];
+    const keys = new Set();
+    rows.forEach((row) => {
+        const productId = row.product_id ?? props.inquiry?.product_id;
+        (row.pantones ?? []).forEach((pantone) => (row.yarns ?? []).forEach((yarn) => keys.add(`${Number(productId)}:${Number(pantone.id)}:${Number(yarn.id)}`)));
+        (row.colorways ?? []).forEach((colorway) => (colorway.yarn_ids ?? []).forEach((yarnId) => keys.add(`${Number(productId)}:${Number(colorway.pantone?.id ?? colorway.pantone_id)}:${Number(yarnId)}`)));
+    });
+    return [...keys];
+});
+const hasRequestedColorways = computed(() => requestedColorwayKeys.value.length > 0);
 const allRequestedColorwaysApproved = computed(() => {
     if (!hasRequestedColorways.value) return true;
-    const approved = clientSampleRequests.value.filter((sample) => sample.status === 'approved').flatMap((sample) => (sample.pantone_colors ?? []).map((color) => `${Number(color.pantone_reference_id)}:${Number(color.yarn_material_id)}`));
-    return props.inquiry.product_selections.pantones.every((pantone) => props.inquiry.product_selections.yarns.every((yarn) => approved.includes(`${Number(pantone.id)}:${Number(yarn.id)}`)));
+    const approvedProductKeys = clientSampleRequests.value.filter((sample) => sample.status === 'approved').flatMap((sample) => (sample.pantone_colors ?? []).map((color) => `${Number(sample.product_id)}:${Number(color.pantone_reference_id)}:${Number(color.yarn_material_id)}`));
+    return requestedColorwayKeys.value.every((key) => approvedProductKeys.includes(key));
 });
 const canSendPurchaseOrder = computed(() =>
     allRequestedColorwaysApproved.value && (props.quotations ?? []).some(q => ['sent', 'accepted'].includes(q.status) && q.items?.length)

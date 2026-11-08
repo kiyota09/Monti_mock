@@ -97,7 +97,58 @@ const relatedColors = (sample) => (props.sampleRequests || []).filter((candidate
     }
     return Number(candidate.id) === Number(sample.id);
 });
-const openColorCount = computed(() => (props.sampleRequests || []).reduce((total, sample) => total + Math.max(1, sample.pantone_colors?.length || 1), 0));
+const activeClientTab = ref('all');
+const activeRequestTab = ref('active');
+const sampleRequestsNewest = computed(() => [...(props.sampleRequests || [])].sort((a, b) => {
+    const timeDiff = (Date.parse(b.created_at || '') || 0) - (Date.parse(a.created_at || '') || 0);
+    return timeDiff || Number(b.id || 0) - Number(a.id || 0);
+}));
+const activeSampleRequests = computed(() => sampleRequestsNewest.value.filter((sample) => sample.status !== 'discarded'));
+const discardedSampleRequests = computed(() => sampleRequestsNewest.value.filter((sample) => sample.status === 'discarded'));
+const selectedSampleRequests = computed(() => activeRequestTab.value === 'discarded' ? discardedSampleRequests.value : activeSampleRequests.value);
+const openColorCount = computed(() => activeSampleRequests.value.reduce((total, sample) => total + Math.max(1, sample.pantone_colors?.length || 1), 0));
+const sampleClientKey = (sample) => String(sample.client_id ?? sample.inquiry?.client_id ?? 'unknown');
+const clientTabs = computed(() => {
+    const clients = new Map();
+    selectedSampleRequests.value.forEach((sample) => {
+        const id = sampleClientKey(sample);
+        if (!clients.has(id)) {
+            clients.set(id, {
+                id,
+                name: sample.inquiry?.client?.company_name || 'Business client',
+                count: 0,
+                latestAt: sample.created_at,
+            });
+        }
+        clients.get(id).count++;
+    });
+    return [...clients.values()];
+});
+const visibleInquiryGroups = computed(() => {
+    const requests = activeClientTab.value === 'all'
+        ? selectedSampleRequests.value
+        : selectedSampleRequests.value.filter((sample) => sampleClientKey(sample) === activeClientTab.value);
+    const groups = new Map();
+    requests.forEach((sample) => {
+        const clientId = sampleClientKey(sample);
+        const inquiryId = sample.inquiry_id ?? sample.inquiry?.id ?? null;
+        const key = `${clientId}:${inquiryId ?? `request-${sample.id}`}`;
+        if (!groups.has(key)) {
+            groups.set(key, {
+                key,
+                clientName: sample.inquiry?.client?.company_name || 'Business client',
+                inquiryLabel: sample.inquiry?.hash_key || inquiryId || 'Unlinked request',
+                requests: [],
+            });
+        }
+        groups.get(key).requests.push(sample);
+    });
+    return [...groups.values()];
+});
+const discardSample = (sample) => {
+    if (!window.confirm(`Discard the recipe request for ${sample.pantone_colors?.[0]?.pantone_name || sample.color_description} and ${sample.pantone_colors?.[0]?.yarn_type || 'this yarn'}? It will become requestable again in CRM.`)) return;
+    router.patch(route('man.staff.dyeing-lab-chemist.sample.discard', sample.id), {}, { preserveScroll: true });
+};
 const formulaSections = (sample, color = null) => {
     const formula = color?.formula || (sample.pantone_colors?.length === 1 ? sample.pantone_formula || sample.formula : {}) || {};
     return [
@@ -247,6 +298,7 @@ const stripEmptyRows = (data) => {
 
 const statusBadge = (s) => s === 'approved'
     ? 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30'
+    : s === 'discarded' ? 'bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30'
     : s === 'rejected' ? 'bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30'
     : ['pending', 'awaiting_crm_review', 'crm_adjustment_review'].includes(s) ? 'bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30'
     : 'bg-indigo-100 text-indigo-700 ring-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/30';
@@ -321,12 +373,43 @@ const statusBadge = (s) => s === 'approved'
                     <span class="rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-[11px] font-black px-2.5 py-1">{{ openColorCount }} colors open</span>
                 </div>
 
-                <div v-if="!(sampleRequests?.length)" class="bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-700 px-6 py-8 text-center text-sm text-gray-400 font-bold">
-                    No color requests are waiting for the Dyeing Lab Chemist.
+                <div class="flex gap-2 border-b border-slate-200 px-1 dark:border-zinc-800" role="tablist" aria-label="Recipe request status">
+                    <button type="button" role="tab" :aria-selected="activeRequestTab === 'active'" @click="activeRequestTab = 'active'; activeClientTab = 'all'"
+                        :class="activeRequestTab === 'active' ? 'border-teal-600 text-teal-700 dark:text-teal-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100'"
+                        class="shrink-0 border-b-2 px-3 py-2 text-xs font-black transition">Active <span class="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-zinc-800">{{ activeSampleRequests.length }}</span></button>
+                    <button type="button" role="tab" :aria-selected="activeRequestTab === 'discarded'" @click="activeRequestTab = 'discarded'; activeClientTab = 'all'"
+                        :class="activeRequestTab === 'discarded' ? 'border-rose-600 text-rose-700 dark:text-rose-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100'"
+                        class="shrink-0 border-b-2 px-3 py-2 text-xs font-black transition">Discarded <span class="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-zinc-800">{{ discardedSampleRequests.length }}</span></button>
                 </div>
 
+                <div v-if="clientTabs.length" class="flex gap-2 overflow-x-auto border-b border-slate-200 px-1 dark:border-zinc-800" role="tablist" aria-label="Business client recipe requests">
+                    <button type="button" role="tab" :aria-selected="activeClientTab === 'all'" @click="activeClientTab = 'all'"
+                        :class="activeClientTab === 'all' ? 'border-teal-600 text-teal-700 dark:text-teal-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100'"
+                        class="shrink-0 border-b-2 px-3 py-2 text-xs font-black transition">
+                        All clients <span class="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-zinc-800">{{ selectedSampleRequests.length }}</span>
+                    </button>
+                    <button v-for="client in clientTabs" :key="client.id" type="button" role="tab" :aria-selected="activeClientTab === client.id" @click="activeClientTab = client.id"
+                        :class="activeClientTab === client.id ? 'border-teal-600 text-teal-700 dark:text-teal-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100'"
+                        class="shrink-0 border-b-2 px-3 py-2 text-xs font-black transition">
+                        {{ client.name }} <span class="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-zinc-800">{{ client.count }}</span>
+                    </button>
+                </div>
+
+                <div v-if="!selectedSampleRequests.length" class="bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-700 px-6 py-8 text-center text-sm text-gray-400 font-bold">
+                    {{ activeRequestTab === 'discarded' ? 'No discarded color requests.' : 'No color requests are waiting for the Dyeing Lab Chemist.' }}
+                </div>
+
+                <section v-for="inquiryGroup in visibleInquiryGroups" :key="inquiryGroup.key" class="space-y-3">
+                    <header class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-100/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
+                        <div class="min-w-0">
+                            <p class="truncate text-xs font-black text-slate-800 dark:text-zinc-100">{{ inquiryGroup.clientName }}</p>
+                            <p class="mt-0.5 truncate text-[11px] text-slate-500 dark:text-zinc-400">Inquiry {{ inquiryGroup.inquiryLabel }}</p>
+                        </div>
+                        <span class="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">{{ inquiryGroup.requests.length }} request(s)</span>
+                    </header>
+
                 <!-- NOTE: no overflow-hidden here so the Pantone dropdown can extend past the card edge -->
-                <div v-for="s in sampleRequests" :key="s.id" class="relative bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm" :class="pantoneOpen === s.id || yarnDropdownOpen?.startsWith(`${s.id}:`) ? 'z-30' : ''">
+                <div v-for="s in inquiryGroup.requests" :key="s.id" class="relative bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm" :class="pantoneOpen === s.id || yarnDropdownOpen?.startsWith(`${s.id}:`) ? 'z-30' : ''">
                     <!-- Color-coded accent edge: shows the linked Pantone at a glance -->
                     <div class="absolute inset-x-0 top-0 h-1.5 rounded-t-3xl" :style="{ backgroundColor: s.pantone_colors?.[0]?.hex || s.pantone_reference?.hex || 'transparent' }" />
                     <div class="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-zinc-800">
@@ -366,7 +449,7 @@ const statusBadge = (s) => s === 'approved'
                                     View client color image
                                 </a>
                             </div>
-                            <div class="relative" data-pantone-picker @keydown.esc="pantoneOpen = null">
+                            <div v-if="activeRequestTab === 'active'" class="relative" data-pantone-picker @keydown.esc="pantoneOpen = null">
                                 <button type="button" :disabled="!canEditProduction" @click="togglePantone(s, colorIndex)" aria-haspopup="listbox"
                                     class="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-zinc-200 shadow-sm hover:border-indigo-300 disabled:opacity-60">
                                     <span class="h-5 w-5 rounded-md ring-1 ring-black/10" :style="{ backgroundColor: color.hex || '#e2e8f0' }" />
@@ -389,7 +472,7 @@ const statusBadge = (s) => s === 'approved'
                                     </div>
                                 </Transition>
                             </div>
-                            <div v-if="pendingPantoneSelections[pantonePickerKey(s, colorIndex)] || color.pantone_reference_id" class="relative min-w-[13rem] space-y-1 text-[10px] font-bold text-slate-500 dark:text-zinc-400" data-yarn-picker>
+                            <div v-if="activeRequestTab === 'active' && (pendingPantoneSelections[pantonePickerKey(s, colorIndex)] || color.pantone_reference_id)" class="relative min-w-[13rem] space-y-1 text-[10px] font-bold text-slate-500 dark:text-zinc-400" data-yarn-picker>
                                 Yarn / fabric type for formula
                                 <button type="button" :disabled="!canEditProduction" @click="toggleYarnDropdown(s, colorIndex)" :aria-expanded="yarnDropdownOpen === pantonePickerKey(s, colorIndex)" class="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-700 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
                                     <span class="truncate">{{ selectedYarnOption(s, colorIndex, color) ? materialOptionLabel(selectedYarnOption(s, colorIndex, color)) : 'Select the correct yarn type' }}</span>
@@ -403,11 +486,14 @@ const statusBadge = (s) => s === 'approved'
                                     </div>
                                 </div>
                             </div>
-                            <button v-if="color.pantone_reference_id && canEditProduction" type="button" @click="unlinkPantone(s, colorIndex)" :aria-label="`Remove Pantone link for ${color.pantone_name || color.label}`" title="Remove linked Pantone formula" class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/40">
+                            <button v-if="activeRequestTab === 'active' && color.pantone_reference_id && canEditProduction" type="button" @click="unlinkPantone(s, colorIndex)" :aria-label="`Remove Pantone link for ${color.pantone_name || color.label}`" title="Remove linked Pantone formula" class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/40">
                                 <Trash2 class="h-3.5 w-3.5" /> Remove link
                             </button>
-                            <button v-if="color.pantone_reference_id && color.yarn_material_id && canEditProduction" type="button" @click="openKnitRequest(s, color, colorIndex)" class="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-teal-700">
+                            <button v-if="activeRequestTab === 'active' && color.pantone_reference_id && color.yarn_material_id && canEditProduction" type="button" @click="openKnitRequest(s, color, colorIndex)" class="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-teal-700">
                                 <Scissors class="h-3.5 w-3.5" /> Request Fabric
+                            </button>
+                            <button v-if="activeRequestTab === 'active' && s.request_method === 'pantone' && s.pantone_colors?.length === 1 && ['requested', 'in_progress', 'adjustment_requested'].includes(s.status) && canEditProduction" type="button" @click="discardSample(s)" class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/40">
+                                <Trash2 class="h-3.5 w-3.5" /> Discard color
                             </button>
                         </div>
                         <div class="mt-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-500/5 p-3">
@@ -547,6 +633,7 @@ const statusBadge = (s) => s === 'approved'
                     </div>
                     </Teleport>
                 </div>
+                </section>
 
                 <div class="animate-fade-up flex items-center gap-3 px-2 pt-4">
                     <h2 class="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Lab Dip Requests</h2>

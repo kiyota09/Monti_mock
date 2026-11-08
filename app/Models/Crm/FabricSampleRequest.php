@@ -16,7 +16,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * Lifecycle: requested → in_progress → formulated → forwarded
  * → approved | adjustment_requested (a follow-up round points back here
- * via parent_id). Cancelled is terminal.
+ * via parent_id). Cancelled and discarded are terminal. A discarded recipe
+ * request no longer blocks CRM from submitting the same client colorway.
  */
 class FabricSampleRequest extends Model
 {
@@ -29,6 +30,7 @@ class FabricSampleRequest extends Model
     public const STATUS_APPROVED = 'approved';
     public const STATUS_ADJUSTMENT_REQUESTED = 'adjustment_requested';
     public const STATUS_CANCELLED = 'cancelled';
+    public const STATUS_DISCARDED = 'discarded';
 
     protected $fillable = [
         'code',
