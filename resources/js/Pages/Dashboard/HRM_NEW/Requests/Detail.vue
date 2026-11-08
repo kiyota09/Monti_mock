@@ -35,10 +35,10 @@ const props = withDefaults(defineProps<{
             resume_url: string | null; resume_name: string | null;
             assigned_at: string | null; assigned_by: string | null;
         }>;
-        available_workers: Array<{ id: number; code: string; name: string; position_skill: string | null; worker_status?: string | null; daily_rate?: string | number | null; phone?: string | null; gender?: string | null; clearance_expiry?: string | null; resume_url?: string | null; resume_name?: string | null; emergency_name?: string | null; emergency_relationship?: string | null; emergency_phone?: string | null; availability?: string | null; employment_arrangement?: string | null; proposed_department?: string | null; years_experience?: string | number | null }>;
+        available_workers: Array<{ id: number; code: string; name: string; email?: string | null; position_skill: string | null; worker_status?: string | null; daily_rate?: string | number | null; phone?: string | null; gender?: string | null; clearance_expiry?: string | null; resume_url?: string | null; resume_name?: string | null; emergency_name?: string | null; emergency_relationship?: string | null; emergency_phone?: string | null; availability?: string | null; employment_arrangement?: string | null; proposed_department?: string | null; years_experience?: string | number | null }>;
         proposals: Array<{
             id: number; worker_id: number; worker_code: string | null; worker_name: string | null;
-            position_skill: string | null; worker_status: string | null; daily_rate: string | number | null;
+            position_skill: string | null; email?: string | null; worker_status: string | null; daily_rate: string | number | null;
             phone: string | null; gender: string | null; clearance_expiry: string | null;
             clearance_expired: boolean; resume_url: string | null; resume_name: string | null;
             emergency_name?: string | null; emergency_relationship?: string | null; emergency_phone?: string | null;
@@ -72,6 +72,7 @@ const reasonError = ref('');
 
 const assignForm = useForm({ worker_id: '' as string | number });
 const selectedManagerId = ref<string | number>(props.default_hiring_manager_id || '');
+const hirePreviewError = ref('');
 
 function statusBadge(s: string): string {
     const map: Record<string, string> = {
@@ -305,10 +306,16 @@ function closeHirePreview() {
     hireMode.value = null;
     previewEmail.value = '';
     previewStartDate.value = '';
+    hirePreviewError.value = '';
     resetTraining();
 }
 function finishHirePreview() {
     if (!hirePreview.value || accepting.value) return;
+    if (!hirePreview.value.email) {
+        hirePreviewError.value = 'Add a valid personal email to this worker profile before assigning them so the welcome email can be sent.';
+        return;
+    }
+    hirePreviewError.value = '';
     if (!previewStartDate.value || previewStartDate.value < todayDate) {
         previewStartDateError.value = 'Choose today or a future deployment date.';
         return;
@@ -339,6 +346,7 @@ function finishHirePreview() {
         previewEmail.value = '';
         previewStartDate.value = '';
         previewStartDateError.value = '';
+        hirePreviewError.value = '';
         resetTraining();
         assignForm.reset();
     };
@@ -349,6 +357,7 @@ function finishHirePreview() {
         }, {
             preserveScroll: true,
             onSuccess: done,
+            onError: (errors) => { hirePreviewError.value = Object.values(errors || {}).join(' '); },
             onFinish: () => { accepting.value = false; },
         });
         return;
@@ -357,6 +366,7 @@ function finishHirePreview() {
     router.post(route('hrm.manpower-requests.proposals.accept', { manpowerRequest: props.request.id, proposal: proposalId }), payload, {
         preserveScroll: true,
         onSuccess: done,
+        onError: (errors) => { hirePreviewError.value = Object.values(errors || {}).join(' '); },
         onFinish: () => { accepting.value = false; },
     });
 }
@@ -474,7 +484,7 @@ const canAssign = computed(() =>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Request</h2>
-                <dl class="space-y-2 text-sm">
+                <dl class="divide-y divide-slate-300 text-sm dark:divide-zinc-600 [&>div]:py-2">
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Department</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.department }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Position / skill</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.position_skill }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-slate-400">Headcount</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.needed }}</dd></div>
@@ -877,6 +887,7 @@ const canAssign = computed(() =>
                             <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Worker</span><span class="font-bold text-slate-800 dark:text-slate-100">{{ hirePreview.worker_name }}</span></div>
                             <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Position / skill</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.position_skill || '—' }}</span></div>
                             <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Phone</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.phone || '—' }}</span></div>
+                            <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Email for welcome notice</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.email || 'Missing email' }}</span></div>
                             <div class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Gender</span><span class="font-semibold text-slate-700 dark:text-slate-200">{{ hirePreview.gender || '—' }}</span></div>
                             <div v-if="hireMode !== 'direct'" class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Proposal</span><span class="font-semibold text-amber-600">⏳ Proposed — under review{{ hirePreview.proposed_at ? ' · ' + hirePreview.proposed_at : '' }}</span></div>
                             <div v-else class="flex justify-between border-b border-slate-50 dark:border-slate-700/50 py-1.5"><span class="text-slate-400">Source</span><span class="font-semibold text-blue-600">Direct assign — available worker</span></div>
@@ -946,7 +957,7 @@ const canAssign = computed(() =>
                                 </div>
                             </div>
                         </div>
-                        <p class="mt-2 text-xs text-slate-500">Generate via system or type manually. On Finish the worker gets the same welcome email as CREATE EMPLOYEE (ID, position, department, company email, temp password, training date).</p>
+                        <p class="mt-2 text-xs text-slate-500">Generate via system or type manually. On Finish the worker gets a welcome email with their ID, position, department, company account, temporary password, and training date and shift time.</p>
                     </section>
 
                     <section>
@@ -960,6 +971,7 @@ const canAssign = computed(() =>
                     </section>
                 </div>
 
+                <p v-if="hirePreviewError" class="mx-5 mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">{{ hirePreviewError }}</p>
                 <div class="p-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3 shrink-0">
                     <Link :href="route('hrm.workers.show', hirePreview.worker_id || hirePreview.id)" class="text-xs font-bold text-blue-600 hover:text-blue-700 transition">Open full worker profile →</Link>
                     <div class="flex items-center gap-2">

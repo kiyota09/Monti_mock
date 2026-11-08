@@ -1,8 +1,8 @@
 <template>
   <AuthenticatedLayout>
-    <div class="h-full flex flex-col bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-indigo-950/40 overflow-hidden -mx-4 -mt-4 px-4 pt-4">
+    <div class="min-h-screen flex flex-col bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-indigo-950/40 -mx-4 -mt-4 px-4 pt-4">
 
-      <div class="flex-1 text-slate-900 dark:text-zinc-100 font-sans relative flex flex-col overflow-hidden">
+      <div class="flex-1 text-slate-900 dark:text-zinc-100 font-sans relative flex flex-col">
 
         <!-- Subtle Background Pattern -->
         <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
@@ -103,53 +103,52 @@
         </div>
 
         <!-- TABLE VIEW SECTION - FULL HEIGHT -->
-        <div class="bg-white dark:bg-zinc-900/80 rounded-xl border border-slate-200/60 dark:border-zinc-800 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden flex-1 flex flex-col min-h-0">
+        <div class="bg-white dark:bg-zinc-900/80 rounded-xl border border-slate-200/60 dark:border-zinc-800 shadow-lg transition-all duration-300 backdrop-blur-sm overflow-hidden flex flex-col">
 
           <!-- Department Table -->
-          <div class="flex-1 overflow-auto">
-            <table class="w-full text-left border-collapse min-w-[760px]">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[820px] table-fixed border-collapse text-left text-[11px]">
+              <colgroup><col class="w-[30%]" /><col class="w-[20%]" /><col class="w-[12%]" /><col class="w-[12%]" /><col class="w-[16%]" /><col class="w-[10%]" /></colgroup>
               <thead class="sticky top-0 z-10">
-                <tr class="bg-gradient-to-r from-slate-50 to-transparent dark:from-zinc-800 dark:to-zinc-900 border-b border-slate-200 dark:border-zinc-700 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                  <th class="py-3 px-4">Department</th>
-                  <th class="py-3 px-4">Leadership</th>
-                  <th class="py-3 px-4 text-center">Stats</th>
-                  <th class="py-3 px-4 text-center">Status</th>
-                  <th class="py-3 px-4">Created By</th>
-                  <th class="py-3 px-4">Created At</th>
-                  <th class="py-3 px-4 text-right">Actions</th>
+                <tr class="bg-slate-100 dark:bg-zinc-800 border-b border-slate-200 dark:border-zinc-700 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-300">
+                  <th class="border border-slate-200 dark:border-zinc-700 px-2 py-1.5">Department</th>
+                  <th class="border border-slate-200 dark:border-zinc-700 px-2 py-1.5">Leadership</th>
+                  <th class="border border-slate-200 dark:border-zinc-700 px-1.5 py-1.5 text-center">Workforce</th>
+                  <th class="border border-slate-200 dark:border-zinc-700 px-1.5 py-1.5 text-center">Status</th>
+                  <th class="border border-slate-200 dark:border-zinc-700 px-2 py-1.5 text-center">Created At</th>
+                  <th class="border border-slate-200 dark:border-zinc-700 px-1.5 py-1.5 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-zinc-800">
                 <tr
                   v-for="dept in filteredDepartments"
                   :key="dept.id"
-                  class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent dark:hover:from-indigo-900/20 dark:hover:to-transparent transition-all duration-200 group"
+                  class="h-10 odd:bg-white even:bg-slate-50/70 dark:odd:bg-zinc-900 dark:even:bg-zinc-800/60 hover:bg-blue-50 dark:hover:bg-indigo-900/20 transition-colors group"
                 >
-                  <td class="py-3 px-4">
-                    <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-indigo-900/50 dark:to-indigo-800/40 flex items-center justify-center shadow-inner shrink-0">
+                  <td class="border-x border-slate-200 dark:border-zinc-800 px-2 py-1">
+                    <div class="flex items-center gap-2">
+                      <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-indigo-900/50 dark:to-indigo-800/40 flex items-center justify-center shadow-inner shrink-0">
                         <Building2 class="w-4 h-4 text-blue-600 dark:text-indigo-300" />
                       </div>
                       <div class="min-w-0">
                         <button @click="openModal('edit', dept)" :disabled="!!dept.archived_at"
-                          class="text-sm font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2 hover:text-blue-700 dark:hover:text-indigo-300 transition-colors text-left disabled:cursor-default">
+                          class="text-xs font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-indigo-300 transition-colors text-left disabled:cursor-default">
                           <span class="truncate">{{ dept.name }}</span>
                           <span v-if="dept.category" class="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 text-[10px] font-semibold whitespace-nowrap">
                             {{ dept.category }}
                           </span>
                         </button>
-                        <div class="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">{{ dept.code }}</div>
                       </div>
                     </div>
                   </td>
-                  <td class="py-3 px-4">
-                    <div class="text-sm font-semibold text-slate-800 dark:text-zinc-200">{{ dept.head_name || '—' }}</div>
+                  <td class="border-x border-slate-200 dark:border-zinc-800 px-2 py-1">
+                    <div class="truncate text-xs font-semibold text-slate-800 dark:text-zinc-200">{{ dept.head_name || '—' }}</div>
                   </td>
-                  <td class="py-3 px-4 text-center">
-                    <div class="text-sm font-bold text-slate-800 dark:text-zinc-100">{{ dept.employee_count || 0 }} emp.</div>
+                  <td class="border-x border-slate-200 dark:border-zinc-800 px-1.5 py-1 text-center">
+                    <div class="text-xs font-bold text-slate-800 dark:text-zinc-100">{{ dept.employee_count || 0 }} emp.</div>
                     <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">{{ dept.open_positions || 0 }} open</div>
                   </td>
-                  <td class="py-3 px-4 text-center">
+                  <td class="border-x border-slate-200 dark:border-zinc-800 px-1.5 py-1 text-center">
                     <span :class="[
                       'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-sm whitespace-nowrap border',
                       dept.archived_at
@@ -162,14 +161,11 @@
                       {{ dept.archived_at ? 'Archived' : dept.status === 'active' ? 'Active' : 'Inactive' }}
                     </span>
                   </td>
-                  <td class="py-3 px-4">
-                    <div class="text-sm font-semibold text-slate-700 dark:text-zinc-300">{{ dept.created_by_name || 'System' }}</div>
+                  <td class="border-x border-slate-200 dark:border-zinc-800 px-2 py-1 text-center">
+                    <div class="whitespace-nowrap text-xs text-slate-600 dark:text-zinc-400">{{ formatDate(dept.created_at) }}</div>
                   </td>
-                  <td class="py-3 px-4">
-                    <div class="text-sm text-slate-600 dark:text-zinc-400">{{ dept.created_at || '—' }}</div>
-                  </td>
-                  <td class="py-3 px-4">
-                    <div class="flex items-center justify-end gap-1">
+                  <td class="border-x border-slate-200 dark:border-zinc-800 px-1 py-1">
+                    <div class="flex items-center justify-center gap-1">
                       <button
                         v-if="!dept.archived_at"
                         @click="openModal('edit', dept)"
@@ -187,7 +183,7 @@
                       >
                         <Lock class="w-4 h-4" />
                       </button>
-                      <button v-if="!dept.archived_at" @click="confirmArchive(dept.id, dept.name)" class="p-1.5 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-lg text-slate-400 dark:text-zinc-500 hover:text-amber-600 dark:hover:text-amber-300 transition-all" title="Archive" :aria-label="`Archive ${dept.name}`"><Archive class="w-4 h-4" /></button>
+                      <button v-if="!dept.archived_at" @click="confirmArchive(dept.id, dept.name)" :disabled="Number(dept.positions_count) > 0" class="p-1.5 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-lg text-slate-400 dark:text-zinc-500 hover:text-amber-600 dark:hover:text-amber-300 transition-all disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-400" :title="Number(dept.positions_count) > 0 ? 'Move or remove this department’s positions before archiving' : 'Archive'" :aria-label="Number(dept.positions_count) > 0 ? `${dept.name} cannot be archived while it has positions` : `Archive ${dept.name}`"><Archive class="w-4 h-4" /></button>
                       <button v-else @click="confirmRestore(dept.id, dept.name)" class="p-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-lg text-slate-400 dark:text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-300 transition-all" title="Restore" :aria-label="`Restore ${dept.name}`"><RotateCcw class="w-4 h-4" /></button>
                     </div>
                   </td>
@@ -439,6 +435,15 @@ const statusOptions = [
     { label: 'Active', value: 'active' },
     { label: 'Inactive', value: 'inactive' },
 ];
+
+const formatDate = (value) => {
+    if (!value) return '—';
+    const datePart = String(value).slice(0, 10);
+    const parsed = new Date(`${datePart}T00:00:00`);
+    return Number.isNaN(parsed.getTime())
+        ? String(value)
+        : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+};
 
 // Module options use active role codes, matching users.role.
 const categoryOptions = computed(() => (props.categories || []).map((c) =>
@@ -853,7 +858,7 @@ const archiveDepartment = async (id) => {
                 toast.success('Department archived.');
                 loadDepartments();
             },
-            onError: () => toast.error('Failed to archive department.')
+            onError: (errors) => toast.error(errors.department || 'Failed to archive department.')
         });
     } catch (e) {
         toast.error('Failed to archive department.');

@@ -21,6 +21,7 @@ const supplier = computed(() => page.props.auth.supplier || (page.props.auth.use
 const applicantUser = computed(() => page.props.auth.applicant);
 const agencyUser = computed(() => page.props.auth.agency);
 const currentUrl = computed(() => page.url);
+const isAgencyDashboard = computed(() => currentUrl.value.split('?')[0] === '/agency/dashboard');
 
 const isClient = computed(() => !!client.value);
 const isRepresentative = computed(() => isClient.value && !!representative.value);
@@ -849,7 +850,7 @@ onMounted(() => {
                     <span v-if="clientNotifsUnread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">{{ clientNotifsUnread > 99 ? '99+' : clientNotifsUnread }}</span>
                 </button>
                 <!-- Agency notifications (agency only, left of Settings) -->
-                <button v-if="isAgency" @click="openAgencyNotifPanel" title="Notifications"
+                <button v-if="isAgency && !isAgencyDashboard" @click="openAgencyNotifPanel" title="Notifications"
                     :class="['relative rounded-xl p-2.5 transition active:scale-95', openPanel === 'agency_notif' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-zinc-800']">
                     <Bell class="h-5 w-5" />
                     <span v-if="agencyNotifsUnread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white ring-2 ring-white dark:ring-zinc-900">{{ agencyNotifsUnread > 99 ? '99+' : agencyNotifsUnread }}</span>
@@ -1008,7 +1009,7 @@ onMounted(() => {
                 </div>
 
                 <!-- AGENCY NOTIFICATIONS -->
-                <div v-if="openPanel === 'agency_notif'">
+                <div v-if="openPanel === 'agency_notif' && !isAgencyDashboard">
                     <div class="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-zinc-800">
                         <p class="text-sm font-black text-gray-900 dark:text-white">Notifications</p>
                         <div class="flex items-center gap-2">

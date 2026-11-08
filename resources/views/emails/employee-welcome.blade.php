@@ -26,7 +26,9 @@
         <p class="row"><span class="label">Company Email:</span> <span class="value">{{ $companyEmail }}</span></p>
         <p class="row"><span class="label">Temporary Password:</span> <span class="value">{{ $tempPassword }}</span></p>
 
-        <p>Your training is scheduled to begin on <strong>{{ $trainingStartDate }}</strong>.</p>
+        @if($trainingStartDate)
+            <p>Your training is scheduled to begin on <strong>{{ $trainingStartDate }}</strong>@if($trainingStartTime) at <strong>{{ $trainingStartTime }}</strong>@endif@if($trainingEndTime) and end at <strong>{{ $trainingEndTime }}</strong>@endif.</p>
+        @endif
 
         <p>You may use your company email to access the Employee Portal after activation.</p>
 

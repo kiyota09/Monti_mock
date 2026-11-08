@@ -56,7 +56,7 @@ class PositionController extends Controller
             'filters' => $request->only(['search', 'department', 'status']),
             'filterOptions' => [
                 'departments' => HrmDepartment::select('id', 'name', 'category')->get(),
-                'managementLevels' => ['Executive', 'Managerial', 'Supervisory', 'Individual Contributor', 'Trainee'],
+                'managementLevels' => ['Executive', 'Director', 'Managerial', 'Supervisor', 'Individual Contributor'],
             ],
             'metrics' => [
                 'active' => HrmPosition::whereNull('archived_at')->count(),
@@ -94,8 +94,6 @@ class PositionController extends Controller
         'status' => 'nullable|in:active,inactive',
     ]);
 
-        $this->validateManufacturingPosition($request, $data);
-
         if (empty($data['code'])) {
             $data['code'] = self::nextCode();
         }
@@ -105,19 +103,6 @@ class PositionController extends Controller
         return back()->with('success', 'Position created.');
     }
 
-    private function validateManufacturingPosition(Request $request, array $data, ?HrmPosition $position = null): void
-    {
-        $departmentId = $data['department_id'] ?? $position?->department_id;
-        $department = $departmentId ? HrmDepartment::find($departmentId) : null;
-
-        if (strtoupper((string) $department?->category) !== 'MAN') {
-            return;
-        }
-
-        $request->validate([
-            'name' => ['required', \Illuminate\Validation\Rule::in(array_values(ManufacturingRoles::LABELS))],
-        ]);
-    }
     protected static function nextCode(): string
     {
         $next = (int) (HrmPosition::max('id') ?? 0) + 1;
@@ -152,7 +137,6 @@ class PositionController extends Controller
         if (!empty($data['reports_to_id']) && (int) $data['reports_to_id'] === (int) $position->id) {
             $data['reports_to_id'] = null;
         }
-        $this->validateManufacturingPosition($request, $data, $position);
         $position->update($data);
 
         return back()->with('success', 'Position updated.');
@@ -192,7 +176,7 @@ class PositionController extends Controller
         // Blocked while employees hold the position (ported from super_monti).
         if ($position->holders()->count() > 0) {
             return back()->withErrors([
-                'delete' => 'Cannot delete this position while employees are assigned to it. Reassign those employees first.',
+                'delete' => 'Cannot delete this position while employees are assigned to it.',
             ]);
         }
         $position->delete();
@@ -290,6 +274,12 @@ class PositionController extends Controller
 
     public function archive(HrmPosition $position)
     {
+        if ($position->holders()->exists()) {
+            return back()->withErrors([
+                'archive' => 'Cannot archive this position while employees are assigned to it.',
+            ]);
+        }
+
         $position->update(['archived_at' => now(), 'status' => 'inactive']);
 
         return back()->with('success', 'Position archived.');
@@ -306,7 +296,14 @@ class PositionController extends Controller
     {
         $employees = User::where('hrm_position_id', $position->id)
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'employee_id']);
+            ->get(['id', 'name', 'email', 'employee_id', 'profile_photo_path'])
+            ->map(function (User $employee) {
+                $employee->profile_photo_url = $employee->profile_photo_path
+                    ? asset('storage/' . $employee->profile_photo_path)
+                    : null;
+
+                return $employee;
+            });
 
         return response()->json([
             'employees' => $employees,

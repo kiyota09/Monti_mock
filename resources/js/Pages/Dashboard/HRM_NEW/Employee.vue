@@ -191,7 +191,6 @@
                   <KeyRound class="w-4 h-4" /> Resend Login
                 </button>
               </div>
-
               <div class="mt-4 pt-4 border-t border-slate-100 space-y-2">
                 <button @click="triggerAction('assets')" class="w-full text-left text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center justify-between p-2 hover:bg-blue-50 rounded-lg transition-colors">
                   <span class="flex items-center gap-2"><Monitor class="w-4 h-4" /> View Assigned Assets</span>

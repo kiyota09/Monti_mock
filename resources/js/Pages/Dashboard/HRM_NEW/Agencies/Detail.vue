@@ -4,7 +4,7 @@ import { confirmModal } from '@/lib/feedback';
 import { ref, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Pencil, Pause, Play, Ban } from 'lucide-vue-next';
+import { Pencil, Pause, Play, Ban, Star } from 'lucide-vue-next';
 
 const props = defineProps<{
     agency: {
@@ -50,6 +50,28 @@ const reasonError = ref('');
 const confirmUserCreate = ref(false);
 const confirmUserAction = ref<{ type: 'reset' | 'toggle'; user: { id: number; name: string; is_active: boolean } } | null>(null);
 const userActionProcessing = ref(false);
+const reportTargetWorker = ref<{ id: number; name: string } | null>(null);
+const workerReportForm = useForm({ reason: '', rating: 0 });
+
+function openWorkerReport(worker: { id: number; name: string }) {
+    reportTargetWorker.value = worker;
+    workerReportForm.reset();
+    workerReportForm.clearErrors();
+}
+
+function submitWorkerReport() {
+    if (!reportTargetWorker.value) return;
+    workerReportForm.post(route('hrm.agencies.workers.report', {
+        agency: props.agency.id,
+        worker: reportTargetWorker.value.id,
+    }), {
+        preserveScroll: true,
+        onSuccess: () => {
+            reportTargetWorker.value = null;
+            workerReportForm.reset();
+        },
+    });
+}
 
 function statusBadge(s: string): string {
     const map: Record<string, string> = {
@@ -353,18 +375,6 @@ function actionLabel(a: string): string {
                 </form>
                 <p class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">A temporary password will be emailed to the new login.</p>
 
-                <!-- Confirm panel for adding a user -->
-                <div v-if="confirmUserCreate" class="mt-3 p-4 rounded-xl bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-600">
-                    <p class="text-sm font-black text-slate-900 dark:text-white">Create login for {{ userForm.name }} ({{ userForm.email }})?</p>
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">A temporary password will be emailed to {{ userForm.email }}.</p>
-                    <p v-if="userForm.errors.email" class="mt-1 text-xs text-rose-600">{{ userForm.errors.email }}</p>
-                    <div class="mt-3 flex items-center justify-end gap-2">
-                        <button @click="confirmUserCreate = false" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">Cancel</button>
-                        <button @click="submitUserCreate" :disabled="userForm.processing" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-60">
-                            {{ userForm.processing ? 'Creating...' : 'Confirm creation' }}
-                        </button>
-                    </div>
-                </div>
             </div>
 
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -411,10 +421,10 @@ function actionLabel(a: string): string {
                 <table class="w-full text-left border-collapse min-w-[560px]">
                     <thead>
                         <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                            <th class="py-3 px-4">Code</th>
                             <th class="py-3 px-4">Name</th>
                             <th class="py-3 px-4">Position / skill</th>
                             <th class="py-3 px-4 text-center">Status</th>
+                            <th v-if="canEdit" class="py-3 px-4 text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -424,11 +434,13 @@ function actionLabel(a: string): string {
                             @click="router.visit(route('hrm.workers.show', w.id))"
                             class="transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60"
                         >
-                            <td class="py-3 px-4 text-xs font-mono font-bold text-slate-700 dark:text-slate-200">{{ w.code }}</td>
                             <td class="py-3 px-4 text-sm font-bold text-blue-600 hover:text-blue-700">{{ w.name }}</td>
                             <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ w.position_skill || '—' }}</td>
                             <td class="py-3 px-4 text-center">
                                 <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', workerStatusBadge(w.status)]">{{ w.status }}</span>
+                            </td>
+                            <td v-if="canEdit" class="py-2 px-3 text-center">
+                                <button type="button" @click.stop="openWorkerReport(w)" class="rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-bold text-rose-700 transition hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-900/20">Report</button>
                             </td>
                         </tr>
                     </tbody>
@@ -534,6 +546,54 @@ function actionLabel(a: string): string {
                     <p class="text-sm font-bold text-slate-900 dark:text-white">No billing statements for this agency yet.</p>
                 </div>
             </div>
+        </div>
+        <div v-if="reportTargetWorker" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="presentation" @click.self="!workerReportForm.processing && (reportTargetWorker = null)">
+            <form @submit.prevent="submitWorkerReport" class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="worker-report-title">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 id="worker-report-title" class="text-lg font-black text-slate-900 dark:text-white">Report worker</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ reportTargetWorker.name }}</p>
+                    </div>
+                    <button type="button" @click="reportTargetWorker = null" :disabled="workerReportForm.processing" aria-label="Close report dialog" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-slate-800"><Ban class="h-4 w-4" /></button>
+                </div>
+                <fieldset class="mt-5">
+                    <legend class="text-xs font-bold text-slate-700 dark:text-slate-200">Rating <span class="text-rose-600">*</span></legend>
+                    <div class="mt-2 flex items-center gap-1" role="group" aria-label="Worker rating from one to five stars">
+                        <button v-for="star in 5" :key="star" type="button" @click="workerReportForm.rating = star" :aria-label="`Rate ${star} out of 5 stars`" :aria-pressed="workerReportForm.rating === star" class="rounded p-1 focus:outline-none focus:ring-2 focus:ring-amber-400"><Star class="h-7 w-7" :class="workerReportForm.rating >= star ? 'fill-amber-400 text-amber-500' : 'text-slate-300'" /></button>
+                        <span class="ml-2 text-xs text-slate-500">{{ workerReportForm.rating ? `${workerReportForm.rating} of 5` : 'Select a rating' }}</span>
+                    </div>
+                    <p v-if="workerReportForm.errors.rating" class="mt-1 text-xs text-rose-600">{{ workerReportForm.errors.rating }}</p>
+                </fieldset>
+                <label class="mt-4 block text-xs font-bold text-slate-700 dark:text-slate-200">Reason for report <span class="text-rose-600">*</span>
+                    <textarea v-model="workerReportForm.reason" required minlength="3" maxlength="5000" rows="4" placeholder="Describe the reason for reporting this worker..." class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-normal text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                </label>
+                <p v-if="workerReportForm.errors.reason" class="mt-1 text-xs text-rose-600">{{ workerReportForm.errors.reason }}</p>
+                <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">The agency will be notified of this report and rating.</p>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" @click="reportTargetWorker = null" :disabled="workerReportForm.processing" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</button>
+                    <button type="submit" :disabled="workerReportForm.processing || workerReportForm.rating < 1 || !workerReportForm.reason.trim()" class="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50">{{ workerReportForm.processing ? 'Sending report...' : 'Submit report' }}</button>
+                </div>
+            </form>
+        </div>
+        <div v-if="confirmUserCreate" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="presentation" @click.self="!userForm.processing && (confirmUserCreate = false)">
+            <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="alertdialog" aria-modal="true" aria-labelledby="agency-user-create-title">
+                <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"><Users class="h-5 w-5" /></div>
+                <h2 id="agency-user-create-title" class="text-lg font-black text-slate-900 dark:text-white">Create agency login?</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Create login for <strong>{{ userForm.name }}</strong> (<strong>{{ userForm.email }}</strong>)?</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">A temporary password will be emailed to {{ userForm.email }}.</p>
+                <p v-if="userForm.errors.email" class="mt-2 text-xs text-rose-600">{{ userForm.errors.email }}</p>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" @click="confirmUserCreate = false" :disabled="userForm.processing" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</button>
+                    <button type="button" @click="submitUserCreate" :disabled="userForm.processing" class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50">{{ userForm.processing ? 'Creating...' : 'Confirm creation' }}</button>
+                </div>
+            </section>
+        </div>
+        <div v-if="userForm.processing" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="status" aria-live="polite">
+            <section class="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+                <span class="mx-auto block h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600 dark:border-slate-700 dark:border-t-blue-400" aria-hidden="true"></span>
+                <h2 class="mt-4 text-base font-black text-slate-900 dark:text-white">Creating agency login</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Setting up {{ userForm.name }}. Please wait.</p>
+            </section>
         </div>
         <div v-if="confirmUserAction" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="presentation" @click.self="!userActionProcessing && (confirmUserAction = null)">
             <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="alertdialog" aria-modal="true" aria-labelledby="agency-user-action-title">

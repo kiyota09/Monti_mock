@@ -44,21 +44,9 @@ const departmentFilter = ref('All');
 const programFilter = ref('All');
 const assignmentView = ref('training');
 const traineeColumnLabels = ['Trainee', 'Type', 'Position', 'Department', 'Training Program', 'Start Date', 'Expected End', 'Status', 'Evaluation', 'Action'];
-const traineeColumnWidths = ref([155, 85, 165, 145, 190, 108, 108, 145, 100, 85]);
-
-function startColumnResize(event, index) {
-    const startX = event.clientX;
-    const startWidth = traineeColumnWidths.value[index];
-    const onMove = (moveEvent) => {
-        traineeColumnWidths.value[index] = Math.max(60, Math.min(500, startWidth + moveEvent.clientX - startX));
-    };
-    const onUp = () => {
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp, { once: true });
-}
+// Percentage widths keep all ten columns inside the content area while still
+// giving names/programs more room than dates and action buttons.
+const traineeColumnWidths = [14, 7, 11, 10, 14, 9, 9, 12, 8, 6];
 
 const statusOptions = ['All', 'Not Started', 'In Progress', 'Evaluation Due', 'Final Evaluation', 'Completed', 'Extended'];
 
@@ -639,12 +627,6 @@ const finalDoneScore = ref(null);
                 </div>
             </div>
 
-            <div class="flex items-center gap-2">
-                <button @click="assignmentView = 'training'" :class="['px-4 py-2 rounded-xl text-xs font-bold border transition-colors', assignmentView === 'training' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50']">
-                    Training <span class="ml-1 opacity-75">({{ (props.trainees || []).length }})</span>
-                </button>
-            </div>
-
             <!-- Filters -->
             <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm grid grid-cols-1 md:grid-cols-5 gap-3">
                 <div class="relative md:col-span-1">
@@ -671,26 +653,26 @@ const finalDoneScore = ref(null);
             <!-- Trainee List -->
             <div v-if="assignmentView === 'training'" class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="table-fixed border-collapse text-[11px]" :style="{ width: traineeColumnWidths.reduce((sum, width) => sum + width, 0) + 'px' }">
-                        <colgroup><col v-for="(width, index) in traineeColumnWidths" :key="index" :style="{ width: width + 'px' }" /></colgroup>
+                    <table class="w-full min-w-[760px] table-fixed border-collapse text-[10px]">
+                        <colgroup><col v-for="(width, index) in traineeColumnWidths" :key="index" :style="{ width: width + '%' }" /></colgroup>
                         <thead class="sticky top-0 z-10 bg-slate-100 text-slate-600 uppercase text-[10px]">
                             <tr>
-                                <th v-for="(label, index) in traineeColumnLabels" :key="label" class="relative border border-slate-300 px-2 py-2 text-left font-bold tracking-wide select-none">{{ label }}<span role="separator" aria-orientation="vertical" :aria-label="`Resize ${label} column`" title="Drag to resize column" @pointerdown.stop.prevent="startColumnResize($event, index)" class="absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none hover:bg-blue-400/60"></span></th>
+                                <th v-for="label in traineeColumnLabels" :key="label" class="border border-slate-300 px-2 py-1.5 text-left font-bold tracking-wide">{{ label }}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="t in filtered" :key="t.id" class="odd:bg-white even:bg-slate-50/70 hover:bg-blue-50">
-                                <td class="border border-slate-200 px-2 py-1.5 font-bold text-slate-800">{{ t.name }}</td>
-                                <td class="border border-slate-200 px-2 py-1.5">{{ t.person_type || 'Employee' }}</td>
-                                <td class="border border-slate-200 px-2 py-1.5">{{ t.position }}</td>
-                                <td class="border border-slate-200 px-2 py-1.5">{{ t.department }}</td>
-                                <td class="border border-slate-200 px-2 py-1.5">{{ t.training_program }}</td>
-                                <td class="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{{ fmtDate(t.training_start) }}</td>
-                                <td class="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{{ fmtDate(t.expected_end) }}</td>
-                                <td class="border border-slate-200 px-2 py-1.5"><span :class="['px-1.5 py-0.5 rounded-full font-bold inline-flex items-center gap-1 whitespace-nowrap', statusBadge(t.display_status)]"><span :class="['w-1.5 h-1.5 rounded-full inline-block', statusDotClass(t.display_status)]"></span>{{ t.display_status }}</span></td>
-                                <td class="border border-slate-200 px-2 py-1.5 font-bold">{{ t.latest_evaluation_label }}</td>
-                                <td class="border border-slate-200 px-2 py-1.5 text-center">
-                                    <button @click="openDetail(t)" class="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-md font-bold text-[10px]">{{ t.display_status === 'Final Evaluation' || t.display_status === 'Evaluation Due' ? 'Evaluate' : 'View' }}</button>
+                            <tr v-for="t in filtered" :key="t.id" class="h-9 odd:bg-white even:bg-slate-50 hover:bg-blue-50">
+                                <td :title="t.name" class="truncate border border-slate-200 px-2 py-1 font-bold text-slate-800">{{ t.name }}</td>
+                                <td :title="t.person_type || 'Employee'" class="truncate border border-slate-200 px-2 py-1">{{ t.person_type || 'Employee' }}</td>
+                                <td :title="t.position" class="truncate border border-slate-200 px-2 py-1">{{ t.position }}</td>
+                                <td :title="t.department" class="truncate border border-slate-200 px-2 py-1">{{ t.department }}</td>
+                                <td :title="t.training_program" class="truncate border border-slate-200 px-2 py-1">{{ t.training_program }}</td>
+                                <td class="whitespace-nowrap border border-slate-200 px-2 py-1">{{ fmtDate(t.training_start) }}</td>
+                                <td class="whitespace-nowrap border border-slate-200 px-2 py-1">{{ fmtDate(t.expected_end) }}</td>
+                                <td class="truncate border border-slate-200 px-2 py-1"><span :class="['rounded-sm px-1.5 py-0.5 font-bold inline-flex items-center gap-1', statusBadge(t.display_status)]"><span :class="['w-1.5 h-1.5 rounded-full inline-block shrink-0', statusDotClass(t.display_status)]"></span>{{ t.display_status }}</span></td>
+                                <td class="whitespace-nowrap border border-slate-200 px-2 py-1 font-bold">{{ t.latest_evaluation_label }}</td>
+                                <td class="border border-slate-200 px-1 py-1 text-center">
+                                    <button @click="openDetail(t)" class="rounded border border-blue-700 bg-blue-600 px-1.5 py-0.5 font-bold text-[9px] text-white hover:bg-blue-700">{{ t.display_status === 'Final Evaluation' || t.display_status === 'Evaluation Due' ? 'Evaluate' : 'View' }}</button>
                                 </td>
                             </tr>
                             <tr v-if="!filtered.length">
@@ -742,18 +724,19 @@ const finalDoneScore = ref(null);
             <!-- Detail modal -->
             <div v-if="selected" class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
                 <div class="absolute inset-0 bg-slate-900/50" @click="closeDetail"></div>
-                <div class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-                    <div class="sticky top-0 z-10 flex shrink-0 items-start justify-between border-b border-slate-200 bg-white p-5">
+                <div class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-slate-50 shadow-2xl ring-1 ring-slate-900/10">
+                    <div class="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-5">
                         <div>
-                            <h3 class="font-black text-slate-900">Trainee Training Details</h3>
+                            <p class="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">Training record</p>
+                            <h3 class="mt-1 text-lg font-black text-slate-900">Trainee Training Details</h3>
                             <p class="text-[11px] text-slate-500">{{ selected.name }} · {{ selected.employee_id }}</p>
                         </div>
-                        <button @click="closeDetail" class="p-2 hover:bg-slate-100 rounded-xl text-slate-400"><X class="w-4 h-4" /></button>
+                        <button @click="closeDetail" aria-label="Close details" class="ml-4 rounded-xl p-2.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X class="w-5 h-5" /></button>
                     </div>
 
-                    <div class="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-5">
+                    <div class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-6">
                         <!-- Employee Information -->
-                        <section class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                             <h4 class="text-xs font-black uppercase text-slate-500 mb-2">Employee Information</h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                                 <div><span class="text-slate-400">Employee:</span> <b>{{ selected.name }}</b></div>
@@ -768,8 +751,8 @@ const finalDoneScore = ref(null);
                         <!-- Training Information -->
                         <section>
                             <h4 class="text-xs font-black uppercase text-slate-500 mb-2">Training Information</h4>
-                            <div class="border border-slate-200 rounded-xl overflow-hidden text-xs">
-                                <div class="grid grid-cols-2 border-b border-slate-100"><span class="px-3 py-2 text-slate-400 bg-slate-50">Training Program</span><span class="px-3 py-2 font-bold">{{ selected.training_program }}</span></div>
+                            <div class="grid grid-cols-1 gap-2 text-xs">
+                                <div class="rounded-xl bg-blue-50 px-4 py-3"><div class="text-[10px] font-bold uppercase tracking-wide text-blue-500">Training Program</div><div class="mt-1 text-sm font-black text-blue-950">{{ selected.training_program }}</div></div>
                                 <div class="grid grid-cols-2 border-b border-slate-100"><span class="px-3 py-2 text-slate-400 bg-slate-50">Training Start</span><span class="px-3 py-2">{{ fmtDate(selected.training_start) }}</span></div>
                                 <div class="grid grid-cols-2 border-b border-slate-100"><span class="px-3 py-2 text-slate-400 bg-slate-50">Expected End</span><span class="px-3 py-2">{{ fmtDate(selected.expected_end) }}</span></div>
                                 <div class="grid grid-cols-2 border-b border-slate-100"><span class="px-3 py-2 text-slate-400 bg-slate-50">Duration</span><span class="px-3 py-2">{{ selected.duration_label }}</span></div>
@@ -779,7 +762,7 @@ const finalDoneScore = ref(null);
                         </section>
 
                         <!-- Weekly Evaluation -->
-                        <section class="border border-slate-200 rounded-xl p-4">
+                        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                             <h4 class="text-xs font-black uppercase text-slate-700 mb-1">Week {{ weeklyForm.week_number }} Evaluation</h4>
                             <div v-if="trainingNotStarted" class="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                                 <b>Evaluation locked.</b> Training starts {{ fmtDate(selected.training_start) }}. You can evaluate once the start date arrives.
@@ -804,12 +787,13 @@ const finalDoneScore = ref(null);
                             <div class="text-xs font-bold mb-2">Week {{ weeklyForm.week_number }} of {{ weekOptions.length }} weeks (from training duration)</div>
                             <div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                                <label v-for="c in [['attendance','Attendance & Punctuality'],['knowledge','Knowledge & Learning'],['practical_skills','Practical Skills'],['work_behavior','Work Behavior'],['safety_compliance','Safety Compliance']]" :key="c[0]" class="flex items-center justify-between gap-2">
-                                    <span>{{ c[1] }}</span>
-                                    <select v-model.number="weeklyForm[c[0]]" class="w-24 px-2 py-1.5 border border-slate-200 rounded-lg">
-                                        <option :value="1">1 / 5</option><option :value="2">2 / 5</option><option :value="3">3 / 5</option><option :value="4">4 / 5</option><option :value="5">5 / 5</option>
-                                    </select>
-                                </label>
+                                <div v-for="c in [['attendance','Attendance & Punctuality'],['knowledge','Knowledge & Learning'],['practical_skills','Practical Skills'],['work_behavior','Work Behavior'],['safety_compliance','Safety Compliance']]" :key="c[0]" class="flex flex-col justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-3 sm:flex-row sm:items-center">
+                                    <span class="font-semibold text-slate-700">{{ c[1] }}</span>
+                                    <div class="flex items-center gap-0" role="radiogroup" :aria-label="c[1] + ' rating'">
+                                        <button v-for="rating in [1, 2, 3, 4, 5]" :key="rating" type="button" role="radio" :disabled="finalSubmitted" :aria-checked="Number(weeklyForm[c[0]]) === rating" :aria-label="`${rating} out of 5 stars`" @click="weeklyForm[c[0]] = rating" :class="['rounded-sm px-0 text-xl leading-none transition focus:outline-none focus:ring-2 focus:ring-amber-300', finalSubmitted ? 'cursor-not-allowed' : 'hover:scale-110', rating <= Number(weeklyForm[c[0]]) ? 'text-amber-400' : 'text-slate-300 hover:text-amber-300']">&#9733;</button>
+                                        <span class="ml-1 min-w-10 text-right text-[11px] font-bold text-slate-500">{{ weeklyForm[c[0]] }}/5</span>
+                                    </div>
+                                </div>
                             </div>
                             <p v-if="observationsInWeek.length && !currentWeekSaved" class="mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Auto-calculated from {{ observationsInWeek.length }} daily observation{{ observationsInWeek.length > 1 ? 's' : '' }} this week — you can still adjust before saving.</p>
                             <button type="button" @click="showAttendanceModal = true" class="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl text-xs font-bold transition-all shadow-sm">
@@ -840,7 +824,7 @@ const finalDoneScore = ref(null);
                         </section>
 
                         <!-- Final Evaluation -->
-                        <section class="border-2 border-blue-100 rounded-xl p-4 bg-blue-50/50">
+                        <section class="rounded-2xl border border-blue-200 bg-blue-50/60 p-5 shadow-sm">
                             <div v-if="finalSubmitted" class="mb-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 flex items-center gap-2">
                                 <Lock class="w-4 h-4 shrink-0" /><span><b>Final evaluation submitted — locked.</b> This evaluation can no longer be modified. HR reviews the evaluation and decides (Approve Regularization / Extend Training / Do Not Regularize).</span>
                             </div>
@@ -962,7 +946,7 @@ const finalDoneScore = ref(null);
                                 <p class="text-[11px] text-slate-500 mt-0.5">{{ weekRangeLabel(weeklyForm.week_number) }} · {{ selected.name }}</p>
                             </div>
                             <div class="p-5 space-y-4">
-                                <div class="border border-slate-200 rounded-xl overflow-hidden text-xs">
+                                <div class="grid grid-cols-1 gap-2 text-xs">
                                     <div class="grid grid-cols-2 border-b border-slate-100"><span class="px-3 py-2 text-slate-400 bg-slate-50">Scheduled Days</span><span class="px-3 py-2 font-black text-right">{{ weekAttendanceSummary.scheduled }}</span></div>
                                     <div class="grid grid-cols-2 border-b border-slate-100"><span class="px-3 py-2 text-slate-400 bg-slate-50">Present</span><span class="px-3 py-2 font-black text-right text-emerald-600">{{ weekAttendanceSummary.present }}</span></div>
                                     <div class="grid grid-cols-2 border-b border-slate-100"><span class="px-3 py-2 text-slate-400 bg-slate-50">Late</span><span class="px-3 py-2 font-black text-right text-amber-600">{{ weekAttendanceSummary.late }}</span></div>

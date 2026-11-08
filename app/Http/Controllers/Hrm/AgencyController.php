@@ -270,6 +270,28 @@ class AgencyController extends Controller
         }
     }
 
+    public function reportWorker(Request $request, Agency $agency, Worker $worker)
+    {
+        abort_unless((int) $worker->agency_id === (int) $agency->id, 404);
+
+        $data = $request->validate([
+            'reason' => 'required|string|min:3|max:5000',
+            'rating' => 'required|integer|min:1|max:5',
+        ]);
+
+        AgencyActivity::create([
+            'agency_id' => $agency->id,
+            'worker_id' => $worker->id,
+            'action' => 'worker_reported',
+            'details' => "A report was submitted for {$worker->name} ({$worker->code}). Rating: {$data['rating']}/5.",
+            'actor_id' => $request->user()->id,
+            'actor_name' => $request->user()->name,
+            'reason' => trim($data['reason']),
+        ]);
+
+        return back()->with('success', 'Worker report sent to ' . $agency->name . '.');
+    }
+
     public function resetUserPassword(Request $request, Agency $agency, AgencyUser $user)
     {
         abort_unless((int) $user->agency_id === (int) $agency->id, 404);

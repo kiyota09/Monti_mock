@@ -168,7 +168,7 @@
                         <Lock class="w-3.5 h-3.5" />
                       </button>
                       <button @click="viewEmployees(position)" class="p-1 hover:bg-emerald-50 rounded-md text-slate-400 hover:text-emerald-600 transition-all" title="View Employees"><Users class="w-3.5 h-3.5" /></button>
-                      <button v-if="!position.archived_at" @click="confirmArchive(position.id, position.name)" class="p-1 hover:bg-amber-50 rounded-md text-slate-400 hover:text-amber-600 transition-all" title="Archive"><Archive class="w-3.5 h-3.5" /></button>
+                      <button v-if="!position.archived_at" @click="confirmArchive(position.id, position.name)" :disabled="Number(position.filled_positions) > 0" class="p-1 hover:bg-amber-50 rounded-md text-slate-400 hover:text-amber-600 transition-all disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-400" :title="Number(position.filled_positions) > 0 ? 'Cannot archive while employees are assigned' : 'Archive'" :aria-label="Number(position.filled_positions) > 0 ? `${position.name} cannot be archived while employees are assigned` : `Archive ${position.name}`"><Archive class="w-3.5 h-3.5" /></button>
                       <button v-else @click="confirmRestore(position.id, position.name)" class="p-1 hover:bg-emerald-50 rounded-md text-slate-400 hover:text-emerald-600 transition-all" title="Restore"><RotateCcw class="w-3.5 h-3.5" /></button>
                     </div>
                   </td>
@@ -269,27 +269,32 @@
 
         <!-- EMPLOYEES ASSIGNED TO POSITION -->
         <div v-if="showEmployeesModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" @click.self="showEmployeesModal = false">
-          <section role="dialog" aria-modal="true" aria-labelledby="employees-modal-title" class="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-2xl">
-            <header class="flex items-center justify-between gap-4 border-b border-slate-100 dark:border-zinc-700 bg-slate-50/70 dark:bg-zinc-800 p-5">
+          <section role="dialog" aria-modal="true" aria-labelledby="employees-modal-title" class="flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-2xl">
+            <header class="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-zinc-700 bg-slate-50/70 dark:bg-zinc-800 px-4 py-3">
               <div>
-                <h3 id="employees-modal-title" class="text-lg font-bold text-slate-900">Employees in {{ employeesPosition?.name }}</h3>
-                <p class="mt-1 text-sm text-slate-500">{{ employeeRoster.length }} {{ employeeRoster.length === 1 ? 'employee' : 'employees' }} assigned to this position</p>
+                <h3 id="employees-modal-title" class="text-sm font-bold text-slate-900 dark:text-zinc-100">Employees in {{ employeesPosition?.name }}</h3>
+                <p class="mt-0.5 text-xs text-slate-500">{{ employeeRoster.length }} {{ employeeRoster.length === 1 ? 'employee' : 'employees' }} assigned to this position</p>
               </div>
               <button @click="showEmployeesModal = false" aria-label="Close employee list" class="rounded-lg p-2 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800 dark:text-zinc-200"><X class="h-5 w-5" /></button>
             </header>
-            <div class="min-h-32 flex-1 overflow-y-auto p-5">
-              <div v-if="loadingEmployees" class="flex items-center justify-center gap-3 py-12 text-sm text-slate-500"><span class="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></span>Loading employees...</div>
+            <div class="min-h-24 flex-1 overflow-y-auto p-3">
+              <div v-if="loadingEmployees" class="flex items-center justify-center gap-3 py-8 text-xs text-slate-500"><span class="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></span>Loading employees...</div>
               <div v-else-if="employeesError" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{{ employeesError }}</div>
-              <div v-else-if="employeeRoster.length === 0" class="py-12 text-center"><Users class="mx-auto h-9 w-9 text-slate-300" /><p class="mt-3 text-sm font-semibold text-slate-700">No employees assigned</p><p class="mt-1 text-xs text-slate-500">Employees assigned to this position will appear here.</p></div>
-              <div v-else class="divide-y divide-slate-100 rounded-xl border border-slate-100">
-                <div v-for="employee in employeeRoster" :key="employee.id" class="flex items-center gap-3 px-4 py-3">
-                  <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">{{ employee.name?.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase() }}</span>
-                  <div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold text-slate-800 dark:text-zinc-200">{{ employee.name }}</p><p class="truncate text-xs text-slate-500">{{ employee.employee_id || employee.email || 'Employee' }}</p></div>
-                  <span class="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 sm:inline-flex">Assigned</span>
-                </div>
+              <div v-else-if="employeeRoster.length === 0" class="py-8 text-center"><Users class="mx-auto h-7 w-7 text-slate-300" /><p class="mt-2 text-xs font-semibold text-slate-700">No employees assigned</p><p class="mt-1 text-[11px] text-slate-500">Employees assigned to this position will appear here.</p></div>
+              <div v-else class="overflow-hidden rounded-lg border border-slate-200 dark:border-zinc-700">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-zinc-800 dark:text-zinc-400"><tr><th class="px-2.5 py-2">Employee</th><th class="px-2.5 py-2">Employee ID</th><th class="px-2.5 py-2 text-right">Status</th></tr></thead>
+                  <tbody class="divide-y divide-slate-100 dark:divide-zinc-800">
+                    <tr v-for="employee in employeeRoster" :key="employee.id" class="hover:bg-slate-50 dark:hover:bg-zinc-800/60">
+                      <td class="px-2.5 py-1.5"><div class="flex items-center gap-2"><img v-if="employee.profile_photo_url" :src="employee.profile_photo_url" :alt="`${employee.name} profile photo`" class="h-7 w-7 shrink-0 rounded-full object-cover"/><span v-else class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[10px] font-bold text-blue-700 dark:bg-indigo-900/50 dark:text-indigo-300">{{ employee.name?.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase() }}</span><span class="truncate font-semibold text-slate-800 dark:text-zinc-200">{{ employee.name }}</span></div></td>
+                      <td class="px-2.5 py-1.5 text-slate-500">{{ employee.employee_id || employee.email || '—' }}</td>
+                      <td class="px-2.5 py-1.5 text-right"><span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Assigned</span></td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-            <footer class="flex justify-end border-t border-slate-100 dark:border-zinc-700 bg-slate-50/70 dark:bg-zinc-800 p-4"><button @click="showEmployeesModal = false" class="rounded-xl border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-600">Close</button></footer>
+            <footer class="flex justify-end border-t border-slate-100 dark:border-zinc-700 bg-slate-50/70 dark:bg-zinc-800 px-3 py-2"><button @click="showEmployeesModal = false" class="rounded-lg border border-slate-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-600">Close</button></footer>
           </section>
         </div>
 
@@ -322,7 +327,7 @@
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Position Name <span class="text-rose-500">*</span></label>
-                    <input v-model="form.name" type="text" :readonly="isManufacturingDepartment" :placeholder="isManufacturingDepartment ? 'Choose a manufacturing role below' : 'e.g., Senior Software Engineer'" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" :class="[{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.name }, isManufacturingDepartment ? 'bg-slate-100 cursor-not-allowed' : '']" />
+                    <input v-model="form.name" type="text" placeholder="e.g., Knitting Yarn Staff" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" :class="{ 'border-rose-500 ring-2 ring-rose-200': validationErrors.name }" />
                     <p v-if="validationErrors.name" class="text-[10px] text-rose-500 mt-1">{{ validationErrors.name }}</p>
                   </div>
                   <div>
@@ -334,7 +339,7 @@
                     <p v-if="validationErrors.department_id" class="text-[10px] text-rose-500 mt-1">{{ validationErrors.department_id }}</p>
                   </div>
                   <div v-if="isManufacturingDepartment">
-                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Manufacturing Role <span class="text-rose-500">*</span></label>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Manufacturing Role <span class="text-slate-400 text-[10px] font-normal">(Optional)</span></label>
                     <select v-model="manufacturingRole" @change="handleManufacturingRoleChange" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer">
                       <option value="">Select Manufacturing Role</option>
                       <option v-for="role in manufacturingRoles" :key="role.value" :value="role.value">{{ role.label }}</option>
@@ -346,6 +351,13 @@
                       <option :value="null">None (Top Level)</option>
                       <option v-for="pos in allPositions.filter(p => p.id !== form.id)" :key="pos.id" :value="pos.id">{{ pos.name }} ({{ pos.code }})</option>
                     </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Organizational Level <span class="text-rose-500">*</span></label>
+                    <select v-model="form.management_level" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer">
+                      <option v-for="level in filterOptions.managementLevels" :key="level" :value="level">{{ level }}</option>
+                    </select>
+                    <p class="mt-1 text-[10px] text-slate-400">Defines this position’s level in the organizational hierarchy.</p>
                   </div>
                 </div>
               </div>
@@ -1025,7 +1037,8 @@ const deletePosition = async () => {
 const archivePosition = async (id) => {
     try {
         await router.post(route('hrm.workforce.positions.archive', { position: id }), {}, {
-            onSuccess: () => loadPositions()
+            onSuccess: () => loadPositions(),
+            onError: (errors) => showValidationError(errors.archive || 'Could not archive this position while employees are assigned.')
         });
     } catch (e) {
         console.error('Error archiving position:', e);

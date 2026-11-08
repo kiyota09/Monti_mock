@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Hrm\Workforce;
 use App\Http\Controllers\Controller;
 use App\Models\Core\Notification;
 use App\Models\Core\User;
+use App\Models\Hrm\AuditLog;
 use App\Services\Hrm\KpiScoringService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -186,6 +187,46 @@ class PerformanceManagementController extends Controller
 
         Notification::notify($evaluator->id, 'kpi_evaluation_assigned', 'KPI evaluation assigned', "Complete {$employee->name}'s evaluation by {$data['due_date']}.", 'hrm.workforce.performance-kpi.index', $request->user()->id);
         return response()->json(['evaluation' => $evaluation], 201);
+    }
+
+    public function promoteEmployee(Request $request, int $evaluation)
+    {
+        $this->assertHr($request);
+        $data = $request->validate(['position' => 'required|in:staff,supervisor,manager,special_officer,secretary']);
+        $record = DB::table('hrm_kpi_evaluations')->where('id', $evaluation)->firstOrFail();
+        $employee = User::whereNull('worker_id')->where('is_active', true)->findOrFail($record->user_id);
+
+        if ((int) $employee->id === (int) $request->user()->id) {
+            return back()->withErrors(['employee_movement' => 'You cannot promote your own account.']);
+        }
+        if (in_array(strtoupper((string) $employee->role), ['CEO', 'COO'], true)) {
+            return back()->withErrors(['employee_movement' => 'Executive accounts cannot be promoted through this action.']);
+        }
+        $previousPosition = strtolower((string) $employee->position);
+        $nextPosition = $data['position'];
+
+        DB::transaction(function () use ($employee, $request, $record, $previousPosition, $nextPosition) {
+            $employee->position = $nextPosition;
+            $employee->save();
+
+            AuditLog::create([
+                'admin_id' => $request->user()->id,
+                'target_id' => $employee->id,
+                'target_name' => $employee->name,
+                'action' => 'promote_position',
+                'reason' => "Position changed from {$previousPosition} to {$nextPosition} through KPI Employee Movement.",
+            ]);
+
+            $this->audit($record->id, $request->user()->id, 'employee_promoted', (string) $record->status, (string) $record->status, [
+                'employee_id' => $employee->id,
+                'previous_position' => $previousPosition,
+                'new_position' => $nextPosition,
+            ]);
+        });
+
+        Notification::notify($employee->id, 'employee_position_changed', 'Your position has changed', 'Your position was changed from ' . str_replace('_', ' ', ucwords($previousPosition, '_')) . ' to ' . str_replace('_', ' ', ucwords($nextPosition, '_')) . '.', 'hrm.workforce.performance-kpi.index', $request->user()->id);
+
+        return back()->with('message', "{$employee->name} position has been changed to " . str_replace('_', ' ', ucwords($nextPosition, '_')) . '.');
     }
 
     public function update(Request $request, int $evaluation)
@@ -526,7 +567,7 @@ class PerformanceManagementController extends Controller
             ->leftJoin('users as evaluator', 'evaluator.id', '=', 'kpi.evaluator_id')
             ->leftJoin('users as manager', 'manager.id', '=', 'kpi.manager_id')
             ->leftJoin('users as hr_reviewer', 'hr_reviewer.id', '=', 'kpi.hr_reviewer_id')
-            ->select('kpi.*', 'employee.name as employee_name', 'employee.employee_id', 'employee.hrm_department_id', 'employee.hrm_position_id', 'employee.hrm_employment_type_id', 'department.name as department_name', 'position.name as position_name', 'employment_type.name as employment_type_name', 'template.name as template_name', 'evaluator.name as evaluator_name', 'manager.name as manager_name', 'hr_reviewer.name as hr_reviewer_name')
+            ->select('kpi.*', 'employee.name as employee_name', 'employee.employee_id', 'employee.position as user_position', 'employee.hrm_department_id', 'employee.hrm_position_id', 'employee.hrm_employment_type_id', 'department.name as department_name', 'position.name as position_name', 'employment_type.name as employment_type_name', 'template.name as template_name', 'evaluator.name as evaluator_name', 'manager.name as manager_name', 'hr_reviewer.name as hr_reviewer_name')
             ->when(! $isHr, fn ($query) => $query->where(fn ($scope) => $scope->where('kpi.evaluator_id', $user->id)->orWhere('kpi.manager_id', $user->id)->orWhere(fn ($own) => $own->where('kpi.user_id', $user->id)->where('kpi.status', 'Completed'))));
     }
 

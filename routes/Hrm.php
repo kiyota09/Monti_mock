@@ -91,6 +91,8 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
             ->middleware('page.permission:agencies,edit')->name('terminate');
         Route::post('/{agency}/users', [AgencyController::class, 'storeUser'])
             ->middleware('page.permission:agencies,edit')->name('users.store');
+        Route::post('/{agency}/workers/{worker}/report', [AgencyController::class, 'reportWorker'])
+            ->middleware('page.permission:agencies,edit')->name('workers.report');
         Route::post('/{agency}/users/{user}/reset-password', [AgencyController::class, 'resetUserPassword'])
             ->middleware('page.permission:agencies,edit')->name('users.reset-password');
         Route::post('/{agency}/users/{user}/toggle-status', [AgencyController::class, 'toggleUserStatus'])
@@ -490,6 +492,8 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
             ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.store');
         Route::put('/performance-kpi/evaluations/{evaluation}', [PerformanceManagementController::class, 'update'])
             ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.update');
+        Route::post('/performance-kpi/evaluations/{evaluation}/promote-employee', [PerformanceManagementController::class, 'promoteEmployee'])
+            ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.promote-employee');
         Route::post('/performance-kpi/evaluations/{evaluation}/cancel', [PerformanceManagementController::class, 'cancel'])
             ->middleware('page.permission:employee,edit')->name('performance-kpi.evaluations.cancel');
         Route::post('/performance-kpi/evaluations/{evaluation}/manager-review', [PerformanceManagementController::class, 'managerReview'])

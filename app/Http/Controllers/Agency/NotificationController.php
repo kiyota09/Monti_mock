@@ -26,6 +26,7 @@ class NotificationController extends Controller
                     'request_created' => 'Manpower request created',
                     'request_updated' => 'Manpower request updated',
                     'worker_assigned' => 'Worker deployed in Monti',
+                    'worker_reported' => 'Worker report received',
                     default => $activity->action,
                 },
                 'details' => $activity->details,

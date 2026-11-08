@@ -12,6 +12,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // A stale page can submit an old CSRF token when the user signs out.
+        // Allow only the logout endpoints through CSRF validation so the auth
+        // middleware/controller can clear the session and redirect normally.
+        $middleware->validateCsrfTokens(except: [
+            'logout',
+            'client/logout',
+            'supplier/logout',
+            'applicant/logout',
+            'agency/logout',
+        ]);
+
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,

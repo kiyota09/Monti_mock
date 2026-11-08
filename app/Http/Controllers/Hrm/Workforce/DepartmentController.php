@@ -19,7 +19,7 @@ class DepartmentController extends Controller
 
     public function index(Request $request)
     {
-        $q = HrmDepartment::withCount(['positions as open_positions' => function ($qq) {
+        $q = HrmDepartment::withCount('positions')->withCount(['positions as open_positions' => function ($qq) {
             $qq->where('status', 'active');
         }])->with('head');
 
@@ -261,6 +261,12 @@ class DepartmentController extends Controller
 
     public function archive(HrmDepartment $department)
     {
+        if ($department->positions()->exists()) {
+            return back()->withErrors([
+                'department' => 'This department cannot be archived while it has positions. Move or remove its positions first.',
+            ]);
+        }
+
         $department->update(['archived_at' => now(), 'status' => 'inactive']);
 
         return back()->with('success', 'Department archived.');

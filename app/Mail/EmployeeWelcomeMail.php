@@ -17,6 +17,8 @@ class EmployeeWelcomeMail extends Mailable
     public string $companyEmail;
     public string $tempPassword;
     public ?string $trainingStartDate;
+    public ?string $trainingStartTime;
+    public ?string $trainingEndTime;
     public string $portalUrl;
 
     public function __construct(
@@ -27,7 +29,9 @@ class EmployeeWelcomeMail extends Mailable
         string $companyEmail,
         string $tempPassword,
         ?string $trainingStartDate,
-        string $portalUrl
+        string $portalUrl,
+        ?string $trainingStartTime = null,
+        ?string $trainingEndTime = null
     ) {
         $this->employeeName = $employeeName;
         $this->employeeId = $employeeId;
@@ -36,6 +40,8 @@ class EmployeeWelcomeMail extends Mailable
         $this->companyEmail = $companyEmail;
         $this->tempPassword = $tempPassword;
         $this->trainingStartDate = $trainingStartDate;
+        $this->trainingStartTime = $trainingStartTime;
+        $this->trainingEndTime = $trainingEndTime;
         $this->portalUrl = $portalUrl;
     }
 

@@ -583,6 +583,12 @@ class ManpowerRequestController extends Controller
 
     protected function finalizeWorkerAccount(ManpowerRequest $manpowerRequest, Worker $worker, ?string $companyEmail, ?string $startDate, ?int $managerId, bool $trainingRequired, ?string $trainingEndDate): array
     {
+        if (! filter_var((string) $worker->email, FILTER_VALIDATE_EMAIL)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'worker_id' => 'Add a valid email address to this worker before assigning them.',
+            ]);
+        }
+
         $companyEmail = $companyEmail ?: self::suggestCompanyEmail($worker->name);
         $companyEmail = $this->uniqueCompanyEmail($companyEmail, $worker->name);
         $deploymentDate = $startDate ?: $manpowerRequest->start_date?->toDateString() ?? $worker->availability ?? now()->toDateString();
@@ -658,6 +664,7 @@ class ManpowerRequestController extends Controller
         }
 
         $trainingLabel = \Carbon\Carbon::parse($deploymentDate)->format('F j, Y');
+        $shiftSchedule = HrmShift::where('name', trim((string) $manpowerRequest->shift))->first(['start_time', 'end_time']);
         $recipient = $worker->email;
         $mailSent = false;
         $mailError = null;
@@ -670,8 +677,10 @@ class ManpowerRequestController extends Controller
                     $manpowerRequest->department,
                     $companyEmail,
                     $tempPassword ?? '(unchanged — use your existing password)',
-                    $trainingLabel,
-                    route('login')
+                    $trainingRequired ? $trainingLabel : null,
+                    route('login'),
+                    $shiftSchedule?->start_time,
+                    $shiftSchedule?->end_time
                 ));
                 $mailSent = true;
             } catch (\Throwable $e) {
@@ -794,10 +803,11 @@ class ManpowerRequestController extends Controller
             ->whereIn('status', [Worker::STATUS_AVAILABLE, Worker::STATUS_PENDING])
             ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('manpower_assignments as ma')
                 ->whereColumn('ma.worker_id', 'workers.id')->whereNull('ma.released_at'))
-            ->orderBy('name')->get(['id', 'code', 'name', 'position_skill', 'status', 'daily_rate', 'phone', 'gender', 'clearance_expiry', 'resume_path', 'resume_original_name', 'emergency_name', 'emergency_relationship', 'emergency_phone', 'availability', 'employment_arrangement', 'proposed_department', 'years_experience'])
+            ->orderBy('name')->get(['id', 'code', 'name', 'email', 'position_skill', 'status', 'daily_rate', 'phone', 'gender', 'clearance_expiry', 'resume_path', 'resume_original_name', 'emergency_name', 'emergency_relationship', 'emergency_phone', 'availability', 'employment_arrangement', 'proposed_department', 'years_experience'])
             ->filter(fn ($w) => ! $w->clearance_expired && $this->workerMatchesRequest($request, $w))
             ->map(fn ($w) => [
                 'id' => $w->id, 'code' => $w->code, 'name' => $w->name,
+                'email' => $w->email,
                 'position_skill' => $w->position_skill,
                 'worker_status' => $w->status,
                 'daily_rate' => $w->daily_rate,
@@ -871,13 +881,14 @@ class ManpowerRequestController extends Controller
             // Agency proposals awaiting HR review (Proposed → Accepted/Rejected).
             // Worker snapshot included so HR can review (and open) the
             // proposed worker's info without leaving the page.
-            'proposals' => ManpowerProposal::with('worker:id,code,name,position_skill,status,daily_rate,phone,gender,clearance_expiry,resume_path,resume_original_name,emergency_name,emergency_relationship,emergency_phone,availability,employment_arrangement,proposed_department,years_experience')
+            'proposals' => ManpowerProposal::with('worker:id,code,name,email,position_skill,status,daily_rate,phone,gender,clearance_expiry,resume_path,resume_original_name,emergency_name,emergency_relationship,emergency_phone,availability,employment_arrangement,proposed_department,years_experience')
                 ->where('request_id', $request->id)
                 ->orderByDesc('id')->get()->map(fn ($p) => [
                     'id' => $p->id,
                     'worker_id' => $p->worker_id,
                     'worker_code' => $p->worker?->code,
                     'worker_name' => $p->worker?->name,
+                    'email' => $p->worker?->email,
                     'position_skill' => $p->worker?->position_skill,
                     'worker_status' => $p->worker?->status,
                     'daily_rate' => $p->worker?->daily_rate,

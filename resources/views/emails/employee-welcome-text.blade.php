@@ -10,7 +10,9 @@ Department: {{ $department }}
 Company Email: {{ $companyEmail }}
 Temporary Password: {{ $tempPassword }}
 
-Your training is scheduled to begin on {{ $trainingStartDate }}.
+@if($trainingStartDate)
+Your training is scheduled to begin on {{ $trainingStartDate }}@if($trainingStartTime) at {{ $trainingStartTime }}@endif@if($trainingEndTime) and end at {{ $trainingEndTime }}@endif.
+@endif
 
 You may use your company email to access the Employee Portal after activation.
 Access the portal: {{ $portalUrl }}
