@@ -73,14 +73,15 @@ function formatAddedAt(value: string | null): { date: string; time: string } | n
 <template>
     <Head title="My Workers - Monti ERP" />
     <AgencyLayout>
-        <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="workers-page-content">
+        <div class="agency-page-header">
             <div>
-                <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-                <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">My Workers</h1>
-                <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Your agency's workers. New workers need HR approval.</p>
+                <p class="agency-page-eyebrow">Agency Portal</p>
+                <h1 class="mt-1 text-2xl font-black leading-tight text-slate-900 dark:text-white">My Workers</h1>
+                <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Your agency's workers. New workers need HR approval.</p>
             </div>
-            <Link :href="route('agency.workers.create')" class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-xl transition shadow-md">
-                <Plus class="w-4 h-4" /> Add worker
+            <Link :href="route('agency.workers.create')" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700 shadow-sm">
+                <Plus class="h-3.5 w-3.5" /> Add worker
             </Link>
         </div>
 
@@ -172,6 +173,7 @@ function formatAddedAt(value: string | null): { date: string; time: string } | n
                     <button :disabled="pagination.current_page >= pagination.last_page" @click="applyFilters(pagination.current_page + 1)" class="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40">Next</button>
                 </div>
             </div>
+        </div>
         </div>
     </AgencyLayout>
 </template>

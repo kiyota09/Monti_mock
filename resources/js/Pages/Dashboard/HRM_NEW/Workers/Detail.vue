@@ -22,6 +22,7 @@ const props = defineProps<{
         resume_url?: string | null;
         resume_original_name?: string | null;
         education?: string | null;
+        education_address?: string | null;
         work_experience?: string | null;
         skills?: string | null;
         trainings_certifications?: string | null;
@@ -51,6 +52,7 @@ const props = defineProps<{
         }>;
         document_statuses?: string[];
         status: string;
+        show_review_actions: boolean;
         blacklist_reason: string | null;
         pending_note?: string | null;
         assignments: Array<{
@@ -98,6 +100,7 @@ const overviewForm = useForm({
     email: (props as any).worker?.email || '',
     address: (props as any).worker?.address || '',
     education: (props as any).worker?.education || '',
+    education_address: (props as any).worker?.education_address || '',
     work_experience: (props as any).worker?.work_experience || '',
     skills: (props as any).worker?.skills || '',
     trainings_certifications: (props as any).worker?.trainings_certifications || '',
@@ -127,6 +130,7 @@ watch(() => (props as any).worker, (w) => {
     f.email = w.email || '';
     f.address = w.address || '';
     f.education = w.education || '';
+    f.education_address = w.education_address || '';
     f.work_experience = w.work_experience || '';
     f.skills = w.skills || '';
     f.trainings_certifications = w.trainings_certifications || '';
@@ -182,6 +186,7 @@ function syncOverviewFromWorker() {
     f.email = w.email || '';
     f.address = w.address || '';
     f.education = w.education || '';
+    f.education_address = w.education_address || '';
     f.work_experience = w.work_experience || '';
     f.skills = w.skills || '';
     f.trainings_certifications = w.trainings_certifications || '';
@@ -213,12 +218,12 @@ const overviewDiff = computed(() => {
     };
     put('name', 'Full name'); put('birth_date', 'Birth date'); put('gender', 'Gender');
     put('phone', 'Phone'); put('email', 'Email'); put('address', 'Address');
-    put('education', 'Education'); put('work_experience', 'Experience'); put('skills', 'Skills');
+    put('education', 'Education'); put('education_address', 'School address'); put('work_experience', 'Experience'); put('skills', 'Skills');
     put('trainings_certifications', 'Training'); put('position_skill', 'Position');
     put('years_experience', 'Years exp.'); put('proposed_department', 'Department');
     put('availability', 'Availability'); put('daily_rate', 'Daily rate');
     put('employment_arrangement', 'Arrangement'); put('gov_id_type', 'Gov ID type');
-    put('gov_id_number', 'Gov ID no.'); put('clearance_expiry', 'Clearance expiry');
+    put('gov_id_number', 'Gov ID no.');
     put('emergency_name', 'Emergency name'); put('emergency_relationship', 'Emergency relation');
     put('emergency_phone', 'Emergency phone');
     return rows;
@@ -439,63 +444,29 @@ function docBadge(s: string): string {
                     </div>
                 </div>
             </div>
-            <div v-if="canEdit" class="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                    v-if="worker.status === 'Available'"
-                    @click="openConfirm('deactivate')"
-                    class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Reject
-                </button>
-                <button
-                    v-if="worker.status === 'Inactive'"
-                    @click="reactivate"
-                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Re-open
-                </button>
+            <div v-if="canEdit && worker.show_review_actions" class="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                     v-if="worker.status === 'Pending'"
                     @click="approvePending"
                     :disabled="hasPendingDocs"
                     :title="hasPendingDocs ? 'All supporting documents must be Verified before approving.' : ''"
-                    :class="[
-                        'px-4 py-2 rounded-xl text-xs font-bold transition',
-                        hasPendingDocs
-                            ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
-                            : 'bg-emerald-600 hover:bg-emerald-700 text-white',
-                    ]"
-                >
-                    Approve
-                </button>
+                    :class="['px-4 py-2 rounded-xl text-xs font-bold transition', hasPendingDocs ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white']"
+                >Approve</button>
                 <button
                     v-if="worker.status === 'Pending' || worker.status === 'Available' || worker.status === 'Deployed' || worker.status === 'For Correction'"
                     @click="openConfirm('request_changes')"
                     class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Request changes
-                </button>
+                >Request changes</button>
                 <button
                     v-if="worker.status === 'Pending' || worker.status === 'For Correction'"
                     @click="openConfirm('reject_pending')"
                     class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Reject
-                </button>
+                >Reject</button>
                 <button
                     v-if="worker.status !== 'Blacklisted'"
                     @click="openConfirm('blacklist')"
                     class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Blacklist
-                </button>
-                <button
-                    v-if="worker.status === 'Blacklisted'"
-                    @click="liftBlacklist"
-                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Lift blacklist
-                </button>
+                >Blacklist</button>
             </div>
         </div>
 
@@ -542,7 +513,7 @@ function docBadge(s: string): string {
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4">
                 <div class="flex items-start justify-between gap-2 mb-1">
                     <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">Overview</h2>
                     <div v-if="canEdit" class="flex items-center gap-1.5 shrink-0">
@@ -557,7 +528,7 @@ function docBadge(s: string): string {
                 </p>
                 <!-- Read mode -->
                 <div v-if="!editingOverview" class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-sm">
+                    <table class="w-full text-left border-collapse text-xs [&_th]:py-1.5 [&_td]:py-1.5">
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                             <tr><th class="py-2 pr-4 w-2/5 text-xs font-medium text-slate-400">Agency</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.agency || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Position / skill</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.position_skill || '—' }}</td></tr>
@@ -572,11 +543,11 @@ function docBadge(s: string): string {
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Email</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.email || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Address</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.address || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Government ID</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ (worker.gov_id_type ? worker.gov_id_type + ' · ' : '') + (worker.gov_id_number || '—') }}</td></tr>
-                            <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Clearance expiry</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.clearance_expiry || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Emergency contact</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.emergency_name || '—' }}{{ worker.emergency_relationship ? ' (' + worker.emergency_relationship + ')' : '' }}{{ worker.emergency_phone ? ' · ' + worker.emergency_phone : '' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Consent</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.consent_given ? 'Yes' + (worker.consent_at ? ' · ' + worker.consent_at : '') : '—' }}</td></tr>
                             <tr v-if="worker.resume_url"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Resume</th><td class="py-2 font-semibold"><button type="button" @click="openDocumentPreview({ url: worker.resume_url!, name: worker.resume_original_name || 'Resume' })" class="text-blue-600 hover:underline">{{ worker.resume_original_name || 'View resume' }}</button></td></tr>
                             <tr v-if="worker.education"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Education</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.education }}</td></tr>
+                            <tr v-if="worker.education_address"><th class="py-2 pr-4 text-xs font-medium text-slate-400">School address</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.education_address }}</td></tr>
                             <tr v-if="worker.work_experience"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Experience</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.work_experience }}</td></tr>
                             <tr v-if="worker.skills"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Skills</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.skills }}</td></tr>
                             <tr v-if="worker.trainings_certifications"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Training / Certifications</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.trainings_certifications }}</td></tr>
@@ -655,10 +626,6 @@ function docBadge(s: string): string {
                         <input v-model="overviewForm.gov_id_number" type="text" :class="ovInput" />
                     </div>
                     <div>
-                        <label :class="ovLabel">Clearance expiry</label>
-                        <input v-model="overviewForm.clearance_expiry" type="date" :class="ovInput" />
-                    </div>
-                    <div>
                         <label :class="ovLabel">Emergency name</label>
                         <input v-model="overviewForm.emergency_name" type="text" :class="ovInput" />
                     </div>
@@ -675,6 +642,10 @@ function docBadge(s: string): string {
                         <textarea v-model="overviewForm.education" rows="2" :class="ovInput"></textarea>
                     </div>
                     <div class="sm:col-span-2">
+                        <label :class="ovLabel">School address</label>
+                        <textarea v-model="overviewForm.education_address" rows="2" :class="ovInput"></textarea>
+                    </div>
+                    <div class="sm:col-span-2">
                         <label :class="ovLabel">Experience</label>
                         <textarea v-model="overviewForm.work_experience" rows="2" :class="ovInput"></textarea>
                     </div>
@@ -689,21 +660,16 @@ function docBadge(s: string): string {
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-1">Documents — HR verification</h2>
-                <p class="text-[11px] text-slate-400 mb-3">Mark each file as Pending, Verified, Rejected, or Expired. Approval requires all files Verified — no Pending / Rejected / Expired files.</p>
-                <p v-if="hasPendingDocs && worker.status === 'Pending'" class="mb-3 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-[11px] font-bold text-amber-700 dark:text-amber-400">
-                    Verify every document before approving — {{ (worker.documents || []).filter((d: any) => d.status === 'Pending').length }} still Pending.
-                </p>
+                <p class="text-[11px] text-slate-400 mb-3">Supporting files submitted by the agency.</p>
                 <div v-if="!worker.documents || worker.documents.length === 0" class="text-xs text-slate-400">No supporting files uploaded yet.</div>
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[520px]">
+                    <table class="w-full text-left border-collapse text-xs min-w-[480px] [&_th]:py-1.5 [&_td]:py-1.5">
                         <thead>
                             <tr class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700">
                                 <th class="py-2 px-2">Document</th>
                                 <th class="py-2 px-2">Details</th>
-                                <th class="py-2 px-2 text-center">Status</th>
-                                <th class="py-2 px-2 text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -711,17 +677,6 @@ function docBadge(s: string): string {
                                 <tr class="align-top hover:bg-slate-50 dark:hover:bg-slate-800/60">
                                     <td class="py-3 px-2 text-xs"><button type="button" @click="openDocumentPreview({ url: d.url, name: d.original_name || d.label || d.doc_type_label, mime: d.mime })" class="font-bold text-blue-600 hover:underline">{{ d.original_name || d.label || d.doc_type_label }}</button></td>
                                     <td class="py-3 px-2 text-[11px] text-slate-400">{{ d.doc_type_label }}{{ d.label && d.label !== d.original_name ? ' · ' + d.label : '' }}{{ d.issue_date ? ' · start ' + d.issue_date : '' }}{{ d.expiry_date ? ' · exp ' + d.expiry_date : '' }}{{ d.verified_by ? ' · by ' + d.verified_by : '' }}<p v-if="d.review_note" class="mt-1 italic">“{{ d.review_note }}”</p></td>
-                                    <td class="py-3 px-2 text-center"><span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', docBadge(d.status)]">{{ d.status }}</span></td>
-                                    <td class="py-3 px-2 text-right"><button v-if="canEdit" @click="openVerify(d.id, d.status)" class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700">Verify</button></td>
-                                </tr>
-                                <tr v-if="verifyingId === d.id && canEdit">
-                                    <td colspan="4" class="px-2 pb-3">
-                                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-2 sm:items-center">
-                                            <select v-model="verifyStatus" class="px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"><option v-for="s in (worker.document_statuses || ['Pending','Verified','Rejected','Expired'])" :key="s" :value="s">{{ s }}</option></select>
-                                            <input v-model="verifyNote" type="text" placeholder="Review note (optional)" class="flex-1 px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg" />
-                                            <div class="flex gap-2"><button @click="verifyingId = null" class="px-3 py-2 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700">Cancel</button><button @click="submitVerify(d.id)" class="px-3 py-2 text-[11px] font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700">Save</button></div>
-                                        </div>
-                                    </td>
                                 </tr>
                             </template>
                         </tbody>
@@ -749,7 +704,7 @@ function docBadge(s: string): string {
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Attendance history (last 30)</h2>
                 <div v-if="worker.attendance_history.length === 0" class="text-xs text-slate-400">No attendance records yet.</div>
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[520px]">
+                    <table class="w-full text-left border-collapse text-xs min-w-[480px] [&_th]:py-1.5 [&_td]:py-1.5">
                         <thead>
                             <tr class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                 <th class="py-2 px-3">Date</th>

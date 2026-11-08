@@ -240,7 +240,7 @@ function viewInterview() {
     <Head title="Dashboard - Monti ERP" />
 
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="applicant-page-header">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     Applicant <span class="text-blue-600">Dashboard</span>
@@ -276,11 +276,11 @@ function viewInterview() {
                 <!-- ============================================ -->
                 <!-- KPI METRICS ROW                              -->
                 <!-- ============================================ -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div class="applicant-metric-grid grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 mb-4">
                     <div 
                         v-for="stat in stats" 
                         :key="stat.id"
-                        class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4 cursor-pointer"
+                        class="applicant-metric-card bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm cursor-pointer"
                         @click="navigateTo(stat.route)"
                     >
                         <span

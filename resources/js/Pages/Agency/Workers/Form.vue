@@ -41,6 +41,7 @@ const form = useForm({
     address: props.worker?.address || '',
     resume: null as File | null,
     education: props.worker?.education || '',
+    education_address: props.worker?.education_address || '',
     work_experience: props.worker?.work_experience || '',
     skills: props.worker?.skills || '',
     trainings_certifications: props.worker?.trainings_certifications || '',
@@ -65,6 +66,46 @@ const form = useForm({
     emergency_phone: props.worker?.emergency_phone || '',
     consent_given: props.worker?.consent_given || false,
 });
+const educationOptions = [
+    'Elementary level',
+    'Elementary graduate',
+    'Junior High School level',
+    'Junior High School graduate',
+    'Senior High School level',
+    'Senior High School graduate',
+    'High School Graduate',
+    'Vocational / Technical graduate (TESDA)',
+    'Some college',
+    'College undergraduate',
+    "Bachelor's degree graduate",
+    'Postgraduate',
+    'Other',
+];
+let qualificationRowId = 0;
+const skillItems = ref<{ id: number; value: string }[]>(
+    String(form.skills || '').split(',').map((value) => value.trim()).filter(Boolean).map((value) => ({ id: qualificationRowId++, value })),
+);
+if (skillItems.value.length === 0) skillItems.value.push({ id: qualificationRowId++, value: '' });
+const workExperienceItems = ref<{ id: number; value: string }[]>(
+    String(form.work_experience || '').split(/\n\s*\n/).map((value) => value.trim()).filter(Boolean).map((value) => ({ id: qualificationRowId++, value })),
+);
+if (workExperienceItems.value.length === 0) workExperienceItems.value.push({ id: qualificationRowId++, value: '' });
+watch(skillItems, (items) => {
+    form.skills = items.map((item) => item.value.trim()).filter(Boolean).join(', ');
+}, { deep: true, immediate: true });
+watch(workExperienceItems, (items) => {
+    form.work_experience = items.map((item) => item.value.trim()).filter(Boolean).join('\n\n');
+}, { deep: true, immediate: true });
+function addSkill() { skillItems.value.push({ id: qualificationRowId++, value: '' }); }
+function removeSkill(id: number) {
+    skillItems.value = skillItems.value.filter((item) => item.id !== id);
+    if (skillItems.value.length === 0) addSkill();
+}
+function addWorkExperience() { workExperienceItems.value.push({ id: qualificationRowId++, value: '' }); }
+function removeWorkExperience(id: number) {
+    workExperienceItems.value = workExperienceItems.value.filter((item) => item.id !== id);
+    if (workExperienceItems.value.length === 0) addWorkExperience();
+}
 const duplicateMatch = computed(() => {
     const normalizeName = (value: unknown) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
     const normalizeDigits = (value: unknown) => String(value || '').replace(/\D/g, '');
@@ -410,7 +451,8 @@ const reviewSections = computed(() => [
     ] },
     { title: 'Resume and Qualifications', fields: [
         ['Resume / CV', form.resume?.name || resumeName.value], ['Education', form.education],
-        ['Work experience', form.work_experience], ['Skills', form.skills], ['Training / certifications', form.trainings_certifications],
+        ['School address', form.education_address], ['Work experience', form.work_experience],
+        ['Skills', form.skills], ['Training / certifications', form.trainings_certifications],
     ] },
     { title: 'Work and Deployment', fields: [
         ['Department / assignment', form.proposed_department], ['Position / skill', form.position_skill],
@@ -594,21 +636,22 @@ const errCls = 'mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-ro
         </nav>
 
         <!-- Standard form wizard progress -->
-        <div class="relative mb-6 w-full rounded-xl border border-slate-200 bg-white p-5 text-slate-800 shadow-sm dark:border-slate-700 dark:bg-zinc-800 dark:text-slate-100">
+        <div class="agency-page-header relative mb-6 w-full">
             <div class="relative flex items-start justify-between gap-4">
                 <div>
-                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                         Agency · Workers
                     </span>
-                    <h1 class="mt-2 text-xl font-bold tracking-tight text-slate-900 dark:text-white">{{ isEdit ? (form.name || 'Edit worker') : 'Add worker' }}</h1>
-                    <p v-if="isEdit" class="mt-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">Worker profile · Edit details</p>
-                    <p class="mt-1 max-w-xl text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                    <p class="agency-page-eyebrow">Agency Portal · Workers</p>
+                    <h1>{{ isEdit ? (form.name || 'Edit worker') : 'Add worker' }}</h1>
+                    <p v-if="isEdit" class="mt-0.5 text-xs font-semibold text-amber-300">Worker profile · Edit details</p>
+                    <p class="mt-1 max-w-xl text-xs leading-relaxed text-slate-300">
                         {{ isEdit ? 'Status changes stay with HR. You can edit worker details directly, including daily rate.' : 'New workers enter as Pending HR Approval and become Available only after HR approves them.' }}
                     </p>
                 </div>
                 <div class="flex shrink-0 flex-col items-end pl-4">
-                    <span class="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-zinc-700 dark:text-slate-300">Step {{ step + 1 }} of {{ steps.length }}</span>
+                    <span class="rounded-md bg-white/10 px-2.5 py-1 text-xs font-semibold text-slate-200">Step {{ step + 1 }} of {{ steps.length }}</span>
                 </div>
             </div>
 
@@ -754,18 +797,48 @@ const errCls = 'mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-ro
                         </div>
                         <p v-if="err('resume')" :class="errCls">{{ err('resume') }}</p>
                     </div>
-                    <div class="sm:col-span-2">
+                    <div>
                         <label :class="labelCls">Educational attainment <span class="text-rose-500">*</span></label>
-                        <textarea v-model="form.education" rows="2" placeholder="e.g. High school graduate, TESDA NC II..." :class="fieldCls('education')"></textarea>
+                        <select v-model="form.education" :class="fieldCls('education')">
+                            <option value="" disabled>Select educational attainment...</option>
+                            <option v-if="form.education && !educationOptions.includes(form.education)" :value="form.education">{{ form.education }}</option>
+                            <option v-for="option in educationOptions" :key="option" :value="option">{{ option }}</option>
+                        </select>
                         <p v-if="err('education')" :class="errCls">{{ err('education') }}</p>
                     </div>
-                    <div class="sm:col-span-2">
-                        <label :class="labelCls">Previous work experience</label>
-                        <textarea v-model="form.work_experience" rows="2" placeholder="Previous employers, roles, inclusive dates..." :class="inputCls"></textarea>
-                    </div>
                     <div>
-                        <label :class="labelCls">Skills <span class="text-rose-500">*</span></label>
-                        <textarea v-model="form.skills" rows="2" placeholder="e.g. Sewing, packing, machine operation..." :class="fieldCls('skills')"></textarea>
+                        <label :class="labelCls">School address</label>
+                        <input v-model="form.education_address" type="text" maxlength="2000" placeholder="School or training center address" :class="inputCls" />
+                    </div>
+                    <div class="sm:col-span-2">
+                        <div class="mb-1.5 flex items-center justify-between gap-3">
+                            <label :class="labelCls" class="mb-0">Previous work experience</label>
+                            <button type="button" @click="addWorkExperience" class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-bold text-amber-800 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/50">
+                                <span aria-hidden="true" class="flex h-4 w-4 items-center justify-center rounded bg-amber-200/70 text-xs leading-none dark:bg-amber-800/70">+</span>
+                                Add experience
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <div v-for="(experience, index) in workExperienceItems" :key="experience.id" class="flex items-start gap-2">
+                                <input v-model="experience.value" type="text" maxlength="2000" :aria-label="`Previous work experience ${index + 1}`" :placeholder="index === 0 ? 'Company, role, and dates...' : 'Another employer, role, and dates...'" :class="inputCls" />
+                                <button type="button" @click="removeWorkExperience(experience.id)" :aria-label="`Remove work experience ${index + 1}`" class="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20">×</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <div class="mb-1.5 flex items-center justify-between gap-3">
+                            <label :class="labelCls" class="mb-0">Skills <span class="text-rose-500">*</span></label>
+                            <button type="button" @click="addSkill" class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-bold text-amber-800 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/50">
+                                <span aria-hidden="true" class="flex h-4 w-4 items-center justify-center rounded bg-amber-200/70 text-xs leading-none dark:bg-amber-800/70">+</span>
+                                Add skill
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <div v-for="(skill, index) in skillItems" :key="skill.id" class="flex items-center gap-2">
+                                <input v-model="skill.value" type="text" :aria-label="`Skill ${index + 1}`" :placeholder="index === 0 ? 'e.g. Equipment operation' : 'Add another skill'" :class="fieldCls('skills')" />
+                                <button type="button" @click="removeSkill(skill.id)" :aria-label="`Remove skill ${index + 1}`" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20">×</button>
+                            </div>
+                        </div>
                         <p v-if="err('skills')" :class="errCls">{{ err('skills') }}</p>
                     </div>
                     <div>

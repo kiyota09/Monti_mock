@@ -232,11 +232,11 @@ const exportCsv = async () => {
 <template>
     <Head title="Payroll" />
     <AuthenticatedLayout>
-        <div class="flex min-h-screen bg-white">
+        <div class="payroll-page flex min-h-screen bg-white">
             <div class="flex-1 p-4 sm:p-6 lg:p-8 text-slate-900 font-sans min-w-0 relative flex flex-col gap-4">
                 <div class="absolute inset-0 bg-grid-slate-100 opacity-10 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
 
-                <header class="mb-0 relative shrink-0">
+                <div class="relative shrink-0">
                     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         <div>
                             <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
@@ -274,7 +274,7 @@ const exportCsv = async () => {
                         <span v-if="active_period_meta.is_current" class="px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 font-semibold">Current period</span>
                         <span v-if="active_period_meta.locked" class="px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold">Locked · all Paid</span>
                     </div>
-                </header>
+                </div>
 
                 <div v-if="errorMsg" class="mb-4 px-4 py-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold relative">{{ errorMsg }}</div>
                 <div v-if="flashMsg" class="mb-4 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold relative">{{ flashMsg }}</div>
@@ -431,4 +431,31 @@ const exportCsv = async () => {
 .bg-grid-slate-100 { background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px); background-size: 24px 24px; }
 button:disabled { opacity: .45; cursor: not-allowed; }
 :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+:global(html.dark .payroll-page) {
+    background-color: #09090b !important;
+    color: #e4e4e7 !important;
+}
+:global(html.dark .payroll-page .bg-white) { background-color: #18181b !important; }
+:global(html.dark .payroll-page .bg-slate-50) { background-color: #27272a !important; }
+:global(html.dark .payroll-page .border-slate-100),
+:global(html.dark .payroll-page .border-slate-200) { border-color: #3f3f46 !important; }
+:global(html.dark .payroll-page .divide-slate-100 > :not([hidden]) ~ :not([hidden])) { border-color: #3f3f46 !important; }
+:global(html.dark .payroll-page .text-slate-900),
+:global(html.dark .payroll-page .text-slate-800),
+:global(html.dark .payroll-page .text-slate-700),
+:global(html.dark .payroll-page .text-slate-600),
+:global(html.dark .payroll-page h1),
+:global(html.dark .payroll-page h2),
+:global(html.dark .payroll-page h3) { color: #e4e4e7 !important; }
+:global(html.dark .payroll-page .text-slate-500),
+:global(html.dark .payroll-page .text-slate-400),
+:global(html.dark .payroll-page p),
+:global(html.dark .payroll-page nav) { color: #a1a1aa !important; }
+:global(html.dark .payroll-page input),
+:global(html.dark .payroll-page select) { background-color: #27272a !important; border-color: #52525b !important; color: #f4f4f5 !important; color-scheme: dark; }
+:global(html.dark .payroll-page input::placeholder) { color: #a1a1aa !important; }
+:global(html.dark .payroll-page button.bg-white) { background-color: #27272a !important; border-color: #52525b !important; color: #e4e4e7 !important; }
+:global(html.dark .payroll-page .hover\:bg-slate-50:hover) { background-color: #3f3f46 !important; }
+:global(html.dark .payroll-page .hover\:bg-slate-100:hover) { background-color: #3f3f46 !important; }
 </style>

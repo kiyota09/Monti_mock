@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Page 9: Create / Edit manpower request
-import { computed, ref, watch } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
@@ -54,6 +54,8 @@ watch(() => form.start_date, (startDate) => {
 const showSaveConfirm = ref(false);
 const showDiscardConfirm = ref(false);
 const saveIntent = ref(false);
+const pendingNavigation = ref<string | URL | null>(null);
+let bypassNavigationGuard = false;
 const missingRequiredFields = computed(() => {
     const missing: string[] = [];
     if (!form.department) missing.push('Department');
@@ -65,6 +67,19 @@ const missingRequiredFields = computed(() => {
 const hasFormInput = computed(() => isEdit
     ? form.isDirty
     : Boolean(form.code.trim() || form.department || form.position_skill || form.start_date || form.end_date || form.shift || form.notes.trim() || form.agency_id || Number(form.headcount) !== 1));
+
+const removeNavigationGuard = router.on('before', (event: any) => {
+    if (bypassNavigationGuard) {
+        bypassNavigationGuard = false;
+        return;
+    }
+    if (!hasFormInput.value || form.processing) return;
+
+    event.preventDefault();
+    pendingNavigation.value = event.detail?.visit?.url ?? route('hrm.manpower-requests.index');
+    showDiscardConfirm.value = true;
+});
+onUnmounted(removeNavigationGuard);
 
 function requestSave(submit: boolean) {
     saveIntent.value = submit;
@@ -78,16 +93,16 @@ function confirmSave() {
 
 function requestCancel() {
     if (form.processing) return;
-    if (hasFormInput.value) {
-        showDiscardConfirm.value = true;
-        return;
-    }
-    router.visit(isEdit ? route('hrm.manpower-requests.show', props.request.id) : route('hrm.manpower-requests.index'));
+    pendingNavigation.value = isEdit ? route('hrm.manpower-requests.show', props.request.id) : route('hrm.manpower-requests.index');
+    showDiscardConfirm.value = true;
 }
 
 function discardForm() {
+    const destination = pendingNavigation.value || (isEdit ? route('hrm.manpower-requests.show', props.request.id) : route('hrm.manpower-requests.index'));
     showDiscardConfirm.value = false;
-    router.visit(isEdit ? route('hrm.manpower-requests.show', props.request.id) : route('hrm.manpower-requests.index'));
+    pendingNavigation.value = null;
+    bypassNavigationGuard = true;
+    router.visit(destination);
 }
 
 // Department → positions connection (positions carry department_id).
@@ -193,6 +208,8 @@ function save(submit: boolean) {
     // `submit` is a reserved useForm method name, so it travels via
     // transform instead of living in the form data.
     form.transform((data: any) => ({ ...data, submit }));
+    // The navigation guard protects leaving the form, but this visit saves it.
+    bypassNavigationGuard = true;
     if (isEdit) {
         form.put(route('hrm.manpower-requests.update', props.request.id), { preserveScroll: true });
     } else {
@@ -357,8 +374,8 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
 
         <div v-if="showDiscardConfirm" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="presentation" @click.self="showDiscardConfirm = false">
             <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="alertdialog" aria-modal="true" aria-labelledby="request-discard-title">
-                <h2 id="request-discard-title" class="text-lg font-black text-slate-900 dark:text-white">Discard request changes?</h2>
-                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Your entered details will be lost if you leave this page.</p>
+                <h2 id="request-discard-title" class="text-lg font-black text-slate-900 dark:text-white">Leave this request form?</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Any details you entered will be lost if you leave without saving.</p>
                 <div class="mt-6 flex justify-end gap-2">
                     <button type="button" @click="showDiscardConfirm = false" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Keep editing</button>
                     <button type="button" @click="discardForm" class="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700">Discard</button>

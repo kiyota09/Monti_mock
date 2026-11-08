@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Hrm;
 use App\Http\Controllers\Controller;
 use App\Models\Hrm\Agency;
 use App\Models\Hrm\AgencyActivity;
+use App\Models\Hrm\HrmPosition;
+use App\Models\Hrm\ManpowerRequest;
+use App\Models\Hrm\ManpowerProposal;
 use App\Models\Hrm\Worker;
 use App\Models\Hrm\WorkerDocument;
 use App\Models\Hrm\WorkerRateRequest;
@@ -164,12 +167,33 @@ class WorkerController extends Controller
     // ------------------------------------------------------------------
     // Page 7: Worker detail
     // ------------------------------------------------------------------
-    public function show(Worker $worker)
+    public function show(Request $request, Worker $worker)
     {
         $worker->loadMissing(['agency:id,code,name,status', 'assignments.request:id,code,department']);
+        $hasPendingProposal = ManpowerProposal::where('worker_id', $worker->id)
+            ->where('status', ManpowerProposal::STATUS_PROPOSED)
+            ->exists();
+
+        $requestForReview = $request->integer('request_id')
+            ? ManpowerRequest::query()
+                ->whereKey($request->integer('request_id'))
+                ->where('agency_id', $worker->agency_id)
+                ->where('status', ManpowerRequest::STATUS_OPEN)
+                ->first()
+            : null;
+        $workerDepartment = $worker->proposed_department ?: HrmPosition::with('department:id,name')
+            ->where('name', $worker->position_skill)
+            ->first()?->department?->name;
+        $matchesRequest = $requestForReview
+            && $worker->status === Worker::STATUS_PENDING
+            && strcasecmp(trim((string) $worker->position_skill), trim((string) $requestForReview->position_skill)) === 0
+            && $workerDepartment !== null
+            && strcasecmp(trim($workerDepartment), trim((string) $requestForReview->department)) === 0;
 
         return Inertia::render('Dashboard/HRM_NEW/Workers/Detail', [
-            'worker' => $this->detail($worker),
+            'worker' => $this->detail($worker) + [
+                'show_review_actions' => $hasPendingProposal || $matchesRequest,
+            ],
             'departments' => \App\Models\Hrm\HrmDepartment::whereNull('archived_at')->orderBy('name')->get(['id', 'code', 'name']),
             'positions' => \App\Models\Hrm\HrmPosition::whereNull('archived_at')->orderBy('name')->get(['id', 'name', 'department_id']),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
@@ -336,7 +360,7 @@ class WorkerController extends Controller
         // is edited inside the Request-changes flow). Validated like update
         // but never saved — agency applies them. Skipped when only a message
         // is posted (legacy callers).
-        $workerKeys = ['name', 'agency_id', 'birth_date', 'gender', 'phone', 'email', 'address', 'education', 'work_experience', 'skills', 'trainings_certifications', 'position_skill', 'years_experience', 'proposed_department', 'availability', 'daily_rate', 'employment_arrangement', 'gov_id_type', 'gov_id_number', 'clearance_expiry', 'emergency_name', 'emergency_relationship', 'emergency_phone', 'code'];
+        $workerKeys = ['name', 'agency_id', 'birth_date', 'gender', 'phone', 'email', 'address', 'education', 'education_address', 'work_experience', 'skills', 'trainings_certifications', 'position_skill', 'years_experience', 'proposed_department', 'availability', 'daily_rate', 'employment_arrangement', 'gov_id_type', 'gov_id_number', 'clearance_expiry', 'emergency_name', 'emergency_relationship', 'emergency_phone', 'code'];
         $hasWorkerFields = collect($workerKeys)->some(fn ($k) => $request->has($k));
         $data = $hasWorkerFields ? $this->validated($request, $worker->id) : [];
         unset($data['agency_id'], $data['code'], $data['resume']);
@@ -349,7 +373,7 @@ class WorkerController extends Controller
         $labels = [
             'name' => 'Full name', 'birth_date' => 'Birth date', 'gender' => 'Gender',
             'phone' => 'Phone', 'email' => 'Email', 'address' => 'Address',
-            'education' => 'Education', 'work_experience' => 'Experience', 'skills' => 'Skills',
+            'education' => 'Education', 'education_address' => 'School address', 'work_experience' => 'Experience', 'skills' => 'Skills',
             'trainings_certifications' => 'Training', 'position_skill' => 'Position',
             'years_experience' => 'Years exp.', 'proposed_department' => 'Department',
             'availability' => 'Availability', 'daily_rate' => 'Daily rate',
@@ -476,6 +500,7 @@ class WorkerController extends Controller
             'agency' => $worker->agency?->name,
             'agency_id' => $worker->agency_id,
             'position_skill' => $worker->position_skill,
+            'department' => $worker->proposed_department,
             'current_assignment' => $active?->request
                 ? $active->request->code . ' · ' . ($active->request->department ?? '')
                 : null,
@@ -526,6 +551,7 @@ class WorkerController extends Controller
             'resume_url' => $worker->resume_path ? Storage::url($worker->resume_path) : null,
             'resume_original_name' => $worker->resume_original_name,
             'education' => $worker->education,
+            'education_address' => $worker->education_address,
             'work_experience' => $worker->work_experience,
             'skills' => $worker->skills,
             'trainings_certifications' => $worker->trainings_certifications,
@@ -598,6 +624,7 @@ class WorkerController extends Controller
             'address' => 'nullable|string|max:2000',
             'resume' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
             'education' => 'nullable|string|max:2000',
+            'education_address' => 'nullable|string|max:2000',
             'work_experience' => 'nullable|string|max:4000',
             'skills' => 'nullable|string|max:4000',
             'trainings_certifications' => 'nullable|string|max:4000',

@@ -1337,7 +1337,7 @@ const handleKeydown = (event: KeyboardEvent) => {
                         <h2 class="section-title mt-2">Join Our Team</h2>
                     </div>
                     <div class="card mx-auto max-w-4xl divide-y divide-black/5 p-6 sm:px-8" v-reveal:zoom>
-                        <div v-for="(job, ji) in jobs.slice(0, 3)" :key="job.id" v-reveal:left="150 + ji * 120" class="flex flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
+                        <div v-for="(job, ji) in jobs.slice(0, 4)" :key="job.id" v-reveal:left="150 + ji * 120" class="flex flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
                             <div>
                                 <h4 class="text-base font-bold t-ink">{{ job.title }}</h4>
                                 <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs t-muted">

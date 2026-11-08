@@ -20,13 +20,7 @@ const user = computed(() => page.props.auth.user)
 // document. CRM pages already follow this pattern, so they only need the
 // shared padding removed (their own pages provide it).
 const isCrmPage = computed(() => (page.url || '').startsWith('/dashboard/crm'))
-// IT and Applicant portal pages render several sibling sections in the slot.
-// Forcing every direct child to viewport height stretched each section, so let
-// their sections follow content instead.
-const isNoStretchPage = computed(() => {
-    const url = page.url || ''
-    return url.startsWith('/dashboard/it') || url.startsWith('/applicant')
-})
+const isApplicantPortal = computed(() => !!page.props.auth.applicant || (page.url || '').startsWith('/applicant'))
 const isLocating = ref(true)
 const locationReady = ref(false)
 let locationWatchId = null
@@ -216,10 +210,8 @@ const reloadPage = () => {
                     <div :class="[
                         'app-viewport min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950',
                         isCrmPage ? 'pt-9' : 'px-3 pb-3 pt-9 sm:px-4 sm:pb-4 sm:pt-9 lg:px-5 lg:pb-5 lg:pt-9',
-                        {
-                            'hrm-natural-sections': (page.url || '').startsWith('/dashboard/hrm'),
-                            'no-stretch-sections': isNoStretchPage,
-                        },
+                        { 'hrm-natural-sections': (page.url || '').startsWith('/dashboard/hrm') },
+                        { 'applicant-portal-viewport': isApplicantPortal },
                     ]">
                         <slot />
                     </div>
@@ -243,7 +235,7 @@ const reloadPage = () => {
    so neutralise those at the outer two levels only. Only centered wrappers
    (mx-auto) are widened, and fixed/dialog elements (modals) are excluded so
    they keep their designed width and are never stretched. */
-.app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
+html:not([data-module="it"]):not([data-module="supplier"]) .app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
     min-height: 100% !important;
 }
 /* IT and supplier pages render sibling sections in the layout slot. Let each
@@ -253,6 +245,9 @@ html[data-module="supplier"] .app-viewport > *:not(.fixed):not([role="dialog"]):
 .app-viewport.hrm-natural-sections > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]) {
     min-height: 0 !important;
 }
+.app-viewport.applicant-portal-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
+    min-height: 0 !important;
+}
 .app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
 .app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
     > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"] {
@@ -260,14 +255,36 @@ html[data-module="supplier"] .app-viewport > *:not(.fixed):not([role="dialog"]):
     margin-left: 0 !important;
     margin-right: 0 !important;
 }
-
-/* IT and Applicant portal pages: sections follow their content instead of each
-   being stretched to a full viewport. A page with a single root wrapper still
-   fills the viewport. */
-.app-viewport.no-stretch-sections > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
-    min-height: 0 !important;
+.applicant-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid #334155;
+    border-radius: 1rem;
+    background: linear-gradient(105deg, #0f172a 0%, #1e293b 58%, #334155 100%);
+    color: #fff;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 12%);
 }
-.app-viewport.no-stretch-sections > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero):only-child {
-    min-height: 100% !important;
+.applicant-page-header h1 {
+    margin: 0;
+    color: #fff;
+    font-size: 1.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+.applicant-page-header h1 span { color: #fcd34d !important; }
+.applicant-page-header p { color: #cbd5e1; }
+.applicant-metric-grid { gap: .75rem !important; }
+.applicant-metric-card {
+    min-height: 0 !important;
+    border-radius: .75rem !important;
+    padding: 1rem !important;
+}
+@media (max-width: 640px) {
+    .applicant-page-header { align-items: flex-start; flex-direction: column; padding: 1rem 1.125rem; }
+    .applicant-page-header h1 { font-size: 1.5rem; }
 }
 </style>

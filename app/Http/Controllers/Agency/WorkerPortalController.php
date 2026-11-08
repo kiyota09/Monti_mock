@@ -312,6 +312,7 @@ class WorkerPortalController extends Controller
             'resume_original_name' => $worker->resume_original_name,
             'resume_url' => $worker->resume_path ? Storage::url($worker->resume_path) : null,
             'education' => $worker->education,
+            'education_address' => $worker->education_address,
             'work_experience' => $worker->work_experience,
             'skills' => $worker->skills,
             'trainings_certifications' => $worker->trainings_certifications,
@@ -417,6 +418,7 @@ class WorkerPortalController extends Controller
 
             'resume' => [$isUpdate ? 'nullable' : 'required', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
             'education' => 'required|string|max:2000',
+            'education_address' => 'nullable|string|max:2000',
             'work_experience' => 'nullable|string|max:4000',
             'skills' => 'required|string|max:4000',
             'trainings_certifications' => 'nullable|string|max:4000',

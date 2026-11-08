@@ -31,7 +31,7 @@ class Worker extends Model
     protected $fillable = [
         'code', 'agency_id', 'name', 'birth_date', 'gender', 'phone', 'email', 'address',
         'resume_path', 'resume_original_name',
-        'education', 'work_experience', 'skills', 'trainings_certifications',
+        'education', 'education_address', 'work_experience', 'skills', 'trainings_certifications',
         'position_skill', 'years_experience', 'proposed_department',
         'availability', 'daily_rate', 'employment_arrangement',
         'gov_id_type', 'gov_id_number', 'clearance_expiry',

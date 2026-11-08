@@ -434,7 +434,7 @@ function evaluationHref(evaluation, evidence) { return `/dashboard/hrm/workforce
         <section v-else-if="activeTab === 'promotions'" class="space-y-5">
           <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-5">
             <div><h2 class="font-bold">Promotion recommendations</h2><p class="mt-1 max-w-3xl text-sm text-slate-500">All employees are listed. The current-year overall score is the total of manager-submitted evaluation scores divided by four. Qualification requires {{ promotionThreshold }}% or higher.</p></div>
-            <span class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">{{ qualifiedPromotionCount }} qualified</span>
+            <span v-if="qualifiedPromotionCount > 0" class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">{{ qualifiedPromotionCount }} qualified</span>
           </div>
           <div class="overflow-x-auto rounded-md border border-slate-300 bg-white">
             <table class="w-full min-w-[1100px] border-collapse text-left text-[11px]">

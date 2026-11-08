@@ -44,11 +44,11 @@ function money(v: any): string {
 <template>
     <Head title="Billing - Monti ERP" />
     <AgencyLayout>
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div class="agency-page-header">
             <div>
-                <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-                <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Billing</h1>
-                <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Issued and paid statements for your agency.</p>
+                <p class="agency-page-eyebrow">Agency Portal</p>
+                <h1>Billing</h1>
+                <p class="mt-1 text-sm">Issued and paid statements for your agency.</p>
             </div>
             <Link
                 :href="route('agency.billing.create')"

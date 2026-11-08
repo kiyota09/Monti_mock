@@ -14,6 +14,7 @@ use App\Http\Controllers\ThemePreferenceController;
 use App\Support\ThemePolicy;
 use App\Http\Controllers\Users\TopbarController;
 use App\Models\Crm\CrmPost;
+use App\Models\Hrm\HrmJobPosting;
 use App\Models\Inv\Product;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
@@ -61,6 +62,50 @@ Route::get('/', function () {
         })->values(),
     ]);
 
+    $careerJobs = HrmJobPosting::with(['position', 'employmentType'])
+        ->where('status', 'Published')
+        ->whereNull('archived_at')
+        ->where(fn ($query) => $query->whereNull('closing_date')->orWhereDate('closing_date', '>=', today()))
+        ->whereColumn('filled_vacancies', '<', 'vacancies')
+        ->latest('published_at')
+        ->take(4)
+        ->get()
+        ->map(fn ($job) => [
+            'id' => $job->id,
+            'posting_id' => $job->posting_id,
+            'title' => $job->title,
+            'work_location' => $job->work_location,
+            'work_mode' => $job->work_mode,
+            'work_schedule' => $job->work_schedule,
+            'salary_visibility' => $job->salary_visibility,
+            'salary_min' => $job->salary_min,
+            'salary_max' => $job->salary_max,
+            'salary_range' => '',
+            'closing_date' => $job->closing_date?->format('M d, Y'),
+            'closing_date_raw' => $job->closing_date?->toDateString(),
+            'published_date' => $job->published_at?->format('M d, Y'),
+            'published_date_raw' => $job->published_at?->toIso8601String(),
+            'posted' => $job->published_at?->diffForHumans() ?? 'Recently',
+            'posted_timestamp' => $job->published_at?->timestamp,
+            'created_at' => $job->created_at?->toIso8601String(),
+            'position_name' => $job->position?->name ?? $job->title,
+            'position_code' => $job->position?->code ?? '',
+            'department' => $job->department ?? '',
+            'job_description' => $job->position?->description ?? '',
+            'responsibilities' => $job->position?->responsibilities,
+            'qualifications' => $job->position?->qualifications,
+            'required_skills' => $job->position?->required_skills,
+            'employment_type' => $job->employmentType?->name ?? 'Full-time',
+            'reports_to' => $job->reports_to,
+            'management_level' => $job->position?->management_level,
+            'vacancies' => (int) $job->vacancies,
+            'filled_vacancies' => (int) $job->filled_vacancies,
+            'available_vacancies' => max(0, (int) $job->vacancies - (int) $job->filled_vacancies),
+            'status' => $job->status,
+            'hiring_priority' => $job->hiring_priority,
+            'is_urgent' => $job->hiring_priority === 'Urgent',
+        ])->values();
+
     return inertia('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
@@ -68,6 +113,7 @@ Route::get('/', function () {
         'phpVersion' => PHP_VERSION,
         'companyPosts' => $posts,
         'products' => $products,
+        'careerJobs' => $careerJobs,
     ]);
 });
 

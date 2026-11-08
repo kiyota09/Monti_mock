@@ -68,23 +68,50 @@ const reloadPage = () => {
 </template>
 
 <style>
-/* Agency workspace: pages scroll internally. Sections follow their content so
-   sibling sections are not each stretched to a full viewport; a page with a
-   single root wrapper still fills the viewport. Centered max-width clamps are
-   neutralised at the outer two levels only, and modals are excluded so they
-   keep their designed width. */
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]) {
-    min-height: 0 !important;
-}
-.app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):only-child {
-    min-height: 100% !important;
-}
+/* Agency pages scroll inside the viewport. Avoid stretching each individual
+   root child; that made header cards and statistic grids fill the screen. */
 .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
 .app-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
     > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"] {
     max-width: none !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
+}
+.agency-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid #334155;
+    border-radius: 1rem;
+    background: linear-gradient(105deg, #0f172a 0%, #1e293b 58%, #334155 100%);
+    color: #fff;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 12%);
+}
+.agency-page-header h1 {
+    margin-top: .25rem;
+    margin-bottom: 0;
+    color: #fff;
+    font-size: 1.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+.agency-page-header p { color: #cbd5e1; }
+.agency-page-header .agency-page-eyebrow {
+    color: #fcd34d;
+    font-size: .875rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+}
+.agency-page-header nav,
+.agency-page-header nav a { color: #cbd5e1; }
+.agency-page-header nav a:hover { color: #fcd34d; }
+@media (max-width: 640px) {
+    .agency-page-header { align-items: flex-start; flex-direction: column; padding: 1rem 1.125rem; }
+    .agency-page-header h1 { font-size: 1.5rem; }
 }
 .agency-motion button,
 .agency-motion a,

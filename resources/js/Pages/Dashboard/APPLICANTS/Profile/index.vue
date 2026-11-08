@@ -906,7 +906,7 @@ const isDisabled = computed(() => !isEditMode.value)
             <div class="flex-1 text-slate-900 dark:text-slate-100 relative flex flex-col overflow-hidden">
 
                 <!-- HEADER -->
-                <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+                <div class="applicant-page-header shrink-0">
                     <div>
                         <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                             My <span class="text-blue-600">Profile</span>

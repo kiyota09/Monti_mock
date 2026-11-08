@@ -1,17 +1,17 @@
 <template>
     <AgencyLayout>
     <Head title="Referred Applicants" />
-    <div class="space-y-6 bg-slate-50 px-1 py-2 text-slate-800 dark:bg-zinc-900 dark:text-slate-100 sm:px-2">
-        <header class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div class="space-y-4 bg-slate-50 px-1 py-2 text-slate-800 dark:bg-zinc-900 dark:text-slate-100 sm:px-2">
+        <header class="agency-page-header">
             <div>
-                <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-                <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Referred Applicants</h1>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review applicants referred by Monti HR and submit your response.</p>
+                <p class="agency-page-eyebrow">Agency Portal</p>
+                <h1>Referred Applicants</h1>
+                <p class="mt-1 text-sm">Review applicants referred by Monti HR and submit your response.</p>
             </div>
         </header>
 
-        <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <article v-for="card in cards" :key="card.label" class="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-zinc-800">
+        <section class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+            <article v-for="card in cards" :key="card.label" class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-zinc-800">
                 <div class="flex items-start justify-between gap-2"><div><p class="text-xs font-semibold text-slate-500 dark:text-slate-400">{{ card.label }}</p><p class="mt-2 text-2xl font-black text-slate-900 dark:text-white">{{ card.value }}</p></div><span :class="card.tone" class="rounded-xl p-2.5"><component :is="card.icon" class="h-5 w-5" /></span></div>
             </article>
         </section>

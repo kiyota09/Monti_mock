@@ -21,6 +21,8 @@ const supplier = computed(() => page.props.auth.supplier || (page.props.auth.use
 const applicantUser = computed(() => page.props.auth.applicant);
 const agencyUser = computed(() => page.props.auth.agency);
 const currentUrl = computed(() => page.url);
+const isHrmAgenciesPage = computed(() => page.component === 'Dashboard/HRM_NEW/Agencies/Index');
+const isCompactTopbar = computed(() => isHrmAgenciesPage.value);
 const isAgencyDashboard = computed(() => currentUrl.value.split('?')[0] === '/agency/dashboard');
 
 const isClient = computed(() => !!client.value);
@@ -793,8 +795,8 @@ onMounted(() => {
 </script>
 
 <template>
-    <header class="sticky top-16 md:top-0 z-40 border-b border-gray-200/70 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90">
-        <div class="topbar-row mx-auto flex h-16 max-w-7xl items-center gap-2 px-4 sm:px-6 lg:px-8">
+    <header :class="['sticky top-16 md:top-0 z-40 border-b border-gray-200/70 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90', isCompactTopbar ? 'agencies-compact-topbar' : '']">
+        <div :class="['topbar-row mx-auto flex max-w-7xl items-center gap-2 px-4 sm:px-6 lg:px-8', isCompactTopbar ? 'h-12' : 'h-16']">
             <div class="flex min-w-0 flex-1 items-center gap-2">
                 <!-- Sidebar toggle (drawer on mobile, collapse on desktop) -->
                 <button @click="toggleSidebar" title="Toggle sidebar"
@@ -817,7 +819,7 @@ onMounted(() => {
                 </nav>
                 <!-- Live date & time -->
                 <div class="hidden min-w-0 flex-1 items-center justify-center sm:flex" title="Server time">
-                    <div class="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 dark:border-zinc-700 dark:bg-zinc-800">
+                    <div :class="['flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 dark:border-zinc-700 dark:bg-zinc-800', isCompactTopbar ? 'px-2.5 py-1' : 'px-4 py-2']">
                         <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                         <span class="font-mono text-sm font-black tabular-nums text-gray-800 dark:text-zinc-100">{{ clockTime }}</span>
                         <span class="hidden text-[11px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 lg:inline">{{ clockDate }}</span>

@@ -95,13 +95,15 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
 <template>
     <Head title="Create Invoice - Monti ERP" />
     <AgencyLayout>
-        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-        <nav class="mt-2 flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-            <Link :href="route('agency.billing.index')" class="hover:text-amber-700">Billing</Link>
-            <span>/</span>
-            <span class="text-slate-800 dark:text-slate-200 font-semibold">Create Invoice</span>
-        </nav>
-        <h1 class="text-2xl font-black text-slate-900 dark:text-white mb-4">Create Invoice</h1>
+        <header class="agency-page-header">
+            <div>
+                <p class="agency-page-eyebrow">Agency Portal</p>
+                <nav class="mt-1 flex items-center gap-2 text-xs font-medium">
+                    <Link :href="route('agency.billing.index')">Billing</Link><span>/</span><span class="font-semibold">Create Invoice</span>
+                </nav>
+                <h1>Create Invoice</h1>
+            </div>
+        </header>
 
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5 mb-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

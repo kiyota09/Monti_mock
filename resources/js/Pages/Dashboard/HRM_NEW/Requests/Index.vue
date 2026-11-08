@@ -87,33 +87,33 @@ function statusBadge(s: string): string {
 <template>
     <Head title="Manpower Requests - Monti ERP" />
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+        <div class="mb-3 flex min-h-16 flex-col items-start justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center">
+            <div class="min-w-0">
+                <h1 class="text-xl font-bold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-2xl">
                     Manpower Requests
                 </h1>
-                <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Worker requests placed with manpower agencies.</p>
+                <p class="mt-0.5 text-xs leading-4 text-slate-500 dark:text-slate-400 sm:text-sm">Worker requests placed with manpower agencies.</p>
             </div>
             <Link
                 :href="route('hrm.manpower-requests.create')"
-                class="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition shadow-lg shadow-blue-500/30 active:scale-95"
+                class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700"
             >
-                <Plus class="w-4 h-4" /> New request
+                <Plus class="h-3.5 w-3.5" /> New request
             </Link>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4">
-                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</div>
-                <div class="text-2xl font-black text-slate-900 dark:text-white mt-1">{{ stats.total }}</div>
+        <div class="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div class="flex min-h-14 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total</div>
+                <div class="text-base font-bold leading-5 text-slate-900 dark:text-white">{{ stats.total }}</div>
             </div>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4">
-                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Draft</div>
-                <div class="text-2xl font-black text-slate-500 mt-1">{{ stats.draft }}</div>
+            <div class="flex min-h-14 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Draft</div>
+                <div class="text-base font-bold leading-5 text-slate-500">{{ stats.draft }}</div>
             </div>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4">
-                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Open</div>
-                <div class="text-2xl font-black text-blue-600 mt-1">{{ stats.open }}</div>
+            <div class="flex min-h-14 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Open</div>
+                <div class="text-base font-bold leading-5 text-blue-600">{{ stats.open }}</div>
             </div>
         </div>
 

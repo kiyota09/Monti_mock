@@ -72,13 +72,12 @@ function lateOf(timeIn: string | null, shift: string | null): string {
 <template>
     <Head title="Worker Attendance - Monti ERP" />
     <AgencyLayout>
-        <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-            <span class="text-slate-800 dark:text-slate-200 font-semibold">Worker Attendance</span>
-        </nav>
-        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-        <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white mb-4">
-            Worker Attendance
-        </h1>
+        <header class="agency-page-header">
+            <div>
+                <p class="agency-page-eyebrow">Agency Portal</p>
+                <h1>Worker Attendance</h1>
+            </div>
+        </header>
 
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4 mb-4 flex flex-col sm:flex-row gap-3">
             <div class="flex-1">

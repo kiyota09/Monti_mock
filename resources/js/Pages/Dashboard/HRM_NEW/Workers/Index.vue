@@ -14,6 +14,7 @@ const props = defineProps<{
         agency: string | null;
         agency_id: number;
         position_skill: string | null;
+        department: string | null;
         current_assignment: string | null;
         status: string;
         clearance_expiry: string | null;
@@ -160,6 +161,7 @@ function statusBadge(s: string): string {
                             <th class="py-3 px-4">Name</th>
                             <th class="py-3 px-4">Agency</th>
                             <th class="py-3 px-4">Position / skill</th>
+                            <th class="py-3 px-4">Department</th>
                             <th class="py-3 px-4 text-center">Status</th>
                             <th class="py-3 px-4 text-right">Actions</th>
                         </tr>
@@ -179,6 +181,7 @@ function statusBadge(s: string): string {
                             <td class="py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">{{ w.name }}</td>
                             <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{{ w.agency || '—' }}</td>
                             <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ w.position_skill || '—' }}</td>
+                            <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ w.department || '—' }}</td>
                             <td class="py-3 px-4 text-center">
                                 <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', statusBadge(w.status)]">{{ w.status }}</span>
                             </td>

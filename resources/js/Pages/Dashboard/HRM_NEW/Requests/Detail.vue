@@ -176,6 +176,16 @@ function closeProposalWorker() {
     selectedProposal.value = null;
 }
 
+function proposalDocumentBadge(status: string): string {
+    const colors: Record<string, string> = {
+        Verified: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800',
+        Pending: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800',
+        Rejected: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800',
+        Expired: 'bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600',
+    };
+    return colors[status] || 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600';
+}
+
 // Worker-info modal for a clicked assigned worker.
 const selectedAssigned = ref<any>(null);
 
@@ -482,19 +492,25 @@ const canAssign = computed(() =>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
-                <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Request</h2>
-                <dl class="divide-y divide-slate-300 text-sm dark:divide-zinc-600 [&>div]:py-2">
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Department</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.department }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Position / skill</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.position_skill }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Headcount</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.needed }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Start date</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.start_date || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">End date</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.end_date || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Shift</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ request.shift || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Agency</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ request.agency || '—' }}</dd></div>
-                    <div v-if="request.notes"><dt class="text-slate-400">Notes</dt><dd class="mt-1 text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{{ request.notes }}</dd></div>
-                </dl>
-                <div class="mt-4">
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div class="border-b border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/50">
+                    <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">Request</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full table-fixed border-collapse text-sm">
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                            <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Department</th><td class="break-words px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.department }}</td></tr>
+                            <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Position / skill</th><td class="break-words px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.position_skill }}</td></tr>
+                            <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Headcount</th><td class="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.needed }}</td></tr>
+                            <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Start date</th><td class="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.start_date || '—' }}</td></tr>
+                            <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">End date</th><td class="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.end_date || '—' }}</td></tr>
+                            <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Shift</th><td class="break-words px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.shift || '—' }}</td></tr>
+                            <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Agency</th><td class="break-words px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.agency || '—' }}</td></tr>
+                            <tr v-if="request.notes"><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left align-top text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Notes</th><td class="whitespace-pre-wrap break-words px-4 py-2.5 text-sm text-slate-600 dark:text-slate-300 [overflow-wrap:anywhere]">{{ request.notes }}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="border-t border-slate-100 px-4 py-3 dark:border-slate-700">
                     <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
                         <span>{{ request.filled }} of {{ request.needed }} filled</span>
                         <span>{{ progressPct() }}%</span>
@@ -515,7 +531,7 @@ const canAssign = computed(() =>
                                 {{ w.name }}{{ w.proposed_department ? ' · ' + w.proposed_department : '' }}{{ w.position_skill ? ' · ' + w.position_skill : '' }}{{ w.worker_status !== 'Available' ? ' · Pending HR approval' : '' }}
                             </option>
                         </select>
-                        <Link v-if="selectedAvailable?.worker_status === 'Pending'" :href="route('hrm.workers.show', selectedAvailable.id)" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition whitespace-nowrap">
+                        <Link v-if="selectedAvailable?.worker_status === 'Pending'" :href="route('hrm.workers.show', selectedAvailable.id) + '?request_id=' + request.id" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition whitespace-nowrap">
                             Review &amp; approve
                         </Link>
                         <button v-else type="submit" :disabled="!assignForm.worker_id || assignForm.processing || selectedAvailable?.worker_status !== 'Available'" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-60 whitespace-nowrap">
@@ -600,6 +616,7 @@ const canAssign = computed(() =>
                             <p v-if="p.status !== 'Proposed'" class="text-slate-500 dark:text-slate-400">{{ p.status }}{{ p.reviewed_by ? ' by ' + p.reviewed_by : '' }}{{ p.review_reason ? ' — ' + p.review_reason : '' }}</p>
                         </div>
                         <div class="flex items-center gap-1">
+                            <button @click="openProposalWorker(p)" class="px-3 py-1.5 text-[11px] font-bold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded-lg transition">View</button>
                             <span v-if="p.status !== 'Proposed'" :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', p.status === 'Accepted' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400']">{{ p.status }}</span>
                             <template v-if="p.status === 'Proposed' && canEdit">
                                 <button @click="openAcceptProposal(p)" class="px-3 py-1.5 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition">Accept</button>
@@ -667,65 +684,91 @@ const canAssign = computed(() =>
             </section>
         </div>
 
-        <!-- Proposal worker-info modal -->
-        <div v-if="selectedProposal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @click.self="closeProposalWorker">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 w-full max-w-lg p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <h3 class="text-base font-black text-slate-900 dark:text-white">{{ selectedProposal.worker_name }}</h3>
-                    </div>
-                    <button @click="closeProposalWorker" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Close">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        <!-- Agency proposal worker profile -->
+        <div v-if="selectedProposal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm sm:p-5" @click.self="closeProposalWorker">
+            <section class="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" :aria-label="'Worker profile: ' + selectedProposal.worker_name">
+                <header class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800 sm:px-5">
+                    <nav class="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500">
+                        <span>Workers</span><span>/</span><span class="truncate font-semibold text-slate-800 dark:text-slate-200">{{ selectedProposal.worker_code || ('WRK-' + selectedProposal.worker_id) }}</span>
+                    </nav>
+                    <button type="button" @click="closeProposalWorker" aria-label="Close worker profile" class="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-white">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
+                </header>
+                <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-5">
+                    <div class="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:p-4">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-lg font-black text-white">{{ selectedProposal.worker_name?.charAt(0) || 'W' }}</div>
+                            <div class="min-w-0">
+                                <h2 class="truncate text-base font-black text-slate-900 dark:text-white sm:text-lg">{{ selectedProposal.worker_name }}</h2>
+                                <div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                    <span class="font-mono">{{ selectedProposal.worker_code || '—' }}</span><span>{{ selectedProposal.worker_profile?.agency || request.agency || 'No agency' }}</span>
+                                    <span :class="['rounded-full border px-2 py-0.5 text-[10px] font-black uppercase', proposalDocumentBadge(selectedProposal.worker_profile?.status || selectedProposal.worker_status || 'Pending') ]">{{ selectedProposal.worker_profile?.status || selectedProposal.worker_status || 'Pending' }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span :class="['rounded-full px-2 py-1 text-[10px] font-black uppercase', selectedProposal.status === 'Accepted' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : selectedProposal.status === 'Rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400']">Proposal {{ selectedProposal.status }}</span>
+                            <Link :href="route('hrm.workers.show', selectedProposal.worker_id)" class="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-bold text-blue-600 transition hover:bg-blue-50 dark:border-slate-700 dark:text-blue-400 dark:hover:bg-slate-700">Open worker page</Link>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800 sm:p-4">
+                        <h3 class="mb-2 text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">Overview</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full min-w-[500px] border-collapse text-left text-xs [&_td]:py-2 [&_th]:py-2">
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <tr><th class="w-2/5 pr-3 font-medium text-slate-400">Agency</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.agency || request.agency || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Position / skill</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.position_skill || selectedProposal.position_skill || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Years experience</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.years_experience ? selectedProposal.worker_profile.years_experience + ' years' : '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Proposed dept.</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.proposed_department || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Availability</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.availability || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Arrangement</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.employment_arrangement || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Daily rate</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.daily_rate != null ? '₱' + Number(selectedProposal.worker_profile.daily_rate).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Birth date</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.birth_date || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Gender</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.gender || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Phone</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.phone || selectedProposal.phone || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Email</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.email || selectedProposal.email || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Address</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.address || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Government ID</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.gov_id_type ? selectedProposal.worker_profile.gov_id_type + ' · ' + (selectedProposal.worker_profile.gov_id_number || '—') : '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Emergency contact</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.emergency_name ? selectedProposal.worker_profile.emergency_name + (selectedProposal.worker_profile.emergency_relationship ? ' (' + selectedProposal.worker_profile.emergency_relationship + ')' : '') + (selectedProposal.worker_profile.emergency_phone ? ' · ' + selectedProposal.worker_profile.emergency_phone : '') : '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Consent</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.consent_given ? 'Yes' + (selectedProposal.worker_profile.consent_at ? ' · ' + selectedProposal.worker_profile.consent_at : '') : '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Resume</th><td class="font-semibold text-slate-700 dark:text-slate-200"><a v-if="selectedProposal.worker_profile?.resume_url || selectedProposal.resume_url" :href="selectedProposal.worker_profile?.resume_url || selectedProposal.resume_url" target="_blank" rel="noopener" class="text-blue-600 hover:underline dark:text-blue-400">{{ selectedProposal.worker_profile?.resume_name || selectedProposal.resume_name || 'View resume' }}</a><span v-else>—</span></td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Education</th><td class="whitespace-pre-line font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.education || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">School address</th><td class="whitespace-pre-line font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.education_address || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Experience</th><td class="whitespace-pre-line font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.work_experience || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Skills</th><td class="whitespace-pre-line font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.skills || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Training / certifications</th><td class="whitespace-pre-line font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.trainings_certifications || '—' }}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800 sm:p-4">
+                        <h3 class="mb-2 text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">Documents — HR verification</h3>
+                        <p class="mb-3 text-[11px] text-slate-500 dark:text-slate-400">Review each uploaded file and its current verification status.</p>
+                        <div v-if="!selectedProposal.worker_profile?.documents?.length" class="text-xs text-slate-400">No supporting files uploaded yet.</div>
+                        <div v-else class="overflow-x-auto">
+                            <table class="w-full min-w-[480px] border-collapse text-left text-xs [&_td]:py-2 [&_th]:py-2">
+                                <thead><tr class="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-400"><th class="px-2">Document</th><th class="px-2">Details</th><th class="px-2 text-center">Status</th></tr></thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <tr v-for="doc in selectedProposal.worker_profile.documents" :key="doc.id" class="align-top">
+                                        <td class="px-2"><a :href="doc.url" target="_blank" rel="noopener" class="font-bold text-blue-600 hover:underline dark:text-blue-400">{{ doc.original_name || doc.label || doc.doc_type_label }}</a></td>
+                                        <td class="px-2 text-[11px] text-slate-500 dark:text-slate-400">{{ doc.doc_type_label }}{{ doc.label && doc.label !== doc.original_name ? ' · ' + doc.label : '' }}{{ doc.issue_date ? ' · start ' + doc.issue_date : '' }}{{ doc.expiry_date ? ' · exp ' + doc.expiry_date : '' }}{{ doc.verified_by ? ' · by ' + doc.verified_by : '' }}<p v-if="doc.review_note" class="mt-1 italic">{{ doc.review_note }}</p></td>
+                                        <td class="px-2 text-center"><span :class="['rounded-full border px-2 py-0.5 text-[10px] font-black uppercase', proposalDocumentBadge(doc.status)]">{{ doc.status }}</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Proposed {{ selectedProposal.proposed_at || '' }}{{ selectedProposal.proposed_by ? ' by ' + selectedProposal.proposed_by : '' }}<span v-if="selectedProposal.status !== 'Proposed'"> · {{ selectedProposal.status }}{{ selectedProposal.reviewed_by ? ' by ' + selectedProposal.reviewed_by : '' }}{{ selectedProposal.review_reason ? ' — ' + selectedProposal.review_reason : '' }}</span></p>
                 </div>
-
-                <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <span v-if="selectedProposal.worker_status" class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase border bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600">{{ selectedProposal.worker_status }}</span>
-                    <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', selectedProposal.status === 'Accepted' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : selectedProposal.status === 'Rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400']">Proposal: {{ selectedProposal.status }}</span>
-                </div>
-
-                <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
-                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3">
-                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Position / skill</dt>
-                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{{ selectedProposal.position_skill || '—' }}</dd>
-                    </div>
-                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3">
-                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Daily rate</dt>
-                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{{ selectedProposal.daily_rate ?? '—' }}</dd>
-                    </div>
-                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3">
-                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Phone</dt>
-                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{{ selectedProposal.phone || '—' }}</dd>
-                    </div>
-                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3">
-                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Gender</dt>
-                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">{{ selectedProposal.gender || '—' }}</dd>
-                    </div>
-                    <div class="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 p-3 col-span-2">
-                        <dt class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Resume</dt>
-                        <dd class="mt-0.5 font-bold text-slate-800 dark:text-slate-100">
-                            <a v-if="selectedProposal.resume_url" :href="selectedProposal.resume_url" target="_blank" rel="noopener"
-                                class="text-blue-600 hover:text-blue-700 hover:underline transition" :title="selectedProposal.resume_name || 'View resume'">
-                                {{ selectedProposal.resume_name || 'View resume' }} →
-                            </a>
-                            <span v-else class="text-slate-400">No resume uploaded</span>
-                        </dd>
-                    </div>
-                </dl>
-
-                <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                    Proposed {{ selectedProposal.proposed_at || '' }}{{ selectedProposal.proposed_by ? ' by ' + selectedProposal.proposed_by : '' }}
-                    <span v-if="selectedProposal.status !== 'Proposed'"> · {{ selectedProposal.status }}{{ selectedProposal.reviewed_by ? ' by ' + selectedProposal.reviewed_by : '' }}{{ selectedProposal.review_reason ? ' — ' + selectedProposal.review_reason : '' }}</span>
-                </p>
-
-                <div class="mt-4 flex items-center justify-between gap-2">
-                    <Link :href="route('hrm.workers.show', selectedProposal.worker_id)" class="text-xs font-bold text-blue-600 hover:text-blue-700 transition">Open full worker profile →</Link>
-                    <div v-if="selectedProposal.status === 'Proposed' && canEdit" class="flex items-center gap-2">
-                        <button @click="openAcceptProposal(selectedProposal)" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition">Accept</button>
-                        <button @click="openRejectProposal(selectedProposal.id)" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition">Reject</button>
-                    </div>
-                </div>
-            </div>
+                <footer v-if="selectedProposal.status === 'Proposed' && canEdit" class="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800 sm:px-5">
+                    <button @click="openAcceptProposal(selectedProposal)" class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-700">Accept</button>
+                    <button @click="openRejectProposal(selectedProposal.id)" class="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700">Reject</button>
+                </footer>
+            </section>
         </div>
 
         <!-- Assigned worker-info modal -->

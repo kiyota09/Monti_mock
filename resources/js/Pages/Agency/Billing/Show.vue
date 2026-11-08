@@ -39,16 +39,14 @@ function money(v: any): string {
 <template>
     <Head :title="statement.code + ' - Monti ERP'" />
     <AgencyLayout>
-        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-        <nav class="mt-2 flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-            <Link :href="route('agency.billing.index')" class="hover:text-amber-700">Billing</Link>
-            <span>/</span>
-            <span class="font-semibold">{{ statement.code }}</span>
-        </nav>
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div class="agency-page-header">
             <div>
-                <h1 class="text-2xl font-black text-slate-900 dark:text-white">{{ statement.code }}</h1>
-                <p class="text-sm text-slate-500 mt-0.5">{{ statement.period }} · <strong>{{ statement.status }}</strong></p>
+                <p class="agency-page-eyebrow">Agency Portal</p>
+                <nav class="mt-1 flex items-center gap-2 text-xs font-medium">
+                    <Link :href="route('agency.billing.index')">Billing</Link><span>/</span><span class="font-semibold">{{ statement.code }}</span>
+                </nav>
+                <h1>{{ statement.code }}</h1>
+                <p class="mt-1 text-sm">{{ statement.period }} · <strong>{{ statement.status }}</strong></p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
                 <a :href="route('agency.billing.export-pdf', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition">

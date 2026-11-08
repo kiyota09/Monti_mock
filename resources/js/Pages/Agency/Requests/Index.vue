@@ -61,9 +61,13 @@ function statusBadge(s: string): string {
 <template>
     <Head title="Requests - Monti ERP" />
     <AgencyLayout>
-        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-        <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Manpower Requests</h1>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5 mb-4">Requests addressed to your agency. Propose workers on open requests — HR approves each proposal.</p>
+        <header class="agency-page-header">
+            <div>
+                <p class="agency-page-eyebrow">Agency Portal</p>
+                <h1>Manpower Requests</h1>
+                <p class="mt-1 text-sm">Requests addressed to your agency. Propose workers on open requests — HR approves each proposal.</p>
+            </div>
+        </header>
 
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-3 bg-slate-50/50 dark:bg-slate-800/50">
