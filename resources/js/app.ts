@@ -94,6 +94,16 @@ router.on('navigate', (event) => {
     realtimeEnabled = pageHasAuthenticatedUser(event.detail.page?.props);
     acceptRealtimeVersion(event.detail.page?.props?.realtime_version);
 });
+router.on('before', (event: any) => {
+    const lat = sessionStorage.getItem('erp-user-lat');
+    const lng = sessionStorage.getItem('erp-user-lng');
+    if (!lat || !lng || !event.detail?.visit) return;
+    event.detail.visit.headers = {
+        ...(event.detail.visit.headers || {}),
+        'X-User-Lat': lat,
+        'X-User-Lng': lng,
+    };
+});
 
 axios.interceptors.request.use((config) => {
     (config as any).__feedbackTimer = window.setTimeout(() => {
@@ -113,8 +123,6 @@ axios.interceptors.response.use((response) => {
     const status = error?.response?.status;
     if (status === 401 || status === 419) {
         notify({ kind: 'session', actionLabel: 'Sign in', action: () => { window.location.href = feedbackLoginPath; } });
-    } else if (status === 403) {
-        notify({ kind: 'permission' });
     }
     return Promise.reject(error);
 });
@@ -135,8 +143,8 @@ window.onerror = function (message, source, lineno, colno, error) {
 
 window.onunhandledrejection = function (event) {
     console.error('Unhandled Promise Rejection:', event.reason);
-    // Request failures are handled by their caller (or the session/permission
-    // notices above); do not turn server responses into the global error modal.
+    // Request failures are handled by their caller; do not turn server
+    // responses into the global error modal.
     if (axios.isAxiosError(event.reason)) {
         event.preventDefault();
         return;

@@ -23,7 +23,11 @@ class CompensationController extends Controller
 
     public function index()
     {
-        $users = User::with(['hrmDepartment:id,name', 'hrmOrgPosition:id,name', 'hrmEmploymentType:id,name'])
+        $users = User::select([
+                'id', 'employee_id', 'name', 'department', 'position',
+                'hrm_department_id', 'hrm_position_id', 'hrm_employment_type_id', 'basic_salary',
+            ])
+            ->with(['hrmDepartment:id,name', 'hrmOrgPosition:id,name', 'hrmEmploymentType:id,name'])
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
@@ -68,6 +72,7 @@ class CompensationController extends Controller
                 'employeeId' => $a->employee?->employee_id ?: ('EMP-' . str_pad((string) $a->user_id, 4, '0', STR_PAD_LEFT)),
                 'oldSalary' => $a->old_salary !== null ? (float) $a->old_salary : null,
                 'newSalary' => (float) $a->new_salary,
+                'allowance' => (float) ($a->allowance ?? 0),
                 'type' => $a->adjustment_type,
                 'reason' => $a->reason,
                 'notes' => $a->notes,
@@ -137,6 +142,7 @@ class CompensationController extends Controller
         $data = $request->validate([
             'user_id' => 'required|exists:users,id',
             'new_salary' => 'required|numeric|min:0',
+            'allowance' => 'nullable|numeric|min:0',
             'adjustment_type' => 'nullable|string|max:60',
             'reason' => 'nullable|string|max:1000',
             'notes' => 'nullable|string|max:2000',
@@ -157,6 +163,7 @@ class CompensationController extends Controller
             'user_id' => $employee->id,
             'old_salary' => $employee->basic_salary,
             'new_salary' => $data['new_salary'],
+            'allowance' => $data['allowance'] ?? 0,
             'adjustment_type' => $data['adjustment_type'] ?? 'Merit Increase',
             'reason' => $data['reason'] ?? null,
             'notes' => $data['notes'] ?? null,
@@ -186,6 +193,7 @@ class CompensationController extends Controller
 
         $adjustment->update($request->validate([
             'new_salary' => 'sometimes|required|numeric|min:0',
+            'allowance' => 'nullable|numeric|min:0',
             'adjustment_type' => 'nullable|string|max:60',
             'reason' => 'nullable|string|max:1000',
             'notes' => 'nullable|string|max:2000',

@@ -38,17 +38,18 @@ watch(() => form.period, applyPeriodDates);
 onMounted(applyPeriodDates);
 
 const query = ref('');
+const jobTitleOf = (employee) => employee.job_position || employee.hrm_org_position?.name || '';
 
 const list = computed(() => {
     const q = query.value.trim().toLowerCase();
     const rows = props.employees || [];
     if (!q) return rows;
     return rows.filter((e) => (e.name || '').toLowerCase().includes(q) || String(e.id).includes(q)
-        || (e.position || '').toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q)
+        || jobTitleOf(e).toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q)
         || (e.department || '').toLowerCase().includes(q));
 });
 
-const levelOf = (e) => [e.position, e.role, e.department].filter(Boolean).join(' · ');
+const levelOf = (e) => [jobTitleOf(e), e.department].filter(Boolean).join(' · ');
 
 const toggleAll = (e) => {
     form.employee_ids = e.target.checked ? list.value.map((emp) => emp.id) : [];
@@ -205,7 +206,7 @@ const confirmSubmit = () => {
                         <tbody class="divide-y divide-slate-100">
                             <tr v-for="emp in selectedEmployees" :key="emp.id" class="hover:bg-slate-50/50">
                                 <td class="py-2 px-3 font-medium">{{ emp.name }}</td>
-                                <td class="py-2 px-3 text-slate-600">{{ emp.position }}</td>
+                                <td class="py-2 px-3 text-slate-600">{{ jobTitleOf(emp) || '—' }}</td>
                                 <td class="py-2 px-3 text-slate-600">{{ emp.department || '—' }}</td>
                                 <td class="py-2 px-3 text-right font-mono">{{ emp.basic_salary ? `₱${Number(emp.basic_salary).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—' }}</td>
                             </tr>

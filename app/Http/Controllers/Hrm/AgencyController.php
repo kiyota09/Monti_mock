@@ -276,17 +276,24 @@ class AgencyController extends Controller
 
         $data = $request->validate([
             'reason' => 'required|string|min:3|max:5000',
-            'rating' => 'required|integer|min:1|max:5',
+            'rating' => 'nullable|integer|min:1|max:5',
+            'attachment' => 'nullable|file|max:10240|mimes:pdf,doc,docx,jpg,jpeg,png,webp',
         ]);
+
+        $attachment = $request->file('attachment');
+        $attachmentPath = $attachment?->store('worker-reports', 'public');
 
         AgencyActivity::create([
             'agency_id' => $agency->id,
             'worker_id' => $worker->id,
             'action' => 'worker_reported',
-            'details' => "A report was submitted for {$worker->name} ({$worker->code}). Rating: {$data['rating']}/5.",
+            'details' => "A report was submitted for {$worker->name} ({$worker->code})." . (!empty($data['rating']) ? " Rating: {$data['rating']}/5." : ''),
             'actor_id' => $request->user()->id,
             'actor_name' => $request->user()->name,
             'reason' => trim($data['reason']),
+            'attachment_path' => $attachmentPath,
+            'attachment_name' => $attachment?->getClientOriginalName(),
+            'attachment_mime' => $attachment?->getMimeType(),
         ]);
 
         return back()->with('success', 'Worker report sent to ' . $agency->name . '.');
@@ -404,6 +411,9 @@ class AgencyController extends Controller
                 'code' => $r->code,
                 'department' => $r->department,
                 'position_skill' => $r->position_skill,
+                'start_date' => optional($r->start_date)->toDateString(),
+                'end_date' => optional($r->end_date)->toDateString(),
+                'is_ended' => $r->end_date ? $r->end_date->lt(today()) : false,
                 'needed' => (int) $r->headcount,
                 'filled' => (int) $r->filled_count,
                 'status' => $r->effective_status,

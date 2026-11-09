@@ -9,19 +9,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * Manpower request to an agency (HRM > Requests).
  *
- * Stored status: Draft|Open|Cancelled|Closed. The in-progress labels are
- * derived from assigned vs needed and never set by hand:
- *   stored Open + 0 filled        → Open
- *   stored Open + some filled      → Partially filled
- *   stored Open + needed reached   → Filled
+ * Stored status: Draft|Open|Cancelled|Closed. Filled is derived once the
+ * requested headcount is reached; otherwise the request remains Open.
  */
 class ManpowerRequest extends Model
 {
     public const STATUS_DRAFT = 'Draft';
 
     public const STATUS_OPEN = 'Open';
-
-    public const STATUS_PARTIAL = 'Partially filled';
 
     public const STATUS_FILLED = 'Filled';
 
@@ -31,7 +26,7 @@ class ManpowerRequest extends Model
 
     protected $fillable = [
         'code', 'department', 'position_skill', 'headcount',
-        'start_date', 'end_date', 'shift', 'notes',
+        'start_date', 'end_date', 'shift', 'employment_type_id', 'notes',
         'agency_id', 'status', 'cancel_reason',
     ];
 
@@ -44,6 +39,11 @@ class ManpowerRequest extends Model
     public function agency(): BelongsTo
     {
         return $this->belongsTo(Agency::class, 'agency_id');
+    }
+
+    public function employmentType(): BelongsTo
+    {
+        return $this->belongsTo(HrmEmploymentType::class, 'employment_type_id');
     }
 
     public function assignments(): HasMany
@@ -77,10 +77,6 @@ class ManpowerRequest extends Model
         if ($filled >= $needed) {
             return self::STATUS_FILLED;
         }
-        if ($filled > 0) {
-            return self::STATUS_PARTIAL;
-        }
-
         return self::STATUS_OPEN;
     }
 }

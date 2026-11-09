@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // Page 5: Agency Workers list (HRM > Workers)
 import { ref, watch, computed } from 'vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { toast } from '@/lib/feedback';
-import { Search, Eye } from 'lucide-vue-next';
+import { Search, Flag, X } from 'lucide-vue-next';
 
 const props = defineProps<{
     workers: Array<{
@@ -14,6 +14,7 @@ const props = defineProps<{
         agency: string | null;
         agency_id: number;
         position_skill: string | null;
+        department: string | null;
         current_assignment: string | null;
         status: string;
         clearance_expiry: string | null;
@@ -39,6 +40,38 @@ const search = ref(props.filters?.search || '');
 const agencyId = ref(props.filters?.agency_id || 'All');
 const status = ref(props.filters?.status || 'All');
 const expiring = ref(!!props.filters?.expiring);
+const reportTarget = ref<{ id: number; agency_id: number; name: string; agency: string | null } | null>(null);
+const reportForm = useForm<{ reason: string; attachment: File | null }>({ reason: '', attachment: null });
+
+function openReport(worker: { id: number; agency_id: number; name: string; agency: string | null }) {
+    reportTarget.value = worker;
+    reportForm.reset();
+    reportForm.clearErrors();
+}
+
+function closeReport() {
+    if (reportForm.processing) return;
+    reportTarget.value = null;
+    reportForm.reset();
+    reportForm.clearErrors();
+}
+
+function submitReport() {
+    if (!reportTarget.value || !reportForm.reason.trim()) return;
+
+    reportForm.post(route('hrm.agencies.workers.report', {
+        agency: reportTarget.value.agency_id,
+        worker: reportTarget.value.id,
+    }), {
+        preserveScroll: true,
+        onSuccess: closeReport,
+    });
+}
+
+function selectReportAttachment(event: Event) {
+    const input = event.target as HTMLInputElement;
+    reportForm.attachment = input.files?.[0] || null;
+}
 
 function applyFilters(pageNum = 1) {
     const params: any = { page: pageNum };
@@ -160,6 +193,7 @@ function statusBadge(s: string): string {
                             <th class="py-3 px-4">Name</th>
                             <th class="py-3 px-4">Agency</th>
                             <th class="py-3 px-4">Position / skill</th>
+                            <th class="py-3 px-4">Department</th>
                             <th class="py-3 px-4 text-center">Status</th>
                             <th class="py-3 px-4 text-right">Actions</th>
                         </tr>
@@ -179,18 +213,21 @@ function statusBadge(s: string): string {
                             <td class="py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">{{ w.name }}</td>
                             <td class="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{{ w.agency || '—' }}</td>
                             <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ w.position_skill || '—' }}</td>
+                            <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ w.department || '—' }}</td>
                             <td class="py-3 px-4 text-center">
                                 <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', statusBadge(w.status)]">{{ w.status }}</span>
                             </td>
                             <td class="py-3 px-4">
                                 <div class="flex items-center justify-end gap-1" @click.stop>
-                                    <Link
-                                        :href="route('hrm.workers.show', w.id)"
-                                        class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                                        title="View"
+                                    <button
+                                        type="button"
+                                        @click="openReport(w)"
+                                        class="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1.5 text-[10px] font-bold text-rose-700 transition hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-900/20"
+                                        title="Report worker"
                                     >
-                                        <Eye class="w-4 h-4" />
-                                    </Link>
+                                        <Flag class="h-3.5 w-3.5" />
+                                        <span class="hidden xl:inline">Report</span>
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -235,6 +272,32 @@ function statusBadge(s: string): string {
                     </button>
                 </div>
             </div>
+        </div>
+
+        <div v-if="reportTarget" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="presentation" @click.self="closeReport">
+            <form @submit.prevent="submitReport" class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="worker-report-title">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 id="worker-report-title" class="text-lg font-black text-slate-900 dark:text-white">Report worker</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ reportTarget.name }} <span v-if="reportTarget.agency">· {{ reportTarget.agency }}</span></p>
+                    </div>
+                    <button type="button" @click="closeReport" :disabled="reportForm.processing" aria-label="Close report dialog" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-slate-800"><X class="h-4 w-4" /></button>
+                </div>
+                <label class="mt-5 block text-xs font-bold text-slate-700 dark:text-slate-200">Reason for report <span class="text-rose-600">*</span>
+                    <textarea v-model="reportForm.reason" required minlength="3" maxlength="5000" rows="5" placeholder="Describe the reason for reporting this worker..." class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-normal text-slate-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                </label>
+                <p v-if="reportForm.errors.reason" class="mt-1 text-xs text-rose-600">{{ reportForm.errors.reason }}</p>
+                <label class="mt-4 block text-xs font-bold text-slate-700 dark:text-slate-200">Supporting document or image <span class="font-normal text-slate-400">(optional)</span>
+                    <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" @change="selectReportAttachment" class="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-bold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:file:bg-slate-700" />
+                </label>
+                <p v-if="reportForm.errors.attachment" class="mt-1 text-xs text-rose-600">{{ reportForm.errors.attachment }}</p>
+                <p v-if="reportForm.attachment" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Selected: {{ reportForm.attachment.name }}</p>
+                <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">The agency will be notified about this worker and the report reason.</p>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" @click="closeReport" :disabled="reportForm.processing" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</button>
+                    <button type="submit" :disabled="reportForm.processing || !reportForm.reason.trim()" class="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50">{{ reportForm.processing ? 'Sending report...' : 'Submit report' }}</button>
+                </div>
+            </form>
         </div>
     </AuthenticatedLayout>
 </template>

@@ -65,6 +65,7 @@ class Payroll extends Model
         // Loans
         'sss_loan',
         'pf_loan',
+        'advance_deduction',
 
         // Financial Totals and Review Status
         // Workflow: Draft -> Submitted -> Approved -> Paid (Paid is final)
@@ -107,6 +108,7 @@ class Payroll extends Model
         'tax_withheld' => 'decimal:2',
         'sss_loan' => 'decimal:2',
         'pf_loan' => 'decimal:2',
+        'advance_deduction' => 'decimal:2',
         'gross_pay' => 'decimal:2',
         'net_pay' => 'decimal:2',
         'employer_sss' => 'decimal:2',

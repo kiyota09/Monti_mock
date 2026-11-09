@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Route;
 | middleware's native shortcut.
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/eco')->name('eco.')->middleware(['auth', 'verified', 'module.access:ECO'])->group(function () {
+Route::prefix('dashboard/eco')->name('eco.')->middleware(['auth', 'verified', 'module.access:ECO', 'geofence'])->group(function () {
     // Dashboard
     Route::get('/', [EcoDashboardController::class, 'index'])
         ->middleware('page.permission:dashboard,view')->name('dashboard');

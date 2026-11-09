@@ -154,6 +154,20 @@ const closeLightbox = () => { lightbox.value = null; };
 const showPhotoPreview = ref(false);
 const openPhotoPreview = () => { showPhotoPreview.value = true; };
 const closePhotoPreview = () => { showPhotoPreview.value = false; };
+const activeSection = ref('account');
+const profileSections = [
+    { id: 'account', label: 'Account' },
+    { id: 'personal', label: 'Personal' },
+    { id: 'ids', label: 'IDs' },
+    { id: 'family', label: 'Family' },
+    { id: 'emergency', label: 'Emergency' },
+    { id: 'documents', label: 'Documents' },
+    { id: 'education', label: 'Education' },
+    { id: 'work', label: 'Work' },
+    { id: 'profile-settings', label: 'Profile settings' },
+    { id: 'password', label: 'Password' },
+    { id: 'account-status', label: 'Account status' },
+];
 
 // ─── Self-service edit of application personal details ────────────────────
 // Employees keep these current themselves (moved address, newly issued
@@ -344,8 +358,15 @@ const submitAppForm = () => {
                     </div>
                 </div>
 
+                <nav aria-label="Profile sections" class="sticky top-2 z-20 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/90 p-2 shadow-lg shadow-slate-900/5 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/90">
+                    <button v-for="item in profileSections" :key="item.id" type="button" @click="activeSection = item.id"
+                        :class="['shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition', activeSection === item.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white']">
+                        {{ item.label }}
+                    </button>
+                </nav>
+
                 <!-- Full details -->
-                <div class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                <div v-if="activeSection === 'account'" id="account-details" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                     <h2 class="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                         <Briefcase class="h-4 w-4 text-indigo-500" /> Account details
                     </h2>
@@ -362,7 +383,7 @@ const submitAppForm = () => {
                 </div>
 
                 <!-- Personal information from the application -->
-                <div v-if="application" class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                <div v-if="application && activeSection === 'personal'" id="personal-information" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                     <div class="flex items-center gap-2">
                         <h2 class="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                             <UserIcon class="h-4 w-4 text-indigo-500" /> Personal information
@@ -375,9 +396,9 @@ const submitAppForm = () => {
                     <p class="mt-1 text-[11px] text-slate-400">As filled up in the job application form. Moved house or got a new ID? Keep it current here.</p>
                     <dl class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <div v-for="d in personalTiles" :key="d.label"
-                            class="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-                            <dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">{{ d.label }}</dt>
-                            <dd class="mt-1 truncate text-sm font-black text-slate-800 dark:text-zinc-100">{{ d.value }}</dd>
+                            class="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800/50">
+                            <dt class="text-[9px] font-bold uppercase tracking-wider text-slate-400">{{ d.label }}</dt>
+                            <dd class="mt-0.5 truncate text-xs font-semibold text-slate-800 dark:text-zinc-100">{{ d.value }}</dd>
                         </div>
                     </dl>
                     <h3 class="mt-5 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
@@ -385,15 +406,15 @@ const submitAppForm = () => {
                     </h3>
                     <dl class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <div v-for="d in addressTiles" :key="d.label"
-                            class="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-                            <dt class="text-[10px] font-black uppercase tracking-widest text-slate-400">{{ d.label }}</dt>
-                            <dd class="mt-1 truncate text-sm font-black text-slate-800 dark:text-zinc-100">{{ d.value }}</dd>
+                            class="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800/50">
+                            <dt class="text-[9px] font-bold uppercase tracking-wider text-slate-400">{{ d.label }}</dt>
+                            <dd class="mt-0.5 truncate text-xs font-semibold text-slate-800 dark:text-zinc-100">{{ d.value }}</dd>
                         </div>
                     </dl>
                 </div>
 
                 <!-- Government ID cards submitted during application -->
-                <div v-if="application" class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                <div v-if="application && activeSection === 'ids'" id="government-ids" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                     <div class="flex items-center gap-2">
                         <h2 class="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                             <IdCard class="h-4 w-4 text-indigo-500" /> Government ID cards
@@ -432,8 +453,8 @@ const submitAppForm = () => {
                 </div>
 
                 <!-- Family & emergency contact -->
-                <div v-if="application" class="grid gap-5 lg:grid-cols-2">
-                    <div class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                <div v-if="application && ['family', 'emergency', 'documents'].includes(activeSection)" class="grid gap-5">
+                    <div v-if="activeSection === 'family'" id="family-background" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                         <div class="flex items-center gap-2">
                             <h2 class="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                                 <Users class="h-4 w-4 text-indigo-500" /> Family background
@@ -458,7 +479,7 @@ const submitAppForm = () => {
                         </div>
                     </div>
                     <div class="space-y-5">
-                        <div class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                        <div v-if="activeSection === 'emergency'" id="emergency-contact" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                             <div class="flex items-center gap-2">
                                 <h2 class="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                                     <Phone class="h-4 w-4 text-indigo-500" /> Emergency contact
@@ -476,7 +497,7 @@ const submitAppForm = () => {
                                 </div>
                             </dl>
                         </div>
-                        <div v-if="application.documents?.length" class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                        <div v-if="activeSection === 'documents' && application.documents?.length" id="application-documents" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                             <h2 class="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                                 <Images class="h-4 w-4 text-indigo-500" /> Application documents ({{ application.documents.length }})
                             </h2>
@@ -501,12 +522,15 @@ const submitAppForm = () => {
                                 </li>
                             </ul>
                         </div>
+                        <div v-else-if="activeSection === 'documents'" class="rounded-3xl border border-dashed border-gray-200 bg-white/60 p-5 text-center text-xs font-bold text-slate-400 dark:border-zinc-800 dark:bg-zinc-900/50">
+                            No documents have been submitted.
+                        </div>
                     </div>
                 </div>
 
                 <!-- Education & work history -->
-                <div v-if="application" class="grid gap-5 lg:grid-cols-2">
-                    <div class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                <div v-if="application && ['education', 'work'].includes(activeSection)" class="grid gap-5">
+                    <div v-if="activeSection === 'education'" id="education" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                         <div class="flex items-center gap-2">
                             <h2 class="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                                 <GraduationCap class="h-4 w-4 text-indigo-500" /> Education
@@ -524,7 +548,7 @@ const submitAppForm = () => {
                             </div>
                         </dl>
                     </div>
-                    <div class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                    <div v-if="activeSection === 'work'" id="work-history" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                         <div class="flex items-center gap-2">
                             <h2 class="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                                 <Briefcase class="h-4 w-4 text-indigo-500" /> Work history
@@ -550,22 +574,22 @@ const submitAppForm = () => {
                     </div>
                 </div>
 
-                <div v-else class="rounded-3xl border border-dashed border-gray-200 bg-white/60 p-5 text-center text-xs font-bold text-slate-400 dark:border-zinc-800 dark:bg-zinc-900/50">
+                <div v-if="!application && ['personal', 'ids', 'family', 'emergency', 'documents', 'education', 'work'].includes(activeSection)" class="rounded-3xl border border-dashed border-gray-200 bg-white/60 p-5 text-center text-xs font-bold text-slate-400 dark:border-zinc-800 dark:bg-zinc-900/50">
                     No hiring application is linked to this account yet — personal details from the hiring process will appear here once HR links it.
                 </div>
 
-                <div class="grid gap-5 lg:grid-cols-2">
+                <div v-if="['profile-settings', 'password', 'account-status'].includes(activeSection)" class="grid gap-5">
                     <!-- Edit -->
-                    <div class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                    <div v-if="activeSection === 'profile-settings'" id="profile-settings" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                         <UpdateProfileInformationForm :must-verify-email="mustVerifyEmail" :status="status" />
                     </div>
                     <div class="space-y-5">
                         <!-- Security -->
-                        <div class="rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+                        <div v-if="activeSection === 'password'" id="password" class="scroll-mt-24 rounded-3xl border border-gray-100 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
                             <UpdatePasswordForm />
                         </div>
                         <!-- Account status policy -->
-                        <div class="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-5 dark:border-indigo-900/40 dark:bg-indigo-900/10 sm:p-6">
+                        <div v-if="activeSection === 'account-status'" id="account-status" class="scroll-mt-24 rounded-3xl border border-indigo-100 bg-indigo-50/60 p-5 dark:border-indigo-900/40 dark:bg-indigo-900/10 sm:p-6">
                             <h2 class="flex items-center gap-2 text-sm font-black text-indigo-900 dark:text-indigo-200">
                                 <ShieldCheck class="h-4 w-4" /> Account status
                             </h2>
@@ -585,7 +609,7 @@ const submitAppForm = () => {
              ancestor filters can never push it off-screen) -->
         <Teleport to="body">
         <Transition name="modal">
-            <div v-if="showEditApp" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showEditApp = false">
+            <div v-if="showEditApp" class="profile-edit-modal fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="showEditApp = false">
                 <div class="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900">
                     <div class="flex shrink-0 items-center gap-2 border-b border-gray-100 bg-white/95 px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900/95">
                         <Pencil class="h-4 w-4 text-indigo-500" />
@@ -939,6 +963,14 @@ const submitAppForm = () => {
 </template>
 
 <style scoped>
+.profile-edit-modal :deep(input:not([type="checkbox"]):not([type="radio"])),
+.profile-edit-modal :deep(textarea),
+.profile-edit-modal :deep(select) {
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+    border-radius: 0.5rem;
+}
+
 .modal-enter-active { transition: opacity 0.25s ease, transform 0.25s ease; }
 .modal-enter-from { opacity: 0; transform: scale(0.97); }
 .modal-leave-active { transition: opacity 0.2s ease; }

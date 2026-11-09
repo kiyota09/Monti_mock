@@ -133,7 +133,7 @@ class TraineeController extends Controller
         return Inertia::render('Dashboard/HRM_NEW/Trainee', [
             'trainees'      => $rows,
             'summary'       => self::summarizeRows($rows),
-            'departments'   => HrmDepartment::whereNull('archived_at')->orderBy('name')->select('id', 'name')->get(),
+            'departments'   => HrmDepartment::whereNull('archived_at')->orderBy('name')->select('id', 'name', 'code', 'category')->get(),
             'positions'     => HrmPosition::whereNull('archived_at')->orderBy('name')->select('id', 'name', 'department_id')->get(),
             'roles'         => ['HRM', 'SCM', 'FIN', 'MAN', 'INV', 'ORD', 'WAR', 'CRM', 'ECO', 'PRO', 'PROJ', 'IT', 'LOG'],
             'currentModule' => 'HRM',   // fixed for HRM
@@ -290,8 +290,16 @@ class TraineeController extends Controller
 
         // HR review & decision (null until HR acts; defaults to Pending
         // once a final evaluation exists).
+        $hrStatus = $grade?->hr_review_status ?? ($finalGrade !== null ? 'Pending' : null);
+        // A new final evaluation submitted after a previous reassignment
+        // starts a fresh HR decision cycle, even if legacy data retained the
+        // previous Reassigned status.
+        if ($grade?->evaluated_at && $grade?->hr_reviewed_at
+            && $grade->evaluated_at->gt($grade->hr_reviewed_at)) {
+            $hrStatus = 'Pending';
+        }
         $hrReview = [
-            'status' => $grade?->hr_review_status ?? ($finalGrade !== null ? 'Pending' : null),
+            'status' => $hrStatus,
             'reviewer_id' => $grade?->hr_reviewer_id,
             'notes' => $grade?->hr_review_notes,
             'reviewed_at' => $grade?->hr_reviewed_at?->toDateTimeString(),
@@ -545,14 +553,22 @@ class TraineeController extends Controller
             : null;
         $row['final_evaluated_at'] = $grade?->evaluated_at?->toDateTimeString();
 
+        $managerQuery = User::with(['hrmDepartment:id,name', 'hrmOrgPosition:id,name,management_level'])
+            ->where('is_active', true)
+            ->whereIn('position', ['manager', 'supervisor']);
+        if ($request->filled('department_id')) {
+            $managerQuery->where('hrm_department_id', (int) $request->input('department_id'));
+        }
+        $managers = $managerQuery->orderBy('name')
+            ->select('id', 'name', 'position', 'department', 'hrm_department_id', 'hrm_position_id')
+            ->take(200)->get();
+
         return response()->json([
             'trainee' => $row,
             'weights' => TraineeGrade::EVALUATION_WEIGHTS,
             'passing_grade' => TraineeGrade::PASSING_GRADE,
             // Eligible reporting managers for the Approve Reassignment form.
-            'managers' => User::where('is_active', true)
-                ->whereIn('position', ['manager', 'supervisor', 'secretary', 'special_officer', 'vice_president'])
-                ->orderBy('name')->select('id', 'name', 'position', 'department')->take(200)->get(),
+            'managers' => $managers,
         ]);
     }
 
@@ -598,7 +614,11 @@ class TraineeController extends Controller
 
             return back()->withErrors(['hr_review' => $msg]);
         }
-        if (in_array($grade->hr_review_status, ['Approved', 'Extended', 'Rejected', 'Reassigned'], true)) {
+        $reviewAlreadyCoversCurrentEvaluation = in_array($grade->hr_review_status, ['Approved', 'Extended', 'Rejected', 'Reassigned'], true)
+            && $grade->hr_reviewed_at
+            && $grade->evaluated_at
+            && $grade->hr_reviewed_at->gte($grade->evaluated_at);
+        if ($reviewAlreadyCoversCurrentEvaluation) {
             $msg = 'HR review already recorded for ' . $trainee->name . '.';
             if ($request->wantsJson()) {
                 return response()->json(['message' => $msg], 422);

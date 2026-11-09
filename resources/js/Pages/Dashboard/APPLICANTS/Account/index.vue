@@ -133,7 +133,7 @@ function closeVerificationModal() {
     <Head title="Account Settings - Monti ERP" />
 
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="applicant-page-header">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     Account <span class="text-blue-600">Settings</span>

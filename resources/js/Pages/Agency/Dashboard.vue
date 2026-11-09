@@ -41,29 +41,35 @@ const cards = computed(() => [
 <template>
     <Head title="Agency Dashboard - Monti ERP" />
     <AgencyLayout>
-        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-        <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">{{ agency?.name || 'Agency workspace' }}</h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+        <div class="agency-dashboard-content">
+        <div class="agency-page-header">
+        <div>
+        <p class="agency-page-eyebrow">Agency Portal</p>
+        <h1 class="mt-1 text-3xl font-bold leading-tight text-white">{{ agency?.name || 'Agency workspace' }}</h1>
+        <p class="mt-1 text-base text-slate-300">
             Contract ends {{ agency?.contract_end || '—' }}.
         </p>
+        </div>
 
-        <div v-if="agency?.expiring_soon" class="mt-4 p-3 rounded-xl bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-800 text-xs font-bold text-yellow-800 dark:text-yellow-300">
+        </div>
+
+        <div v-if="agency?.expiring_soon" class="mb-3 rounded-xl border border-yellow-300 bg-yellow-100 p-3 text-xs font-bold text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
             Your contract or DOLE registration expires within 30 days — please coordinate with Monti Corp HR.
         </div>
 
-        <div class="mt-4 grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <Link
                 v-for="c in cards"
                 :key="c.label"
                 :href="route(c.href)"
-                class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 hover:shadow-md transition"
+                class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
             >
-                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">{{ c.label }}</div>
-                <div :class="['text-2xl font-black mt-1', c.tone]">{{ c.value }}</div>
+                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ c.label }}</div>
+                <div :class="['mt-1 text-2xl font-bold', c.tone]">{{ c.value }}</div>
             </Link>
         </div>
 
-        <div v-if="clearances_soon.length > 0" class="mt-4 bg-white dark:bg-slate-800 rounded-2xl border border-orange-200 dark:border-orange-800 shadow-sm p-4">
+        <div v-if="clearances_soon.length > 0" class="mt-3 rounded-xl border border-orange-200 bg-white p-4 shadow-sm dark:border-orange-800 dark:bg-slate-800">
             <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-2">Worker clearances expiring soon</h2>
             <ul class="divide-y divide-slate-100 dark:divide-slate-700/50">
                 <li v-for="w in clearances_soon" :key="w.code" class="py-1.5 flex items-center justify-between gap-2 text-xs">
@@ -73,8 +79,9 @@ const cards = computed(() => [
             </ul>
         </div>
 
-        <div class="mt-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 text-xs text-slate-500 dark:text-slate-400">
+        <div class="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
             Signed in as <strong class="text-slate-800 dark:text-slate-100">{{ user.name }}</strong> ({{ user.email }}).
+        </div>
         </div>
     </AgencyLayout>
 </template>

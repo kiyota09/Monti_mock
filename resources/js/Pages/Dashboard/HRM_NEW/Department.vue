@@ -25,32 +25,36 @@
             <!-- Quick Actions - Right Aligned -->
             <div class="flex flex-wrap items-center justify-end gap-2 shrink-0">
               <button
+                type="button"
                 @click="openModal('create')"
-                class="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 dark:from-indigo-600 dark:to-indigo-700 dark:hover:from-indigo-500 dark:hover:to-indigo-600 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
+                aria-label="Create department"
+                title="Create department"
+                class="department-action-icon inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-white transition-all duration-200 shadow-lg hover:from-blue-500 hover:to-blue-600 dark:from-indigo-600 dark:to-indigo-700 dark:hover:from-indigo-500 dark:hover:to-indigo-600 hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
-                Create Department
               </button>
 
               <button
+                type="button"
                 @click="toggleArchived()"
-                class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                :aria-label="showArchived ? 'Show active departments' : 'Show archived departments'"
+                :title="showArchived ? 'Show active departments' : 'Show archived departments'"
+                class="department-action-icon inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-all duration-200 shadow-sm hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
                 <span v-if="showArchived"><ClipboardList class="w-4 h-4" /></span>
                 <span v-else><Archive class="w-4 h-4" /></span>
-                {{ showArchived ? 'Show Active (' + activeCount + ')' : 'Archived (' + archivedCount + ')' }}
               </button>
 
               <button
+                type="button"
                 @click="exportCsv"
                 title="Download departments as CSV"
                 aria-label="Export departments as CSV"
-                class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                class="department-action-icon inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-all duration-200 shadow-sm hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
                 <Download class="w-4 h-4" />
-                Export
               </button>
             </div>
           </div>
@@ -339,7 +343,15 @@
                   <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Module <span class="text-rose-500">*</span></label>
                   <select v-model="form.category" required class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-200 focus:ring-2 focus:ring-blue-500 dark:focus:ring-indigo-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer">
                     <option value="">Select module</option>
-                    <option v-for="module in categoryOptions" :key="module" :value="module">{{ module }}</option>
+                    <option v-for="module in categoryOptions" :key="module.value" :value="module.value">{{ module.label }}</option>
+                  </select>
+                </div>
+
+                <div v-if="isManufacturingModule">
+                  <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Control Department <span class="text-rose-500">*</span></label>
+                  <select v-model="form.control_department" :required="isManufacturingModule" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-200 focus:ring-2 focus:ring-blue-500 dark:focus:ring-indigo-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer">
+                    <option value="">Select control department</option>
+                    <option v-for="control in manufacturingControlDepartments" :key="control" :value="control">{{ control }}</option>
                   </select>
                 </div>
 
@@ -446,9 +458,11 @@ const formatDate = (value) => {
 };
 
 // Module options use active role codes, matching users.role.
-const categoryOptions = computed(() => (props.categories || []).map((c) =>
-    typeof c === 'string' ? c : (c?.value ?? String(c ?? ''))
-).map((c) => String(c)).filter(Boolean));
+const categoryOptions = computed(() => (props.categories || []).map((c) => {
+    const value = typeof c === 'string' ? c : (c?.value ?? String(c ?? ''));
+    return { value: String(value), label: typeof c === 'string' ? c : (c?.label || value) };
+}).filter((c) => c.value));
+const manufacturingControlDepartments = ['Knitting', 'Dyeing', 'Finishing', 'Boiler', 'Maintenance'];
 
 // Confirm Modal State
 const confirmModal = ref({
@@ -473,6 +487,11 @@ const pagination = computed(() => {
     };
 });
 
+// Filters
+const filters = reactive({
+    search: props.filters?.search || '',
+});
+
 // Computed filtered departments based on archived toggle + search + status pills
 const filteredDepartments = computed(() => {
     return allDepartments.value.filter(dept => {
@@ -487,20 +506,23 @@ const filteredDepartments = computed(() => {
     });
 });
 
-// Filters
-const filters = reactive({
-    search: props.filters?.search || '',
-});
-
 // Form
 const form = reactive({
     id: null,
     code: '',
     name: '',
     category: '',
+    control_department: '',
     description: '',
     head_id: '',
     status: 'active',
+});
+
+const isManufacturingModule = computed(() => ['MAN', 'MANUFACTURING'].includes(String(form.category || '').trim().toUpperCase()));
+watch(() => form.category, (category) => {
+    if (!['MAN', 'MANUFACTURING'].includes(String(category || '').trim().toUpperCase())) {
+        form.control_department = '';
+    }
 });
 
 // Computed
@@ -568,23 +590,6 @@ const headCandidatesHint = computed(() => {
     if (!form.id) return `${all.length} managers / supervisors available`;
     if (!shown.length) return 'No manager found for this department — you may leave this blank';
     return `${shown.length} manager${shown.length === 1 ? '' : 's'} available for this department`;
-});
-
-// Initialize departments from props
-onMounted(() => {
-    if (props.departmentsData?.data) {
-        allDepartments.value = props.departmentsData.data;
-        currentPage.value = props.departmentsData.current_page || 1;
-        if (activeModal.value === 'create' && !form.code) {
-            generateCode();
-        }
-    }
-    window.addEventListener('keydown', onEscape);
-});
-
-onUnmounted(() => {
-    window.removeEventListener('keydown', onEscape);
-    clearTimeout(searchTimeout);
 });
 
 const onEscape = (e) => {
@@ -668,6 +673,11 @@ const validateForm = () => {
         isValid = false;
     } else if (form.name.length > 255) {
         validationErrors.name = 'Department Name cannot exceed 255 characters.';
+        isValid = false;
+    }
+
+    if (isManufacturingModule.value && !form.control_department) {
+        toast.error('Select a control department for Manufacturing.');
         isValid = false;
     }
 
@@ -784,6 +794,7 @@ const openModal = (type, data = null) => {
             code: data.code,
             name: data.name,
             category: data.category || '',
+            control_department: data.control_department || '',
             description: data.description || '',
             head_id: data.head_id || '',
             status: data.status || 'active',
@@ -794,6 +805,7 @@ const openModal = (type, data = null) => {
             code: '',
             name: '',
             category: '',
+            control_department: '',
             description: '',
             head_id: '',
             status: 'active',
@@ -880,6 +892,23 @@ const restoreDepartment = async (id) => {
         console.error('Error restoring department:', e);
     }
 };
+
+// Register lifecycle handlers after all referenced state and functions exist.
+onMounted(() => {
+    if (props.departmentsData?.data) {
+        allDepartments.value = props.departmentsData.data;
+        currentPage.value = props.departmentsData.current_page || 1;
+        if (activeModal.value === 'create' && !form.code) {
+            generateCode();
+        }
+    }
+    window.addEventListener('keydown', onEscape);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', onEscape);
+    clearTimeout(searchTimeout);
+});
 </script>
 
 <style scoped>
@@ -896,5 +925,19 @@ const restoreDepartment = async (id) => {
 }
 .backdrop-blur-sm {
   backdrop-filter: blur(8px);
+}
+@keyframes department-action-icon-bounce {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-6px); }
+  65% { transform: translateY(1px); }
+  82% { transform: translateY(-2px); }
+}
+.department-action-icon:hover svg,
+.department-action-icon:focus-visible svg {
+  animation: department-action-icon-bounce 480ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .department-action-icon:hover svg,
+  .department-action-icon:focus-visible svg { animation: none; }
 }
 </style>

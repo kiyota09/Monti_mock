@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Route;
 | middleware's native shortcut.
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/scm')->name('scm.')->middleware(['auth', 'verified', 'module.access:SCM'])->group(function () {
+Route::prefix('dashboard/scm')->name('scm.')->middleware(['auth', 'verified', 'module.access:SCM', 'geofence'])->group(function () {
     // Command Center (SCOR: Enable — pipeline overview)
     Route::get('/dashboard', [ScmDashboardController::class, 'index'])
         ->middleware('page.permission:dashboard,view')->name('dashboard');

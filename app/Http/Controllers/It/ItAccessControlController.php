@@ -185,7 +185,7 @@ class ItAccessControlController extends Controller
                 'photo_url' => $u->profile_photo_path
                     ? (str_starts_with($u->profile_photo_path, 'http://') || str_starts_with($u->profile_photo_path, 'https://')
                         ? $u->profile_photo_path
-                        : Storage::disk('public')->url(ltrim(str_replace('/storage/', '', $u->profile_photo_path), '/')))
+                        : url('/storage/' . ltrim(str_replace('/storage/', '', $u->profile_photo_path), '/')))
                     : null,
                 'employee_id' => $u->employee_id,
                 'role' => $u->role,

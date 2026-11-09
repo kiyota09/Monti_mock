@@ -3,8 +3,12 @@
 namespace App\Http\Controllers\Hrm;
 
 use App\Http\Controllers\Controller;
+use App\Models\Core\User;
 use App\Models\Hrm\Agency;
 use App\Models\Hrm\AgencyActivity;
+use App\Models\Hrm\HrmPosition;
+use App\Models\Hrm\ManpowerRequest;
+use App\Models\Hrm\ManpowerProposal;
 use App\Models\Hrm\Worker;
 use App\Models\Hrm\WorkerDocument;
 use App\Models\Hrm\WorkerRateRequest;
@@ -164,12 +168,33 @@ class WorkerController extends Controller
     // ------------------------------------------------------------------
     // Page 7: Worker detail
     // ------------------------------------------------------------------
-    public function show(Worker $worker)
+    public function show(Request $request, Worker $worker)
     {
-        $worker->loadMissing(['agency:id,code,name,status', 'assignments.request:id,code,department']);
+        $worker->loadMissing(['agency:id,code,name,status', 'assignments.request:id,code,department,position_skill,start_date,shift']);
+        $hasPendingProposal = ManpowerProposal::where('worker_id', $worker->id)
+            ->where('status', ManpowerProposal::STATUS_PROPOSED)
+            ->exists();
+
+        $requestForReview = $request->integer('request_id')
+            ? ManpowerRequest::query()
+                ->whereKey($request->integer('request_id'))
+                ->where('agency_id', $worker->agency_id)
+                ->where('status', ManpowerRequest::STATUS_OPEN)
+                ->first()
+            : null;
+        $workerDepartment = $worker->proposed_department ?: HrmPosition::with('department:id,name')
+            ->where('name', $worker->position_skill)
+            ->first()?->department?->name;
+        $matchesRequest = $requestForReview
+            && $worker->status === Worker::STATUS_PENDING
+            && strcasecmp(trim((string) $worker->position_skill), trim((string) $requestForReview->position_skill)) === 0
+            && $workerDepartment !== null
+            && strcasecmp(trim($workerDepartment), trim((string) $requestForReview->department)) === 0;
 
         return Inertia::render('Dashboard/HRM_NEW/Workers/Detail', [
-            'worker' => $this->detail($worker),
+            'worker' => $this->detail($worker) + [
+                'show_review_actions' => $hasPendingProposal || $matchesRequest,
+            ],
             'departments' => \App\Models\Hrm\HrmDepartment::whereNull('archived_at')->orderBy('name')->get(['id', 'code', 'name']),
             'positions' => \App\Models\Hrm\HrmPosition::whereNull('archived_at')->orderBy('name')->get(['id', 'name', 'department_id']),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
@@ -242,8 +267,8 @@ class WorkerController extends Controller
     /** HR approves an agency-added worker: Pending → Available. */
     public function approvePending(Worker $worker)
     {
-        if ($worker->status !== Worker::STATUS_PENDING) {
-            return back()->with('error', 'Only workers pending HR approval can be approved.');
+        if (! in_array($worker->status, [Worker::STATUS_PENDING, Worker::STATUS_CORRECTION], true)) {
+            return back()->with('error', 'Only workers pending HR approval or awaiting corrections can be approved.');
         }
         if ($worker->agency->status !== Agency::STATUS_ACTIVE) {
             return back()->with('error', 'The agency is no longer Active.');
@@ -295,7 +320,7 @@ class WorkerController extends Controller
             return back()->with('error', 'Clearance / medical has expired — cannot approve.');
         }
 
-        $worker->update(['status' => Worker::STATUS_AVAILABLE]);
+        $worker->update(['status' => Worker::STATUS_AVAILABLE, 'pending_note' => null]);
         $this->log($worker, 'worker_approved', "Worker {$worker->code} approved by HR (Available).", null);
 
         return back()->with('success', "Worker {$worker->name} approved.");
@@ -336,7 +361,7 @@ class WorkerController extends Controller
         // is edited inside the Request-changes flow). Validated like update
         // but never saved — agency applies them. Skipped when only a message
         // is posted (legacy callers).
-        $workerKeys = ['name', 'agency_id', 'birth_date', 'gender', 'phone', 'email', 'address', 'education', 'work_experience', 'skills', 'trainings_certifications', 'position_skill', 'years_experience', 'proposed_department', 'availability', 'daily_rate', 'employment_arrangement', 'gov_id_type', 'gov_id_number', 'clearance_expiry', 'emergency_name', 'emergency_relationship', 'emergency_phone', 'code'];
+        $workerKeys = ['name', 'agency_id', 'birth_date', 'gender', 'phone', 'email', 'address', 'education', 'education_address', 'work_experience', 'skills', 'trainings_certifications', 'position_skill', 'years_experience', 'proposed_department', 'availability', 'daily_rate', 'employment_arrangement', 'gov_id_type', 'gov_id_number', 'clearance_expiry', 'emergency_name', 'emergency_relationship', 'emergency_phone', 'code'];
         $hasWorkerFields = collect($workerKeys)->some(fn ($k) => $request->has($k));
         $data = $hasWorkerFields ? $this->validated($request, $worker->id) : [];
         unset($data['agency_id'], $data['code'], $data['resume']);
@@ -349,7 +374,7 @@ class WorkerController extends Controller
         $labels = [
             'name' => 'Full name', 'birth_date' => 'Birth date', 'gender' => 'Gender',
             'phone' => 'Phone', 'email' => 'Email', 'address' => 'Address',
-            'education' => 'Education', 'work_experience' => 'Experience', 'skills' => 'Skills',
+            'education' => 'Education', 'education_address' => 'School address', 'work_experience' => 'Experience', 'skills' => 'Skills',
             'trainings_certifications' => 'Training', 'position_skill' => 'Position',
             'years_experience' => 'Years exp.', 'proposed_department' => 'Department',
             'availability' => 'Availability', 'daily_rate' => 'Daily rate',
@@ -371,13 +396,22 @@ class WorkerController extends Controller
             }
         }
 
+        if ($hasWorkerFields && ! $diffs) {
+            return back()->with('error', 'Edit at least one worker field before sending a correction request.');
+        }
+
         $note = $request->message;
         if ($diffs) {
             $note .= "\n\nHR requested changes (agency to apply):\n- " . implode("\n- ", $diffs);
         }
+        $existingNote = trim((string) $worker->pending_note);
+        if ($existingNote !== '') {
+            $note = $existingNote . "\n\n--- Additional HR correction request ---\n\n" . $note;
+        }
 
         // Proposal only — worker data stays untouched so the agency portal
-        // applies the corrections itself. Deployed workers stay Deployed
+        // applies the corrections itself. New requests are appended until the
+        // agency applies them. Deployed workers stay Deployed
         // (active assignment untouched); others go to For Correction.
         $isDeployed = $worker->status === Worker::STATUS_DEPLOYED && $worker->activeAssignment()->exists();
         $worker->update(array_merge(
@@ -436,11 +470,29 @@ class WorkerController extends Controller
     {
         $data = $request->validate([
             'status' => ['required', Rule::in(WorkerDocument::STATUSES)],
+            'decision' => ['nullable', Rule::in(['approve', 'reject', 'resubmit'])],
             'review_note' => 'nullable|string|max:2000',
         ]);
 
+        $decision = $data['decision'] ?? match ($data['status']) {
+            WorkerDocument::STATUS_VERIFIED => 'approve',
+            WorkerDocument::STATUS_REJECTED => 'reject',
+            default => 'status_update',
+        };
+        if (in_array($decision, ['reject', 'resubmit'], true) && blank($data['review_note'] ?? null)) {
+            return back()->withErrors(['review_note' => 'A note is required when rejecting or requesting a replacement document.']);
+        }
+        $status = $decision === 'approve' ? WorkerDocument::STATUS_VERIFIED
+            : ($decision === 'reject' || $decision === 'resubmit' ? WorkerDocument::STATUS_REJECTED : $data['status']);
+        $decisionLabel = match ($decision) {
+            'approve' => 'approved',
+            'reject' => 'rejected',
+            'resubmit' => 'marked for resubmission',
+            default => 'marked ' . strtolower($status),
+        };
+
         $document->update([
-            'status' => $data['status'],
+            'status' => $status,
             'review_note' => $data['review_note'] ?? null,
             'verified_by_name' => auth()->user()?->name,
             'verified_at' => now(),
@@ -450,14 +502,14 @@ class WorkerController extends Controller
         AgencyActivity::create([
             'agency_id' => $worker->agency_id,
             'worker_id' => $worker->id,
-            'action' => 'document_' . strtolower($data['status']),
-            'details' => "Document '{$document->label}' ({$document->doc_type}) marked {$data['status']} by HR.",
+            'action' => $decision === 'resubmit' ? 'document_resubmit_requested' : 'document_' . strtolower($status),
+            'details' => "Document '{$document->label}' ({$document->doc_type}) {$decisionLabel} by HR.",
             'actor_id' => auth()->id(),
             'actor_name' => auth()->user()?->name,
             'reason' => $data['review_note'] ?? null,
         ]);
 
-        return back()->with('success', "Document marked as {$data['status']}.");
+        return back()->with('success', "Document {$decisionLabel}.");
     }
 
     // ------------------------------------------------------------------
@@ -476,6 +528,7 @@ class WorkerController extends Controller
             'agency' => $worker->agency?->name,
             'agency_id' => $worker->agency_id,
             'position_skill' => $worker->position_skill,
+            'department' => $worker->proposed_department,
             'current_assignment' => $active?->request
                 ? $active->request->code . ' · ' . ($active->request->department ?? '')
                 : null,
@@ -489,6 +542,37 @@ class WorkerController extends Controller
     protected function detail(Worker $worker): array
     {
         $worker->loadMissing('documents');
+        $latestAssignment = $worker->assignments->sortByDesc('assigned_at')->first();
+        $latestRequest = $latestAssignment?->request;
+        $employeeAccount = User::query()
+            ->with('manager:id,name,position')
+            ->where('worker_id', $worker->id)
+            ->latest('id')
+            ->first([
+                'id', 'worker_id', 'employee_id', 'email', 'role', 'department', 'manager_id',
+                'join_date', 'shift', 'work_schedule', 'training_start_date', 'training_end_date', 'training_duration_weeks',
+            ]);
+        $formatAssignmentDate = static fn ($date) => $date
+            ? \Illuminate\Support\Carbon::parse($date)->format('M d, Y')
+            : null;
+        $assignmentDetails = ($latestAssignment || $employeeAccount) ? [
+            'employee_id' => $employeeAccount?->employee_id ?: $worker->code,
+            'company_email' => $employeeAccount?->email,
+            'department_module' => $employeeAccount?->role,
+            'position' => $latestRequest?->position_skill ?: $worker->position_skill,
+            'department' => $latestRequest?->department ?: $employeeAccount?->department,
+            'employment_arrangement' => 'Agency-deployed',
+            'reporting_manager' => $employeeAccount?->manager?->name,
+            'reporting_manager_position' => $employeeAccount?->manager?->position,
+            'request_code' => $latestRequest?->code,
+            'deployment_start_date' => $formatAssignmentDate($employeeAccount?->join_date ?: $employeeAccount?->training_start_date ?: $latestRequest?->start_date),
+            'shift' => $latestRequest?->shift ?: $employeeAccount?->shift ?: $employeeAccount?->work_schedule,
+            'training_required' => (bool) ($employeeAccount?->training_start_date && $employeeAccount?->training_end_date),
+            'training_start_date' => $formatAssignmentDate($employeeAccount?->training_start_date),
+            'training_end_date' => $formatAssignmentDate($employeeAccount?->training_end_date),
+            'training_duration_weeks' => $employeeAccount?->training_duration_weeks,
+        ] : null;
+
         $assignments = $worker->assignments->sortByDesc('assigned_at')->map(fn ($a) => [
             'id' => $a->id,
             'request_id' => $a->request_id,
@@ -526,6 +610,7 @@ class WorkerController extends Controller
             'resume_url' => $worker->resume_path ? Storage::url($worker->resume_path) : null,
             'resume_original_name' => $worker->resume_original_name,
             'education' => $worker->education,
+            'education_address' => $worker->education_address,
             'work_experience' => $worker->work_experience,
             'skills' => $worker->skills,
             'trainings_certifications' => $worker->trainings_certifications,
@@ -569,6 +654,7 @@ class WorkerController extends Controller
             ])->values()->all(),
             'document_statuses' => WorkerDocument::STATUSES,
             'assignments' => $assignments,
+            'assignment_details' => $assignmentDetails,
             'activities' => $activities,
             // Attendance history (latest 30).
             'attendance_history' => \App\Models\Hrm\Attendance::with('request:id,code')
@@ -598,6 +684,7 @@ class WorkerController extends Controller
             'address' => 'nullable|string|max:2000',
             'resume' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
             'education' => 'nullable|string|max:2000',
+            'education_address' => 'nullable|string|max:2000',
             'work_experience' => 'nullable|string|max:4000',
             'skills' => 'nullable|string|max:4000',
             'trainings_certifications' => 'nullable|string|max:4000',

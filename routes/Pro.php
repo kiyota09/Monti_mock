@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Route;
 | in the CEO module + IT Access Control.)
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/pro')->name('pro.')->middleware(['auth', 'verified'])->group(function () {
+Route::prefix('dashboard/pro')->name('pro.')->middleware(['auth', 'verified', 'geofence'])->group(function () {
     Route::get('/interview', [InterviewController::class, 'index'])->name('interview.index');
     Route::get('/trainee', [TraineeController::class, 'index'])->name('trainee.index');
 

@@ -22,6 +22,7 @@ const props = defineProps<{
         resume_url?: string | null;
         resume_original_name?: string | null;
         education?: string | null;
+        education_address?: string | null;
         work_experience?: string | null;
         skills?: string | null;
         trainings_certifications?: string | null;
@@ -51,8 +52,16 @@ const props = defineProps<{
         }>;
         document_statuses?: string[];
         status: string;
+        show_review_actions: boolean;
         blacklist_reason: string | null;
         pending_note?: string | null;
+        assignment_details?: {
+            employee_id: string | null; company_email: string | null; department_module: string | null;
+            position: string | null; department: string | null; employment_arrangement: string | null;
+            reporting_manager: string | null; reporting_manager_position: string | null; request_code: string | null;
+            deployment_start_date: string | null; shift: string | null; training_required: boolean;
+            training_start_date: string | null; training_end_date: string | null; training_duration_weeks: number | null;
+        } | null;
         assignments: Array<{
             id: number; request_id: number; request_code: string | null; department: string | null;
             assigned_at: string | null; released_at: string | null; assigned_by: string | null; active: boolean;
@@ -98,6 +107,7 @@ const overviewForm = useForm({
     email: (props as any).worker?.email || '',
     address: (props as any).worker?.address || '',
     education: (props as any).worker?.education || '',
+    education_address: (props as any).worker?.education_address || '',
     work_experience: (props as any).worker?.work_experience || '',
     skills: (props as any).worker?.skills || '',
     trainings_certifications: (props as any).worker?.trainings_certifications || '',
@@ -127,6 +137,7 @@ watch(() => (props as any).worker, (w) => {
     f.email = w.email || '';
     f.address = w.address || '';
     f.education = w.education || '';
+    f.education_address = w.education_address || '';
     f.work_experience = w.work_experience || '';
     f.skills = w.skills || '';
     f.trainings_certifications = w.trainings_certifications || '';
@@ -182,6 +193,7 @@ function syncOverviewFromWorker() {
     f.email = w.email || '';
     f.address = w.address || '';
     f.education = w.education || '';
+    f.education_address = w.education_address || '';
     f.work_experience = w.work_experience || '';
     f.skills = w.skills || '';
     f.trainings_certifications = w.trainings_certifications || '';
@@ -213,12 +225,12 @@ const overviewDiff = computed(() => {
     };
     put('name', 'Full name'); put('birth_date', 'Birth date'); put('gender', 'Gender');
     put('phone', 'Phone'); put('email', 'Email'); put('address', 'Address');
-    put('education', 'Education'); put('work_experience', 'Experience'); put('skills', 'Skills');
+    put('education', 'Education'); put('education_address', 'School address'); put('work_experience', 'Experience'); put('skills', 'Skills');
     put('trainings_certifications', 'Training'); put('position_skill', 'Position');
     put('years_experience', 'Years exp.'); put('proposed_department', 'Department');
     put('availability', 'Availability'); put('daily_rate', 'Daily rate');
     put('employment_arrangement', 'Arrangement'); put('gov_id_type', 'Gov ID type');
-    put('gov_id_number', 'Gov ID no.'); put('clearance_expiry', 'Clearance expiry');
+    put('gov_id_number', 'Gov ID no.');
     put('emergency_name', 'Emergency name'); put('emergency_relationship', 'Emergency relation');
     put('emergency_phone', 'Emergency phone');
     return rows;
@@ -231,7 +243,12 @@ function refreshWorker() {
 const ovInput = 'w-full px-3 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200';
 const ovLabel = 'block mb-1 text-[10px] font-black uppercase tracking-wider text-slate-400';
 
-const confirmAction = ref<'deactivate' | 'blacklist' | 'reject_pending' | 'request_changes' | null>(null);
+const confirmAction = ref<'approve' | 'deactivate' | 'blacklist' | 'reject_pending' | 'request_changes' | null>(null);
+const showPendingChanges = ref(false);
+const pendingChangeRequests = computed(() => {
+    const note = (props as any).worker?.pending_note || '';
+    return note.split(/\n\n--- Additional HR correction request ---\n\n/).filter((request: string) => request.trim());
+});
 const reason = ref('');
 const reasonError = ref('');
 
@@ -241,19 +258,22 @@ function statusBadge(s: string): string {
         Deployed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
         Inactive: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600',
         Blacklisted: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800',
-        Pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+        Pending: 'bg-amber-200 dark:bg-amber-900/40 border-amber-400 dark:border-amber-700',
         'For Correction': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800',
     };
     return map[s] || 'bg-slate-100 text-slate-600 border-slate-200';
 }
 
-function openConfirm(action: 'deactivate' | 'blacklist' | 'reject_pending' | 'request_changes') {
+function openConfirm(action: 'approve' | 'deactivate' | 'blacklist' | 'reject_pending' | 'request_changes') {
     confirmAction.value = action;
-    reason.value = '';
-    reasonError.value = '';
+    const continuingRequest = action === 'request_changes' && editingOverview.value;
+    if (!continuingRequest) {
+        reason.value = '';
+        reasonError.value = '';
+    }
     if (action === 'request_changes') {
         // Overview becomes input-filled for HR correction.
-        syncOverviewFromWorker();
+        if (!continuingRequest) syncOverviewFromWorker();
         editingOverview.value = true;
     } else {
         editingOverview.value = false;
@@ -267,16 +287,32 @@ function closeConfirm() {
     editingOverview.value = false;
 }
 
-function approvePending() {
-    router.post(route('hrm.workers.approve', props.worker.id), {}, { preserveScroll: true });
+function continueEditingOverview() {
+    confirmAction.value = null;
 }
 
-function submitConfirm() {
+function approvePending() {
+    openConfirm('approve');
+}
+
+async function submitConfirm() {
     if ((confirmAction.value === 'blacklist' || confirmAction.value === 'reject_pending' || confirmAction.value === 'request_changes') && !reason.value.trim()) {
         reasonError.value = confirmAction.value === 'request_changes' ? 'Tell the agency what to correct or complete.' : 'A reason is required.';
         return;
     }
+    if (confirmAction.value === 'approve') {
+        router.post(route('hrm.workers.approve', props.worker.id), {}, {
+            preserveScroll: true,
+            onSuccess: () => { confirmAction.value = null; },
+        });
+        return;
+    }
     if (confirmAction.value === 'request_changes') {
+        if (!overviewDiff.value.length) {
+            reasonError.value = 'Edit at least one Overview field before sending a correction request.';
+            return;
+        }
+        if (!await confirmModal(`Send ${overviewDiff.value.length} correction request${overviewDiff.value.length === 1 ? '' : 's'} to the agency?`)) return;
         // HR-corrected overview fields ride along with the message so the
         // agency portal is notified of old → new changes.
         const f: any = overviewForm as any;
@@ -336,13 +372,18 @@ function actionLabel(a: string): string {
         worker_correction_requested: 'Correction requested', worker_resubmitted: 'Resubmitted',
         document_pending: 'Doc pending', document_verified: 'Doc verified',
         document_rejected: 'Doc rejected', document_expired: 'Doc expired',
+        document_resubmit_requested: 'Resubmission requested',
     };
     return map[a] || a;
 }
 
 const verifyingId = ref<number | null>(null);
-const verifyStatus = ref('Verified');
+const verifyAction = ref<'approve' | 'reject' | 'resubmit'>('approve');
+const verifyConfirmationAction = ref<'approve' | 'reject' | 'resubmit' | null>(null);
 const verifyNote = ref('');
+const verifyNoteError = ref('');
+const verifySaving = ref(false);
+const verifyingDocument = computed(() => (props.worker.documents || []).find((document: any) => document.id === verifyingId.value) || null);
 const previewDocument = ref<{ url: string; name: string; mime?: string | null } | null>(null);
 const previewZoom = ref(1);
 const previewOffset = ref({ x: 0, y: 0 });
@@ -389,19 +430,51 @@ function stopPreviewDrag() {
 onMounted(() => window.addEventListener('keydown', handlePreviewKeydown));
 onUnmounted(() => window.removeEventListener('keydown', handlePreviewKeydown));
 
-function openVerify(docId: number, current: string) {
-    verifyingId.value = docId;
-    verifyStatus.value = current || 'Verified';
+function openVerify(document: any) {
+    verifyingId.value = document.id;
+    verifyAction.value = 'approve';
+    verifyConfirmationAction.value = null;
     verifyNote.value = '';
+    verifyNoteError.value = '';
 }
 
-function submitVerify(docId: number) {
-    router.post(route('hrm.workers.documents.verify', docId), {
-        status: verifyStatus.value,
+function closeVerify() {
+    if (verifySaving.value) return;
+    verifyingId.value = null;
+    verifyConfirmationAction.value = null;
+    verifyNote.value = '';
+    verifyNoteError.value = '';
+}
+
+function requestVerify(action: 'approve' | 'reject' | 'resubmit') {
+    if (!verifyingId.value || verifySaving.value) return;
+    if (action === 'approve') verifyNote.value = '';
+    verifyNoteError.value = '';
+    verifyAction.value = action;
+    verifyConfirmationAction.value = action;
+}
+
+function cancelVerifyConfirmation() {
+    if (verifySaving.value) return;
+    verifyConfirmationAction.value = null;
+}
+
+function submitVerify() {
+    const action = verifyConfirmationAction.value;
+    if (!verifyingId.value || !action || verifySaving.value) return;
+    if (action !== 'approve' && !verifyNote.value.trim()) {
+        verifyNoteError.value = 'Add a note explaining the rejection or replacement needed.';
+        return;
+    }
+    verifySaving.value = true;
+    router.post(route('hrm.workers.documents.verify', verifyingId.value), {
+        decision: action,
+        status: action === 'approve' ? 'Verified' : 'Rejected',
         review_note: verifyNote.value || null,
     }, {
         preserveScroll: true,
-        onSuccess: () => { verifyingId.value = null; verifyNote.value = ''; },
+        onSuccess: () => { verifyingId.value = null; verifyConfirmationAction.value = null; verifyNote.value = ''; verifyNoteError.value = ''; },
+        onFinish: () => { verifySaving.value = false; },
     });
 }
 
@@ -419,13 +492,14 @@ function docBadge(s: string): string {
 <template>
     <Head :title="worker.name + ' - Workers - Monti ERP'" />
     <AuthenticatedLayout>
-        <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
+        <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
             <Link :href="route('hrm.workers.index')" class="hover:text-blue-600">Workers</Link>
             <span>/</span>
             <span class="text-slate-800 dark:text-slate-200 font-semibold">{{ worker.code }}</span>
         </nav>
 
-        <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div class="flex items-center gap-3">
                 <div class="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-lg shrink-0">
                     {{ worker.name?.charAt(0) || 'W' }}
@@ -435,68 +509,35 @@ function docBadge(s: string): string {
                     <div class="flex flex-wrap items-center gap-2 mt-1">
                         <span class="text-xs font-mono text-slate-400">{{ worker.code }}</span>
                         <span class="text-xs text-slate-500 dark:text-slate-400">{{ worker.agency || 'No agency' }}</span>
-                        <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', statusBadge(worker.status)]">{{ worker.status }}</span>
+                        <span :class="['px-2.5 py-1 rounded-full text-[11px] font-black uppercase border', statusBadge(worker.status), worker.status === 'Pending' && 'worker-status-pending']">{{ worker.status }}</span>
                     </div>
                 </div>
             </div>
-            <div v-if="canEdit" class="flex flex-wrap items-center gap-2 shrink-0">
+            <div v-if="canEdit && worker.show_review_actions" class="flex flex-wrap items-center gap-2 shrink-0">
                 <button
-                    v-if="worker.status === 'Available'"
-                    @click="openConfirm('deactivate')"
-                    class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Reject
-                </button>
-                <button
-                    v-if="worker.status === 'Inactive'"
-                    @click="reactivate"
-                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Re-open
-                </button>
-                <button
-                    v-if="worker.status === 'Pending'"
+                    v-if="worker.status === 'Pending' || worker.status === 'For Correction'"
                     @click="approvePending"
                     :disabled="hasPendingDocs"
                     :title="hasPendingDocs ? 'All supporting documents must be Verified before approving.' : ''"
-                    :class="[
-                        'px-4 py-2 rounded-xl text-xs font-bold transition',
-                        hasPendingDocs
-                            ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
-                            : 'bg-emerald-600 hover:bg-emerald-700 text-white',
-                    ]"
-                >
-                    Approve
-                </button>
+                    :class="['px-4 py-2 rounded-xl text-xs font-bold transition', hasPendingDocs ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white']"
+                >Approve</button>
                 <button
                     v-if="worker.status === 'Pending' || worker.status === 'Available' || worker.status === 'Deployed' || worker.status === 'For Correction'"
                     @click="openConfirm('request_changes')"
                     class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Request changes
-                </button>
+                >Request changes</button>
                 <button
                     v-if="worker.status === 'Pending' || worker.status === 'For Correction'"
                     @click="openConfirm('reject_pending')"
                     class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Reject
-                </button>
+                >Reject</button>
                 <button
                     v-if="worker.status !== 'Blacklisted'"
                     @click="openConfirm('blacklist')"
                     class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Blacklist
-                </button>
-                <button
-                    v-if="worker.status === 'Blacklisted'"
-                    @click="liftBlacklist"
-                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition"
-                >
-                    Lift blacklist
-                </button>
+                >Blacklist</button>
             </div>
+        </div>
         </div>
 
         <div v-if="flash.success" class="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
@@ -506,8 +547,9 @@ function docBadge(s: string): string {
             {{ flash.error }}
         </div>
 
-        <div v-if="worker.pending_note && (worker.status === 'For Correction' || worker.status === 'Deployed')" class="mb-4 p-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-xs text-orange-800 dark:text-orange-300">
-            <span class="font-black">Waiting on agency:</span> {{ worker.pending_note || 'Correction requested.' }}
+        <div v-if="worker.pending_note && (worker.status === 'For Correction' || worker.status === 'Deployed')" class="mb-4 flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-xs text-orange-800 dark:text-orange-300">
+            <span class="font-black">Waiting on agency to apply requested changes.</span>
+            <button type="button" @click="showPendingChanges = true" class="px-3 py-1.5 rounded-lg border border-orange-300 dark:border-orange-700 font-bold hover:bg-orange-100 dark:hover:bg-orange-900/40">View request for changes</button>
         </div>
         <div v-if="worker.status === 'Blacklisted' && worker.blacklist_reason" class="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-400">
             <span class="font-black">Blacklisted:</span> {{ worker.blacklist_reason }}
@@ -516,10 +558,12 @@ function docBadge(s: string): string {
             Work permit / medical clearance has expired — this worker cannot be assigned.
         </div>
 
-        <div v-if="confirmAction && canEdit" class="mb-4 p-4 rounded-xl bg-white dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600">
+        <div v-if="confirmAction && canEdit" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="presentation" @click.self="closeConfirm">
+          <section class="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="worker-action-title">
             <p class="text-sm font-black text-slate-900 dark:text-white">
-                {{ confirmAction === 'blacklist' ? 'Blacklist worker' : confirmAction === 'reject_pending' ? 'Reject worker' : confirmAction === 'request_changes' ? 'Request corrections from agency' : 'Reject worker' }} — {{ worker.name }}?
+                <span id="worker-action-title">{{ confirmAction === 'approve' ? 'Approve worker' : confirmAction === 'blacklist' ? 'Blacklist worker' : confirmAction === 'reject_pending' ? 'Reject worker' : confirmAction === 'request_changes' ? 'Request corrections from agency' : 'Deactivate worker' }} — {{ worker.name }}?</span>
             </p>
+            <p v-if="confirmAction === 'approve'" class="mt-1 text-[11px] text-slate-500">This will approve the worker and move them to Available. Any pending correction requests will be cleared.</p>
             <p v-if="confirmAction === 'request_changes'" class="mt-1 text-[11px] text-slate-500">The Overview card below becomes editable — propose the corrections there. Nothing is saved on HR side; the agency portal applies them.</p>
             <div v-if="confirmAction === 'request_changes'" class="mt-2 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <p class="px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-500 bg-slate-50 dark:bg-slate-900">Requested changes (current → proposed) — {{ overviewDiff.length }}</p>
@@ -529,6 +573,7 @@ function docBadge(s: string): string {
                 <p v-else class="px-3 py-2 text-[11px] text-slate-400">No field edits yet — edit the Overview below or just send a note.</p>
             </div>
             <textarea
+                v-if="confirmAction !== 'approve'"
                 v-model="reason"
                 rows="2"
                 :placeholder="confirmAction === 'request_changes' ? 'What should the agency correct or complete? (required)' : (confirmAction === 'blacklist' || confirmAction === 'reject_pending') ? 'Reason (required)' : 'Reason (optional)'"
@@ -536,35 +581,38 @@ function docBadge(s: string): string {
             ></textarea>
             <p v-if="reasonError" class="mt-1 text-xs text-rose-600">{{ reasonError }}</p>
             <div class="mt-3 flex items-center justify-end gap-2">
+                <button v-if="confirmAction === 'request_changes'" @click="continueEditingOverview" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">Continue editing overview</button>
                 <button @click="closeConfirm" class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">Cancel</button>
-                <button @click="submitConfirm" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition">Confirm</button>
+                <button @click="submitConfirm" :disabled="confirmAction === 'request_changes' && !overviewDiff.length" :class="['px-4 py-2 text-white rounded-xl text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50', confirmAction === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : confirmAction === 'request_changes' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-rose-600 hover:bg-rose-700']">{{ confirmAction === 'approve' ? 'Confirm approval' : confirmAction === 'request_changes' ? 'Send request' : confirmAction === 'blacklist' ? 'Confirm blacklist' : 'Confirm rejection' }}</button>
             </div>
+          </section>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
-                <div class="flex items-start justify-between gap-2 mb-1">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div class="flex items-start justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/30">
                     <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">Overview</h2>
                     <div v-if="canEdit" class="flex items-center gap-1.5 shrink-0">
-                        <button @click="refreshWorker" title="Pull latest agency changes" class="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700">Refresh</button>
+                        <button v-if="!editingOverview" @click="refreshWorker" title="Pull latest agency changes" class="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700">Refresh</button>
+                        <button v-else @click="openConfirm('request_changes')" class="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-orange-500 text-white hover:bg-orange-600">Review &amp; send request</button>
                     </div>
                 </div>
-                <p class="text-[11px] text-slate-400 mb-3">
+                <p class="px-5 pt-3 text-[11px] text-slate-400">
                     <span v-if="worker.last_agency_update">Agency update: {{ worker.last_agency_update }}</span>
                     <span v-if="worker.updated_at"> · Last change: {{ worker.updated_at }}</span>
                     <span v-else>Synced with agency portal — Refresh pulls the latest submission.</span>
                     <span v-if="editingOverview" class="block mt-1 font-bold text-orange-500">Proposing via Request changes — your edits are sent as requests; the agency applies them, then Confirm.</span>
                 </p>
                 <!-- Read mode -->
-                <div v-if="!editingOverview" class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-sm">
+                <div v-if="!editingOverview" class="overflow-x-auto px-5 pb-5 pt-2">
+                    <table class="w-full text-left border-collapse text-xs [&_th]:py-1.5 [&_td]:py-1.5">
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                             <tr><th class="py-2 pr-4 w-2/5 text-xs font-medium text-slate-400">Agency</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.agency || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Position / skill</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.position_skill || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Years experience</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ formattedYearsExperience }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Proposed dept.</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.proposed_department || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Availability</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.availability || '—' }}</td></tr>
-                            <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Arrangement</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.employment_arrangement || '—' }}</td></tr>
+                            <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Arrangement</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">Agency-deployed</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Daily rate</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.daily_rate !== null ? '₱' + Number(worker.daily_rate).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Birth date</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.birth_date || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Gender</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.gender || '—' }}</td></tr>
@@ -572,11 +620,11 @@ function docBadge(s: string): string {
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Email</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.email || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Address</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.address || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Government ID</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ (worker.gov_id_type ? worker.gov_id_type + ' · ' : '') + (worker.gov_id_number || '—') }}</td></tr>
-                            <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Clearance expiry</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.clearance_expiry || '—' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Emergency contact</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.emergency_name || '—' }}{{ worker.emergency_relationship ? ' (' + worker.emergency_relationship + ')' : '' }}{{ worker.emergency_phone ? ' · ' + worker.emergency_phone : '' }}</td></tr>
                             <tr><th class="py-2 pr-4 text-xs font-medium text-slate-400">Consent</th><td class="py-2 font-semibold text-slate-700 dark:text-slate-200">{{ worker.consent_given ? 'Yes' + (worker.consent_at ? ' · ' + worker.consent_at : '') : '—' }}</td></tr>
                             <tr v-if="worker.resume_url"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Resume</th><td class="py-2 font-semibold"><button type="button" @click="openDocumentPreview({ url: worker.resume_url!, name: worker.resume_original_name || 'Resume' })" class="text-blue-600 hover:underline">{{ worker.resume_original_name || 'View resume' }}</button></td></tr>
                             <tr v-if="worker.education"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Education</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.education }}</td></tr>
+                            <tr v-if="worker.education_address"><th class="py-2 pr-4 text-xs font-medium text-slate-400">School address</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.education_address }}</td></tr>
                             <tr v-if="worker.work_experience"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Experience</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.work_experience }}</td></tr>
                             <tr v-if="worker.skills"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Skills</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.skills }}</td></tr>
                             <tr v-if="worker.trainings_certifications"><th class="py-2 pr-4 text-xs font-medium text-slate-400">Training / Certifications</th><td class="py-2 text-slate-600 dark:text-slate-300 whitespace-pre-line">{{ worker.trainings_certifications }}</td></tr>
@@ -607,7 +655,7 @@ function docBadge(s: string): string {
                     </div>
                     <div>
                         <label :class="ovLabel">Years experience</label>
-                        <input v-model="overviewForm.years_experience" type="number" min="0" max="60" step="0.5" :class="[ovInput, worker.status === 'Deployed' && 'bg-slate-100 dark:bg-slate-900 opacity-70']" :readonly="worker.status === 'Deployed'" />
+                        <input v-model="overviewForm.years_experience" type="number" min="0" max="60" step="1" :class="[ovInput, worker.status === 'Deployed' && 'bg-slate-100 dark:bg-slate-900 opacity-70']" :readonly="worker.status === 'Deployed'" />
                     </div>
                     <div>
                         <label :class="ovLabel">Availability</label>
@@ -655,16 +703,21 @@ function docBadge(s: string): string {
                         <input v-model="overviewForm.gov_id_number" type="text" :class="ovInput" />
                     </div>
                     <div>
-                        <label :class="ovLabel">Clearance expiry</label>
-                        <input v-model="overviewForm.clearance_expiry" type="date" :class="ovInput" />
-                    </div>
-                    <div>
                         <label :class="ovLabel">Emergency name</label>
                         <input v-model="overviewForm.emergency_name" type="text" :class="ovInput" />
                     </div>
                     <div>
                         <label :class="ovLabel">Emergency relationship</label>
-                        <input v-model="overviewForm.emergency_relationship" type="text" :class="ovInput" />
+                        <select v-model="overviewForm.emergency_relationship" :class="ovInput">
+                            <option value="">Select...</option>
+                            <option>Spouse</option>
+                            <option>Parent</option>
+                            <option>Sibling</option>
+                            <option>Child</option>
+                            <option>Relative</option>
+                            <option>Friend</option>
+                            <option>Other</option>
+                        </select>
                     </div>
                     <div>
                         <label :class="ovLabel">Emergency phone</label>
@@ -673,6 +726,10 @@ function docBadge(s: string): string {
                     <div class="sm:col-span-2">
                         <label :class="ovLabel">Education</label>
                         <textarea v-model="overviewForm.education" rows="2" :class="ovInput"></textarea>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label :class="ovLabel">School address</label>
+                        <textarea v-model="overviewForm.education_address" rows="2" :class="ovInput"></textarea>
                     </div>
                     <div class="sm:col-span-2">
                         <label :class="ovLabel">Experience</label>
@@ -689,21 +746,47 @@ function docBadge(s: string): string {
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
+            <div v-if="worker.assignment_details" class="lg:col-span-1 lg:self-start bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/30">
+                    <div>
+                        <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">Employment &amp; Training</h2>
+                        <p class="mt-1 text-[11px] text-slate-400">Assignment details saved when this worker was accepted.</p>
+                    </div>
+                    <span v-if="worker.assignment_details.request_code" class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 dark:border-blue-900 dark:bg-blue-900/30 dark:text-blue-300">{{ worker.assignment_details.request_code }}</span>
+                </div>
+                <div class="overflow-x-auto px-5 pb-5 pt-2">
+                    <table class="w-full min-w-[480px] border-collapse text-left text-xs [&_th]:py-2 [&_td]:py-2">
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                            <tr><th class="w-2/5 pr-4 font-medium text-slate-400">Employee ID</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.employee_id || worker.code }}</td></tr>
+                            <tr><th class="pr-4 font-medium text-slate-400">Company email</th><td class="break-all font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.company_email || '—' }}</td></tr>
+                            <tr><th class="pr-4 font-medium text-slate-400">Employment arrangement</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.employment_arrangement || 'Agency-deployed' }}</td></tr>
+                            <tr><th class="pr-4 font-medium text-slate-400">Position / skill</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.position || '—' }}</td></tr>
+                            <tr><th class="pr-4 font-medium text-slate-400">Department</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.department || '—' }}</td></tr>
+                            <tr><th class="pr-4 font-medium text-slate-400">Department module (users.role)</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.department_module || '—' }}</td></tr>
+                            <tr><th class="pr-4 font-medium text-slate-400">Reporting manager</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.reporting_manager ? worker.assignment_details.reporting_manager + (worker.assignment_details.reporting_manager_position ? ' · ' + worker.assignment_details.reporting_manager_position : '') : '—' }}</td></tr>
+                            <tr><th class="pr-4 font-medium text-slate-400">Deployment start date</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.deployment_start_date || '—' }}</td></tr>
+                            <tr><th class="pr-4 font-medium text-slate-400">Shift</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.shift || '—' }}</td></tr>
+                            <tr><th class="pr-4 font-medium text-slate-400">Training required</th><td><span :class="['inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold', worker.assignment_details.training_required ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300']">{{ worker.assignment_details.training_required ? 'Yes' : 'No' }}</span></td></tr>
+                            <tr v-if="worker.assignment_details.training_required"><th class="pr-4 font-medium text-slate-400">Training start date</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.training_start_date || '—' }}</td></tr>
+                            <tr v-if="worker.assignment_details.training_required"><th class="pr-4 font-medium text-slate-400">Training end date</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.training_end_date || '—' }}</td></tr>
+                            <tr v-if="worker.assignment_details.training_required"><th class="pr-4 font-medium text-slate-400">Training duration</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ worker.assignment_details.training_duration_weeks ? worker.assignment_details.training_duration_weeks + (worker.assignment_details.training_duration_weeks === 1 ? ' week' : ' weeks') : '—' }}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-1">Documents — HR verification</h2>
-                <p class="text-[11px] text-slate-400 mb-3">Mark each file as Pending, Verified, Rejected, or Expired. Approval requires all files Verified — no Pending / Rejected / Expired files.</p>
-                <p v-if="hasPendingDocs && worker.status === 'Pending'" class="mb-3 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-[11px] font-bold text-amber-700 dark:text-amber-400">
-                    Verify every document before approving — {{ (worker.documents || []).filter((d: any) => d.status === 'Pending').length }} still Pending.
-                </p>
+                <p class="text-[11px] text-slate-400 mb-3">Supporting files submitted by the agency.</p>
                 <div v-if="!worker.documents || worker.documents.length === 0" class="text-xs text-slate-400">No supporting files uploaded yet.</div>
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[520px]">
+                    <table class="w-full text-left border-collapse text-xs min-w-[640px] [&_th]:py-1.5 [&_td]:py-1.5">
                         <thead>
                             <tr class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700">
                                 <th class="py-2 px-2">Document</th>
                                 <th class="py-2 px-2">Details</th>
-                                <th class="py-2 px-2 text-center">Status</th>
-                                <th class="py-2 px-2 text-right">Action</th>
+                                <th class="py-2 px-2">Status</th>
+                                <th v-if="worker.status !== 'Deployed'" class="py-2 px-2 text-right">Review</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -711,17 +794,8 @@ function docBadge(s: string): string {
                                 <tr class="align-top hover:bg-slate-50 dark:hover:bg-slate-800/60">
                                     <td class="py-3 px-2 text-xs"><button type="button" @click="openDocumentPreview({ url: d.url, name: d.original_name || d.label || d.doc_type_label, mime: d.mime })" class="font-bold text-blue-600 hover:underline">{{ d.original_name || d.label || d.doc_type_label }}</button></td>
                                     <td class="py-3 px-2 text-[11px] text-slate-400">{{ d.doc_type_label }}{{ d.label && d.label !== d.original_name ? ' · ' + d.label : '' }}{{ d.issue_date ? ' · start ' + d.issue_date : '' }}{{ d.expiry_date ? ' · exp ' + d.expiry_date : '' }}{{ d.verified_by ? ' · by ' + d.verified_by : '' }}<p v-if="d.review_note" class="mt-1 italic">“{{ d.review_note }}”</p></td>
-                                    <td class="py-3 px-2 text-center"><span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', docBadge(d.status)]">{{ d.status }}</span></td>
-                                    <td class="py-3 px-2 text-right"><button v-if="canEdit" @click="openVerify(d.id, d.status)" class="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700">Verify</button></td>
-                                </tr>
-                                <tr v-if="verifyingId === d.id && canEdit">
-                                    <td colspan="4" class="px-2 pb-3">
-                                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-2 sm:items-center">
-                                            <select v-model="verifyStatus" class="px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"><option v-for="s in (worker.document_statuses || ['Pending','Verified','Rejected','Expired'])" :key="s" :value="s">{{ s }}</option></select>
-                                            <input v-model="verifyNote" type="text" placeholder="Review note (optional)" class="flex-1 px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg" />
-                                            <div class="flex gap-2"><button @click="verifyingId = null" class="px-3 py-2 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700">Cancel</button><button @click="submitVerify(d.id)" class="px-3 py-2 text-[11px] font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700">Save</button></div>
-                                        </div>
-                                    </td>
+                                    <td class="py-3 px-2"><span :class="['inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase', docBadge(d.status)]">{{ d.status }}</span></td>
+                                    <td v-if="worker.status !== 'Deployed'" class="py-3 px-2 text-right"><button type="button" @click="openVerify(d)" class="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-[10px] font-bold text-blue-700 transition hover:bg-blue-50 dark:border-blue-900 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-slate-700">Review</button></td>
                                 </tr>
                             </template>
                         </tbody>
@@ -749,7 +823,7 @@ function docBadge(s: string): string {
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Attendance history (last 30)</h2>
                 <div v-if="worker.attendance_history.length === 0" class="text-xs text-slate-400">No attendance records yet.</div>
                 <div v-else class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[520px]">
+                    <table class="w-full text-left border-collapse text-xs min-w-[480px] [&_th]:py-1.5 [&_td]:py-1.5">
                         <thead>
                             <tr class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                 <th class="py-2 px-3">Date</th>
@@ -800,6 +874,67 @@ function docBadge(s: string): string {
         </div>
         </Teleport>
 
+        <div v-if="verifyingDocument" class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="presentation" @click.self="closeVerify">
+            <section class="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800" role="dialog" aria-modal="true" aria-labelledby="document-review-title">
+                <header class="border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+                    <h2 id="document-review-title" class="text-base font-black text-slate-900 dark:text-white">Review supporting document</h2>
+                    <p class="mt-1 truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{{ verifyingDocument.original_name || verifyingDocument.label || verifyingDocument.doc_type_label }}</p>
+                </header>
+                <div class="space-y-3 p-5">
+                    <div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-900">
+                        <span class="text-xs font-semibold text-slate-600 dark:text-slate-300">Current status</span>
+                        <span :class="['rounded-full border px-2 py-0.5 text-[9px] font-black uppercase', docBadge(verifyingDocument.status)]">{{ verifyingDocument.status }}</span>
+                    </div>
+                </div>
+                <footer class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/50">
+                    <button type="button" @click="closeVerify" :disabled="verifySaving" class="mr-auto rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">Cancel</button>
+                    <button type="button" @click="requestVerify('approve')" :disabled="verifySaving" class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">Approve</button>
+                    <button type="button" @click="requestVerify('reject')" :disabled="verifySaving" class="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:opacity-50">Reject</button>
+                    <button type="button" @click="requestVerify('resubmit')" :disabled="verifySaving" class="rounded-xl bg-amber-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">Request resubmission</button>
+                </footer>
+            </section>
+        </div>
+
+        <div v-if="verifyConfirmationAction && verifyingDocument" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="presentation" @click.self="cancelVerifyConfirmation">
+            <section class="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800" role="alertdialog" aria-modal="true" aria-labelledby="document-review-confirm-title">
+                <div class="p-5">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-2xl" :class="verifyAction === 'approve' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : verifyAction === 'reject' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'">
+                        <svg v-if="verifyAction === 'approve'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 12 4 4L19 6" /></svg>
+                        <svg v-else class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.3 3.9 1.8 18.5A1.7 1.7 0 0 0 3.3 21h17.4a1.7 1.7 0 0 0 1.5-2.5L13.7 3.9a2 2 0 0 0-3.4 0Z" /></svg>
+                    </div>
+                    <h2 id="document-review-confirm-title" class="mt-4 text-base font-black text-slate-900 dark:text-white">
+                        {{ verifyAction === 'approve' ? 'Approve this document?' : verifyAction === 'reject' ? 'Reject this document?' : 'Request a replacement document?' }}
+                    </h2>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                        {{ verifyAction === 'approve' ? 'This will mark the document as verified.' : verifyAction === 'reject' ? 'The agency will be notified that this document was rejected.' : 'The agency will be asked to replace this document.' }}
+                    </p>
+                    <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
+                        <p class="text-xs font-bold text-slate-800 dark:text-slate-200">{{ verifyingDocument.original_name || verifyingDocument.label || verifyingDocument.doc_type_label }}</p>
+                    </div>
+                    <div v-if="verifyAction !== 'approve'" class="mt-4">
+                        <label for="document-review-note-confirm" class="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Note to agency <span class="font-medium normal-case">(required)</span></label>
+                        <textarea id="document-review-note-confirm" v-model="verifyNote" rows="3" maxlength="2000" :disabled="verifySaving" :aria-invalid="!!verifyNoteError" @input="verifyNoteError = ''" placeholder="Explain what needs to be corrected or replaced..." class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"></textarea>
+                        <p v-if="verifyNoteError" class="mt-1 text-xs font-semibold text-rose-600">{{ verifyNoteError }}</p>
+                        <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">The agency will receive this note with the {{ verifyAction === 'reject' ? 'rejection' : 'resubmission request' }}.</p>
+                    </div>
+                </div>
+                <footer class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/50">
+                    <button type="button" @click="cancelVerifyConfirmation" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">Cancel</button>
+                    <button type="button" @click="submitVerify" class="rounded-xl px-4 py-2.5 text-xs font-bold text-white transition" :class="verifyAction === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : verifyAction === 'reject' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'">
+                        {{ verifyAction === 'approve' ? 'Confirm approval' : verifyAction === 'reject' ? 'Notify agency & reject' : 'Notify agency & request resubmission' }}
+                    </button>
+                </footer>
+            </section>
+        </div>
+
+        <div v-if="verifySaving" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" role="status" aria-live="polite">
+            <div class="w-full max-w-xs rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+                <div class="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600 dark:border-slate-600 dark:border-t-blue-400"></div>
+                <p class="mt-4 text-sm font-black text-slate-900 dark:text-white">{{ verifyAction === 'approve' ? 'Approving document…' : verifyAction === 'reject' ? 'Rejecting document…' : 'Sending resubmission request…' }}</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Please wait while we save this review.</p>
+            </div>
+        </div>
+
         <div v-if="previewDocument" class="fixed inset-0 z-[100] flex flex-col bg-[#111214] text-white"
             role="presentation" @click.self="closeDocumentPreview">
             <section class="flex min-h-0 flex-1 flex-col" role="dialog" aria-modal="true"
@@ -829,5 +964,58 @@ function docBadge(s: string): string {
                 </div>
             </section>
         </div>
+
+        <div v-if="showPendingChanges" class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="presentation" @click.self="showPendingChanges = false">
+            <section class="w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="pending-changes-title">
+                <header class="relative overflow-hidden border-b border-orange-100 bg-gradient-to-br from-orange-50 via-white to-amber-50 px-6 py-5 dark:border-slate-700 dark:from-slate-800 dark:via-slate-900 dark:to-slate-800 sm:px-7">
+                    <div class="absolute -right-8 -top-12 h-36 w-36 rounded-full bg-orange-200/30 blur-2xl dark:bg-orange-500/10"></div>
+                    <div class="relative flex items-start justify-between gap-4">
+                        <div class="flex items-start gap-3">
+                            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/20">
+                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+                            </div>
+                            <div>
+                                <div class="mb-1 flex flex-wrap items-center gap-2">
+                                    <h2 id="pending-changes-title" class="text-base font-black text-slate-900 dark:text-white">Agency correction requests</h2>
+                                    <span class="rounded-full border border-orange-200 bg-orange-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-orange-700 dark:border-orange-800 dark:bg-orange-900/40 dark:text-orange-300">{{ pendingChangeRequests.length }} pending</span>
+                                </div>
+                                <p class="text-xs text-slate-600 dark:text-slate-400">{{ worker.name }} <span class="text-slate-400">· {{ worker.code }}</span></p>
+                            </div>
+                        </div>
+                        <button type="button" @click="showPendingChanges = false" aria-label="Close pending correction requests" class="rounded-xl p-2 text-slate-400 transition hover:bg-white/80 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-white">×</button>
+                    </div>
+                    <div class="relative mt-4 flex items-center gap-2 rounded-xl border border-orange-200/80 bg-white/70 px-3 py-2 dark:border-orange-900/60 dark:bg-slate-950/40">
+                        <span class="h-2 w-2 rounded-full bg-orange-500 ring-4 ring-orange-100 dark:ring-orange-900/50"></span>
+                        <p class="text-[11px] font-semibold text-orange-800 dark:text-orange-300">Waiting for the agency to apply these requests</p>
+                    </div>
+                </header>
+                <div class="max-h-[55vh] space-y-3 overflow-y-auto bg-slate-50/70 px-5 py-5 dark:bg-slate-950/40 sm:px-7">
+                    <article v-for="(request, index) in pendingChangeRequests" :key="index" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-black text-slate-600 dark:bg-slate-700 dark:text-slate-200">{{ index + 1 }}</span>
+                            <h3 class="text-xs font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Request {{ index + 1 }}</h3>
+                        </div>
+                        <div class="whitespace-pre-line break-words px-4 py-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ request.trim() }}</div>
+                    </article>
+                </div>
+                <footer class="flex justify-end gap-2 border-t border-slate-100 bg-white px-5 py-4 dark:border-slate-700 dark:bg-slate-900 sm:px-7">
+                    <button type="button" @click="showPendingChanges = false" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">Cancel</button>
+                </footer>
+            </section>
+        </div>
     </AuthenticatedLayout>
 </template>
+
+<style>
+.worker-status-pending {
+    color: #000000 !important;
+    background-color: #eab308 !important;
+    border-color: #a16207 !important;
+}
+
+.dark .worker-status-pending {
+    color: #fde68a !important;
+    background-color: #854d0e !important;
+    border-color: #ca8a04 !important;
+}
+</style>

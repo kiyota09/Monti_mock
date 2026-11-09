@@ -99,8 +99,19 @@ const roleOptions = computed(() => (props.roles?.length ? props.roles : ['HRM', 
 const guessRole = (deptId, fallback = '') => {
     const list = roleOptions.value || [];
     const d = (props.departments || []).find((x) => String(x.id) === String(deptId));
-    const fromName = String(d?.name || '').toUpperCase();
-    if (fromName && list.includes(fromName)) return fromName;
+    const candidates = [d?.category, d?.code?.replace(/^DEP-/i, ''), d?.name]
+        .map((value) => String(value || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_'));
+    const aliases = {
+        HUMAN_RESOURCES: 'HRM',
+        HR: 'HRM',
+        IT_AND_SYSTEMS: 'IT',
+        IT_SYSTEMS: 'IT',
+        ORDER_MANAGEMENT: 'ORD',
+        ORDER_PROCESSING: 'ORD',
+        MANUFACTURING: 'MAN',
+    };
+    const fromDepartment = candidates.map((value) => aliases[value] || value).find((value) => list.includes(value));
+    if (fromDepartment) return fromDepartment;
     const fb = String(fallback || '').toUpperCase();
     if (fb && list.includes(fb)) return fb;
     return '';
@@ -456,6 +467,10 @@ const hrReviewBadge = (s) => ({
     'Pending': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
 }[s] || 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300');
 const hrDecisionLabel = (d) => ({ approve_regularization: 'Approve Regularization', worker_training_passed: 'Worker Training Passed', worker_do_not_pass: 'Do Not Pass', extend_training: 'Extend Training', do_not_regularize: 'Do Not Regularize', approve_reassignment: 'Approve Reassignment', reject_reassignment: 'Reject Reassignment' }[d] || d || '—');
+const hrFinalDecisionLabel = (status) => ({
+    Reassigned: 'Reassignment Approved',
+    Rejected: 'Reassignment Rejected',
+}[status] || hrDecisionLabel(hrDecidedKey.value));
 const isWorkerTrainingReview = computed(() => trainingDetail.value?.person_type === 'Worker');
 const hrDecisionNeedsNotes = computed(() => !['approve_regularization', 'worker_training_passed'].includes(hrDecision.value));
 const hrReviewerName = computed(() => hrReview.value?.reviewer_name || user.value?.name || '—');
@@ -477,7 +492,7 @@ const reloadDetail = async () => {
 const submitHrReview = (skipConfirm = false) => {
     if (!trainingDetail.value || !canEdit.value || hrSaving.value) return;
     if (!hrDecision.value) { triggerToast('Select an HR decision first.'); return; }
-    if (hrDecision.value === 'approve_regularization' && !skipConfirm) { showApproveConfirm.value = true; return; }
+    if (!skipConfirm) { showApproveConfirm.value = true; return; }
     if (['do_not_regularize', 'worker_do_not_pass'].includes(hrDecision.value) && !hrNotes.value.trim()) { triggerToast('HR notes are required for this decision.'); return; }
     if (hrDecision.value === 'approve_regularization' && !hrEffectiveDate.value) { triggerToast('Set the regularization effective date.'); return; }
     if (hrDecision.value === 'approve_regularization' && hrEffectiveDate.value < todayLocal()) { triggerToast('Regularization date cannot be in the past.'); return; }
@@ -520,9 +535,13 @@ const resetReassignForm = () => {
 };
 const onReDeptChange = () => {
     rePosition.value = '';
-    if (!reRole.value) {
-        reRole.value = guessRole(reDeptId.value, trainingDetail.value?.role);
-    }
+    reManagerId.value = '';
+    reRole.value = guessRole(reDeptId.value, trainingDetail.value?.role);
+    const url = `${route('hrm.trainee.show', trainingDetail.value.id)}?department_id=${encodeURIComponent(reDeptId.value)}`;
+    fetch(url, { headers: { Accept: 'application/json' } })
+        .then((res) => res.json())
+        .then((json) => { reassignManagers.value = json.managers || []; })
+        .catch(() => { reassignManagers.value = []; });
 };
 const isReassignment = computed(() => trainingDetail.value?.manager_recommendation === 'reassigned'
     && trainingDetail.value?.final_score !== null && trainingDetail.value?.final_score !== undefined);
@@ -1292,8 +1311,8 @@ const failTrainee = () => {
 
         <!-- View Details modal: read-only Trainee Training Details -->
         <div v-if="isDetailsOpen && selectedTrainee" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md" @click.self="closeModals">
-            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-                <div class="p-5 border-b border-slate-100 dark:border-slate-700 flex items-start justify-between sticky top-0 bg-white dark:bg-slate-800 z-10">
+            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-3xl h-[calc(100dvh_-_2rem)] max-h-[90vh] min-h-0 overflow-hidden flex flex-col">
+                <div class="p-5 border-b border-slate-100 dark:border-slate-700 flex items-start justify-between shrink-0 bg-white dark:bg-slate-800 z-10">
                     <div>
                         <h3 class="font-black text-slate-900 dark:text-white">Trainee Training Details</h3>
                         <p class="text-[11px] text-slate-500 dark:text-slate-400">{{ selectedTrainee.name }} · {{ selectedTrainee.employee_id }}</p>
@@ -1301,7 +1320,7 @@ const failTrainee = () => {
                     <button @click="closeModals" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl text-slate-400"><X class="w-4 h-4" /></button>
                 </div>
                 <div v-if="detailLoading" class="p-10 text-center text-sm text-slate-400">Loading training details…</div>
-                <div v-else-if="trainingDetail" class="p-5 space-y-6">
+                <div v-else-if="trainingDetail" class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 space-y-6">
                     <!-- Employee Information -->
                     <section class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
                         <h4 class="text-xs font-black uppercase text-slate-500 mb-2">Employee Information</h4>
@@ -1423,7 +1442,7 @@ const failTrainee = () => {
                             </div>
                         </div>
                         <div v-if="hrDecided" class="border border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900 text-xs space-y-1.5">
-                            <div class="flex items-center justify-between"><span class="text-slate-400">HR Decision</span><span :class="['px-2 py-0.5 rounded-full text-[11px] font-bold', hrReviewBadge(hrReview.status)]">{{ hrDecisionLabel(hrDecidedKey) }}</span></div>
+                            <div class="flex items-center justify-between"><span class="text-slate-400">Final HR Decision</span><span :class="['px-2 py-0.5 rounded-full text-[11px] font-bold', hrReviewBadge(hrReview.status)]">{{ hrFinalDecisionLabel(hrReview.status) }}</span></div>
                             <div class="flex items-center justify-between"><span class="text-slate-400">HR Reviewer</span><span class="font-bold text-slate-800 dark:text-slate-100">{{ hrReview.reviewer_name || '—' }}</span></div>
                             <div class="flex items-center justify-between"><span class="text-slate-400">Review Date</span><span class="font-bold text-slate-800 dark:text-slate-100">{{ hrReview.reviewed_at ? dFmtDate(hrReview.reviewed_at) : '—' }}</span></div>
                             <div v-if="hrReview.regularization_date" class="flex items-center justify-between"><span class="text-slate-400">Regularization Date</span><span class="font-bold text-slate-800 dark:text-slate-100">{{ dFmtDate(hrReview.regularization_date) }}</span></div>
@@ -1492,7 +1511,7 @@ const failTrainee = () => {
                                 <div class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">HR Decision</div>
                                 <div class="flex flex-col gap-2 text-xs">
                                     <template v-if="isWorkerTrainingReview">
-                                        <label class="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 cursor-pointer"><input v-model="hrDecision" type="radio" value="worker_training_passed" class="accent-emerald-600" /> <b>Worker Training Passed</b> <span class="text-slate-400">— notify the agency and clear the worker for a contract</span></label>
+                                        <label class="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 cursor-pointer"><input v-model="hrDecision" type="radio" value="worker_training_passed" class="accent-emerald-600" /> <b>Worker Training Passed</b> <span class="text-slate-400">— notify the agency and mark the worker ready for a contract</span></label>
                                         <label class="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 cursor-pointer"><input v-model="hrDecision" type="radio" value="worker_do_not_pass" class="accent-red-600" /> <b>Do Not Pass</b> <span class="text-slate-400">— record a failed training result</span></label>
                                     </template>
                                     <template v-else>
@@ -1605,19 +1624,19 @@ const failTrainee = () => {
                     </div>
                 </div>
 
-                <!-- Approve Regularization confirmation -->
+                <!-- HR review confirmation -->
                 <div v-if="showApproveConfirm && trainingDetail" class="fixed inset-0 z-[70] flex items-center justify-center p-4">
                     <div class="fixed inset-0 bg-slate-900/60" @click="showApproveConfirm = false"></div>
                     <div class="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
                         <div class="p-6 text-center">
                             <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-3"><UserCheck class="h-7 w-7 text-emerald-600" /></div>
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Approve Regularization?</h3>
-                            <p class="text-xs text-slate-500 mt-2">This action will change the employee's employment status from <b>Trainee</b> to <b>Regular</b>.</p>
-                            <div class="mt-4 text-left">
+                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Confirm HR Review</h3>
+                            <p class="text-xs text-slate-500 mt-2">Record <b>{{ hrDecisionLabel(hrDecision) }}</b> for <b>{{ trainingDetail.name }}</b>?</p>
+                            <div v-if="hrDecision === 'approve_regularization'" class="mt-4 text-left">
                                 <div class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">Regularization Effective Date *</div>
                                 <input v-model="hrEffectiveDate" type="date" :min="todayLocal()" class="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200" />
                             </div>
-                            <div v-if="trainingDetail" class="mt-3 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden text-xs text-left">
+                            <div v-if="hrDecision === 'approve_regularization'" class="mt-3 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden text-xs text-left">
                                 <div class="grid grid-cols-2 border-b border-slate-100 dark:border-slate-700"><span class="px-3 py-2 text-slate-400 bg-slate-50 dark:bg-slate-900/50">Before</span><span class="px-3 py-2 text-slate-400 bg-slate-50 dark:bg-slate-900/50">After</span></div>
                                 <div class="grid grid-cols-2 border-b border-slate-100 dark:border-slate-700"><span class="px-3 py-2">Employment Status: Trainee</span><span class="px-3 py-2 font-bold text-emerald-700">Regular</span></div>
                                 <div class="grid grid-cols-2 border-b border-slate-100 dark:border-slate-700"><span class="px-3 py-2">Training Status: {{ trainingDetail.training_status }}</span><span class="px-3 py-2 font-bold">Completed</span></div>
@@ -1626,7 +1645,7 @@ const failTrainee = () => {
                             </div>
                             <div class="mt-4 flex gap-3">
                                 <button @click="showApproveConfirm = false" class="flex-1 py-2.5 text-slate-500 font-bold text-xs uppercase">Cancel</button>
-                                <button @click="submitHrReview(true)" :disabled="hrSaving || !hrEffectiveDate" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase transition disabled:opacity-50">{{ hrSaving ? 'Confirming...' : 'Confirm Regularization' }}</button>
+                                <button @click="submitHrReview(true)" :disabled="hrSaving || (hrDecision === 'approve_regularization' && !hrEffectiveDate)" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase transition disabled:opacity-50">{{ hrSaving ? 'Confirming...' : 'Confirm HR Review' }}</button>
                             </div>
                         </div>
                     </div>

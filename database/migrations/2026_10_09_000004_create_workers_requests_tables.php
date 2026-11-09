@@ -43,8 +43,8 @@ return new class extends Migration
             $table->string('shift')->nullable();
             $table->text('notes')->nullable();
             $table->foreignId('agency_id')->constrained('agencies')->cascadeOnDelete();
-            // Stored lifecycle: Draft|Open|Cancelled|Closed. Partially filled
-            // and Filled are derived from assigned vs needed (see model).
+            // Stored lifecycle: Draft|Open|Cancelled|Closed. Filled is
+            // derived from assigned vs needed (see model).
             $table->string('status', 20)->default('Draft');
             $table->text('cancel_reason')->nullable();
             $table->timestamps();

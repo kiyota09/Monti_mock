@@ -114,10 +114,6 @@
                                 <option value="">All departments</option>
                                 <option v-for="d in departmentOptions" :key="d" :value="d">{{ d }}</option>
                             </select>
-                            <select v-model="empType" class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
-                                <option value="">All types</option>
-                                <option v-for="t in employmentTypeOptions" :key="t" :value="t">{{ t }}</option>
-                            </select>
                             <button @click="activeTab = 'adjustments'" class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-xs font-bold shadow-lg transition-all">
                                 <Plus class="w-3.5 h-3.5" /> Add Salary Record
                             </button>
@@ -125,12 +121,11 @@
                     </div>
                     <div class="bg-white rounded-xl border border-slate-200/60 shadow-md overflow-hidden">
                         <div class="overflow-x-auto">
-                            <table class="w-full text-left min-w-[860px]">
+                            <table class="w-full text-left min-w-[760px]">
                                 <thead>
                                     <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                                         <th class="py-3 px-4">Employee</th>
                                         <th class="py-3 px-4">Position</th>
-                                        <th class="py-3 px-4">Type</th>
                                         <th class="py-3 px-4">Monthly Basic</th>
                                         <th class="py-3 px-4">Last Adjustment</th>
                                         <th class="py-3 px-4 text-center">Status</th>
@@ -149,9 +144,6 @@
                                             </div>
                                         </td>
                                         <td class="py-3 px-4 text-xs text-slate-600">{{ e.position }}</td>
-                                        <td class="py-3 px-4">
-                                            <span :class="['inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap', e.type === 'Regular' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200']">{{ e.type }}</span>
-                                        </td>
                                         <td class="py-3 px-4 text-sm font-black text-slate-900 whitespace-nowrap">{{ peso(e.salary) }}</td>
                                         <td class="py-3 px-4 text-xs text-slate-500 whitespace-nowrap">{{ e.lastAdjustment || '—' }}</td>
                                         <td class="py-3 px-4 text-center">
@@ -171,7 +163,7 @@
                                         </td>
                                     </tr>
                                     <tr v-if="filteredEmployees.length === 0">
-                                        <td colspan="7" class="py-12 text-center">
+                                        <td colspan="6" class="py-12 text-center">
                                             <p class="text-sm font-bold text-slate-700">No records match</p>
                                             <p class="text-xs text-slate-400 mt-1">Try a different search or filter.</p>
                                         </td>
@@ -191,10 +183,13 @@
                             <div class="space-y-4">
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Employee</label>
-                                    <select v-model="adjForm.employeeId" @change="onAdjEmployeeChange" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
-                                        <option value="" disabled>Select employee</option>
-                                        <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }} · {{ e.employeeId }}</option>
-                                    </select>
+                                    <div class="relative">
+                                        <input v-model="adjEmployeeSearch" type="search" placeholder="Search employee by name..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" @focus="adjEmployeeDropdownOpen = true" @input="adjEmployeeDropdownOpen = true" @keydown.esc="adjEmployeeDropdownOpen = false" />
+                                        <div v-if="adjEmployeeDropdownOpen" class="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                                            <button v-for="e in matchingAdjustmentEmployees" :key="e.id" type="button" class="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-blue-50" @click="chooseAdjustmentEmployee(e)">{{ e.name }}</button>
+                                            <p v-if="!matchingAdjustmentEmployees.length" class="px-3 py-2 text-xs text-slate-400">No employees found.</p>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
@@ -205,6 +200,16 @@
                                         <label class="block text-xs font-semibold text-slate-600 mb-1.5">Proposed Monthly Salary (₱)</label>
                                         <input v-model="proposedDisplay" type="text" inputmode="numeric" placeholder="e.g., 27,000" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
                                         <p v-if="bandWarning" class="text-[10px] text-amber-600 font-semibold mt-1">{{ bandWarning }}</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Current Monthly Allowance (₱)</label>
+                                        <input :value="pesoPlain(adjForm.currentAllowance)" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 cursor-not-allowed" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">Proposed Monthly Allowance (₱)</label>
+                                        <input v-model.number="adjForm.allowance" type="number" min="0" step="0.01" placeholder="0.00" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
@@ -228,9 +233,6 @@
                                     <textarea v-model="adjForm.notes" rows="2" placeholder="Review summary, ratings, approvals…" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm"></textarea>
                                 </div>
                                 <div class="flex items-center gap-3 flex-wrap">
-                                    <button @click="copyDraft" class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all">
-                                        <Copy class="w-3.5 h-3.5" /> Copy Draft for Review
-                                    </button>
                                     <button @click="submitDraft(false)" :disabled="saving" class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all disabled:opacity-50">
                                         {{ saving ? 'Saving…' : 'Save as Draft' }}
                                     </button>
@@ -257,10 +259,21 @@
                                         <span class="text-xs text-blue-700 font-semibold">Proposed annual basic</span>
                                         <span class="text-sm font-black text-blue-800">{{ peso((adjForm.proposedSalary || 0) * 12) }}</span>
                                     </div>
+                                    <div class="flex items-center justify-between px-3 py-2.5 bg-amber-50 border border-amber-100 rounded-xl">
+                                        <span class="text-xs text-amber-700 font-semibold">Total monthly allowance</span>
+                                        <span class="text-sm font-black text-amber-800">{{ peso(adjForm.allowance || 0) }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between px-3 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+                                        <span class="text-xs text-emerald-700 font-semibold">Proposed monthly total</span>
+                                        <span class="text-sm font-black text-emerald-800">{{ peso(proposedMonthlyTotal) }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between px-3 py-2.5 bg-violet-50 border border-violet-100 rounded-xl">
+                                        <span class="text-xs text-violet-700 font-semibold">Proposed annual total</span>
+                                        <span class="text-sm font-black text-violet-800">{{ peso(proposedMonthlyTotal * 12) }}</span>
+                                    </div>
                                 </div>
                             </div>
                             <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                                <p class="text-[11px] text-amber-800 leading-relaxed"><b>Workflow:</b> Draft → Pending Approval → Approved → Scheduled → Applied. Payroll uses the new salary only once the request is Applied on its effective date.</p>
                             </div>
                         </div>
                     </div>
@@ -323,7 +336,7 @@
                             <h3 class="text-sm font-bold text-slate-900">Salary History <span class="text-[10px] font-semibold text-slate-400">(read-only preview)</span></h3>
                             <select v-model="historyEmployeeId" class="md:ml-auto px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                 <option value="" disabled>Select employee</option>
-                                <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }} · {{ e.employeeId }}</option>
+                                <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }}</option>
                             </select>
                         </div>
                         <div class="overflow-x-auto">
@@ -437,7 +450,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { toast } from '@/lib/feedback';
 import {
     LayoutDashboard, Users, Settings2, Hourglass, History, BarChart3,
-    Plus, Search, Eye, ArrowRight, X, Copy, Wallet, Banknote,
+    Plus, Search, Eye, ArrowRight, X, Wallet, Banknote,
     TrendingUp, CalendarClock, CheckCircle2,
 } from 'lucide-vue-next';
 
@@ -477,6 +490,11 @@ const pageLoading = ref(true);
 const saving = ref(false);
 
 const employees = computed(() => props.employees || []);
+const selectedAdjustmentEmployee = computed(() => employees.value.find((e) => String(e.id) === String(adjForm.value.employeeId)) || null);
+const matchingAdjustmentEmployees = computed(() => {
+    const query = adjEmployeeSearch.value.trim().toLowerCase();
+    return employees.value.filter((e) => !query || String(e.name || '').toLowerCase().includes(query));
+});
 const approvalQueue = computed(() => props.adjustments || []);
 const histories = computed(() => props.histories || {});
 const componentsByUser = computed(() => props.components || {});
@@ -487,14 +505,15 @@ const adjustmentTypes = computed(() => props.adjustmentTypes?.length
 /* ------------------------------ state ------------------------------ */
 
 const empSearch = ref('');
+const adjEmployeeSearch = ref('');
+const adjEmployeeDropdownOpen = ref(false);
 const empDept = ref('');
-const empType = ref('');
 const detailEmployee = ref(null);
 const historyEmployeeId = ref(props.employees?.[0]?.id ?? '');
 const compForm = ref({ name: '', amount: '' });
 
 const adjForm = ref({
-    employeeId: '', currentSalary: null, proposedSalary: '',
+    employeeId: '', currentSalary: null, proposedSalary: '', currentAllowance: 0, allowance: 0,
     type: 'Merit Increase', reason: '',
     effectiveDate: new Date().toISOString().slice(0, 10), notes: '',
 });
@@ -547,19 +566,20 @@ const upcomingEffective = computed(() => approvalQueue.value
     .map((q) => ({ id: q.id, name: q.name, oldSalary: peso(q.oldSalary), newSalary: peso(q.newSalary), date: q.effectiveDate })));
 
 const departmentOptions = computed(() => [...new Set(employees.value.map((e) => e.department))]);
-const employmentTypeOptions = computed(() => [...new Set(employees.value.map((e) => e.type))]);
-
 const filteredEmployees = computed(() => {
     const q = empSearch.value.trim().toLowerCase();
     return employees.value.filter((e) => {
         const okSearch = !q || e.name.toLowerCase().includes(q) || e.employeeId.toLowerCase().includes(q);
         const okDept = !empDept.value || e.department === empDept.value;
-        const okType = !empType.value || e.type === empType.value;
-        return okSearch && okDept && okType;
+        return okSearch && okDept;
     });
 });
 
 const monthlyDiff = computed(() => (Number(adjForm.value.proposedSalary) || 0) - (Number(adjForm.value.currentSalary) || 0));
+const proposedMonthlyTotal = computed(() => (Number(adjForm.value.proposedSalary) || 0) + (Number(adjForm.value.allowance) || 0));
+const employeeAllowance = (employee) => (componentsByUser.value[employee?.id] || [])
+    .filter((component) => component.isActive !== false)
+    .reduce((total, component) => total + (Number(component.amount) || 0), 0);
 const pctChange = computed(() => {
     const cur = Number(adjForm.value.currentSalary) || 0;
     if (!cur) return '0.00';
@@ -646,10 +666,21 @@ const openDetail = (e) => {
 const startAdjustment = (e) => {
     detailEmployee.value = null;
     adjForm.value.employeeId = e.id;
+    adjEmployeeSearch.value = e.name;
+    adjEmployeeDropdownOpen.value = false;
     adjForm.value.currentSalary = e.salary;
     adjForm.value.proposedSalary = e.salary;
+    adjForm.value.currentAllowance = employeeAllowance(e);
+    adjForm.value.allowance = adjForm.value.currentAllowance;
     adjForm.value.reason = '';
     activeTab.value = 'adjustments';
+};
+
+const chooseAdjustmentEmployee = (employee) => {
+    adjForm.value.employeeId = employee.id;
+    adjEmployeeSearch.value = employee.name;
+    adjEmployeeDropdownOpen.value = false;
+    onAdjEmployeeChange();
 };
 
 const onAdjEmployeeChange = () => {
@@ -657,6 +688,8 @@ const onAdjEmployeeChange = () => {
     if (e) {
         adjForm.value.currentSalary = e.salary;
         adjForm.value.proposedSalary = e.salary;
+        adjForm.value.currentAllowance = employeeAllowance(e);
+        adjForm.value.allowance = adjForm.value.currentAllowance;
     }
 };
 
@@ -666,6 +699,7 @@ const copyDraft = async () => {
         ' | Current: ' + pesoPlain(adjForm.value.currentSalary) +
         ' | Proposed: ' + pesoPlain(adjForm.value.proposedSalary) +
         ' (' + (monthlyDiff.value > 0 ? '+' : '') + pesoPlain(monthlyDiff.value) + ', ' + pctChange.value + '%)' +
+        ' | Allowance: ' + pesoPlain(adjForm.value.allowance || 0) +
         ' | Type: ' + adjForm.value.type + ' | Effective: ' + (adjForm.value.effectiveDate || '—') +
         ' | Reason: ' + (adjForm.value.reason || '—');
     try {
@@ -685,6 +719,7 @@ const submitDraft = (submit) => {
     router.post(route('hrm.compensation.adjustments.store'), {
         user_id: e.id,
         new_salary: Number(adjForm.value.proposedSalary),
+        allowance: Number(adjForm.value.allowance) || 0,
         adjustment_type: adjForm.value.type,
         reason: adjForm.value.reason || null,
         notes: adjForm.value.notes || null,

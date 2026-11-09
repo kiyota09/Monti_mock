@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Page 2: Add / Edit agency (one form, 6 sections)
-import { computed, watch } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed, onUnmounted, ref, watch } from 'vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Check } from 'lucide-vue-next';
 
 const props = defineProps<{
     agency: any | null;
@@ -10,6 +11,7 @@ const props = defineProps<{
 }>();
 
 const isEdit = !!props.agency;
+const isSubmitting = ref(false);
 
 const dateKey = (date: Date) => {
     const year = date.getFullYear();
@@ -35,7 +37,7 @@ const form = useForm({
     contract_start: props.agency?.contract_start || (isEdit ? '' : today),
     contract_end: props.agency?.contract_end || (isEdit ? '' : oneYearAfter(today)),
     billing_cycle: props.agency?.billing_cycle || 'Monthly',
-    payment_terms: props.agency?.payment_terms || '15 days after invoice receipt',
+    payment_terms: props.agency?.payment_terms && props.agency.payment_terms !== 'Custom terms' ? props.agency.payment_terms : '15 days after invoice receipt',
     payment_custom_terms: props.agency?.payment_custom_terms || '',
     service_fee_type: props.agency?.service_fee_type || 'percentage',
     service_fee_value: props.agency?.service_fee_value ?? '',
@@ -52,12 +54,22 @@ watch(() => form.contract_start, (startDate, previousStartDate) => {
 });
 
 function submit() {
+    isSubmitting.value = true;
+    const options = { preserveScroll: true, onFinish: () => { isSubmitting.value = false; } };
     if (isEdit) {
-        form.put(route('hrm.agencies.update', props.agency.id), { preserveScroll: true });
+        form.put(route('hrm.agencies.update', props.agency.id), options);
     } else {
-        form.post(route('hrm.agencies.store'), { preserveScroll: true });
+        form.post(route('hrm.agencies.store'), options);
     }
 }
+
+const removeNavigationGuard = router.on('before', (event) => {
+    if (!form.isDirty || isSubmitting.value) return;
+    if (!window.confirm('Discard your unsaved agency changes and leave this page?')) {
+        event.preventDefault();
+    }
+});
+onUnmounted(removeNavigationGuard);
 
 // Percentage vs fixed presentation for the service-fee value.
 const isPercentage = computed(() => form.service_fee_type === 'percentage');
@@ -80,9 +92,14 @@ function sanitizeFee(raw: string): string {
     return v;
 }
 
+function clampFeeValue(value: string): string {
+    const amount = Number(value);
+    return isPercentage.value && value !== '' && Number.isFinite(amount) && amount > 100 ? '100' : value;
+}
+
 function onFeeInput(e: Event) {
     const el = e.target as HTMLInputElement;
-    const clean = sanitizeFee(el.value);
+    const clean = clampFeeValue(sanitizeFee(el.value));
     if (el.value !== clean) el.value = clean;
     form.service_fee_value = clean as any;
 }
@@ -97,6 +114,7 @@ function onNumericInput(e: Event) {
     const el = e.target as HTMLInputElement;
     const clean = el.value.replace(/[^0-9]/g, '');
     if (el.value !== clean) el.value = clean;
+    form.contact_phone = clean;
 }
 
 // TIN: digits and hyphens only, no other special characters.
@@ -128,16 +146,13 @@ function onFeeKeydown(e: KeyboardEvent) {
 function onFeePaste(e: ClipboardEvent) {
     e.preventDefault();
     const text = e.clipboardData?.getData('text') ?? '';
-    form.service_fee_value = sanitizeFee(text) as any;
+    form.service_fee_value = clampFeeValue(sanitizeFee(text)) as any;
 }
 
 // Switching to percentage clamps anything above 100.
 watch(() => form.service_fee_type, (t) => {
     if (t === 'percentage') {
-        const n = Number(form.service_fee_value);
-        if (form.service_fee_value !== '' && !Number.isNaN(n) && n > 100) {
-            form.service_fee_value = '100' as any;
-        }
+        form.service_fee_value = clampFeeValue(String(form.service_fee_value ?? '')) as any;
     }
 });
 
@@ -160,7 +175,7 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
             <p v-if="!isEdit" class="text-slate-500 dark:text-slate-400 text-sm mt-1">A new agency starts as Active.</p>
         </div>
 
-        <form @submit.prevent="submit" class="space-y-4 max-w-4xl">
+        <form @submit.prevent="submit" class="w-full space-y-4">
             <!-- Section 1: Company -->
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4">Company</h2>
@@ -183,40 +198,43 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                 </div>
             </div>
 
-            <!-- Section 2: DOLE registration -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
-                <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4">DOLE registration</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label :class="labelCls">Registration number</label>
-                        <input v-model="form.dole_number" type="text" :class="inputCls" placeholder="DOLE registration no." />
-                        <p v-if="form.errors.dole_number" class="mt-1 text-xs text-rose-600">{{ form.errors.dole_number }}</p>
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <!-- Section 2: DOLE registration -->
+                <div class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <h2 class="mb-4 text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">DOLE registration</h2>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label :class="labelCls">Registration number</label>
+                            <input v-model="form.dole_number" type="text" :class="inputCls" placeholder="DOLE registration no." />
+                            <p v-if="form.errors.dole_number" class="mt-1 text-xs text-rose-600">{{ form.errors.dole_number }}</p>
+                        </div>
+                        <div>
+                            <label :class="labelCls">Expiry date</label>
+                            <input v-model="form.dole_expiry" type="date" :min="today" :class="inputCls" />
+                            <p v-if="form.errors.dole_expiry" class="mt-1 text-xs text-rose-600">{{ form.errors.dole_expiry }}</p>
+                        </div>
                     </div>
-                    <div>
-                        <label :class="labelCls">Expiry date</label>
-                        <input v-model="form.dole_expiry" type="date" :min="today" :class="inputCls" />
-                        <p v-if="form.errors.dole_expiry" class="mt-1 text-xs text-rose-600">{{ form.errors.dole_expiry }}</p>
+                </div>
+
+                <!-- Section 3: Contract -->
+                <div class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <h2 class="mb-4 text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">Contract</h2>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label :class="labelCls">Start date</label>
+                            <input v-model="form.contract_start" type="date" :min="today" :class="inputCls" />
+                            <p v-if="form.errors.contract_start" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_start }}</p>
+                        </div>
+                        <div>
+                            <label :class="labelCls">End date</label>
+                            <input v-model="form.contract_end" type="date" :min="form.contract_start || today" :class="inputCls" />
+                            <p v-if="form.errors.contract_end" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_end }}</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Section 3: Contract -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
-                <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4">Contract</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label :class="labelCls">Start date</label>
-                        <input v-model="form.contract_start" type="date" :min="today" :class="inputCls" />
-                        <p v-if="form.errors.contract_start" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_start }}</p>
-                    </div>
-                    <div>
-                        <label :class="labelCls">End date</label>
-                        <input v-model="form.contract_end" type="date" :min="form.contract_start || today" :class="inputCls" />
-                        <p v-if="form.errors.contract_end" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_end }}</p>
-                    </div>
-                </div>
-            </div>
-
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <!-- Section 4: Payment Terms (after Contract, before Service Fee) -->
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-4">Payment Terms</h2>
@@ -238,23 +256,21 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                     </div>
                     <div>
                         <label :class="labelCls">Payment terms <span class="text-red-500">*</span></label>
-                        <div class="space-y-2">
+                        <div class="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                             <label
-                                v-for="opt in ['Due upon invoice approval', '7 days after invoice receipt', '15 days after invoice receipt', '30 days after invoice receipt', 'Custom terms']"
+                                v-for="opt in ['Due upon invoice approval', '7 days after invoice receipt', '15 days after invoice receipt', '30 days after invoice receipt']"
                                 :key="opt"
-                                class="flex items-center gap-3 px-4 py-2.5 rounded-xl border cursor-pointer transition text-sm"
+                                class="group flex min-h-10 min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-xs leading-tight transition cursor-pointer break-words"
                                 :class="form.payment_terms === opt ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-900/10 font-bold text-slate-800 dark:text-slate-100' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300'"
                             >
-                                <input v-model="form.payment_terms" type="radio" :value="opt" class="accent-blue-600" />
+                                <input v-model="form.payment_terms" type="radio" :value="opt" class="peer sr-only" />
+                                <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-600 transition peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500/40 dark:border-slate-600 dark:bg-slate-900" :class="form.payment_terms === opt ? 'border-emerald-600 dark:border-emerald-500' : ''">
+                                    <Check v-if="form.payment_terms === opt" class="h-3 w-3" />
+                                </span>
                                 {{ opt }}
                             </label>
                         </div>
                         <p v-if="form.errors.payment_terms" class="mt-1 text-xs text-rose-600">{{ form.errors.payment_terms }}</p>
-                    </div>
-                    <div v-if="form.payment_terms === 'Custom terms'">
-                        <label :class="labelCls">Custom terms <span class="text-red-500">*</span></label>
-                        <input v-model="form.payment_custom_terms" type="text" :class="inputCls" placeholder="e.g. 45 days after invoice receipt, 50% upon approval..." />
-                        <p v-if="form.errors.payment_custom_terms" class="mt-1 text-xs text-rose-600">{{ form.errors.payment_custom_terms }}</p>
                     </div>
                 </div>
             </div>
@@ -291,6 +307,7 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                         <p v-if="form.errors.ot_multiplier" class="mt-1 text-xs text-rose-600">{{ form.errors.ot_multiplier }}</p>
                     </div>
                 </div>
+            </div>
             </div>
 
             <!-- Section 6: Contact person -->

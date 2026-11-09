@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Route;
 | middleware's native shortcut.
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/inventory')->name('inv.')->middleware(['auth', 'verified', 'module.access:INV'])->group(function () {
+Route::prefix('dashboard/inventory')->name('inv.')->middleware(['auth', 'verified', 'module.access:INV', 'geofence'])->group(function () {
     Route::get('/', [InvDashboardController::class, 'managerDashboard'])
         ->middleware('page.permission:dashboard,view')->name('dashboard');
     Route::get('/materials', [MaterialController::class, 'material'])

@@ -30,7 +30,7 @@ use Illuminate\Support\Facades\Route;
 | Customer Relationship Management (CRM) Routes
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'module.access:CRM'])->group(function () {
+Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'module.access:CRM', 'geofence'])->group(function () {
     Route::get('/posts', [CrmPostController::class, 'index'])
         ->middleware('page.permission:campaigns,view')->name('posts');
     Route::post('/posts', [CrmPostController::class, 'store'])

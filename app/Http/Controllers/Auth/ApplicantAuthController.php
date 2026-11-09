@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Mail\ApplicantOtpMail;
 use App\Models\Hrm\Applicant;
+use App\Models\Core\User;
 use App\Models\Hrm\ApplicantStatusHistory;
 use App\Support\NotifiesApplicant;
 use App\Support\TerminatedAccess;
@@ -67,6 +68,12 @@ class ApplicantAuthController extends Controller
         }
 
         $existing = Applicant::where('email', $request->email)->first();
+
+        if ($existing && $this->isEmployeeAccount($existing)) {
+            throw ValidationException::withMessages([
+                'email' => 'This personal email is now linked to an employee account. Use the employee portal to sign in.',
+            ]);
+        }
 
         if ($existing && ($existing->status === TerminatedAccess::TERMINATED_STATUS)) {
             throw ValidationException::withMessages([
@@ -138,6 +145,10 @@ class ApplicantAuthController extends Controller
 
         $applicant = Applicant::where('email', $request->email)->firstOrFail();
 
+        if ($this->isEmployeeAccount($applicant)) {
+            return redirect()->route('login')->withErrors(['identity' => 'This personal email is now linked to an employee account. Use the employee portal to sign in.']);
+        }
+
         if ($applicant->status === TerminatedAccess::TERMINATED_STATUS) {
             return redirect()->route('applicant.login')
                 ->withErrors(['email' => TerminatedAccess::APPLICANT_BLOCK_MESSAGE]);
@@ -159,6 +170,12 @@ class ApplicantAuthController extends Controller
         ]);
 
         $applicant = Applicant::where('email', $request->email)->first();
+
+        if ($applicant && $this->isEmployeeAccount($applicant)) {
+            throw ValidationException::withMessages([
+                'otp' => 'This personal email is now linked to an employee account. Use the employee portal to sign in.',
+            ]);
+        }
 
         if (! $applicant || ! $applicant->email_otp) {
             throw ValidationException::withMessages([
@@ -231,6 +248,12 @@ class ApplicantAuthController extends Controller
         $request->validate(['email' => 'required|email']);
 
         $applicant = Applicant::where('email', $request->email)->first();
+
+        if ($applicant && $this->isEmployeeAccount($applicant)) {
+            throw ValidationException::withMessages([
+                'email' => 'This personal email is now linked to an employee account. Use the employee portal to sign in.',
+            ]);
+        }
 
         if (! $applicant) {
             throw ValidationException::withMessages([
@@ -309,6 +332,11 @@ class ApplicantAuthController extends Controller
             return back()->withErrors(['email' => 'No applicant account found with this email. Please register first.']);
         }
 
+        if ($this->isEmployeeAccount($applicant)) {
+            RateLimiter::hit($this->throttleKey($request));
+            return back()->withErrors(['email' => 'This personal email is now linked to an employee account. Use the employee portal to sign in.']);
+        }
+
         if (! $applicant->password) {
             RateLimiter::hit($this->throttleKey($request));
             Log::warning('Applicant login failed: no portal password set', ['applicant_id' => $applicant->id]);
@@ -378,6 +406,16 @@ class ApplicantAuthController extends Controller
         $request->session()->regenerate();
 
         return $this->portalRedirect($request);
+    }
+
+    private function isEmployeeAccount(Applicant $applicant): bool
+    {
+        if ($applicant->hired_user_id) {
+            return true;
+        }
+
+        $email = strtolower(trim((string) $applicant->email));
+        return $email !== '' && User::whereRaw('LOWER(personal_email) = ?', [$email])->exists();
     }
 
     // ---------------------------------------------------------------

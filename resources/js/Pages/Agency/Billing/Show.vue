@@ -28,6 +28,7 @@ defineProps<{
         }>;
         record_count: number;
         paid_at: string | null; payment_reference: string | null;
+        attachments: Array<{ name: string; url: string }>;
     };
 }>();
 
@@ -39,16 +40,14 @@ function money(v: any): string {
 <template>
     <Head :title="statement.code + ' - Monti ERP'" />
     <AgencyLayout>
-        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-        <nav class="mt-2 flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-            <Link :href="route('agency.billing.index')" class="hover:text-amber-700">Billing</Link>
-            <span>/</span>
-            <span class="font-semibold">{{ statement.code }}</span>
-        </nav>
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div class="agency-page-header">
             <div>
-                <h1 class="text-2xl font-black text-slate-900 dark:text-white">{{ statement.code }}</h1>
-                <p class="text-sm text-slate-500 mt-0.5">{{ statement.period }} · <strong>{{ statement.status }}</strong></p>
+                <p class="agency-page-eyebrow">Agency Portal</p>
+                <nav class="mt-1 flex items-center gap-2 text-xs font-medium">
+                    <Link :href="route('agency.billing.index')">Billing</Link><span>/</span><span class="font-semibold">{{ statement.code }}</span>
+                </nav>
+                <h1>{{ statement.code }}</h1>
+                <p class="mt-1 text-sm">{{ statement.period }} · <strong>{{ statement.status }}</strong></p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
                 <a :href="route('agency.billing.export-pdf', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition">
@@ -92,6 +91,16 @@ function money(v: any): string {
             <p v-if="statement.status === 'Paid'" class="mt-3 text-xs text-slate-500 text-right">
                 Paid {{ statement.paid_at || '' }}{{ statement.payment_reference ? ' · Ref: ' + statement.payment_reference : '' }}
             </p>
+        </div>
+
+        <div v-if="statement.attachments?.length" class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 mb-4">
+            <h2 class="text-sm font-black uppercase tracking-wider mb-3">Attachments</h2>
+            <ul class="space-y-2">
+                <li v-for="file in statement.attachments" :key="file.url" class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-900">
+                    <span class="truncate text-sm font-semibold">{{ file.name }}</span>
+                    <a :href="file.url" target="_blank" rel="noopener noreferrer" class="shrink-0 text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400">Download</a>
+                </li>
+            </ul>
         </div>
     </AgencyLayout>
 </template>

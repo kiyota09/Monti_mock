@@ -1,7 +1,7 @@
 <script setup>
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Search, Upload, DollarSign, TrendingDown, Wallet, Plus, FileText } from 'lucide-vue-next'
 
 // NOTE (real system): role comes from the login session and is enforced on the
@@ -114,6 +114,11 @@ const initials = (name) => String(name || '?').split(' ').map((n) => n[0]).join(
 // Backend uses back()->withErrors() for rejections and with('message') for
 // success — without this banner every rejection looks like a dead button.
 const flashMsg = computed(() => page.props.flash?.message || page.props.flash?.success || '')
+const generatedPayrollMessage = computed(() => String(flashMsg.value).includes('payroll records generated as Draft.') ? flashMsg.value : '')
+const showPayrollGenerationModal = ref(false)
+watch(generatedPayrollMessage, (message) => {
+    if (message) showPayrollGenerationModal.value = true
+}, { immediate: true })
 const errorMsg = computed(() => {
     const e = page.props.errors || {}
     return e.error || e.ids || Object.values(e)[0] || ''
@@ -232,11 +237,11 @@ const exportCsv = async () => {
 <template>
     <Head title="Payroll" />
     <AuthenticatedLayout>
-        <div class="flex min-h-screen bg-white">
+        <div class="payroll-page flex min-h-screen bg-white">
             <div class="flex-1 p-4 sm:p-6 lg:p-8 text-slate-900 font-sans min-w-0 relative flex flex-col gap-4">
                 <div class="absolute inset-0 bg-grid-slate-100 opacity-10 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
 
-                <header class="mb-0 relative shrink-0">
+                <div class="relative shrink-0">
                     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         <div>
                             <nav class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
@@ -262,10 +267,16 @@ const exportCsv = async () => {
                                 class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-72">
                                 <option v-for="p in periodOptions" :key="p.label" :value="p.label">{{ p.label }}{{ p.is_current ? ' · Current' : '' }}{{ p.locked ? ' · Locked' : '' }}{{ p.row_count ? ` (${p.row_count})` : '' }}</option>
                             </select>
-                            <Link :href="route('hrm.payroll.generate')" :class="canEdit ? '' : 'opacity-50 pointer-events-none'"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-[#263c43] hover:bg-[#1e3036] text-white rounded-lg text-sm font-bold transition shadow-md">
-                                <Plus class="w-4 h-4" /> Generate Payroll
-                            </Link>
+                            <div class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap">
+                                <Link :href="route('hrm.payroll.advances.index')"
+                                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition shadow-md">
+                                    <DollarSign class="w-4 h-4 shrink-0" /> Advance Payment
+                                </Link>
+                                <Link :href="route('hrm.payroll.generate')" :class="canEdit ? '' : 'opacity-50 pointer-events-none'"
+                                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#263c43] hover:bg-[#1e3036] text-white rounded-lg text-sm font-bold transition shadow-md">
+                                    <Plus class="w-4 h-4 shrink-0" /> Generate Payroll
+                                </Link>
+                            </div>
                         </div>
                     </div>
                     <div v-if="active_period_meta" class="mt-3 flex flex-wrap gap-2 text-xs relative">
@@ -274,10 +285,10 @@ const exportCsv = async () => {
                         <span v-if="active_period_meta.is_current" class="px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 font-semibold">Current period</span>
                         <span v-if="active_period_meta.locked" class="px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold">Locked · all Paid</span>
                     </div>
-                </header>
+                </div>
 
                 <div v-if="errorMsg" class="mb-4 px-4 py-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold relative">{{ errorMsg }}</div>
-                <div v-if="flashMsg" class="mb-4 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold relative">{{ flashMsg }}</div>
+                <div v-if="flashMsg && !generatedPayrollMessage" class="mb-4 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold relative">{{ flashMsg }}</div>
                 <div v-if="localMsg" class="mb-4 px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold relative">{{ localMsg }}</div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 relative">
@@ -404,6 +415,21 @@ const exportCsv = async () => {
                 </div>
             </div>
         </div>
+        <div v-if="showPayrollGenerationModal && generatedPayrollMessage" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="presentation" @click.self="showPayrollGenerationModal = false">
+            <section class="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="payroll-generation-title">
+                <header class="border-b border-slate-100 px-5 py-4">
+                    <h2 id="payroll-generation-title" class="text-base font-black text-slate-900">Payroll generation complete</h2>
+                    <p class="mt-1 text-xs text-slate-500">Generated records were saved as Draft.</p>
+                </header>
+                <div class="max-h-[55vh] overflow-y-auto px-5 py-4">
+                    <p class="whitespace-pre-line break-words text-sm leading-6 text-slate-700">{{ generatedPayrollMessage }}</p>
+                </div>
+                <footer class="flex justify-end border-t border-slate-100 bg-slate-50 px-5 py-4">
+                    <button type="button" @click="showPayrollGenerationModal = false" class="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800">Close</button>
+                </footer>
+            </section>
+        </div>
+
         <div v-if="confirmBox" class="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-900/50" @click="closeConfirm"></div>
             <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -431,4 +457,31 @@ const exportCsv = async () => {
 .bg-grid-slate-100 { background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px); background-size: 24px 24px; }
 button:disabled { opacity: .45; cursor: not-allowed; }
 :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+:global(html.dark .payroll-page) {
+    background-color: #09090b !important;
+    color: #e4e4e7 !important;
+}
+:global(html.dark .payroll-page .bg-white) { background-color: #18181b !important; }
+:global(html.dark .payroll-page .bg-slate-50) { background-color: #27272a !important; }
+:global(html.dark .payroll-page .border-slate-100),
+:global(html.dark .payroll-page .border-slate-200) { border-color: #3f3f46 !important; }
+:global(html.dark .payroll-page .divide-slate-100 > :not([hidden]) ~ :not([hidden])) { border-color: #3f3f46 !important; }
+:global(html.dark .payroll-page .text-slate-900),
+:global(html.dark .payroll-page .text-slate-800),
+:global(html.dark .payroll-page .text-slate-700),
+:global(html.dark .payroll-page .text-slate-600),
+:global(html.dark .payroll-page h1),
+:global(html.dark .payroll-page h2),
+:global(html.dark .payroll-page h3) { color: #e4e4e7 !important; }
+:global(html.dark .payroll-page .text-slate-500),
+:global(html.dark .payroll-page .text-slate-400),
+:global(html.dark .payroll-page p),
+:global(html.dark .payroll-page nav) { color: #a1a1aa !important; }
+:global(html.dark .payroll-page input),
+:global(html.dark .payroll-page select) { background-color: #27272a !important; border-color: #52525b !important; color: #f4f4f5 !important; color-scheme: dark; }
+:global(html.dark .payroll-page input::placeholder) { color: #a1a1aa !important; }
+:global(html.dark .payroll-page button.bg-white) { background-color: #27272a !important; border-color: #52525b !important; color: #e4e4e7 !important; }
+:global(html.dark .payroll-page .hover\:bg-slate-50:hover) { background-color: #3f3f46 !important; }
+:global(html.dark .payroll-page .hover\:bg-slate-100:hover) { background-color: #3f3f46 !important; }
 </style>

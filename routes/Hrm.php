@@ -12,6 +12,7 @@ use App\Http\Controllers\Hrm\CompensationController;
 use App\Http\Controllers\Hrm\HrmDashboardController;
 use App\Http\Controllers\Hrm\InterviewController;
 use App\Http\Controllers\Hrm\PayrollController;
+use App\Http\Controllers\Hrm\AdvancePaymentController;
 use App\Http\Controllers\Hrm\PayrollRatesController;
 use App\Http\Controllers\Hrm\PayrollSettingsController;
 use App\Http\Controllers\Hrm\PositionController;
@@ -40,7 +41,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::get('/active-positions', [PositionController::class, 'getActivePositions'])->name('active.positions');
-Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->group(function () {
+Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified', 'geofence'])->group(function () {
     // Dashboard (page: dashboard)
     Route::get('/', [HrmDashboardController::class, 'index'])
         ->middleware('page.permission:dashboard,view')
@@ -312,6 +313,30 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
     Route::get('/payroll', [PayrollController::class, 'index'])
         ->middleware('page.permission:payroll,view')
         ->name('payroll');
+    Route::get('/payroll/advances', [AdvancePaymentController::class, 'index'])
+        ->middleware('page.permission:payroll,view')
+        ->name('payroll.advances.index');
+    Route::post('/payroll/advances', [AdvancePaymentController::class, 'store'])
+        ->middleware('page.permission:payroll,edit')
+        ->name('payroll.advances.store');
+    Route::patch('/payroll/advances/{advance}', [AdvancePaymentController::class, 'update'])
+        ->middleware('page.permission:payroll,edit')
+        ->name('payroll.advances.update');
+    Route::post('/payroll/advances/{advance}/submit', [AdvancePaymentController::class, 'submit'])
+        ->middleware('page.permission:payroll,edit')
+        ->name('payroll.advances.submit');
+    Route::post('/payroll/advances/{advance}/decision', [AdvancePaymentController::class, 'decide'])
+        ->middleware('page.permission:payroll,view')
+        ->name('payroll.advances.decision');
+    Route::post('/payroll/advances/{advance}/release', [AdvancePaymentController::class, 'release'])
+        ->middleware('page.permission:payroll,view')
+        ->name('payroll.advances.release');
+    Route::post('/payroll/advances/{advance}/cancel', [AdvancePaymentController::class, 'cancel'])
+        ->middleware('page.permission:payroll,edit')
+        ->name('payroll.advances.cancel');
+    Route::get('/payroll/advances/{advance}/document', [AdvancePaymentController::class, 'document'])
+        ->middleware('page.permission:payroll,view')
+        ->name('payroll.advances.document');
     Route::get('/payroll/employees.json', [PayrollController::class, 'employeesJson'])
         ->middleware('page.permission:payroll,view')
         ->name('payroll.employees.json');
@@ -766,7 +791,7 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified'])->
 // /hrm/... paths via axios instead of route()). Same controllers,
 // same permission mapping. Keeps new UI functional without rewrite.
 // ==================================================================
-Route::prefix('hrm')->middleware(['auth', 'verified'])->group(function () {
+Route::prefix('hrm')->middleware(['auth', 'verified', 'geofence'])->group(function () {
     // Bare /hrm/recruitment/applications has no page (only POST store) — send
     // direct navigations to the real HRM applications page instead of a 405.
     Route::get('/recruitment/applications', function () {

@@ -343,7 +343,7 @@ function confirmWithdraw() {
     <Head title="My Applications - Monti ERP" />
 
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="applicant-page-header">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     My <span class="text-blue-600">Applications</span>
@@ -358,11 +358,11 @@ function confirmWithdraw() {
             </Link>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div class="applicant-metric-grid grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 mb-4">
             <div
                 v-for="metric in metrics"
                 :key="metric.label"
-                class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden p-4"
+                class="applicant-metric-card bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden"
             >
                 <div class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{{ metric.label }}</div>
                 <div class="text-2xl font-black text-slate-900 dark:text-white mt-1">{{ metric.value }}</div>

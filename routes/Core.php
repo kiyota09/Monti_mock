@@ -14,6 +14,7 @@ use App\Http\Controllers\ThemePreferenceController;
 use App\Support\ThemePolicy;
 use App\Http\Controllers\Users\TopbarController;
 use App\Models\Crm\CrmPost;
+use App\Models\Hrm\HrmJobPosting;
 use App\Models\Inv\Product;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
@@ -61,6 +62,50 @@ Route::get('/', function () {
         })->values(),
     ]);
 
+    $careerJobs = HrmJobPosting::with(['position', 'employmentType'])
+        ->where('status', 'Published')
+        ->whereNull('archived_at')
+        ->where(fn ($query) => $query->whereNull('closing_date')->orWhereDate('closing_date', '>=', today()))
+        ->whereColumn('filled_vacancies', '<', 'vacancies')
+        ->latest('published_at')
+        ->take(4)
+        ->get()
+        ->map(fn ($job) => [
+            'id' => $job->id,
+            'posting_id' => $job->posting_id,
+            'title' => $job->title,
+            'work_location' => $job->work_location,
+            'work_mode' => $job->work_mode,
+            'work_schedule' => $job->work_schedule,
+            'salary_visibility' => $job->salary_visibility,
+            'salary_min' => $job->salary_min,
+            'salary_max' => $job->salary_max,
+            'salary_range' => '',
+            'closing_date' => $job->closing_date?->format('M d, Y'),
+            'closing_date_raw' => $job->closing_date?->toDateString(),
+            'published_date' => $job->published_at?->format('M d, Y'),
+            'published_date_raw' => $job->published_at?->toIso8601String(),
+            'posted' => $job->published_at?->diffForHumans() ?? 'Recently',
+            'posted_timestamp' => $job->published_at?->timestamp,
+            'created_at' => $job->created_at?->toIso8601String(),
+            'position_name' => $job->position?->name ?? $job->title,
+            'position_code' => $job->position?->code ?? '',
+            'department' => $job->department ?? '',
+            'job_description' => $job->position?->description ?? '',
+            'responsibilities' => $job->position?->responsibilities,
+            'qualifications' => $job->position?->qualifications,
+            'required_skills' => $job->position?->required_skills,
+            'employment_type' => $job->employmentType?->name ?? 'Full-time',
+            'reports_to' => $job->reports_to,
+            'management_level' => $job->position?->management_level,
+            'vacancies' => (int) $job->vacancies,
+            'filled_vacancies' => (int) $job->filled_vacancies,
+            'available_vacancies' => max(0, (int) $job->vacancies - (int) $job->filled_vacancies),
+            'status' => $job->status,
+            'hiring_priority' => $job->hiring_priority,
+            'is_urgent' => $job->hiring_priority === 'Urgent',
+        ])->values();
+
     return inertia('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
@@ -68,6 +113,7 @@ Route::get('/', function () {
         'phpVersion' => PHP_VERSION,
         'companyPosts' => $posts,
         'products' => $products,
+        'careerJobs' => $careerJobs,
     ]);
 });
 
@@ -76,7 +122,7 @@ Route::get('/', function () {
 | Authenticated User Core Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'geofence'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     // Shown when every page permission is still 'disabled' (IT default).
     Route::get('/awaiting-access', function () {
@@ -129,7 +175,7 @@ Route::middleware(['auth'])->group(function () {
 | Unified Employee UI Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'position:staff,manager'])->prefix('dashboard/employee-ui')->group(function () {
+Route::middleware(['auth', 'geofence', 'position:staff,manager'])->prefix('dashboard/employee-ui')->group(function () {
     Route::get('/', [AppController::class, 'index'])->name('employee.ui.dashboard');
     Route::get('/clock', [ClockController::class, 'clock'])->name('employee.ui.clock');
     Route::post('/clock/toggle', [ClockController::class, 'toggle'])
@@ -147,7 +193,7 @@ Route::middleware(['auth', 'position:staff,manager'])->prefix('dashboard/employe
 | Unified Trainee Portal Routes
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/trainee')->middleware(['auth', 'verified', 'position:trainee'])->group(function () {
+Route::prefix('dashboard/trainee')->middleware(['auth', 'verified', 'geofence', 'position:trainee'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('trainee.dashboard');
     Route::get('/timekeeping', [TraineeTimeKeepingController::class, 'index'])->name('trainee.timekeeping');
     Route::post('/timekeeping/clock', [TraineeTimeKeepingController::class, 'clockInOut'])->name('trainee.timekeeping.clock');

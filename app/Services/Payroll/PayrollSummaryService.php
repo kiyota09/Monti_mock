@@ -310,8 +310,32 @@ class PayrollSummaryService
                 $shiftEnd->addDay();
             }
 
-            $clockIn = Carbon::parse($dateStr.' '.$log->clock_in, 'Asia/Manila');
-            $clockOut = $log->clock_out ? Carbon::parse($dateStr.' '.$log->clock_out, 'Asia/Manila') : $shiftEnd;
+            $rawSessions = is_array($log->sessions) && $log->sessions
+                ? $log->sessions
+                : [['clock_in' => $log->clock_in, 'clock_out' => $log->clock_out]];
+            $segments = [];
+            foreach ($rawSessions as $session) {
+                if (empty($session['clock_in'])) {
+                    continue;
+                }
+                try {
+                    $segmentIn = Carbon::parse($dateStr.' '.$session['clock_in'], 'Asia/Manila');
+                    $segmentOut = ! empty($session['clock_out'])
+                        ? Carbon::parse($dateStr.' '.$session['clock_out'], 'Asia/Manila')
+                        : $shiftEnd->copy();
+                    if ($segmentOut->lt($segmentIn)) {
+                        $segmentOut->addDay();
+                    }
+                    $segments[] = ['in' => $segmentIn, 'out' => $segmentOut];
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+            if (! $segments) {
+                continue;
+            }
+            $clockIn = $segments[0]['in'];
+            $clockOut = $segments[count($segments) - 1]['out'];
 
             // Late deduction: hourly ÷ divisor (Payroll Settings).
             $hourlyRate = $dailyRate > 0 ? $dailyRate / $hrsDay : 0;
@@ -332,7 +356,10 @@ class PayrollSummaryService
 
             // Night differential: hourly × night multiplier (time-based,
             // independent of holiday status).
-            $nightMins = self::calculateNightMinutes($clockIn, $clockOut);
+            $nightMins = 0;
+            foreach ($segments as $segment) {
+                $nightMins += self::calculateNightMinutes($segment['in'], $segment['out']);
+            }
             $nightHrs = $nightMins / 60;
             $nightHours += $nightHrs;
             $nightAmt += $nightHrs * $hourlyRate * $nightMult;
@@ -352,7 +379,11 @@ class PayrollSummaryService
             // ordinary workday must NOT earn a rest premium on top of its
             // 130% daily rate (DOLE: 130% total, 150% only on a rest day).
             if ($isRestDay && ! $worked['skip_rest_premium']) {
-                $hoursWorked = abs($clockIn->diffInHours($clockOut));
+                $hoursWorked = 0;
+                foreach ($segments as $segment) {
+                    $hoursWorked += $segment['in']->floatDiffInHours($segment['out']);
+                }
+                $hoursWorked = (int) round($hoursWorked);
                 $sundayHours += $hoursWorked;
                 $sunAmt += $hoursWorked * $hourlyRate * $sunMult;
             }

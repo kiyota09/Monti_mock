@@ -11,7 +11,7 @@ const props = defineProps<{
         id: number; code: string; department: string; position_skill: string;
         agency?: string | null;
         needed: number; filled: number; start_date: string | null; end_date: string | null;
-        shift: string | null; notes: string | null; status: string; stored_status: string;
+        shift: string | null; employment_type: string | null; notes: string | null; status: string; stored_status: string;
         accepted: Array<{ worker_code: string | null; worker_name: string | null }>;
     };
     proposals: Array<{
@@ -59,14 +59,14 @@ function progressPct(): number {
                 <Link :href="route('agency.requests.index')" class="transition hover:text-amber-700">Requests</Link><span class="text-slate-300">/</span><span class="text-slate-800 dark:text-slate-200">{{ request.code }}</span>
             </nav>
 
-            <section class="relative isolate overflow-hidden rounded-[28px] bg-slate-950 px-5 py-6 text-white shadow-xl shadow-slate-900/10 sm:px-8 sm:py-8">
+            <section class="agency-page-header relative isolate overflow-hidden !mb-4 !rounded-2xl !px-6 !py-5 text-white shadow-sm">
                 <div class="pointer-events-none absolute -right-16 -top-32 -z-10 h-80 w-80 rounded-full bg-amber-400/20 blur-3xl"></div>
                 <div class="pointer-events-none absolute -bottom-40 left-1/3 -z-10 h-72 w-72 rounded-full bg-orange-600/15 blur-3xl"></div>
                 <div class="flex flex-wrap items-start justify-between gap-5">
                     <div class="max-w-3xl">
                         <div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-200"><BriefcaseBusiness class="h-3.5 w-3.5" /> Workforce request</span><span class="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider" :class="request.status === 'Filled' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-300/15 text-amber-200'">{{ request.status }}</span></div>
-                        <h1 class="mt-4 text-2xl font-black tracking-tight sm:text-4xl">{{ request.position_skill }}</h1>
-                        <p class="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-slate-300"><span>{{ request.code }}</span><span class="text-slate-500">·</span><span>{{ request.department }}</span><span v-if="request.agency" class="text-slate-500">·</span><span v-if="request.agency">{{ request.agency }}</span></p>
+                        <h1 class="!mt-3 !text-3xl">{{ request.position_skill }}</h1>
+                        <p class="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-300"><span>{{ request.code }}</span><span class="text-slate-500">·</span><span>{{ request.department }}</span><span v-if="request.agency" class="text-slate-500">·</span><span v-if="request.agency">{{ request.agency }}</span></p>
                     </div>
                     <div class="min-w-[190px] rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm">
                         <div class="flex items-center justify-between"><span class="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Staffing progress</span><span class="text-sm font-black text-amber-300">{{ progressPct() }}%</span></div>
@@ -75,7 +75,7 @@ function progressPct(): number {
                         <p class="mt-1 text-[11px] text-slate-400">{{ Math.max(0, request.needed - request.filled) }} open {{ request.needed - request.filled === 1 ? 'position' : 'positions' }}</p>
                     </div>
                 </div>
-                <div class="mt-7 grid gap-2 border-t border-white/10 pt-4 sm:grid-cols-3">
+                <div class="mt-4 grid gap-2 border-t border-white/10 pt-3 sm:grid-cols-3">
                     <div class="flex items-center gap-3 rounded-xl px-2 py-2"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-amber-200"><CalendarDays class="h-4 w-4" /></span><div><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assignment window</p><p class="mt-0.5 text-xs font-semibold">{{ request.start_date || 'Start date unset' }} <span class="text-slate-500">→</span> {{ request.end_date || 'Ongoing' }}</p></div></div>
                     <div class="flex items-center gap-3 rounded-xl px-2 py-2"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-amber-200"><Clock3 class="h-4 w-4" /></span><div><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Shift</p><p class="mt-0.5 text-xs font-semibold">{{ request.shift || 'Not specified' }}</p></div></div>
                     <div class="flex items-center gap-3 rounded-xl px-2 py-2"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-amber-200"><Users class="h-4 w-4" /></span><div><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Agency allocation</p><p class="mt-0.5 text-xs font-semibold">{{ request.agency || 'Assigned agency' }}</p></div></div>
@@ -88,6 +88,7 @@ function progressPct(): number {
                     <div class="space-y-1 p-4 sm:p-5">
                         <div class="flex items-start gap-3 rounded-2xl px-3 py-3"><span class="mt-0.5 text-slate-400"><MapPin class="h-4 w-4" /></span><div class="min-w-0 flex-1"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Department</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{{ request.department }}</p></div></div>
                         <div class="flex items-start gap-3 rounded-2xl px-3 py-3"><span class="mt-0.5 text-slate-400"><BriefcaseBusiness class="h-4 w-4" /></span><div class="min-w-0 flex-1"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Position / skill</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{{ request.position_skill }}</p></div></div>
+                        <div v-if="request.employment_type" class="flex items-start gap-3 rounded-2xl px-3 py-3"><span class="mt-0.5 text-slate-400"><BriefcaseBusiness class="h-4 w-4" /></span><div class="min-w-0 flex-1"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Employment type</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{{ request.employment_type }}</p></div></div>
                         <div class="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 dark:border-slate-700">
                             <div class="rounded-2xl bg-slate-50 p-3 dark:bg-slate-900/50"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Headcount</p><p class="mt-1 text-lg font-black text-slate-900 dark:text-white">{{ request.needed }}</p></div>
                             <div class="rounded-2xl bg-slate-50 p-3 dark:bg-slate-900/50"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Current fill</p><p class="mt-1 text-lg font-black text-slate-900 dark:text-white">{{ progressPct() }}%</p></div>

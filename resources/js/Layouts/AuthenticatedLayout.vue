@@ -19,12 +19,11 @@ const user = computed(() => page.props.auth.user)
 // shared padding removed (their own pages provide it).
 const isCrmPage = computed(() => (page.url || '').startsWith('/dashboard/crm'))
 const isSupplierPage = computed(() => (page.url || '').startsWith('/supplier'))
-// IT and Applicant portal pages render several sibling sections in the slot.
-// Forcing every direct child to viewport height stretched each section, so let
-// their sections follow content instead.
+const isApplicantPortal = computed(() => !!page.props.auth.applicant || (page.url || '').startsWith('/applicant'))
+// IT pages render multiple sibling sections; keep them at their content height.
 const isNoStretchPage = computed(() => {
     const url = page.url || ''
-    return url.startsWith('/dashboard/it') || url.startsWith('/applicant')
+    return url.startsWith('/dashboard/it')
 })
 const isLocating = ref(true)
 const locationReady = ref(false)
@@ -132,6 +131,8 @@ onMounted(() => {
 
             axios.defaults.headers.common['X-User-Lat'] = lat;
             axios.defaults.headers.common['X-User-Lng'] = lng;
+            sessionStorage.setItem('erp-user-lat', String(lat));
+            sessionStorage.setItem('erp-user-lng', String(lng));
             page.props.auth.location = { lat, lng };
             console.log(`📡 GPS Synced: ${lat}, ${lng}`);
         };
@@ -219,6 +220,7 @@ const reloadPage = () => {
                             'hrm-natural-sections': (page.url || '').startsWith('/dashboard/hrm'),
                             'no-stretch-sections': isNoStretchPage,
                         },
+                        { 'applicant-portal-viewport': isApplicantPortal },
                     ]">
                         <div v-if="isSupplierPage" class="supplier-page-shell" :class="{ 'supplier-page-shell--messages': (page.url || '').startsWith('/supplier/messages') }">
                             <slot />
@@ -253,7 +255,7 @@ const reloadPage = () => {
    so neutralise those at the outer two levels only. Only centered wrappers
    (mx-auto) are widened, and fixed/dialog elements (modals) are excluded so
    they keep their designed width and are never stretched. */
-.app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
+html:not([data-module="it"]):not([data-module="supplier"]) .app-viewport:not(.hrm-natural-sections):not(.applicant-portal-viewport) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
     min-height: 100% !important;
 }
 /* IT and supplier pages render sibling sections in the layout slot. Let each
@@ -263,21 +265,50 @@ html[data-module="supplier"] .app-viewport > *:not(.fixed):not([role="dialog"]):
 .app-viewport.hrm-natural-sections > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]) {
     min-height: 0 !important;
 }
-.app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
-.app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
+.app-viewport.applicant-portal-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
+    min-height: 0 !important;
+    width: 100%;
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+.app-viewport:not(.hrm-natural-sections):not(.applicant-portal-viewport) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
+.app-viewport:not(.hrm-natural-sections):not(.applicant-portal-viewport) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
     > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"] {
     max-width: none !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
 }
-
-/* IT and Applicant portal pages: sections follow their content instead of each
-   being stretched to a full viewport. A page with a single root wrapper still
-   fills the viewport. */
-.app-viewport.no-stretch-sections > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
-    min-height: 0 !important;
+.applicant-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid #334155;
+    border-radius: 1rem;
+    background: linear-gradient(105deg, #0f172a 0%, #1e293b 58%, #334155 100%);
+    color: #fff;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 12%);
 }
-.app-viewport.no-stretch-sections > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero):only-child {
-    min-height: 100% !important;
+.applicant-page-header h1 {
+    margin: 0;
+    color: #fff;
+    font-size: 1.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+.applicant-page-header h1 span { color: #fcd34d !important; }
+.applicant-page-header p { color: #cbd5e1; }
+.applicant-metric-grid { gap: .75rem !important; }
+.applicant-metric-card {
+    min-height: 0 !important;
+    border-radius: .75rem !important;
+    padding: 1rem !important;
+}
+@media (max-width: 640px) {
+    .applicant-page-header { align-items: flex-start; flex-direction: column; padding: 1rem 1.125rem; }
+    .applicant-page-header h1 { font-size: 1.5rem; }
 }
 </style>

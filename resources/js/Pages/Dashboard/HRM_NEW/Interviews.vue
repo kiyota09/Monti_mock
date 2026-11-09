@@ -21,13 +21,13 @@
                                 <span class="text-blue-600 font-semibold">Interviews</span>
                             </nav>
                             <h1 class="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Interviews</h1>
-                            <p class="text-sm text-slate-500 mt-0.5">Manage candidates who have been shortlisted or scheduled for interviews.</p>
+                            <p class="text-sm text-slate-500 mt-0.5">{{ interviewerOnly ? 'Review interviews assigned to you.' : 'Manage candidates who have been shortlisted or scheduled for interviews.' }}</p>
                         </div>
                     </div>
                 </header>
 
                 <!-- KPI METRICS ROW -->
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4 shrink-0">
+                <div v-if="!interviewerOnly" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4 shrink-0">
                     <div
                         v-for="metric in metricsData"
                         :key="metric.label"
@@ -51,6 +51,7 @@
                 <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm p-4 mb-4 shrink-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <button
+                            v-if="!interviewerOnly"
                             @click="activeTab = 'schedule'"
                             class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2"
                             :class="activeTab === 'schedule'
@@ -96,6 +97,7 @@
                             </span>
                         </button>
                         <button
+                            v-if="!interviewerOnly"
                             @click="activeTab = 'passed'"
                             class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2"
                             :class="activeTab === 'passed' ? 'bg-teal-600 text-white shadow-md hover:bg-teal-700' : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'"
@@ -122,7 +124,7 @@
                 <!-- ============================================ -->
                 <!-- SECTION 1: CANDIDATES TO SCHEDULE             -->
                 <!-- ============================================ -->
-                <div v-show="activeTab === 'schedule'">
+                <div v-if="!interviewerOnly && activeTab === 'schedule'">
                     <div class="bg-white rounded-xl border border-slate-200/60 shadow-md backdrop-blur-sm overflow-hidden">
                         <div class="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
                             <div class="relative flex-1 min-w-[200px]">
@@ -457,7 +459,7 @@
                     </div>
                 </div>
 
-                <div v-show="activeTab === 'passed'">
+                <div v-if="!interviewerOnly && activeTab === 'passed'">
                     <div class="overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-md">
                         <div class="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4">
                             <div class="relative min-w-[200px] flex-1">
@@ -1106,7 +1108,7 @@
                             <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openRescheduleModal(selectedInterview)" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md">↻ Reschedule</button>
                             <button v-if="false" @click="openCancelModal(selectedInterview)" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><X class="w-3.5 h-3.5" />Cancel</button>
                             <button v-if="['Scheduled','No Show'].includes(selectedInterview.status) && !isCancelledInterview(selectedInterview)" @click="openNoShowConfirm(selectedInterview)" class="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><AlertTriangle class="w-3.5 h-3.5" />No Show</button>
-                            <button v-if="selectedInterview.status === 'Scheduled' && !isCancelledInterview(selectedInterview)" @click="openEvaluationModal(selectedInterview)" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Check class="w-3.5 h-3.5" />Start Evaluation</button>
+                            <button v-if="(selectedInterview.status === 'Scheduled' || (selectedInterview.status === 'Completed' && !selectedInterview.evaluation)) && !isCancelledInterview(selectedInterview)" @click="openEvaluationModal(selectedInterview)" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Check class="w-3.5 h-3.5" />Start Evaluation</button>
                             <button v-if="isCancelledInterview(selectedInterview) && selectedInterview.applicant_id && !hasScheduledInterviewFor(selectedInterview)" @click="scheduleNewInterview(selectedInterview)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule New Interview</button>
                             <button v-if="selectedInterview.status === 'Completed' && selectedInterview.result === 'Passed' && selectedInterview.applicant?.status === 'Interviewed'" @click="openSelectModal(selectedInterview)" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Star class="w-3.5 h-3.5" />Select Candidate</button>
                             <button v-if="selectedInterview.status === 'Completed' && !isFinalInterview(selectedInterview) && selectedInterview.evaluation?.recommendation === 'proceed_to_final_interview' && ['Shortlisted','Interview Scheduled','Initial Interview','Final Interview','Interviewed'].includes(selectedInterview.applicant?.status)" @click="scheduleFinalInterview(selectedInterview)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule Final Interview</button>
@@ -1174,18 +1176,22 @@ const props = defineProps({
             interview_scheduled: 0,
             interviewed: 0
         })
-    }
+    },
+    interviewerOnly: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 // ============================================
 // STATE
 // ============================================
-const activeTab = ref('completed');
+const activeTab = ref('upcoming');
 const searchQuery = ref('');
 const interviewSearchQuery = ref('');
 const filterStatus = ref('');
 const historyFilterStatus = ref('All');
-const finalFilterStatus = ref('Scheduled');
+const finalFilterStatus = ref('All');
 const showProfileModal = ref(false);
 const isLoadingProfile = ref(false);
 const profileData = ref(null);
@@ -1446,7 +1452,7 @@ const filteredShortlistedCandidates = computed(() => {
 
 const upcomingInterviews = computed(() => {
     return interviewRows.value.filter(interview =>
-        interview.status === 'Scheduled' && !isFinalInterview(interview)
+        interview.status === 'Scheduled'
     );
 });
 
@@ -1868,7 +1874,7 @@ const openScheduleModal = (applicant = null, type = 'Initial Interview', positio
     }
     
     showScheduleModal.value = true;
-    fetchInterviewers(scheduleForm.value.department);
+    fetchInterviewers(scheduleForm.value.department, scheduleForm.value.position);
 };
 
 const closeScheduleModal = () => {
@@ -1983,7 +1989,13 @@ const openRescheduleModal = (interview) => {
         || interview.applicant?.jobPosting?.department
         || interview.department
         || '';
-    fetchInterviewers(department);
+    const position = interview.position
+        || interview.job_posting?.title
+        || interview.jobPosting?.title
+        || interview.applicant?.job_posting?.title
+        || interview.applicant?.jobPosting?.title
+        || '';
+    fetchInterviewers(department, position);
 };
 
 const closeRescheduleModal = () => { showRescheduleModal.value = false; rescheduleMenuOpen.value = false; };
@@ -2185,11 +2197,10 @@ const completeInterview = async () => {
         const response = await axios.post(`/hrm/recruitment/interviews/${evaluationForm.value.interview_id}/complete`, payload);
         const savedScore = Number(response.data?.evaluation?.overall_score ?? response.data?.data?.evaluation?.overall_score);
         showEvaluationModal.value = false;
-        const movedToOnboarding = response.data?.advanced_to_onboarding === true;
-        const wasRejected = response.data?.rejected === true;
+        const nextStep = response.data?.next_step;
         showToastMessage(
             'Evaluation Submitted',
-            `Interview evaluation saved with an overall score of ${Number.isFinite(savedScore) ? savedScore.toFixed(2) : 'N/A'} / 5. ${movedToOnboarding ? 'The applicant has been moved to Onboarding and will appear in the HRM Onboarding module.' : wasRejected ? 'The applicant has been marked as Rejected.' : "The applicant's status was not changed."}`,
+            `Interview evaluation saved with an overall score of ${Number.isFinite(savedScore) ? savedScore.toFixed(2) : 'N/A'} / 5. HR has been notified. Next step: ${nextStep || 'Review the evaluation and choose the next step'}.`,
             'success'
         );
         await refreshList();
@@ -2276,9 +2287,12 @@ const selectCandidate = async () => {
     finally { isSubmitting.value = false; }
 };
 
-const fetchInterviewers = async (department = '') => {
+const fetchInterviewers = async (department = '', position = '') => {
     try {
-        const params = department ? { department } : {};
+        const params = {
+            ...(department ? { department } : {}),
+            ...(position ? { position } : {}),
+        };
         const response = await axios.get('/hrm/recruitment/interviewers', { params });
         const rows = Array.isArray(response.data) ? response.data : [];
         // Safety net: collapse same-name entries so one person appears once.
@@ -2326,7 +2340,7 @@ onMounted(() => {
     if (props.applicants && props.applicants.length > 0) {
         applicants.value = props.applicants;
     }
-    fetchInterviewers();
+    if (!props.interviewerOnly) fetchInterviewers();
     fetchInterviews();
 
     // Applicant-side actions (cancel / reschedule request) happen in another

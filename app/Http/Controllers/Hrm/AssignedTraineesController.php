@@ -240,7 +240,7 @@ class AssignedTraineesController extends Controller
         $trainee = User::findOrFail($id);
         self::authorizeAssignedAccess($request->user(), $trainee);
 
-        $trainingStart = $trainee->training_start_date ?? $trainee->join_date;
+        $trainingStart = self::effectiveTrainingStart($trainee);
         if ($trainingStart && Carbon::parse($trainingStart)->toDateString() > today()->toDateString()) {
             $msg = 'Training evaluations are unavailable until the training start date (' . Carbon::parse($trainingStart)->toDateString() . ').';
             if ($request->wantsJson()) {
@@ -249,8 +249,28 @@ class AssignedTraineesController extends Controller
             return back()->withErrors(['weekly' => $msg]);
         }
 
+        $weekStart = $trainingStart
+            ? Carbon::parse($trainingStart)->startOfDay()->addDays(((int) $validated['week_number'] - 1) * 7)
+            : null;
+        if ($weekStart && $weekStart->toDateString() > today()->toDateString()) {
+            $msg = "Week {$validated['week_number']} evaluation is unavailable until {$weekStart->toDateString()}.";
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
+            return back()->withErrors(['weekly' => $msg]);
+        }
+
         // Training already ended (e.g. early termination) — remaining weeks
         // are cancelled, nothing more can be evaluated.
+        $weekEnd = $weekStart?->copy()->addDays(6);
+        if ($weekEnd && today()->lt($weekEnd->startOfDay()) && $validated['recommendation'] === 'continue') {
+            $msg = "Week {$validated['week_number']} evaluation cannot be saved until the week ends (" . $weekEnd->toDateString() . ').';
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
+            return back()->withErrors(['weekly' => $msg]);
+        }
+
         if (! $trainee->is_active) {
             $msg = 'Training has ended for ' . $trainee->name . ' — remaining weeks are cancelled.';
             if ($request->wantsJson()) {
@@ -336,7 +356,7 @@ class AssignedTraineesController extends Controller
             'recommendation' => 'required|in:' . ($isWorker ? 'passed_training,do_not_recommend' : 'regularization,reassigned,do_not_recommend'),
         ]);
 
-        $trainingStart = $trainee->training_start_date ?? $trainee->join_date;
+        $trainingStart = self::effectiveTrainingStart($trainee);
         if ($trainingStart && Carbon::parse($trainingStart)->toDateString() > today()->toDateString()) {
             $msg = 'Training evaluations are unavailable until the training start date (' . Carbon::parse($trainingStart)->toDateString() . ').';
             if ($request->wantsJson()) {
@@ -402,6 +422,12 @@ class AssignedTraineesController extends Controller
             'remarks' => $validated['notes'] ?? null,
             'evaluated_at' => now(),
             'evaluated_by' => $request->user()->id,
+            // A reassignment starts a fresh HR review cycle. Clear the prior
+            // decision so HR can approve or reject the new recommendation.
+            'hr_review_status' => 'Pending',
+            'hr_reviewer_id' => null,
+            'hr_review_notes' => null,
+            'hr_reviewed_at' => null,
         ];
 
         // Needs Improvement / Reassigned (moved here from the weekly
@@ -472,7 +498,7 @@ class AssignedTraineesController extends Controller
         self::authorizeAssignedAccess($request->user(), $trainee);
 
         $date = Carbon::parse($validated['date'])->toDateString();
-        $trainingStart = $trainee->training_start_date ?? $trainee->join_date;
+        $trainingStart = self::effectiveTrainingStart($trainee);
         if ($trainingStart && Carbon::parse($trainingStart)->toDateString() > today()->toDateString()) {
             $msg = 'Daily observations are unavailable until the training start date (' . Carbon::parse($trainingStart)->toDateString() . ').';
             if ($request->wantsJson()) {
@@ -566,6 +592,17 @@ class AssignedTraineesController extends Controller
         return back()->with('message', 'Time out recorded for ' . $trainee->name . ' at ' . $now);
     }
 
+    protected static function effectiveTrainingStart(User $trainee): ?Carbon
+    {
+        $rawStart = $trainee->training_start_date ?? $trainee->join_date;
+        if (! $rawStart) {
+            return null;
+        }
+
+        $start = Carbon::parse($rawStart);
+        return $start->isFuture() ? today() : $start;
+    }
+
     public static function assignedRow(User $t, ?string $appliedPosition = null): array
     {
         $base = TraineeController::traineeRow($t, $appliedPosition);
@@ -597,14 +634,23 @@ class AssignedTraineesController extends Controller
             } else {
                 $start = now();
             }
+            // A future schedule on this workspace starts immediately when
+            // the assigned manager opens the trainee record.
+            $startWasFuture = $start->isFuture();
+            if ($startWasFuture) {
+                $start = today();
+            }
         } catch (\Throwable $e) {
             $start = now();
+            $startWasFuture = false;
         }
         try {
             $maximumEnd = (clone $start)->addWeeks(4);
-            $expectedEnd = $t->training_end_date
-                ? Carbon::parse($t->training_end_date)
-                : (clone $start)->addWeeks($weeks);
+            $expectedEnd = ! empty($startWasFuture)
+                ? (clone $start)->addWeeks($weeks)
+                : ($t->training_end_date
+                    ? Carbon::parse($t->training_end_date)
+                    : (clone $start)->addWeeks($weeks));
             if ($expectedEnd->gt($maximumEnd)) {
                 $expectedEnd = $maximumEnd;
             }
@@ -721,10 +767,16 @@ class AssignedTraineesController extends Controller
         if ((bool) ($grade?->retraining ?? false)) {
             return 'Extended';
         }
+        // A submitted final evaluation closes the manager's training cycle,
+        // even while an HR review decision is still pending.
+        $finalDone = $grade?->final_grade !== null
+            || in_array($grade?->evaluation_status, ['Evaluated', 'Passed', 'Failed'], true);
+        if ($finalDone) {
+            return 'Completed';
+        }
         // Manager marked a week "Ready for Final Evaluation": remaining
         // training days are auto-passed, so the trainee jumps straight to
         // Final Evaluation and no longer needs to attend training.
-        $finalDone = $grade?->final_grade !== null || in_array($grade?->evaluation_status, ['Evaluated', 'Passed', 'Failed'], true);
         $readyForFinal = collect($t->weeklyEvaluations ?? [])->contains(fn ($w) => ($w->recommendation ?? null) === 'ready_final');
         if ($readyForFinal && ! $finalDone) {
             return 'Final Evaluation';

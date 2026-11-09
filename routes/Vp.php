@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 | the President (role CEO) keeps oversight access through the CEO bypass
 | in CheckRole, while all other roles are denied.
 */
-Route::prefix('dashboard/vp')->name('vp.')->middleware(['auth', 'verified', 'role:COO'])->group(function () {
+Route::prefix('dashboard/vp')->name('vp.')->middleware(['auth', 'verified', 'role:COO', 'geofence'])->group(function () {
 
     // Operations Command (daily plant pulse, read-only)
     Route::get('/operations', [VpOperationsController::class, 'index'])->name('operations');

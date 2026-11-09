@@ -1,4 +1,3 @@
-import { showNotice } from '@/lib/feedback';
 import axios from 'axios';
 import { csrfHeaders } from './http';
 
@@ -33,10 +32,6 @@ api.interceptors.response.use(
         if (error.response?.status === 401) {
             // Handle unauthorized
             window.location.href = '/login';
-        }
-        if (error.response?.status === 403) {
-            // Handle forbidden
-            showNotice('You do not have permission to access this page.');
         }
         return Promise.reject(error);
     }

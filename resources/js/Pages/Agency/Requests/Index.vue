@@ -49,7 +49,6 @@ function statusBadge(s: string): string {
     const map: Record<string, string> = {
         Draft: 'bg-slate-100 text-slate-500 border-slate-200',
         Open: 'bg-blue-100 text-blue-700 border-blue-200',
-        'Partially filled': 'bg-amber-100 text-amber-700 border-amber-200',
         Filled: 'bg-emerald-100 text-emerald-700 border-emerald-200',
         Cancelled: 'bg-rose-100 text-rose-700 border-rose-200',
         Closed: 'bg-slate-200 text-slate-600 border-slate-300',
@@ -61,9 +60,13 @@ function statusBadge(s: string): string {
 <template>
     <Head title="Requests - Monti ERP" />
     <AgencyLayout>
-        <p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Agency Portal</p>
-        <h1 class="mt-1 text-2xl font-black text-slate-900 dark:text-white">Manpower Requests</h1>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mt-0.5 mb-4">Requests addressed to your agency. Propose workers on open requests — HR approves each proposal.</p>
+        <header class="agency-page-header">
+            <div>
+                <p class="agency-page-eyebrow">Agency Portal</p>
+                <h1>Manpower Requests</h1>
+                <p class="mt-1 text-sm">Requests addressed to your agency. Propose workers on open requests — HR approves each proposal.</p>
+            </div>
+        </header>
 
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-3 bg-slate-50/50 dark:bg-slate-800/50">
@@ -73,7 +76,7 @@ function statusBadge(s: string): string {
                 </div>
                 <select v-model="status" class="px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200">
                     <option value="All">All statuses</option>
-                    <option>Open</option><option>Partially filled</option><option>Filled</option>
+                    <option>Open</option><option>Filled</option>
                     <option>Closed</option><option>Cancelled</option>
                 </select>
             </div>

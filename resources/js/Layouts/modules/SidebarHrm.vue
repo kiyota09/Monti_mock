@@ -34,7 +34,7 @@ export const hrmModule = {
             { label: 'Manpower Requests', href: safe('hrm.manpower-requests.index'), icon: ClipboardList, permKey: 'requests' },
             { label: 'Agency Attendance', href: safe('hrm.attendance.bulk'), icon: CalendarCheck, permKey: 'agency_attendance' },
             { label: 'Agency Billing', href: safe('hrm.billing.index'), icon: Receipt, permKey: 'agency_billing' },
-            { label: 'Agency Referral', href: safe('hrm.recruitment.agency-referrals.index'), icon: Send, public: true },
+            { label: 'Agency Referral', href: safe('hrm.recruitment.agency-referrals.index'), icon: Send, permKey: 'application' },
         ]
         const agencyDropdown = {
             label: 'Agency',

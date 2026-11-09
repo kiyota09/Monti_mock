@@ -32,7 +32,7 @@ const props = defineProps<{
         users: Array<{ id: number; name: string; email: string; is_active: boolean }>;
         activities: Array<{ id: number; date: string; action: string; details: string | null; actor: string; reason: string | null }>;
         workers: Array<{ id: number; code: string; name: string; position_skill: string | null; status: string }>;
-        requests: Array<{ id: number; code: string; department: string; position_skill: string; needed: number; filled: number; status: string }>;
+        requests: Array<{ id: number; code: string; department: string; position_skill: string; start_date: string | null; end_date: string | null; is_ended: boolean; needed: number; filled: number; status: string }>;
         attendance: Array<{ id: number; date: string; worker_name: string | null; worker_code: string | null; request_code: string | null; status: string; approval: string }>;
         statements: Array<{ id: number; code: string; period: string; total: string | number; status: string }>;
     };
@@ -316,24 +316,24 @@ function actionLabel(a: string): string {
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Company</h2>
                 <dl class="space-y-2 text-sm">
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">TIN</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ agency.tin || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Address</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ agency.address || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Contact person</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ agency.contact_name || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Email</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ agency.contact_email || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Phone</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ agency.contact_phone || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">TIN</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.tin || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Address</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.address || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Contact person</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.contact_name || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Email</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.contact_email || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Phone</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.contact_phone || '—' }}</dd></div>
                 </dl>
             </div>
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5">
                 <h2 class="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white mb-3">Contract &amp; compliance</h2>
                 <dl class="space-y-2 text-sm">
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Contract start</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ agency.contract_start || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Contract end</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ agency.contract_end || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Billing cycle</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ agency.billing_cycle || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Payment terms</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ agency.payment_terms === 'Custom terms' && agency.payment_custom_terms ? agency.payment_custom_terms : (agency.payment_terms || '—') }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Service fee</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ feeLabel() }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">Overtime rate</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">×{{ Number(agency.ot_multiplier || 1.25) }} of hourly</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">DOLE number</dt><dd class="font-semibold text-slate-700 dark:text-slate-200 text-right">{{ agency.dole_number || '—' }}</dd></div>
-                    <div class="flex justify-between gap-4"><dt class="text-slate-400">DOLE expiry</dt><dd class="font-semibold text-slate-700 dark:text-slate-200">{{ agency.dole_expiry || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Contract start</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.contract_start || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Contract end</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.contract_end || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Billing cycle</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.billing_cycle || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Payment terms</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.payment_terms === 'Custom terms' && agency.payment_custom_terms ? agency.payment_custom_terms : (agency.payment_terms || '—') }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Service fee</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ feeLabel() }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">Overtime rate</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">×{{ Number(agency.ot_multiplier || 1.25) }} of hourly</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">DOLE number</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.dole_number || '—' }}</dd></div>
+                    <div class="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-4 pb-2 border-b-2 border-slate-200 dark:border-slate-600 last:border-0"><dt class="text-slate-400">DOLE expiry</dt><dd class="min-w-0 break-words text-left font-semibold text-slate-700 dark:text-slate-200">{{ agency.dole_expiry || '—' }}</dd></div>
                 </dl>
                 <p v-if="agency.expiring_soon" class="mt-3 px-2 py-1.5 rounded-lg text-[11px] font-bold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
                     Contract or DOLE registration expiring within 30 days.
@@ -348,7 +348,7 @@ function actionLabel(a: string): string {
                         <span class="font-bold text-slate-800 dark:text-slate-100 shrink-0">{{ actionLabel(a.action) }}</span>
                         <span class="text-slate-500 dark:text-slate-400 flex-1">{{ a.details || '' }}</span>
                         <span class="text-slate-500 dark:text-slate-400 shrink-0">by {{ a.actor }}</span>
-                        <span v-if="a.reason" class="text-slate-400 italic shrink-0">“{{ a.reason }}”</span>
+                        <span v-if="a.reason" class="text-slate-400 italic shrink-0">â€œ{{ a.reason }}â€</span>
                     </li>
                 </ul>
             </div>
@@ -409,7 +409,7 @@ function actionLabel(a: string): string {
                         </tbody>
                     </table>
                     <div v-if="agency.users.length === 0" class="py-10 text-center">
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">No users yet. Create the agency’s first login above.</p>
+                        <p class="text-sm font-bold text-slate-900 dark:text-white">No users yet. Create the agencyâ€™s first login above.</p>
                     </div>
                 </div>
             </div>
@@ -460,6 +460,7 @@ function actionLabel(a: string): string {
                             <th class="py-3 px-4">Code</th>
                             <th class="py-3 px-4">Department</th>
                             <th class="py-3 px-4">Position</th>
+                            <th class="py-3 px-4">Request dates</th>
                             <th class="py-3 px-4 text-center">Filled</th>
                             <th class="py-3 px-4 text-center">Status</th>
                         </tr>
@@ -474,9 +475,15 @@ function actionLabel(a: string): string {
                             <td class="py-3 px-4 text-xs font-mono font-bold text-slate-700 dark:text-slate-200">{{ r.code }}</td>
                             <td class="py-3 px-4 text-sm font-bold text-blue-600 hover:text-blue-700">{{ r.department }}</td>
                             <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{{ r.position_skill }}</td>
+                            <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">
+                                <span v-if="r.start_date || r.end_date">
+                                    {{ r.start_date || '—' }}<template v-if="r.end_date"> – {{ r.end_date }}</template>
+                                </span>
+                                <span v-else>—</span>
+                            </td>
                             <td class="py-3 px-4 text-center text-xs font-bold text-slate-700 dark:text-slate-200">{{ r.filled }} of {{ r.needed }}</td>
                             <td class="py-3 px-4 text-center">
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase border bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600">{{ r.status }}</span>
+                                <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', r.is_ended ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border-rose-200 dark:border-rose-800' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600']">{{ r.is_ended ? 'Not available' : r.status }}</span>
                             </td>
                         </tr>
                     </tbody>
@@ -608,7 +615,7 @@ function actionLabel(a: string): string {
                 <div class="mt-6 flex justify-end gap-2">
                     <button type="button" @click="confirmUserAction = null" :disabled="userActionProcessing" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</button>
                     <button type="button" @click="submitUserAction" :disabled="userActionProcessing" class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50">
-                        {{ userActionProcessing ? 'Please wait…' : confirmUserAction.type === 'reset' ? 'Reset password' : confirmUserAction.user.is_active ? 'Deactivate' : 'Reactivate' }}
+                        {{ userActionProcessing ? 'Please waitâ€¦' : confirmUserAction.type === 'reset' ? 'Reset password' : confirmUserAction.user.is_active ? 'Deactivate' : 'Reactivate' }}
                     </button>
                 </div>
             </section>

@@ -170,6 +170,20 @@ class CheckPagePermission
             return $next($request);
         }
 
+        // The assigned-trainee workspace hands completed training records to
+        // HRM Trainees for final review. Allow users who can already view that
+        // workspace to open the HRM trainee list, unless IT explicitly added a
+        // disabled trainee-page row above.
+        if ($module === 'HRM' && strtolower($page) === 'trainee' && $requiredLevel === 'view' && $record === null) {
+            $assignedLevel = $user->pagePermissions()
+                ->whereIn('module', ['HRM', 'hrm'])
+                ->get(['page', 'permission_level'])
+                ->first(fn ($row) => strtolower((string) $row->page) === 'my_assigned_trainees');
+            if ($assignedLevel && in_array(strtolower($assignedLevel->permission_level ?? 'edit'), ['view', 'edit'], true)) {
+                return $next($request);
+            }
+        }
+
         if (!$module) {
             abort(403, 'Could not determine module for permission check.');
         }

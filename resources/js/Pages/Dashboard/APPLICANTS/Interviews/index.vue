@@ -1,6 +1,6 @@
 <template>
     <AuthenticatedLayout>
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="applicant-page-header">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                     My <span class="text-blue-600">Interviews</span>
@@ -21,11 +21,11 @@
                 <!-- ============================================ -->
                 <!-- KPI METRICS ROW                              -->
                 <!-- ============================================ -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div class="applicant-metric-grid grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5 mb-4">
                     <div
                         v-for="metric in metrics"
                         :key="metric.label"
-                        class="relative bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-4 overflow-hidden"
+                        class="applicant-metric-card relative bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden"
                     >
                         <span
                             class="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"

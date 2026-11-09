@@ -27,7 +27,7 @@
               <button 
                 @click="openModal('create')"
                 aria-label="Create Position" title="Create Position"
-                class="flex items-center justify-center p-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
+                class="position-action-icon flex items-center justify-center p-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -38,7 +38,7 @@
                 @click="toggleArchived()"
                 :aria-label="showArchived ? `Show active positions (${activeCount})` : `Show archived positions (${archivedCount})`"
                 :title="showArchived ? `Show active positions (${activeCount})` : `Show archived positions (${archivedCount})`"
-                class="flex items-center justify-center p-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                class="position-action-icon flex items-center justify-center p-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
               >
                 <span v-if="showArchived"><ClipboardList class="w-4 h-4" /></span>
                 <span v-else><Archive class="w-4 h-4" /></span>
@@ -257,10 +257,15 @@
                 </button>
                 <button 
                   @click="executeConfirmAction" 
+                  :disabled="confirming"
                   :class="confirmModal.type === 'danger' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'"
-                  class="px-5 py-2.5 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                  class="px-5 py-2.5 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-70"
                 >
-                  {{ confirmModal.confirmText }}
+                  <span v-if="confirming" class="inline-flex items-center gap-2">
+                    <span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+                    Creating...
+                  </span>
+                  <span v-else>{{ confirmModal.confirmText }}</span>
                 </button>
               </div>
             </div>
@@ -346,13 +351,6 @@
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Reports To <span class="text-slate-400 text-[10px] font-normal">(Optional)</span></label>
-                    <select v-model="form.reports_to_id" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer">
-                      <option :value="null">None (Top Level)</option>
-                      <option v-for="pos in allPositions.filter(p => p.id !== form.id)" :key="pos.id" :value="pos.id">{{ pos.name }} ({{ pos.code }})</option>
-                    </select>
-                  </div>
-                  <div>
                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Organizational Level <span class="text-rose-500">*</span></label>
                     <select v-model="form.management_level" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-600 dark:text-zinc-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 cursor-pointer">
                       <option v-for="level in filterOptions.managementLevels" :key="level" :value="level">{{ level }}</option>
@@ -395,12 +393,28 @@
                     <textarea ref="descriptionInput" v-model="form.description" rows="2" @input="autoGrow" placeholder="Brief overview of the position and its purpose..." class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 resize-none overflow-hidden"></textarea>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Key Responsibilities</label>
-                    <textarea ref="responsibilitiesInput" v-model="form.responsibilities" rows="3" @input="autoGrow" placeholder="• List primary duties and tasks&#10;• Include day-to-day activities&#10;• Specify expected outcomes..." class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 resize-none overflow-hidden"></textarea>
+                    <div class="mb-1.5 flex items-center justify-between">
+                      <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300">Key Responsibilities</label>
+                      <button type="button" @click="responsibilityInputs.push('')" class="flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-100"><Plus class="h-3 w-3" /> Add Responsibility</button>
+                    </div>
+                    <div class="space-y-2">
+                      <div v-for="(item, index) in responsibilityInputs" :key="`responsibility-${index}`" class="flex items-center gap-2">
+                        <input v-model="responsibilityInputs[index]" type="text" placeholder="e.g., Monitor daily production output" class="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs shadow-sm transition-all duration-200 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800" />
+                        <button type="button" @click="removeResponsibility(index)" :disabled="responsibilityInputs.length === 1" class="rounded-lg p-2 text-slate-400 transition" :class="responsibilityInputs.length === 1 ? 'cursor-not-allowed opacity-40' : 'hover:bg-rose-50 hover:text-rose-600'" title="Remove responsibility"><X class="h-4 w-4" /></button>
+                      </div>
+                    </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Qualifications</label>
-                    <textarea ref="qualificationsInput" v-model="form.qualifications" rows="2" @input="autoGrow" placeholder="• Education requirements&#10;• Years of experience&#10;• Specific certifications..." class="w-full px-3 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 resize-none overflow-hidden"></textarea>
+                    <div class="mb-1.5 flex items-center justify-between">
+                      <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300">Qualifications</label>
+                      <button type="button" @click="qualificationInputs.push('')" class="flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-100"><Plus class="h-3 w-3" /> Add Qualification</button>
+                    </div>
+                    <div class="space-y-2">
+                      <div v-for="(item, index) in qualificationInputs" :key="`qualification-${index}`" class="flex items-center gap-2">
+                        <input v-model="qualificationInputs[index]" type="text" placeholder="e.g., High school diploma or equivalent" class="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs shadow-sm transition-all duration-200 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800" />
+                        <button type="button" @click="removeQualification(index)" :disabled="qualificationInputs.length === 1" class="rounded-lg p-2 text-slate-400 transition" :class="qualificationInputs.length === 1 ? 'cursor-not-allowed opacity-40' : 'hover:bg-rose-50 hover:text-rose-600'" title="Remove qualification"><X class="h-4 w-4" /></button>
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <div class="flex items-center justify-between mb-1.5">
@@ -530,6 +544,7 @@ const props = defineProps({
 const showArchived = ref(false);
 const activeModal = ref(null);
 const saving = ref(false);
+const confirming = ref(false);
 const showConfirmModal = ref(false);
 const showValidationModal = ref(false);
 const validationMessage = ref('');
@@ -630,8 +645,8 @@ const manufacturingRoleForName = (name) =>
     (props.manufacturingRoles || []).find((role) => role.label === name)?.value || '';
 // Auto-expanding textareas for the long-form fields.
 const descriptionInput = ref(null);
-const responsibilitiesInput = ref(null);
-const qualificationsInput = ref(null);
+const responsibilityInputs = ref(['']);
+const qualificationInputs = ref(['']);
 
 const autoGrow = (e) => {
     const el = e.target;
@@ -640,7 +655,7 @@ const autoGrow = (e) => {
 };
 
 const resizeTextareas = () => {
-    [descriptionInput, responsibilitiesInput, qualificationsInput].forEach(r => {
+    [descriptionInput].forEach(r => {
         const el = r.value;
         if (!el) return;
         el.style.height = 'auto';
@@ -669,6 +684,18 @@ const skillsToString = () => skillInputs.value
     .map(s => s.trim())
     .filter(Boolean)
     .join(', ');
+
+const parseList = (value) => {
+    const items = String(value || '').split(/\r?\n|;/).map(item => item.replace(/^\s*[•*-]\s*/, '').trim()).filter(Boolean);
+    return items.length ? items : [''];
+};
+const listToString = (items) => items.map(item => item.trim()).filter(Boolean).join('\n');
+const removeResponsibility = (index) => {
+    if (responsibilityInputs.value.length > 1) responsibilityInputs.value.splice(index, 1);
+};
+const removeQualification = (index) => {
+    if (qualificationInputs.value.length > 1) qualificationInputs.value.splice(index, 1);
+};
 
 // Computed
 const archivedCount = computed(() => {
@@ -830,11 +857,15 @@ const closeConfirmModal = () => {
     confirmAction.value = null;
 };
 
-const executeConfirmAction = () => {
-    if (confirmAction.value) {
-        confirmAction.value();
+const executeConfirmAction = async () => {
+    if (confirming.value) return;
+    confirming.value = true;
+    try {
+        if (confirmAction.value) await confirmAction.value();
+        closeConfirmModal();
+    } finally {
+        confirming.value = false;
     }
-    closeConfirmModal();
 };
 
 const confirmCancel = () => {
@@ -960,6 +991,8 @@ const openModal = (type, data = null) => {
         });
         manufacturingRole.value = manufacturingRoleForName(data.name);
         skillInputs.value = parseSkills(data.required_skills);
+        responsibilityInputs.value = parseList(data.responsibilities);
+        qualificationInputs.value = parseList(data.qualifications);
     } else {
         Object.assign(form, {
             id: null, code: '', name: '', description: '', department_id: '',
@@ -972,6 +1005,8 @@ const openModal = (type, data = null) => {
         });
         manufacturingRole.value = '';
         skillInputs.value = [''];
+        responsibilityInputs.value = [''];
+        qualificationInputs.value = [''];
     }
 
     nextTick(resizeTextareas);
@@ -986,6 +1021,8 @@ const closeModal = () => {
 
 const submitForm = async () => {
     form.required_skills = skillsToString();
+    form.responsibilities = listToString(responsibilityInputs.value);
+    form.qualifications = listToString(qualificationInputs.value);
     saving.value = true;
     // Surface server-side (422) messages instead of failing silently.
     const showServerErrors = (errors) => {
@@ -1105,6 +1142,20 @@ const generateReport = (type) => {
 }
 .backdrop-blur-sm {
   backdrop-filter: blur(8px);
+}
+@keyframes position-action-icon-bounce {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-6px); }
+  65% { transform: translateY(1px); }
+  82% { transform: translateY(-2px); }
+}
+.position-action-icon:hover svg,
+.position-action-icon:focus-visible svg {
+  animation: position-action-icon-bounce 480ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .position-action-icon:hover svg,
+  .position-action-icon:focus-visible svg { animation: none; }
 }
 .line-clamp-2 {
   display: -webkit-box;

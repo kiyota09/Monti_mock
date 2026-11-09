@@ -67,7 +67,7 @@ class RequestPortalController extends Controller
     public function show(Request $request, ManpowerRequest $manpowerRequest)
     {
         abort_unless((int) $manpowerRequest->agency_id === $this->agencyId($request), 404);
-        $manpowerRequest->loadMissing(['activeAssignments.worker:id,code,name', 'agency:id,name']);
+        $manpowerRequest->loadMissing(['activeAssignments.worker:id,code,name', 'agency:id,name', 'employmentType:id,name']);
 
         $mine = ManpowerProposal::with('worker:id,code,name,position_skill')
             ->where('request_id', $manpowerRequest->id)
@@ -131,6 +131,7 @@ class RequestPortalController extends Controller
                 'filled' => (int) $manpowerRequest->filled_count,
                 'start_date' => optional($manpowerRequest->start_date)->toDateString(),
                 'end_date' => optional($manpowerRequest->end_date)->toDateString(),
+                'employment_type' => $manpowerRequest->employmentType?->name,
                 'shift' => $manpowerRequest->shift, 'notes' => $manpowerRequest->notes,
                 'status' => $manpowerRequest->effective_status,
                 'stored_status' => $manpowerRequest->status,
