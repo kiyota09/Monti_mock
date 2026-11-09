@@ -25,7 +25,7 @@ class AgencyDashboardController extends Controller
 
         $openRequests = ManpowerRequest::where('agency_id', $agencyId)
             ->where('status', ManpowerRequest::STATUS_OPEN)->get()
-            ->filter(fn ($r) => in_array($r->effective_status, [ManpowerRequest::STATUS_OPEN, ManpowerRequest::STATUS_PARTIAL], true))
+            ->filter(fn ($r) => $r->effective_status === ManpowerRequest::STATUS_OPEN)
             ->count();
 
         $pendingConfirm = Attendance::whereHas('worker', fn ($q) => $q->where('agency_id', $agencyId))

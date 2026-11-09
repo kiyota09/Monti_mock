@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Route;
 | middleware's native shortcut.
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'verified', 'module.access:LOG'])->prefix('dashboard/logistics')->name('logistics.')->group(function () {
+Route::middleware(['auth', 'verified', 'module.access:LOG', 'geofence'])->prefix('dashboard/logistics')->name('logistics.')->group(function () {
     // Main Dashboard
     Route::get('/', [LogisticsDashboardController::class, 'index'])
         ->middleware('page.permission:dashboard,view')->name('dashboard');

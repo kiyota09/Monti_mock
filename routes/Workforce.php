@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Route;
 | Workforce Management Routes
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/workforce')->name('workforce.')->middleware(['auth', 'verified'])->group(function () {
+Route::prefix('dashboard/workforce')->name('workforce.')->middleware(['auth', 'verified', 'geofence'])->group(function () {
     Route::get('/', [WorkforceDashboardController::class, 'index'])->name('dashboard');
     Route::get('/scheduler', [SchedulerController::class, 'index'])->name('scheduler');
     Route::post('/scheduler/shift', [SchedulerController::class, 'storeShift'])->name('scheduler.shift.store');

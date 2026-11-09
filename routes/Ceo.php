@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Route;
 | CEO Dashboard Routes
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/ceo')->name('ceo.')->middleware(['auth', 'verified', 'role:CEO'])->group(function () {
+Route::prefix('dashboard/ceo')->name('ceo.')->middleware(['auth', 'verified', 'role:CEO', 'geofence'])->group(function () {
     Route::get('/', [CeoDashboardController::class, 'index'])->name('dashboard');
 
     // Access Control — VIEW + REQUEST ONLY (executive office).
@@ -76,4 +76,4 @@ Route::prefix('dashboard/ceo')->name('ceo.')->middleware(['auth', 'verified', 'r
 // Kept outside the CEO-only group so role:COO passes; the approve/reject
 // POSTs above stay President-only.
 Route::get('/dashboard/ceo/approvals', [CeoApprovalController::class, 'index'])
-    ->middleware(['auth', 'verified', 'role:CEO,COO'])->name('ceo.approvals');
+    ->middleware(['auth', 'verified', 'role:CEO,COO', 'geofence'])->name('ceo.approvals');

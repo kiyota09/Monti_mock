@@ -34,7 +34,7 @@ Route::post('applicant/logout', [ApplicantAuthController::class, 'logout'])
     ->middleware('auth:applicant')
     ->name('applicant.logout');
 
-Route::middleware('auth:applicant')->prefix('applicant')->name('applicant.')->group(function () {
+Route::middleware(['auth:applicant', 'applicant.employee'])->prefix('applicant')->name('applicant.')->group(function () {
     // Official APPLICANTS portal (resources/js/Pages/Dashboard/APPLICANTS/*)
     Route::get('/dashboard', [PortalDashboardController::class, 'index'])->name('dashboard');
 
@@ -89,7 +89,7 @@ Route::middleware('auth:applicant')->prefix('applicant')->name('applicant.')->gr
 | `application` page so IT grants, AccessGate and the HRM sidebar keep
 | working — no new role required. HRM_NEW/Applications.vue is shared.
 */
-Route::prefix('dashboard/applicants')->name('applicants.')->middleware(['auth', 'verified'])->group(function () {
+Route::prefix('dashboard/applicants')->name('applicants.')->middleware(['auth', 'verified', 'geofence'])->group(function () {
     Route::get('/', [ApplicantsModuleController::class, 'index'])
         ->middleware('page.permission:application,view')
         ->name('index');
@@ -128,7 +128,7 @@ Route::prefix('dashboard/applicants')->name('applicants.')->middleware(['auth', 
 
 // Raw-URL alias for the shared profile payload (same shape as
 // /hrm/recruitment/applications/{id}/profile).
-Route::prefix('applicants')->middleware(['auth', 'verified'])->group(function () {
+Route::prefix('applicants')->middleware(['auth', 'verified', 'geofence'])->group(function () {
     Route::get('/{applicant}/profile', [ApplicantsModuleController::class, 'profile'])
         ->middleware('page.permission:application,view');
 });

@@ -67,8 +67,11 @@ Route::middleware('auth:agency')->prefix('agency')->name('agency.')->group(funct
     // Billing (Issued/Paid only, read-only + exports) + create invoice.
     Route::get('/billing', [BillingPortalController::class, 'index'])->name('billing.index');
     Route::get('/billing/create', [BillingPortalController::class, 'create'])->name('billing.create');
+    Route::post('/billing/uploads', [BillingPortalController::class, 'uploadAttachments'])->name('billing.uploads.store');
+    Route::get('/billing/uploads/{upload}', [BillingPortalController::class, 'downloadUpload'])->name('billing.uploads.show');
     Route::post('/billing', [BillingPortalController::class, 'store'])->name('billing.store');
     Route::get('/billing/{statement}', [BillingPortalController::class, 'show'])->name('billing.show');
+    Route::get('/billing/{statement}/attachments/{index}', [BillingPortalController::class, 'downloadAttachment'])->name('billing.attachment');
     Route::get('/billing/{statement}/export-pdf', [BillingPortalController::class, 'exportPdf'])->name('billing.export-pdf');
     Route::get('/billing/{statement}/export-excel', [BillingPortalController::class, 'exportExcel'])->name('billing.export-excel');
 

@@ -5,7 +5,7 @@ import { ref, computed } from 'vue';
 
 // Daily-rate calc mirrors App\Support\PayrollCalc::calc.
 // Multipliers/divisors come from Payroll Settings (props.settings) with classic fallbacks.
-// Net = Gross − (SSS + PhilHealth + Pag-IBIG + SSS loan + PF loan). Blank = 0.
+// Net = Gross less statutory, loan, and released-advance deductions. Blank = 0.
 function calcJs(e, st = {}) {
     const nightMult = Number(st.night_multiplier ?? 1.10), otMult = Number(st.ot_multiplier ?? 1.25), sunMult = Number(st.sun_multiplier ?? 1.30);
     const lateDiv = Number(st.late_minutes_divisor ?? 60) || 60;
@@ -29,10 +29,11 @@ function calcJs(e, st = {}) {
     const gross = basic + nightAmt + otAmt + sunAmt + holAmt - lateTotal;
     const sss = Math.max(0, Number(e.sss ?? 0)), phil = Math.max(0, Number(e.phil ?? 0)), pag = Math.max(0, Number(e.pag ?? 0));
     const sssLoan = Math.max(0, Number(e.sssLoan ?? 0)), pfLoan = Math.max(0, Number(e.pfLoan ?? 0));
-    const ded = sss + phil + pag + sssLoan + pfLoan;
+    const advanceDeduction = Math.max(0, Number(e.advanceDeduction ?? 0));
+    const ded = sss + phil + pag + sssLoan + pfLoan + advanceDeduction;
     let net = gross - ded; if (net < 0) net = 0;
     const capped = ded > gross;
-    return { days, daily, hourly, nightH, otH, sunH, lateM, holAmt, nightRate, otRate, sunRate, lateRate, basic, nightAmt, otAmt, sunAmt, lateTotal, gross, sss, phil, pag, sssLoan, pfLoan, ded, net, capped, nightMult, otMult, sunMult, lateDiv, hrsDay };
+    return { days, daily, hourly, nightH, otH, sunH, lateM, holAmt, nightRate, otRate, sunRate, lateRate, basic, nightAmt, otAmt, sunAmt, lateTotal, gross, sss, phil, pag, sssLoan, pfLoan, advanceDeduction, ded, net, capped, nightMult, otMult, sunMult, lateDiv, hrsDay };
 }
 
 const props = defineProps({ payroll: { type: Object, required: true }, calc: { type: Object, default: null }, frequency: { type: String, default: 'semi_monthly' }, attendance: { type: Object, default: null }, settings: { type: Object, default: () => ({}) } });
@@ -57,6 +58,7 @@ const form = useForm({
     pagibig_deduction: Number(props.payroll?.pagibig_deduction ?? 0),
     sss_loan: Number(props.payroll?.sss_loan ?? 0),
     pf_loan: Number(props.payroll?.pf_loan ?? 0),
+    advance_deduction: Number(props.payroll?.advance_deduction ?? 0),
 });
 
 const live = computed(() => calcJs({
@@ -64,7 +66,7 @@ const live = computed(() => calcJs({
     otH: form.overtime_hours, nightH: form.night_hours, sunH: form.sunday_restday_hours,
     holAmt: form.holiday_amt, lateM: form.late_minutes,
     sss: form.sss_deduction, phil: form.philhealth_deduction, pag: form.pagibig_deduction,
-    sssLoan: form.sss_loan, pfLoan: form.pf_loan,
+    sssLoan: form.sss_loan, pfLoan: form.pf_loan, advanceDeduction: form.advance_deduction,
 }, props.settings || {}));
 const otWarnAt = computed(() => Number(props.settings?.ot_warning_hours ?? 40));
 
@@ -195,17 +197,15 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Job title</label><input v-model="form.job_title" :disabled="!editable" aria-label="Job title" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Department</label><input v-model="form.department" :disabled="!editable" aria-label="Department" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Days worked</label><input v-model.number="form.days_worked" type="number" min="0" step="0.01" :disabled="!editable" aria-label="Days worked" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Daily rate</label><input v-model.number="form.daily_rate" type="number" min="0" step="0.01" :disabled="!editable" aria-label="Daily rate" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Daily rate</label><div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">₱</span><input v-model.number="form.daily_rate" type="number" min="0" step="0.01" :disabled="!editable" aria-label="Daily rate" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></div>
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Night hours</label><input v-model.number="form.night_hours" type="number" min="0" step="0.01" :disabled="!editable" aria-label="Night hours" placeholder="Blank = 0" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">O.T. hours</label><input v-model.number="form.overtime_hours" type="number" min="0" step="0.01" :disabled="!editable" aria-label="Overtime hours" placeholder="Blank = 0" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Sun / special holiday hours</label><input v-model.number="form.sunday_restday_hours" type="number" min="0" step="0.01" :disabled="!editable" aria-label="Sunday special holiday hours" placeholder="Blank = 0" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Holiday amount</label><input v-model.number="form.holiday_amt" type="number" min="0" step="0.01" :disabled="!editable" aria-label="Holiday amount" placeholder="Blank = 0" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Holiday amount</label><div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">₱</span><input v-model.number="form.holiday_amt" type="number" min="0" step="0.01" :disabled="!editable" aria-label="Holiday amount" placeholder="Blank = 0" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></div>
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Late (min)</label><input v-model.number="form.late_minutes" type="number" min="0" step="1" :disabled="!editable" aria-label="Late minutes" placeholder="Blank = 0" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">SSS contribution amount</label><div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">₱</span><input v-model.number="form.sss_deduction" type="number" min="0" step="0.01" :disabled="!editable" aria-label="SSS contribution amount" placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></div>
-                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">PhilHealth contribution amount</label><div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">₱</span><input v-model.number="form.philhealth_deduction" type="number" min="0" step="0.01" :disabled="!editable" aria-label="PhilHealth contribution amount" placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></div>
-                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Pag-IBIG contribution amount</label><div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">₱</span><input v-model.number="form.pagibig_deduction" type="number" min="0" step="0.01" :disabled="!editable" aria-label="Pag-IBIG contribution amount" placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></div>
-                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">SSS loan</label><input v-model.number="form.sss_loan" type="number" min="0" step="0.01" :disabled="!editable" aria-label="SSS loan" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">PF loan</label><input v-model.number="form.pf_loan" type="number" min="0" step="0.01" :disabled="!editable" aria-label="PF loan" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">SSS contribution amount</label><div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">₱</span><input v-model.number="form.sss_deduction" type="number" min="0" step="0.01" readonly :disabled="!editable" aria-label="SSS contribution amount" placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></div>
+                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">PhilHealth contribution amount</label><div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">₱</span><input v-model.number="form.philhealth_deduction" type="number" min="0" step="0.01" readonly :disabled="!editable" aria-label="PhilHealth contribution amount" placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></div>
+                            <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Pag-IBIG contribution amount</label><div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">₱</span><input v-model.number="form.pagibig_deduction" type="number" min="0" step="0.01" readonly :disabled="!editable" aria-label="Pag-IBIG contribution amount" placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></div>
                         </div>
 
                         <div id="payslip" class="mt-5 rounded-2xl border border-slate-200 p-4 text-sm">
@@ -252,6 +252,7 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                             <div class="flex justify-between py-0.5"><span>Pag-IBIG</span><span>{{ blankPeso(live.pag) }}</span></div>
                             <div class="flex justify-between py-0.5"><span>SSS loan</span><span>{{ peso(live.sssLoan) }}</span></div>
                             <div class="flex justify-between py-0.5"><span>PF loan</span><span>{{ peso(live.pfLoan) }}</span></div>
+                            <div v-if="live.advanceDeduction > 0" class="flex justify-between py-0.5"><span>Advance repayment</span><span>{{ peso(live.advanceDeduction) }}</span></div>
                             <div class="flex justify-between font-bold border-t border-slate-200 mt-2 pt-2 text-base"><span>Net</span><span>{{ peso(live.net) }}</span></div>
                         </div>
 
@@ -315,6 +316,7 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                                 <tr><td>Pag-IBIG</td><td style="text-align:right;">{{ peso(live.pag) }}</td></tr>
                                 <tr><td>SSS loan</td><td style="text-align:right;">{{ peso(live.sssLoan) }}</td></tr>
                                 <tr><td>PF loan</td><td style="text-align:right;">{{ peso(live.pfLoan) }}</td></tr>
+                                <tr v-if="live.advanceDeduction > 0"><td>Advance repayment</td><td style="text-align:right;">{{ peso(live.advanceDeduction) }}</td></tr>
                                 <tr style="font-weight:800;">
                                     <td>Total deductions</td><td style="text-align:right;">{{ peso(live.ded) }}</td>
                                 </tr>
@@ -334,7 +336,7 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                                     <td style="text-align:center;">_________________________<br />Received by (Employee / Date)</td>
                                 </tr>
                             </table>
-                            <div style="font-size:10px; margin-top:12px; text-align:center;">Generated {{ printDate }} · Amounts in PHP · Gross = (days × rate) + night + O.T. + Sun/special + holiday − late · Net = Gross − (SSS + PhilHealth + Pag-IBIG + SSS loan + PF loan)</div>
+                            <div style="font-size:10px; margin-top:12px; text-align:center;">Generated {{ printDate }} · Amounts in PHP · Gross = (days × rate) + night + O.T. + Sun/special + holiday − late · Net = Gross − deductions including released advance repayments</div>
                         </div>
                         <div v-if="live.capped" class="text-xs text-amber-600 font-semibold mt-1.5">Deductions exceed gross — net floored at zero.</div>
                         <div v-if="Number(form.days_worked || 0) === 0" class="text-xs text-amber-600 font-semibold mt-1">No days worked — basic pay is zero. Enter days worked manually if needed.</div>

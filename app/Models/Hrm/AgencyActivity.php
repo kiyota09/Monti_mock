@@ -10,6 +10,7 @@ class AgencyActivity extends Model
     protected $fillable = [
         'agency_id', 'worker_id', 'request_id', 'statement_id',
         'action', 'details', 'actor_id', 'actor_name', 'reason',
+        'attachment_path', 'attachment_name', 'attachment_mime',
     ];
 
     public function agency(): BelongsTo

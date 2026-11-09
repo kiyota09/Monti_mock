@@ -56,6 +56,13 @@ class WorkerPortalController extends Controller
 
         $paginated = $q->orderBy('name')->paginate(15)->withQueryString();
         $pageWorkers = collect($paginated->items());
+        $trainingPassedWorkerIds = AgencyActivity::query()
+            ->where('agency_id', $agencyId)
+            ->where('action', 'worker_training_passed')
+            ->whereIn('worker_id', $pageWorkers->pluck('id'))
+            ->whereNotNull('worker_id')
+            ->pluck('worker_id')
+            ->flip();
         $departmentByPosition = HrmPosition::with('department:id,name')
             ->whereIn('name', $pageWorkers->pluck('position_skill')->filter()->unique())
             ->get()
@@ -72,6 +79,7 @@ class WorkerPortalController extends Controller
                 'department' => $w->proposed_department ?: $departmentByPosition->get($w->position_skill),
                 'daily_rate' => $w->daily_rate,
                 'status' => $w->status,
+                'training_status' => $trainingPassedWorkerIds->has($w->id) ? 'Passed — Ready for Contract' : null,
                 'pending_note' => $w->pending_note,
                 'clearance_expiry' => optional($w->clearance_expiry)->toDateString(),
                 'current_assignment' => ($a = $w->activeAssignments->first()) && $a->request
@@ -412,7 +420,9 @@ class WorkerPortalController extends Controller
             'code' => ['nullable', 'string', 'max:30', Rule::unique('workers', 'code')->ignore($ignoreId)],
             'birth_date' => 'required|date|before_or_equal:' . now()->subYears(18)->toDateString(),
             'gender' => 'nullable|string|max:20',
-            'phone' => ['required', 'string', 'max:60', 'regex:/^(09\d{2}\s?\d{3}\s?\d{4}|09\d{9}|\+63\d{10})$/'],
+            // Accept 10- or 11-digit local Philippine numbers, with an
+            // optional space grouping, while keeping +63 international form.
+            'phone' => ['required', 'string', 'max:60', 'regex:/^(09\d{2}\s?\d{3}\s?\d{3,4}|09\d{8,9}|\+63\d{9,10})$/'],
             'email' => 'nullable|email|max:255',
             'address' => 'required|string|max:2000',
 

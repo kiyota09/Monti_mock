@@ -58,6 +58,18 @@
                         <button @click="clock('in')" :disabled="!today.can_clock_in || clockSaving" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold transition disabled:opacity-40 disabled:cursor-not-allowed">{{ clockSaving ? 'Saving…' : 'Time In' }}</button>
                         <button @click="clock('out')" :disabled="!today.can_clock_out || clockSaving" class="px-6 py-2.5 bg-slate-900 hover:bg-slate-700 text-white rounded-xl text-sm font-bold transition disabled:opacity-40 disabled:cursor-not-allowed">{{ clockSaving ? 'Saving…' : 'Time Out' }}</button>
                     </div>
+                    <div v-if="today.sessions?.length" class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div class="flex items-center justify-between gap-3 mb-2">
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Work sessions</p>
+                            <p class="text-xs font-bold text-slate-700">Total worked: {{ today.hours || '—' }}</p>
+                        </div>
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            <div v-for="(session, index) in today.sessions" :key="`${session.clock_in}-${index}`" class="rounded-lg bg-white border border-slate-200 px-3 py-2 text-xs text-slate-600">
+                                <span class="font-bold text-slate-800">Session {{ index + 1 }}</span>
+                                <span class="ml-2">{{ session.clock_in || '—' }} – {{ session.clock_out || 'In progress' }}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Monthly Summary -->
@@ -152,7 +164,12 @@
                                 </div>
                                 <div><p class="text-[10px] font-bold text-slate-400 uppercase">Remark</p><p class="font-semibold text-slate-700 mt-0.5 truncate" :title="selectedRecord.remark">{{ selectedRecord.remark }}</p></div>
                             </div>
-                            <p v-else class="text-xs text-slate-400">No attendance record for this day.</p>
+                            <div v-if="selectedRecord?.sessions?.length" class="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-600">
+                                <span v-for="(session, index) in selectedRecord.sessions" :key="`${session.clock_in}-${index}`" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                                    Session {{ index + 1 }}: {{ session.clock_in || '—' }} – {{ session.clock_out || 'In progress' }}
+                                </span>
+                            </div>
+                            <p v-if="!selectedRecord" class="text-xs text-slate-400">No attendance record for this day.</p>
                         </div>
                     </div>
 

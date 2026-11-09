@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Route;
 | middleware's native shortcut.
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/warehouse')->name('warehouse.')->middleware(['auth', 'verified', 'module.access:WAR'])->group(function () {
+Route::prefix('dashboard/warehouse')->name('warehouse.')->middleware(['auth', 'verified', 'module.access:WAR', 'geofence'])->group(function () {
     // General Warehouse Management
     Route::get('/', [WarehouseController::class, 'index'])
         ->middleware('page.permission:warehouse,view')->name('index');

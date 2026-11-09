@@ -140,18 +140,36 @@ const submit = () => {
         identity: form.identity,
     };
 
-    form.transform(() => data).post(route('login.store'), {
-        onSuccess: () => {
-            toast.success('Access Granted! Initializing session...');
-        },
-        onError: (errors) => {
-            const errorMsg = Object.values(errors)[0] || 'Authorization failed. Invalid credentials.';
-            toast.error(errorMsg as string);
-        },
-        onFinish: () => {
-            form.reset('password');
-        },
-    });
+    const sendLogin = (headers: Record<string, string> = {}) => {
+        form.transform(() => data).post(route('login.store'), {
+            headers,
+            onSuccess: () => {
+                toast.success('Access Granted! Initializing session...');
+            },
+            onError: (errors) => {
+                const errorMsg = Object.values(errors)[0] || 'Authorization failed. Invalid credentials.';
+                toast.error(errorMsg as string);
+            },
+            onFinish: () => {
+                form.reset('password');
+            },
+        });
+    };
+
+    // Send the device coordinates with login so onsite employees are denied
+    // before a successful session is created when they are out of range.
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => sendLogin({
+                'X-User-Lat': String(position.coords.latitude),
+                'X-User-Lng': String(position.coords.longitude),
+            }),
+            () => sendLogin(),
+            { enableHighAccuracy: false, maximumAge: 30000, timeout: 8000 },
+        );
+    } else {
+        sendLogin();
+    }
 };
 
 const identityPlaceholder = computed(() => "Email address or employee ID");

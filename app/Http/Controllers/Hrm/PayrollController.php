@@ -10,6 +10,9 @@ use App\Models\Hrm\LeaveRequest;
 use App\Models\Hrm\Payroll;
 use App\Models\Hrm\PayrollSet;
 use App\Models\Hrm\PayrollRate;
+use App\Models\Hrm\AdvanceAuditLog;
+use App\Models\Hrm\AdvancePayrollDeduction;
+use App\Services\Payroll\AdvanceRepaymentService;
 use App\Models\Core\User;
 use App\Support\NotifiesExecutive;
 use App\Support\PayrollCalc;
@@ -102,7 +105,8 @@ class PayrollController extends Controller
         $payrollData = $rows->map(function ($payroll) use ($userByEmpId) {
             $deductions = (float) $payroll->late_total_deduction + (float) $payroll->sss_deduction
                 + (float) $payroll->philhealth_deduction + (float) $payroll->pagibig_deduction
-                + (float) $payroll->tax_withheld + (float) $payroll->sss_loan + (float) $payroll->pf_loan;
+                + (float) $payroll->tax_withheld + (float) $payroll->sss_loan + (float) $payroll->pf_loan
+                + (float) ($payroll->advance_deduction ?? 0);
             $u = $userByEmpId->get($payroll->employee_id);
             $fallbackDept = $payroll->department
                 ?: ($u?->department ?: ($u?->hrmDepartment?->name ?: 'Unassigned'));
@@ -141,6 +145,7 @@ class PayrollController extends Controller
                 'tax_withheld' => $payroll->tax_withheld,
                 'sss_loan' => $payroll->sss_loan,
                 'pf_loan' => $payroll->pf_loan,
+                'advance_deduction' => $payroll->advance_deduction ?? 0,
                 'deductions' => $deductions,
                 'gross_pay' => $payroll->gross_pay,
                 'net_pay' => $payroll->net_pay,
@@ -164,7 +169,7 @@ class PayrollController extends Controller
             $s = $norm($r->status);
             if (isset($counts[$s])) $counts[$s]++;
             $gross += (float) $r->gross_pay;
-            $dedTotal += (float) $r->late_total_deduction + (float) $r->sss_deduction + (float) $r->philhealth_deduction + (float) $r->pagibig_deduction + (float) $r->tax_withheld + (float) $r->sss_loan + (float) $r->pf_loan;
+            $dedTotal += (float) $r->late_total_deduction + (float) $r->sss_deduction + (float) $r->philhealth_deduction + (float) $r->pagibig_deduction + (float) $r->tax_withheld + (float) $r->sss_loan + (float) $r->pf_loan + (float) ($r->advance_deduction ?? 0);
             $net += (float) $r->net_pay;
             if ($s === 'Paid') $paidCount++;
         }
@@ -350,10 +355,14 @@ class PayrollController extends Controller
      */
     public function create(Request $request)
     {
-        $employees = User::where('is_active', true)
+        $employees = User::with(['hrmOrgPosition:id,name'])
+            ->where('is_active', true)
             ->whereIn('position', ['staff', 'manager', 'trainee'])
-            ->select('id', 'name', 'position', 'role', 'department', 'basic_salary')
-            ->get();
+            ->select('id', 'name', 'position', 'role', 'department', 'basic_salary', 'hrm_position_id')
+            ->get()
+            ->map(fn (User $employee) => array_merge($employee->toArray(), [
+                'job_position' => $employee->hrmOrgPosition?->name,
+            ]));
 
         $frequency = \App\Support\PayPeriods::normalizeFrequency($request->query('frequency', 'semi_monthly'));
         $calYear = (int) ($request->query('year', now()->year));
@@ -523,6 +532,14 @@ class PayrollController extends Controller
                     'status'                 => 'Draft',
                 ]);
 
+                $advanceDeduction = AdvanceRepaymentService::reserveForPayroll($payroll, $employee, (float) $calc['net']);
+                if ($advanceDeduction > 0) {
+                    $payroll->update([
+                        'advance_deduction' => $advanceDeduction,
+                        'net_pay' => max(0, round((float) $calc['net'] - $advanceDeduction, 2)),
+                    ]);
+                }
+
                   $payrollRecords[] = $payroll;
               }
           });
@@ -571,6 +588,7 @@ class PayrollController extends Controller
             'pagibig' => (float) ($payroll->pagibig_deduction ?? 0),
             'sss_loan' => (float) ($payroll->sss_loan ?? 0),
             'pf_loan' => (float) ($payroll->pf_loan ?? 0),
+            'advance_deduction' => (float) ($payroll->advance_deduction ?? 0),
         ], $freq);
 
         // Job title: stored snapshot first, else the employee's current org position.
@@ -631,13 +649,15 @@ class PayrollController extends Controller
             'pagibig' => (float) ($payroll->pagibig_deduction ?? 0),
             'sss_loan' => (float) ($payroll->sss_loan ?? 0),
             'pf_loan' => (float) ($payroll->pf_loan ?? 0),
+            'advance_deduction' => (float) ($payroll->advance_deduction ?? 0),
         ], $freq);
+        $advanceDeduction = round((float) ($payroll->advance_deduction ?? 0), 2);
         $payroll->update([
             'days_worked' => $liveDays,
             'absent_days' => $liveAbsent,
             'total_days_amt' => $calc['basic'],
             'gross_pay' => $calc['gross'],
-            'net_pay' => $calc['net'],
+            'net_pay' => max(0, round((float) $calc['net'] - $advanceDeduction, 2)),
         ]);
     }
 
@@ -721,7 +741,9 @@ class PayrollController extends Controller
             'pagibig' => (float) ($payroll->pagibig_deduction ?? 0),
             'sss_loan' => (float) ($payroll->sss_loan ?? 0),
             'pf_loan' => (float) ($payroll->pf_loan ?? 0),
+            'advance_deduction' => (float) ($payroll->advance_deduction ?? 0),
         ], $freq);
+        $advanceDeduction = round((float) ($payroll->advance_deduction ?? 0), 2);
         $payroll->update([
             'days_worked' => $src['present'],
             'daily_rate' => $dailyForSync,
@@ -742,7 +764,7 @@ class PayrollController extends Controller
             'late_total_deduction' => $calc['late_total'],
             'absent_days' => $src['absent'],
             'gross_pay' => $calc['gross'],
-            'net_pay' => $calc['net'],
+            'net_pay' => max(0, round((float) $calc['net'] - $advanceDeduction, 2)),
             'accrual_13th' => $calc['accrual_13th'],
         ]);
         $this->auditPayroll('Synced from attendance: '.$payroll->employee_name.' ('.$payroll->period.', present '.$src['present'].'/absent '.$src['absent'].'/leave '.$src['leave'].')', $payroll->id, 'synced');
@@ -798,7 +820,9 @@ class PayrollController extends Controller
             'pagibig' => (float) ($v['pagibig_deduction'] ?? 0),
             'sss_loan' => (float) ($v['sss_loan'] ?? $v['other_deductions'] ?? 0),
             'pf_loan' => (float) ($v['pf_loan'] ?? 0),
+            'advance_deduction' => (float) ($payroll->advance_deduction ?? 0),
         ], $freq);
+        $advanceDeduction = round((float) ($payroll->advance_deduction ?? 0), 2);
         $before = $payroll->only(['days_worked', 'daily_rate', 'overtime_hours', 'night_hours', 'sunday_restday_hours', 'holiday_amt', 'late_minutes', 'sss_deduction', 'sss_loan', 'pf_loan']);
         $payroll->update([
             'employee_name' => $v['employee_name'],
@@ -830,7 +854,7 @@ class PayrollController extends Controller
             'pf_loan' => $calc['pf_loan'],
             'allowance' => 0,
             'gross_pay' => $calc['gross'],
-            'net_pay' => $calc['net'],
+            'net_pay' => max(0, round((float) $calc['net'] - $advanceDeduction, 2)),
             'employer_sss' => 0,
             'employer_philhealth' => 0,
             'employer_pagibig' => 0,
@@ -854,6 +878,26 @@ class PayrollController extends Controller
             return back()->withErrors(['error' => 'Locked. Only HR can remove a Draft row.']);
         }
         $name = $payroll->employee_name;
+        $reservedDeductions = AdvancePayrollDeduction::with('advance')
+            ->where('payroll_id', $payroll->id)
+            ->where('status', 'reserved')
+            ->get();
+        foreach ($reservedDeductions as $reserved) {
+            AdvanceAuditLog::create([
+                'advance_id' => $reserved->advance_id,
+                'actor_id' => auth()->id(),
+                'action' => 'repayment_schedule_voided',
+                'from_status' => $reserved->advance?->status,
+                'to_status' => $reserved->advance?->status,
+                'remarks' => 'Draft payroll was removed; the reserved deduction can be scheduled again in a later payroll.',
+                'details' => [
+                    'payroll_id' => $payroll->id,
+                    'payroll_period' => $payroll->period,
+                    'amount' => (float) $reserved->deduction_amount,
+                ],
+                'created_at' => now(),
+            ]);
+        }
         $payroll->delete();
         $this->auditPayroll('Employee removed: '.$name, null, 'removed');
         return redirect()->route('hrm.payroll')->with('message', 'Employee removed.');
@@ -965,17 +1009,29 @@ class PayrollController extends Controller
         }
         $ps = \App\Models\Hrm\PayrollSetting::cached();
         $ref = $v['payment_reference'] ?? ((string) ($ps['payment_ref_prefix'] ?? 'PAY-').now()->format('Ymd-His'));
-        foreach ($rows as $p) {
-            $p->update([
-                'status' => 'Paid',
-                'paid_at' => now(),
-                'paid_by' => auth()->id(),
-                'payment_reference' => $ref,
-                'payment_method' => $v['payment_method'] ?? (string) ($ps['default_payment_method'] ?? 'bank'),
-            ]);
+        $paidRows = collect();
+        DB::transaction(function () use ($rows, $ref, $v, $ps, &$paidRows) {
+            $lockedRows = Payroll::whereIn('id', $rows->pluck('id'))->lockForUpdate()->get();
+            foreach ($lockedRows as $p) {
+                if ($this->normalizeStatus($p->status) !== 'Approved') {
+                    continue;
+                }
+                AdvanceRepaymentService::settlePaidPayroll($p, $ref);
+                $p->update([
+                    'status' => 'Paid',
+                    'paid_at' => now(),
+                    'paid_by' => auth()->id(),
+                    'payment_reference' => $ref,
+                    'payment_method' => $v['payment_method'] ?? (string) ($ps['default_payment_method'] ?? 'bank'),
+                ]);
+                $paidRows->push($p);
+            }
+        });
+        if ($paidRows->isEmpty()) {
+            return back()->withErrors(['error' => 'None of the selected rows remain approved.']);
         }
         $this->auditPayroll('Marked as paid '.$ref.' — '.$this->auditNames($rows), null, 'paid');
-        return back()->with('message', 'Marked as paid ('.$rows->count().', ref '.$ref.').');
+        return back()->with('message', 'Marked as paid ('.$paidRows->count().', ref '.$ref.').');
     }
 
     /**

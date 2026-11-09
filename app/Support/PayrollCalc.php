@@ -15,6 +15,7 @@ namespace App\Support;
  *   Net   = Gross − (SSS + PhilHealth + Pag-IBIG + SSS loan + PF loan)
  *
  * hourly = daily / 8. Blank inputs = 0.
+ * Released employee advances are included in payroll deductions.
  *
  * Multipliers/divisors come from Payroll Settings (payroll_settings table,
  * PayrollSetting::cached()) with the classic 1.10/1.25/1.30/60/26/8 fallbacks.
@@ -83,6 +84,7 @@ class PayrollCalc
         $pag  = max(0, (float) ($e['pagibig'] ?? $e['pag'] ?? $e['pagibig_deduction'] ?? 0));
         $sssLoan = max(0, (float) ($e['sss_loan'] ?? $e['sssLoan'] ?? 0));
         $pfLoan  = max(0, (float) ($e['pf_loan'] ?? $e['pfLoan'] ?? $e['pf_loan_amt'] ?? 0));
+        $advanceDeduction = max(0, (float) ($e['advance_deduction'] ?? 0));
         // Legacy "other" folded into SSS loan for storage compat (single other_deductions input).
         if (isset($e['other']) || isset($e['other_deductions'])) {
             $other = max(0, (float) ($e['other'] ?? $e['other_deductions'] ?? 0));
@@ -92,7 +94,7 @@ class PayrollCalc
             }
         }
 
-        $deductions = $sss + $phil + $pag + $sssLoan + $pfLoan;
+        $deductions = $sss + $phil + $pag + $sssLoan + $pfLoan + $advanceDeduction;
         $net = $gross - $deductions;
         if ($net < 0) $net = 0;
         $capped = $deductions > $gross;
@@ -125,6 +127,7 @@ class PayrollCalc
             'philhealth' => $phil, 'phil' => $phil, 'philhealth_deduction' => $phil,
             'pagibig' => $pag, 'pag' => $pag, 'pagibig_deduction' => $pag,
             'sss_loan' => $sssLoan, 'pf_loan' => $pfLoan,
+            'advance_deduction' => $advanceDeduction,
             'tax' => 0, 'tax_withheld' => 0,
             'deductions' => $deductions, 'ded' => $deductions, 'total_deductions' => $deductions,
             'net' => $net,

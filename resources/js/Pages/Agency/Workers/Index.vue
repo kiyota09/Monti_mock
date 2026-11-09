@@ -4,12 +4,12 @@ import { ref, watch, computed } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
 import { toast } from '@/lib/feedback';
-import { Search, Plus, Eye, Pencil } from 'lucide-vue-next';
+import { Search, Plus, Pencil } from 'lucide-vue-next';
 
 const props = defineProps<{
     workers: Array<{
         id: number; code: string; name: string; created_at: string | null; position_skill: string | null; department: string | null;
-        daily_rate: string | number | null; status: string; clearance_expiry: string | null;
+        daily_rate: string | number | null; status: string; training_status?: string | null; clearance_expiry: string | null;
         current_assignment: string | null; pending_note?: string | null;
     }>;
     pagination: { current_page: number; last_page: number; per_page: number; total: number };
@@ -96,7 +96,7 @@ function formatAddedAt(value: string | null): { date: string; time: string } | n
             </ul>
         </section>
 
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-[5px] border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-3 bg-slate-50/50 dark:bg-slate-800/50">
                 <div class="relative flex-1">
                     <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -110,48 +110,53 @@ function formatAddedAt(value: string | null): { date: string; time: string } | n
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full table-fixed text-left border-collapse min-w-[1050px]">
+                <table class="w-full table-fixed text-left border-collapse border border-slate-300 bg-white min-w-[900px] dark:border-slate-600 dark:bg-slate-800">
                     <colgroup>
-                        <col class="w-[22%]" />
+                        <col class="w-[25%]" />
+                        <col class="w-[12%]" />
                         <col class="w-[13%]" />
-                        <col class="w-[15%]" />
-                        <col class="w-[12%]" />
-                        <col class="w-[17%]" />
-                        <col class="w-[12%]" />
-                        <col class="w-[9%]" />
+                        <col class="w-[10%]" />
+                        <col class="w-[14%]" />
+                        <col class="w-[11%]" />
+                        <col class="w-[8%]" />
+                        <col class="w-16" />
                     </colgroup>
                     <thead>
-                        <tr class="bg-slate-800 text-[10px] font-bold uppercase tracking-wider text-white/90">
-                            <th class="py-3 px-4">Name</th>
-                            <th class="py-3 px-4">Department</th>
-                            <th class="py-3 px-4">Position</th>
-                            <th class="py-3 px-4">Assignment</th>
-                            <th class="py-3 px-4">Added</th>
-                            <th class="py-3 px-4 text-center">Status</th>
-                            <th class="py-3 px-4 text-right">Actions</th>
+                        <tr class="bg-slate-800 text-[9px] font-bold uppercase tracking-wider text-white/90">
+                            <th class="border border-slate-600 py-2 px-2.5">Name</th>
+                            <th class="border border-slate-600 py-2 px-2.5">Department</th>
+                            <th class="border border-slate-600 py-2 px-2.5">Position</th>
+                            <th class="border border-slate-600 py-2 px-2.5">Assignment</th>
+                            <th class="border border-slate-600 py-2 px-2.5">Added</th>
+                            <th class="border border-slate-600 py-2 px-2.5 text-center">Status</th>
+                            <th class="border border-slate-600 py-2 px-2.5 text-center">Training</th>
+                            <th class="w-16 border border-slate-600 py-2 px-1 text-center">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
-                        <tr v-for="w in workers" :key="w.id" class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                            <td class="align-top py-3 px-4 text-sm font-bold text-slate-900 dark:text-white">
+                    <tbody>
+                        <tr v-for="(w, rowIndex) in workers" :key="w.id" :class="['hover:bg-blue-50/70 dark:hover:bg-slate-700/60', rowIndex % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-slate-50/70 dark:bg-slate-900/20']">
+                            <td class="border border-slate-200 align-top py-2 px-2.5 text-xs font-bold text-slate-900 dark:border-slate-700 dark:text-white">
                                 {{ w.name }}
-                                <p v-if="w.status === 'For Correction' && w.pending_note" class="mt-1 max-w-full whitespace-normal break-words rounded-lg bg-orange-50 px-2 py-1.5 text-[11px] font-medium leading-relaxed text-orange-700 dark:bg-orange-900/20 dark:text-orange-300">HR: {{ w.pending_note }}</p>
                             </td>
-                            <td class="align-top py-3 px-4 text-xs whitespace-normal break-words text-slate-500 dark:text-slate-400">{{ w.department || '—' }}</td>
-                            <td class="align-top py-3 px-4 text-xs whitespace-normal break-words text-slate-500 dark:text-slate-400">{{ w.position_skill || '—' }}</td>
-                            <td class="align-top py-3 px-4 text-xs whitespace-normal break-words text-slate-500 dark:text-slate-400">{{ w.current_assignment || '—' }}</td>
-                            <td class="align-top py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
+                            <td class="border border-slate-200 align-top py-2 px-2.5 text-[11px] whitespace-normal break-words text-slate-500 dark:border-slate-700 dark:text-slate-400">{{ w.department || '—' }}</td>
+                            <td class="border border-slate-200 align-top py-2 px-2.5 text-[11px] whitespace-normal break-words text-slate-500 dark:border-slate-700 dark:text-slate-400">{{ w.position_skill || '—' }}</td>
+                            <td class="border border-slate-200 align-top py-2 px-2.5 text-[11px] whitespace-normal break-words text-slate-500 dark:border-slate-700 dark:text-slate-400">{{ w.current_assignment || '—' }}</td>
+                            <td class="border border-slate-200 align-top py-2 px-2.5 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
                                 <template v-if="formatAddedAt(w.created_at)">
                                     <p>{{ formatAddedAt(w.created_at)?.date }}</p>
                                     <p class="mt-0.5">{{ formatAddedAt(w.created_at)?.time }}</p>
                                 </template>
                                 <span v-else>—</span>
                             </td>
-                            <td class="align-top py-3 px-4 text-center">
-                                <span :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase border', statusBadge(w.status)]">{{ w.status }}</span>
+                            <td class="border border-slate-200 align-top py-2 px-2.5 text-center dark:border-slate-700">
+                                <span :class="['px-2 py-0.5 rounded-full text-[9px] font-black uppercase border', statusBadge(w.status)]">{{ w.status }}</span>
                             </td>
-                            <td class="align-top py-3 px-4">
-                                <div class="flex items-center justify-end gap-1">
+                            <td class="border border-slate-200 align-top py-2 px-2.5 text-center dark:border-slate-700">
+                                <span v-if="w.training_status" class="inline-flex max-w-full items-center justify-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase leading-tight text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">{{ w.training_status }}</span>
+                                <span v-else class="text-xs text-slate-400">—</span>
+                            </td>
+                            <td class="w-16 border border-slate-200 align-top py-2 px-1 dark:border-slate-700">
+                                <div class="flex flex-wrap items-center justify-center gap-1">
                                     <Link :href="route('agency.workers.edit', w.id)" class="p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg" title="Edit">
                                         <Pencil class="w-4 h-4" />
                                     </Link>
@@ -160,7 +165,7 @@ function formatAddedAt(value: string | null): { date: string; time: string } | n
                         </tr>
                     </tbody>
                 </table>
-                <div v-if="workers.length === 0" class="py-10 text-center text-sm font-bold text-slate-900 dark:text-white">
+                <div v-if="workers.length === 0" class="py-10 text-center text-xs font-bold text-slate-900 dark:text-white">
                     No workers yet.
                 </div>
             </div>
@@ -174,6 +179,7 @@ function formatAddedAt(value: string | null): { date: string; time: string } | n
                 </div>
             </div>
         </div>
+
         </div>
     </AgencyLayout>
 </template>

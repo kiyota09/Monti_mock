@@ -19,7 +19,7 @@ class BillingStatement extends Model
     protected $fillable = [
         'code', 'agency_id', 'period_start', 'period_end', 'status',
         'labor_cost', 'service_fee', 'total',
-        'paid_at', 'payment_reference', 'cancel_reason',
+        'paid_at', 'payment_reference', 'cancel_reason', 'attachments',
     ];
 
     protected $casts = [
@@ -29,6 +29,7 @@ class BillingStatement extends Model
         'service_fee' => 'decimal:2',
         'total' => 'decimal:2',
         'paid_at' => 'date',
+        'attachments' => 'array',
     ];
 
     public function agency(): BelongsTo

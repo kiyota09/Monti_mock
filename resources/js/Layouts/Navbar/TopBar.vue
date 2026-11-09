@@ -1032,6 +1032,7 @@ onMounted(() => {
                                 <span class="block truncate text-sm font-black text-gray-900 dark:text-white">{{ n.title }}</span>
                                 <span v-if="n.details" class="block truncate text-xs text-gray-500">{{ n.details }}</span>
                                 <span v-if="n.reason" class="mt-0.5 block truncate text-xs italic text-orange-500">“{{ n.reason }}”</span>
+                                <a v-if="n.attachment_url" :href="n.attachment_url" target="_blank" rel="noopener" class="mt-1 block truncate text-xs font-bold text-indigo-600 hover:underline dark:text-indigo-300">📎 {{ n.attachment_name || 'View attachment' }}</a>
                                 <span class="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-gray-400">{{ n.worker_code || n.request_code || n.action }} · {{ n.date }}</span>
                             </span>
                         </div>

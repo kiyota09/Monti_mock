@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 | pattern: position-gated (secretary-only, CEO bypass via
 | the position middleware) — not module-gated.
 */
-Route::prefix('dashboard/secretary')->name('secretary.')->middleware(['auth', 'verified', 'position:secretary'])->group(function () {
+Route::prefix('dashboard/secretary')->name('secretary.')->middleware(['auth', 'verified', 'position:secretary', 'geofence'])->group(function () {
 
     Route::get('/', [SecretaryDashboardController::class, 'index'])->name('dashboard');
 

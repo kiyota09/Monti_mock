@@ -18,8 +18,13 @@ class AttendanceLog extends Model
         'date',
         'clock_in',
         'clock_out',
+        'sessions',
         'status',
         'remarks',
+    ];
+
+    protected $casts = [
+        'sessions' => 'array',
     ];
 
     /**

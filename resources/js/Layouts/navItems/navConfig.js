@@ -27,7 +27,7 @@ export const MODULES = [
             { id: 'hrm_employment_types', label: 'Employment Types', icon: Layers, route: 'hrm.workforce.employment-types.index', permission: 'hrm.employee', priority: 40 },
             { id: 'hrm_job_postings', label: 'Job Postings', icon: ClipboardList, route: 'hrm.recruitment.job-postings.index', permission: 'hrm.application', priority: 80 },
             { id: 'hrm_applications', label: 'Applications', icon: FileText, route: 'hrm.recruitment.applications.index', permission: 'hrm.application', priority: 85 },
-            { id: 'hrm_agency_referrals', label: 'Agency Referral', icon: Send, route: 'hrm.recruitment.agency-referrals.index', permission: null, public: true, priority: 84 },
+            { id: 'hrm_agency_referrals', label: 'Agency Referral', icon: Send, route: 'hrm.recruitment.agency-referrals.index', permission: 'hrm.application', priority: 84 },
             { id: 'hrm_agencies', label: 'Agencies', icon: Building2, route: 'hrm.agencies.index', permission: 'hrm.agencies', priority: 70 },
             { id: 'hrm_workers', label: 'Workers', icon: Users, route: 'hrm.workers.index', permission: 'hrm.workers', priority: 69 },
             { id: 'hrm_manpower_requests', label: 'Manpower Requests', icon: ClipboardList, route: 'hrm.manpower-requests.index', permission: 'hrm.requests', priority: 68 },

@@ -29,7 +29,7 @@ class SalaryAdjustment extends Model
     ];
 
     protected $fillable = [
-        'user_id', 'old_salary', 'new_salary', 'adjustment_type',
+        'user_id', 'old_salary', 'new_salary', 'allowance', 'adjustment_type',
         'reason', 'notes', 'effective_date', 'status',
         'requested_by', 'approved_by', 'decided_at',
         'document_path', 'applied_at',
@@ -38,6 +38,7 @@ class SalaryAdjustment extends Model
     protected $casts = [
         'old_salary' => 'float',
         'new_salary' => 'float',
+        'allowance' => 'float',
         'effective_date' => 'date',
         'decided_at' => 'datetime',
         'applied_at' => 'datetime',

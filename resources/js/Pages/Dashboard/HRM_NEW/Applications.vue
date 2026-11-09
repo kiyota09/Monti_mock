@@ -41,22 +41,15 @@
                         <!-- Quick Actions -->
                         <div class="flex flex-wrap items-center justify-end gap-2">
                             <button 
-                                @click="openModal('create')"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-[#263c43] hover:bg-[#1e3036] text-white rounded-lg text-sm font-bold transition-all duration-200 shadow-md"
-                            >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                                </svg>
-                                Add Application
-                            </button>
-                            <button 
                                 @click="exportCSV"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-white/90 border border-white hover:bg-white text-[#33484f] rounded-lg text-sm font-medium transition-all duration-200 shadow-sm"
+                                type="button"
+                                title="Export CSV"
+                                aria-label="Export CSV"
+                                class="flex h-10 w-10 items-center justify-center bg-white/90 border border-white hover:bg-white text-[#33484f] rounded-lg transition-all duration-200 shadow-sm"
                             >
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
                                 </svg>
-                                Export CSV
                             </button>
                         </div>
                     </div>
@@ -519,15 +512,6 @@
                             </div>
                             <h3 class="text-lg font-bold text-slate-800 mb-2">No Applications Found</h3>
                             <p class="text-sm text-slate-500 mb-6">Start adding applicants to build your talent pipeline.</p>
-                            <button
-                                @click="openModal('create')"
-                                class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
-                            >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                                </svg>
-                                Add Application
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -617,9 +601,9 @@
                 <!-- ✅ VIEW MODAL - WIDE                          -->
                 <!-- ============================================ -->
                 <div v-if="showViewModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeViewModal">
-                    <div class="bg-white rounded-2xl border border-slate-200/60 w-full max-w-7xl max-h-[95vh] overflow-hidden shadow-2xl animate-modalIn flex flex-col">
+                    <div class="bg-white rounded-2xl border border-slate-200/60 w-full max-w-5xl max-h-[90vh] overflow-hidden shadow-2xl animate-modalIn flex flex-col">
                         <!-- Modal Header -->
-                        <div class="px-6 py-5 border-b border-slate-200 bg-white flex items-start justify-between shrink-0">
+                        <div class="px-4 py-3 border-b border-slate-200 bg-white flex items-start justify-between shrink-0">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
                                     <img
@@ -641,12 +625,13 @@
                                 </div>
                                 <div>
                                     <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Applicant Profile</p>
-                                    <h2 class="text-2xl font-bold text-slate-900 tracking-tight">{{ getViewFullName() }}</h2>
-                                    <p class="text-slate-500 text-sm mt-0.5">{{ viewData?.personal?.email || 'No email' }}<span v-if="viewData?.job_posting?.title"> · {{ viewData.job_posting.title }}</span></p>
+                                    <h2 class="text-xl font-bold text-slate-900 tracking-tight">{{ getViewFullName() }}</h2>
+                                    <p class="text-slate-500 text-xs mt-0.5">{{ viewData?.personal?.email || 'No email' }}<span v-if="viewData?.job_posting?.title"> · {{ viewData.job_posting.title }}</span></p>
                                     <div class="flex flex-wrap items-center gap-3 mt-2">
                                         <span
                                             :class="[
-                                                'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border shadow-sm',
+                                                'inline-flex items-center gap-1 rounded-full font-semibold border shadow-sm',
+                                                viewData?.application?.status === 'Hired' ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs',
                                                 getStatusBadgeClass(viewData?.application?.status)
                                             ]"
                                         >
@@ -667,7 +652,7 @@
                         </div>
 
                         <!-- Modal Body -->
-                        <div class="flex-1 overflow-y-auto p-6">
+                        <div class="flex-1 overflow-y-auto p-4">
                             <div v-if="isLoadingProfile" class="flex items-center justify-center py-12">
                                 <svg class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -727,12 +712,6 @@
                                             <div><span class="text-[10px] text-slate-400 uppercase tracking-wider">Religion</span><p class="text-sm font-semibold text-slate-800">{{ viewData?.personal?.religion || 'N/A' }}</p></div>
                                             <div><span class="text-[10px] text-slate-400 uppercase tracking-wider">Weight (kg)</span><p class="text-sm font-semibold text-slate-800">{{ viewData?.personal?.weight || 'N/A' }}</p></div>
                                             <div><span class="text-[10px] text-slate-400 uppercase tracking-wider">Height (cm)</span><p class="text-sm font-semibold text-slate-800">{{ viewData?.personal?.height || 'N/A' }}</p></div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Address -->
-                                    <div v-if="viewActiveTab === 'address'">
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                             <div><span class="text-[10px] text-slate-400 uppercase tracking-wider">Street</span><p class="text-sm font-semibold text-slate-800">{{ viewData?.address?.street || 'N/A' }}</p></div>
                                             <div><span class="text-[10px] text-slate-400 uppercase tracking-wider">Barangay</span><p class="text-sm font-semibold text-slate-800">{{ viewData?.address?.barangay || 'N/A' }}</p></div>
                                             <div><span class="text-[10px] text-slate-400 uppercase tracking-wider">City</span><p class="text-sm font-semibold text-slate-800">{{ viewData?.address?.city || 'N/A' }}</p></div>
@@ -826,7 +805,7 @@
                         </div>
 
                         <!-- Modal Footer -->
-                        <div class="p-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between shrink-0">
+                        <div class="p-3 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between shrink-0">
                             <div>
                                 <span class="text-xs text-slate-400">Last updated: {{ formatDate(viewData?.application?.updated_at) }}</span>
                             </div>
@@ -1656,8 +1635,7 @@ const form = ref<{
 
 // Tabs
 const viewTabs = [
-    { id: 'personal', label: 'Personal Info' },
-    { id: 'address', label: 'Address' },
+    { id: 'personal', label: 'Personal Info & Address' },
     { id: 'education', label: 'Education' },
     { id: 'experience', label: 'Work Experience' },
     { id: 'emergency', label: 'Emergency Contact' },

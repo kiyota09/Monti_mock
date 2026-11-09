@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Hrm\Recruitment;
 
 use App\Http\Controllers\Controller;
+use App\Models\Core\Notification;
 use App\Models\Core\User;
 use App\Models\Hrm\Applicant;
 use App\Models\Hrm\ApplicantJobApplication;
@@ -12,6 +13,7 @@ use App\Models\Hrm\HrmInterviewEvaluation;
 use App\Models\Hrm\HrmJobPosting;
 use App\Models\Hrm\HrmOnboarding;
 use App\Services\Hrm\ApplicantApplicationHoldService;
+use App\Support\ManufacturingRoles;
 use App\Support\ReapplyCooldown;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
@@ -22,17 +24,22 @@ class InterviewController extends Controller
 {
     use HasPagePermissions;
 
-    public function index()
+    public function index(Request $request)
     {
-        $applicants = Applicant::with('jobPosting')
-            ->whereHas('jobApplications', function ($query) {
-                $query->whereIn('status', ['Shortlisted', 'Interview'])->notOnHold();
-            })
-            ->latest();
+        $interviewerOnly = $this->isInterviewerOnly($request->user());
+        $applicants = collect();
+        $metrics = null;
 
-        return Inertia::render('Dashboard/HRM_NEW/Interviews', [
-            'applicants' => $applicants->take(50)->get(),
-            'metrics' => [
+        if (! $interviewerOnly) {
+            $applicants = Applicant::with('jobPosting')
+                ->whereHas('jobApplications', function ($query) {
+                    $query->whereIn('status', ['Shortlisted', 'Interview'])->notOnHold();
+                })
+                ->latest()
+                ->take(50)
+                ->get();
+
+            $metrics = [
                 'total' => Applicant::count(),
                 'shortlisted' => Applicant::where('status', 'Shortlisted')->count(),
                 'interview_scheduled' => ApplicantApplicationHoldService::excludeHeldInterviews(
@@ -45,17 +52,28 @@ class InterviewController extends Controller
                 'interview_rescheduled' => ApplicantApplicationHoldService::excludeHeldInterviews(
                     HrmInterview::where('status', 'Rescheduled')
                 )->count(),
-            ],
+            ];
+        }
+
+        return Inertia::render('Dashboard/HRM_NEW/Interviews', [
+            'applicants' => $applicants,
+            'metrics' => $metrics,
+            'interviewerOnly' => $interviewerOnly,
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
     }
 
-    public function list()
+    public function list(Request $request)
     {
+        $interviews = HrmInterview::with(['evaluation', 'applicant.jobPosting.employmentType', 'jobPosting.employmentType', 'interviewer:id,name,email']);
+        if ($this->isInterviewerOnly($request->user())) {
+            $interviews->where('interviewer_id', $request->user()->id);
+        }
+
         return response()->json(
             ApplicantApplicationHoldService::excludeHeldInterviews(
-                HrmInterview::with(['evaluation', 'applicant.jobPosting.employmentType', 'jobPosting.employmentType', 'interviewer:id,name,email'])
-            )->latest()->paginate(20)
+                $interviews
+            )->latest()->get()
         );
     }
 
@@ -72,6 +90,8 @@ class InterviewController extends Controller
     public function interviewers(Request $request)
     {
         $department = $request->query('department');
+        $position = $request->query('position');
+        $requestedManufacturingRoles = $this->manufacturingRolesForPosition($position);
 
         $query = User::with([
             'pagePermissions' => fn ($q) => $q->whereIn('module', ['HRM', 'hrm', 'Hrm']),
@@ -83,7 +103,22 @@ class InterviewController extends Controller
             ->orderBy('name')
             ->take(200);
 
-        if ($department) {
+        if ($requestedManufacturingRoles) {
+            $query->where(function ($q) use ($requestedManufacturingRoles) {
+                $q->whereExists(function ($supervisors) use ($requestedManufacturingRoles) {
+                    $supervisors->selectRaw('1')
+                        ->from('manufacturing_supervisor_roles as msr')
+                        ->whereColumn('msr.user_id', 'users.id')
+                        ->whereIn('msr.manufacturing_role', $requestedManufacturingRoles);
+                })->orWhereExists(function ($supervisorPermissions) use ($requestedManufacturingRoles) {
+                    $supervisorPermissions->selectRaw('1')
+                        ->from('man_supervisor_staff_page_permissions as mspp')
+                        ->whereColumn('mspp.supervisor_user_id', 'users.id')
+                        ->whereIn('mspp.permission_level', ['view', 'edit'])
+                        ->whereIn('mspp.manufacturing_role', $requestedManufacturingRoles);
+                });
+            });
+        } elseif ($department) {
             $query->where(function ($q) use ($department) {
                 $q->whereHas('hrmDepartment', function ($dept) use ($department) {
                     $dept->whereRaw('LOWER(name) = ?', [strtolower($department)])
@@ -94,28 +129,63 @@ class InterviewController extends Controller
         }
 
         $users = $query->get();
+        $supervisorRoleAssignments = DB::table('manufacturing_supervisor_roles')
+            ->whereIn('user_id', $users->pluck('id'))
+            ->get(['user_id', 'manufacturing_role']);
+        $supervisorPermissionRoles = DB::table('man_supervisor_staff_page_permissions')
+            ->whereIn('supervisor_user_id', $users->pluck('id'))
+            ->whereIn('permission_level', ['view', 'edit'])
+            ->selectRaw('supervisor_user_id as user_id, manufacturing_role')
+            ->distinct()
+            ->get();
+        $supervisorRolesByUser = $supervisorRoleAssignments
+            ->concat($supervisorPermissionRoles)
+            ->groupBy('user_id');
 
         $eligible = $users->values()
-            ->map(fn ($u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'email' => $u->email,
-                'role' => $u->role,
-                'position' => $u->position,
-                'job_position' => $u->hrmOrgPosition?->name ?: ucfirst((string) $u->position),
-                'department' => $u->hrmDepartment?->name ?: $u->department,
-            ])
+            ->map(function ($u) use ($supervisorRolesByUser, $requestedManufacturingRoles) {
+                $assignedManufacturingRoles = $supervisorRolesByUser->get($u->id, collect())
+                    ->pluck('manufacturing_role')
+                    ->unique()
+                    ->values()
+                    ->all();
+                $manufacturingRoles = $requestedManufacturingRoles
+                    ? array_values(array_intersect($requestedManufacturingRoles, $assignedManufacturingRoles))
+                    : $assignedManufacturingRoles;
+                $manufacturingRoleLabels = collect($manufacturingRoles)
+                    ->map(fn ($role) => ucwords(str_replace('_', ' ', (string) $role)))
+                    ->values();
+
+                return [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'role' => $u->role,
+                    'position' => $u->position,
+                    'job_position' => $manufacturingRoleLabels->isNotEmpty()
+                        ? 'Manufacturing Supervisor · ' . $manufacturingRoleLabels->implode(', ')
+                        : ($u->hrmOrgPosition?->name ?: ucfirst((string) $u->position)),
+                    'department' => $u->hrmDepartment?->name ?: $u->department,
+                    'manufacturing_roles' => $manufacturingRoles,
+                    'is_manufacturing_supervisor' => ! empty($manufacturingRoles),
+                ];
+            })
             // Same person can hold multiple user rows (e.g. duplicate accounts)
             // — show each person only once in the dropdown (keep lowest id).
             ->sortBy('id')
             ->unique(fn ($u) => mb_strtolower(trim((string) $u['name'])))
             ->values();
 
-        // Filter to only managers if department is specified
-        if ($department) {
+        // Keep the interviewer list focused on department managers and supervisors.
+        if ($requestedManufacturingRoles) {
+            $eligible = $eligible->filter(fn ($u) => ! empty($u['manufacturing_roles']))->values();
+        } elseif ($department) {
             $eligible = $eligible->filter(fn ($u) =>
-                str_contains(strtolower((string) ($u['job_position'] ?? '')), 'manager') ||
-                strtolower((string) ($u['position'] ?? '')) === 'manager'
+                ! empty($u['is_manufacturing_supervisor'])
+                || $this->isManagerOrSupervisorPosition(
+                    (string) ($u['position'] ?? ''),
+                    (string) ($u['job_position'] ?? '')
+                )
             )->values();
         }
 
@@ -159,7 +229,60 @@ class InterviewController extends Controller
         return in_array($granted, ['view', 'edit'], true);
     }
 
-    private function ensureInterviewerEligible(?int $interviewerId): void
+    private function isInterviewerOnly(?User $user): bool
+    {
+        return $user !== null
+            && (bool) $user->is_manufacturing_supervisor
+            && $this->canAccessInterview($user);
+    }
+
+    private function isManagerOrSupervisorPosition(?string $position, ?string $jobTitle): bool
+    {
+        $position = strtolower(trim((string) $position));
+        $jobTitle = strtolower(trim((string) $jobTitle));
+
+        return in_array($position, ['manager', 'supervisor'], true)
+            || str_contains($jobTitle, 'manager')
+            || str_contains($jobTitle, 'supervisor');
+    }
+
+    private function manufacturingRolesForPosition(?string $position): array
+    {
+        $position = strtolower(trim((string) $position));
+        if (! str_contains($position, 'knitting')) {
+            return [];
+        }
+
+        foreach ([
+            'yarn' => 'knitting_yarn',
+            'mechanic' => 'knitting_mechanic',
+            'inspector' => 'knitting_inspector',
+            'sample' => 'knitting_sample',
+        ] as $keyword => $role) {
+            if (str_contains($position, $keyword)) {
+                return [$role];
+            }
+        }
+
+        return ManufacturingRoles::DEPARTMENTS['knitting'];
+    }
+
+    private function hasManufacturingSupervisorRole(int $userId, ?string $position = null): bool
+    {
+        $roles = $this->manufacturingRolesForPosition($position);
+        $assignedRole = DB::table('manufacturing_supervisor_roles')
+            ->where('user_id', $userId)
+            ->when($roles, fn ($query) => $query->whereIn('manufacturing_role', $roles))
+            ->exists();
+
+        return $assignedRole || DB::table('man_supervisor_staff_page_permissions')
+            ->where('supervisor_user_id', $userId)
+            ->whereIn('permission_level', ['view', 'edit'])
+            ->when($roles, fn ($query) => $query->whereIn('manufacturing_role', $roles))
+            ->exists();
+    }
+
+    private function ensureInterviewerEligible(?int $interviewerId, ?string $position = null): void
     {
         if (! $interviewerId) {
             return;
@@ -168,20 +291,34 @@ class InterviewController extends Controller
             'pagePermissions' => fn ($q) => $q->whereIn('module', ['HRM', 'hrm', 'Hrm']),
             'hrmOrgPosition:id,name',
         ])->find($interviewerId);
-        $isManager = $interviewer && (
-            strtolower((string) $interviewer->position) === 'manager'
-            || str_contains(strtolower((string) $interviewer->hrmOrgPosition?->name), 'manager')
+        $isManagerOrSupervisor = $interviewer && $this->isManagerOrSupervisorPosition(
+            (string) $interviewer->position,
+            (string) $interviewer->hrmOrgPosition?->name
         );
-        if (! $interviewer || (! $isManager && ! $this->canAccessInterview($interviewer))) {
+        $requestedManufacturingRoles = $this->manufacturingRolesForPosition($position);
+        $isManufacturingSupervisor = $interviewer && $this->hasManufacturingSupervisorRole((int) $interviewer->id, $position);
+        if ($requestedManufacturingRoles) {
+            if (! $isManufacturingSupervisor) {
+                abort(response()->json(['message' => 'Selected interviewer is not assigned to supervise this manufacturing role.', 'errors' => ['interviewer_id' => ['Select a supervisor assigned to the applicant’s manufacturing role.']]], 422));
+            }
+
+            return;
+        }
+        if (! $interviewer || (! $isManagerOrSupervisor && ! $isManufacturingSupervisor && ! $this->canAccessInterview($interviewer))) {
             abort(response()->json(['message' => 'Selected interviewer is not eligible.', 'errors' => ['interviewer_id' => ['Selected interviewer is not eligible.']]], 422));
         }
     }
 
-    public function fetch()
+    public function fetch(Request $request)
     {
+        $interviews = HrmInterview::with(['evaluation', 'applicant', 'interviewer:id,name,email']);
+        if ($this->isInterviewerOnly($request->user())) {
+            $interviews->where('interviewer_id', $request->user()->id);
+        }
+
         return response()->json(
             ApplicantApplicationHoldService::excludeHeldInterviews(
-                HrmInterview::with(['evaluation', 'applicant', 'interviewer:id,name,email'])
+                $interviews
             )->latest()->take(50)->get()
         );
     }
@@ -189,24 +326,31 @@ class InterviewController extends Controller
     /**
      * Upcoming scheduled interviews (ported from super_monti).
      */
-    public function upcoming()
+    public function upcoming(Request $request)
     {
+        $interviews = HrmInterview::with(['applicant.jobPosting.employmentType', 'jobPosting.employmentType', 'evaluation', 'interviewer:id,name,email'])
+            ->where('status', 'Scheduled')
+            ->whereRaw("LOWER(COALESCE(type, 'initial')) NOT LIKE ?", ['%final%'])
+            ->whereDate('date', '>=', today())
+            ->orderBy('date')->orderBy('start_time');
+        if ($this->isInterviewerOnly($request->user())) {
+            $interviews->where('interviewer_id', $request->user()->id);
+        }
+
         return response()->json(
-            ApplicantApplicationHoldService::excludeHeldInterviews(
-                HrmInterview::with(['applicant.jobPosting.employmentType', 'jobPosting.employmentType', 'evaluation', 'interviewer:id,name,email'])
-                    ->where('status', 'Scheduled')
-                    ->whereRaw("LOWER(COALESCE(type, 'initial')) NOT LIKE ?", ['%final%'])
-                    ->whereDate('date', '>=', today())
-                    ->orderBy('date')->orderBy('start_time')
-            )->get()
+            ApplicantApplicationHoldService::excludeHeldInterviews($interviews)->get()
         );
     }
 
     /**
      * Single interview with relations (ported from super_monti).
      */
-    public function show(HrmInterview $interview)
+    public function show(Request $request, HrmInterview $interview)
     {
+        if ($this->isInterviewerOnly($request->user()) && (int) $interview->interviewer_id !== (int) $request->user()->id) {
+            abort(404);
+        }
+
         if ($interview->applicant_id
             && ApplicantApplicationHoldService::isHeldFor((int) $interview->applicant_id, $interview->job_posting_id)) {
             abort(404);
@@ -263,7 +407,7 @@ class InterviewController extends Controller
         if (isset($data['type'])) {
             $data['type'] = stripos($data['type'], 'final') !== false ? 'Final' : 'Initial';
         }
-        $this->ensureInterviewerEligible($data['interviewer_id'] ?? null);
+        $this->ensureInterviewerEligible($data['interviewer_id'] ?? null, $interview->position);
         $result = $data['result'] ?? null;
         unset($data['result']);
 
@@ -347,7 +491,7 @@ class InterviewController extends Controller
             && ApplicantApplicationHoldService::isHeldFor((int) $data['applicant_id'], $data['job_posting_id'] ?? null)) {
             return response()->json(['message' => ApplicantApplicationHoldService::HOLD_MESSAGE], 422);
         }
-        $this->ensureInterviewerEligible($data['interviewer_id'] ?? null);
+        $this->ensureInterviewerEligible($data['interviewer_id'] ?? null, $data['position'] ?? null);
         // Normalize display values ("Initial Interview"/"Final Interview") to DB convention (Initial|Final).
         if (isset($data['type'])) {
             $data['type'] = stripos($data['type'], 'final') !== false ? 'Final' : 'Initial';
@@ -424,7 +568,7 @@ class InterviewController extends Controller
             return response()->json(['message' => 'Choose an interview date and time in the future.', 'errors' => ['date' => ['Choose an interview date and time in the future.']]], 422);
         }
 
-        $this->ensureInterviewerEligible($data['interviewer_id'] ?? null);
+        $this->ensureInterviewerEligible($data['interviewer_id'] ?? null, $interview->position);
 
         if ($interview->reschedule_status === 'completed') {
             return response()->json(['message' => 'This interview has already been rescheduled.'], 422);
@@ -715,7 +859,60 @@ class InterviewController extends Controller
             $advanced = true;
         }
 
-        return response()->json(['ok' => true, 'advanced_to_onboarding' => $advanced, 'rejected' => $rejected]);
+        $nextStep = $this->notifyHrAfterInterviewEvaluation($request, $interview, $recommendation, $advanced, $rejected);
+
+        return response()->json([
+            'ok' => true,
+            'advanced_to_onboarding' => $advanced,
+            'rejected' => $rejected,
+            'next_step' => $nextStep,
+        ]);
+    }
+
+    private function notifyHrAfterInterviewEvaluation(
+        Request $request,
+        HrmInterview $interview,
+        ?string $recommendation,
+        bool $advancedToOnboarding,
+        bool $rejected,
+    ): string {
+        $isFinalInterview = str_contains(strtolower((string) $interview->type), 'final');
+        if ($advancedToOnboarding) {
+            $page = 'onboarding';
+            $title = 'Interview complete — candidate ready for onboarding';
+            $nextStep = 'Continue with onboarding';
+            $linkRoute = 'hrm.onboarding.status.index';
+        } elseif (! $rejected && ! $isFinalInterview && $recommendation === 'proceed_to_final_interview') {
+            $page = 'interview';
+            $title = 'Interview complete — final interview needed';
+            $nextStep = 'Schedule the final interview';
+            $linkRoute = 'hrm.recruitment.interviews.index';
+        } else {
+            $page = 'interview';
+            $title = $rejected ? 'Interview evaluation submitted — HR review needed' : 'Interview evaluation submitted';
+            $nextStep = $rejected ? 'Review the recorded decision' : 'Review the evaluation and choose the next step';
+            $linkRoute = 'hrm.recruitment.interviews.index';
+        }
+
+        $candidate = trim((string) ($interview->candidate_name ?: 'The applicant'));
+        $interviewer = (string) ($request->user()->name ?? 'The assigned interviewer');
+        $interviewType = $isFinalInterview ? 'Final' : 'Initial';
+        $position = trim((string) $interview->position);
+        $positionLabel = $position !== '' ? " ({$position})" : '';
+        $body = "{$interviewType} interview for {$candidate}{$positionLabel} was completed by {$interviewer}. Next step: {$nextStep}.";
+
+        Notification::notifyPage(
+            'HRM',
+            $page,
+            'hrm_interview_evaluation',
+            $title,
+            $body,
+            $linkRoute,
+            [(int) $request->user()->id],
+            (int) $request->user()->id,
+        );
+
+        return $nextStep;
     }
 
     public function advanceToOnboarding(HrmInterview $interview)

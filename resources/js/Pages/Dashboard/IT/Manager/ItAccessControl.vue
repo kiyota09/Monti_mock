@@ -43,6 +43,16 @@ const supervisorStaffForm = useForm({ user_id: '', grants: [] });
 const accessForm = useForm({ user_id: '', modules: [], page_grants: [], supervisor_grants: [] });
 const supervisorStaffGrants = ref({});
 
+const occupiedSupervisorSeat = computed(() => {
+    const department = String(positionForm.supervisor_department || '').toLowerCase();
+    if (positionForm.position !== 'supervisor' || !department) return null;
+    return (props.users || []).find((user) =>
+        user.is_manufacturing_supervisor &&
+        String(user.supervisor_department || '').toLowerCase() === department &&
+        Number(user.id) !== Number(positionForm.user_id)
+    ) || null;
+});
+
 // Local editable page grants: { [MODULE]: { [page]: 'disabled'|'view'|'edit' } }
 const pageGrants = ref({});
 
@@ -770,10 +780,6 @@ onUnmounted(() => {
                                 <ShieldOff class="w-4 h-4" /> Disable / Block
                             </button>
                         </div>
-                        <p v-if="positionForm.errors.error || positionForm.errors.position || positionForm.errors.role || positionForm.errors.supervisor_department"
-                            class="text-xs font-bold text-red-600 dark:text-red-400">
-                            {{ positionForm.errors.error || positionForm.errors.position || positionForm.errors.role || positionForm.errors.supervisor_department }}
-                        </p>
                         <div class="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 space-y-3">
                             <p class="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 inline-flex items-center gap-1.5">
                                 <PauseCircle class="w-4 h-4" /> Temporary suspension
@@ -796,6 +802,10 @@ onUnmounted(() => {
 
                     <!-- POSITION (direct IT control) -->
                     <div v-if="activeTab === 'position'" class="space-y-4">
+                        <p v-if="positionForm.errors.error || positionForm.errors.position || positionForm.errors.role || positionForm.errors.supervisor_department"
+                            role="alert" class="text-xs font-bold text-red-600 dark:text-red-400">
+                            {{ positionForm.errors.error || positionForm.errors.position || positionForm.errors.role || positionForm.errors.supervisor_department }}
+                        </p>
                         <div v-if="managing.is_executive" class="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 font-bold">
                             CEO and COO accounts are protected from IT position changes.
                         </div>
@@ -827,6 +837,9 @@ onUnmounted(() => {
                                     <option value="" disabled>Select department…</option>
                                     <option v-for="d in ['knitting', 'dyeing', 'finishing', 'maintenance', 'boiler']" :key="d" :value="d">{{ d }}</option>
                                 </select>
+                                <p v-if="occupiedSupervisorSeat" role="status" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                                    The {{ positionForm.supervisor_department }} supervisor seat is already held by {{ occupiedSupervisorSeat.name }}. Reassign or demote them before assigning this seat.
+                                </p>
                             </div>
                             <div v-else>
                                 <label class="text-xs font-bold text-slate-500 uppercase">Home Module</label>

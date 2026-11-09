@@ -50,6 +50,19 @@ class MyAttendanceController extends Controller
             ->whereBetween('effective_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
             ->get()->keyBy(fn ($s) => substr((string) $s->effective_date, 0, 10));
 
+        // Workforce Shift Management stores assignments in hrm_shift_user.
+        // Resolve the latest active assignment for each attendance date.
+        $assignedShifts = \DB::table('hrm_shift_user as su')
+            ->join('hrm_shifts as s', 's.id', '=', 'su.shift_id')
+            ->where('su.user_id', $user->id)
+            ->where('s.is_active', true)
+            ->where(function ($query) use ($monthEnd) {
+                $query->whereNull('su.effective_date')
+                    ->orWhereDate('su.effective_date', '<=', $monthEnd->toDateString());
+            })
+            ->select('s.id', 's.code', 's.name', 's.shift_type', 's.start_time', 's.end_time', 's.working_days', 'su.effective_date')
+            ->get();
+
         // Non-working holidays (Holiday Management): never Absent on these days.
         $holidays = \App\Models\Hrm\Holiday::nonWorkingMap($monthStart->toDateString(), $monthEnd->toDateString());
 
@@ -79,19 +92,32 @@ class MyAttendanceController extends Controller
                 $key = $d->toDateString();
                 $log = $logs->get($key);
                 $leave = $leaves->first(fn ($l) => $key >= substr((string) $l->start_date, 0, 10) && $key <= substr((string) $l->end_date, 0, 10));
-                $shift = $shifts->get($key);
+                $shift = $assignedShifts
+                    ->filter(fn ($assignment) => ! $assignment->effective_date || substr((string) $assignment->effective_date, 0, 10) <= $key)
+                    ->sortByDesc(fn ($assignment) => $assignment->effective_date ? substr((string) $assignment->effective_date, 0, 10) : '0000-00-00')
+                    ->first();
+                $legacyShift = $shifts->get($key);
                 $isSunday = ((int) $d->format('w')) === 0;
 
-                $schedule = $shift ? trim(($shift->shift_type ?? '') . ($shift->schedule_range ? ' (' . $shift->schedule_range . ')' : '')) : '—';
+                if ($shift) {
+                    $assignedSchedule = self::assignedShiftLabel($shift);
+                } elseif ($legacyShift) {
+                    $assignedSchedule = trim(($legacyShift->shift_type ?? '') . ($legacyShift->schedule_range ? ' (' . $legacyShift->schedule_range . ')' : '')) ?: 'â€”';
+                } else {
+                    $assignedSchedule = null;
+                }
+
+                $schedule = $assignedSchedule ?? '—';
 
                 if ($employmentStart && $key < $employmentStart) {
                     $status = '—';
                     $remark = '';
                 } elseif ($log) {
                     $status = self::display($log->status);
-                    if (! $log->clock_out && $key < $today) {
+                    $hasOpenSession = self::hasOpenSession($log);
+                    if ($hasOpenSession && $key < $today) {
                         $status = 'Incomplete';
-                    } elseif (! $log->clock_out && $key === $today && $log->clock_in) {
+                    } elseif ($hasOpenSession && $key === $today && $log->clock_in) {
                         $status = 'In Progress';
                     }
                     $remark = $log->remarks ?? '';
@@ -118,7 +144,8 @@ class MyAttendanceController extends Controller
                     'schedule' => $schedule ?: '—',
                     'time_in' => $log?->clock_in ?: '—',
                     'time_out' => $log?->clock_out ?: '—',
-                    'hours' => self::hoursLabel($log?->clock_in, $log?->clock_out),
+                    'hours' => self::hoursLabel($log?->clock_in, $log?->clock_out, self::normalizedSessions($log)),
+                    'sessions' => self::sessionRows($log),
                     'status' => $status,
                     'remark' => $remark ?: '—',
                 ];
@@ -148,9 +175,25 @@ class MyAttendanceController extends Controller
         // ---- Today block ----
         $todayLog = $logs->get($today);
         $todayLeave = $leaves->first(fn ($l) => $today >= substr((string) $l->start_date, 0, 10) && $today <= substr((string) $l->end_date, 0, 10));
-        $todayShift = $shifts->get($today);
+        $todayShift = $assignedShifts
+            ->filter(fn ($assignment) => ! $assignment->effective_date || substr((string) $assignment->effective_date, 0, 10) <= $today)
+            ->sortByDesc(fn ($assignment) => $assignment->effective_date ? substr((string) $assignment->effective_date, 0, 10) : '0000-00-00')
+            ->first();
+        $todayLegacyShift = $shifts->get($today);
+        if ($todayShift) {
+            // Keep the existing today-card formatter compatible with the
+            // roster record returned from hrm_shift_user.
+            $todayShift->shift_type = $todayShift->name ?: $todayShift->shift_type;
+            $todayShift->schedule_range = self::assignedShiftTimeRange($todayShift);
+        }
+        $canClockIn = ! self::hasOpenSession($todayLog)
+            && count(self::normalizedSessions($todayLog)) < 2
+            && ! $todayLeave;
+        if ($canClockIn && ! self::normalizedSessions($todayLog)) {
+            $canClockIn = self::canStartSessionNow($todayShift ?: $todayLegacyShift, now('Asia/Manila'));
+        }
         $todayStatus = $todayLeave ? 'On Leave'
-            : ($todayLog ? ($todayLog->clock_out ? self::display($todayLog->status) : ($todayLog->clock_in ? 'In Progress' : '—')) : '—');
+            : ($todayLog ? (self::hasOpenSession($todayLog) ? 'In Progress' : self::display($todayLog->status)) : '—');
 
         return Inertia::render('Dashboard/HRM_NEW/MyAttendance', [
             'today' => [
@@ -158,11 +201,15 @@ class MyAttendanceController extends Controller
                 'date_label' => now('Asia/Manila')->format('F j, Y'),
                 'time_in' => $todayLog?->clock_in ?: '—',
                 'time_out' => $todayLog?->clock_out ?: '—',
+                'hours' => self::hoursLabel($todayLog?->clock_in, $todayLog?->clock_out, self::normalizedSessions($todayLog)),
+                'sessions' => self::sessionRows($todayLog),
                 'status' => $todayStatus,
                 'leave_type' => $todayLeave ? self::leaveName($todayLeave->leave_type) : null,
-                'schedule' => $todayShift ? (trim(($todayShift->shift_type ?? '') . ($todayShift->schedule_range ? ' (' . $todayShift->schedule_range . ')' : '')) ?: '—') : '—',
-                'can_clock_in' => ! $todayLog && ! $todayLeave,
-                'can_clock_out' => (bool) ($todayLog && $todayLog->clock_in && ! $todayLog->clock_out && ! $todayLeave),
+                'schedule' => $todayShift
+                    ? (trim(($todayShift->shift_type ?? '') . ($todayShift->schedule_range ? ' (' . $todayShift->schedule_range . ')' : '')) ?: '—')
+                    : ($todayLegacyShift ? (trim(($todayLegacyShift->shift_type ?? '') . ($todayLegacyShift->schedule_range ? ' (' . $todayLegacyShift->schedule_range . ')' : '')) ?: '—') : '—'),
+                'can_clock_in' => $canClockIn,
+                'can_clock_out' => (bool) ($todayLog && self::hasOpenSession($todayLog) && ! $todayLeave),
             ],
             'summary' => $summary,
             'history' => array_values($rows),
@@ -170,6 +217,26 @@ class MyAttendanceController extends Controller
             'filters' => ['month' => $monthInput, 'date' => $request->get('date', ''), 'status' => $request->get('status', '')],
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
+    }
+
+    protected static function assignedShiftTimeRange($shift): string
+    {
+        $format = static function ($time): string {
+            $value = substr((string) $time, 0, 5);
+            return preg_match('/^\d{2}:\d{2}$/', $value) ? $value : '';
+        };
+        $start = $format($shift->start_time ?? null);
+        $end = $format($shift->end_time ?? null);
+
+        return $start && $end ? $start . ' - ' . $end : '';
+    }
+
+    protected static function assignedShiftLabel($shift): string
+    {
+        $name = trim((string) ($shift->name ?? '')) ?: trim((string) ($shift->shift_type ?? ''));
+        $range = self::assignedShiftTimeRange($shift);
+
+        return trim($name . ($range ? ' (' . $range . ')' : '')) ?: 'â€”';
     }
 
     public function clockIn(Request $request)
@@ -182,19 +249,41 @@ class MyAttendanceController extends Controller
             return back()->with('error', 'You are on approved leave today.');
         }
         $log = AttendanceLog::where('user_id', $user->id)->where('date', $today)->first();
-        if ($log && $log->clock_in && ! $log->clock_out) {
+        if ($log && self::hasOpenSession($log)) {
             return back()->with('error', 'Already timed in. Please time out first.');
         }
-        if ($log && $log->clock_out) {
-            return back()->with('error', 'Attendance already completed for today.');
+        if (count(self::normalizedSessions($log)) >= 2) {
+            return back()->with('error', 'You can only have two work sessions per shift.');
         }
 
         $shift = EmployeeShift::where('user_id', $user->id)->where('effective_date', $today)->first();
+        if (! $shift) {
+            $shift = \DB::table('hrm_shift_user as su')
+                ->join('hrm_shifts as s', 's.id', '=', 'su.shift_id')
+                ->where('su.user_id', $user->id)
+                ->where('s.is_active', true)
+                ->where(function ($query) use ($today) {
+                    $query->whereNull('su.effective_date')
+                        ->orWhereDate('su.effective_date', '<=', $today);
+                })
+                ->orderByDesc('su.effective_date')
+                ->select('s.shift_type', 's.start_time', 's.end_time', 'su.effective_date')
+                ->first();
+        }
         if (! $shift) {
             $shift = EmployeeShift::firstOrCreate(
                 ['user_id' => $user->id, 'effective_date' => $today],
                 ['shift_type' => 'Morning', 'schedule_range' => '8AM - 5PM']
             );
+        }
+
+        // The first session must start during the assigned shift window. A
+        // later session is allowed after a valid first session, so the
+        // employee can clock back in after the scheduled break.
+        if (! $log || ! self::normalizedSessions($log)) {
+            if (! self::canStartSessionNow($shift, $now)) {
+                return back()->with('error', 'Time in is only available during your assigned shift hours.');
+            }
         }
 
         $late = false;
@@ -203,12 +292,25 @@ class MyAttendanceController extends Controller
         } catch (\Throwable) {
         }
 
-        AttendanceLog::create([
-            'user_id' => $user->id,
-            'date' => $today,
-            'clock_in' => $now->format('h:i A'),
-            'status' => $late ? 'Late' : 'On-Time',
-        ]);
+        $timeIn = $now->format('h:i A');
+        $sessions = self::normalizedSessions($log);
+        $sessions[] = ['clock_in' => $timeIn, 'clock_out' => null];
+        if ($log) {
+            $log->update([
+                'sessions' => $sessions,
+                'status' => $log->status ?: ($late ? 'Late' : 'On-Time'),
+                'clock_in' => $log->clock_in ?: $timeIn,
+                'clock_out' => null,
+            ]);
+        } else {
+            AttendanceLog::create([
+                'user_id' => $user->id,
+                'date' => $today,
+                'clock_in' => $timeIn,
+                'status' => $late ? 'Late' : 'On-Time',
+                'sessions' => $sessions,
+            ]);
+        }
 
         return back()->with('message', 'Time in recorded at ' . $now->format('h:i A'));
     }
@@ -223,10 +325,22 @@ class MyAttendanceController extends Controller
         if (! $log || ! $log->clock_in) {
             return back()->with('error', 'Time in first before timing out.');
         }
-        if ($log->clock_out) {
-            return back()->with('error', 'Already timed out today.');
+        $sessions = self::normalizedSessions($log);
+        $openIndex = null;
+        for ($i = count($sessions) - 1; $i >= 0; $i--) {
+            if (! empty($sessions[$i]['clock_in']) && empty($sessions[$i]['clock_out'])) {
+                $openIndex = $i;
+                break;
+            }
         }
-        $log->update(['clock_out' => $now->format('h:i A')]);
+        if ($openIndex === null) {
+            return back()->with('error', 'There is no open work session to time out.');
+        }
+        $sessions[$openIndex]['clock_out'] = $now->format('h:i A');
+        $log->update([
+            'sessions' => $sessions,
+            'clock_out' => $now->format('h:i A'),
+        ]);
 
         return back()->with('message', 'Time out recorded at ' . $now->format('h:i A'));
     }
@@ -280,6 +394,13 @@ class MyAttendanceController extends Controller
     {
         $range = is_object($shift) ? ($shift->schedule_range ?? null) : null;
         $type = is_object($shift) ? ($shift->shift_type ?? null) : $shift;
+        $startTime = is_object($shift) ? ($shift->start_time ?? null) : null;
+        if ($startTime) {
+            $parsed = self::parseShiftTime($startTime);
+            if ($parsed) {
+                return $parsed;
+            }
+        }
         if ($range && preg_match('/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i', explode('-', (string) $range)[0] ?? '', $m)) {
             $h = (int) $m[1]; $min = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : 0; $ap = strtoupper($m[3]);
             if ($ap === 'PM' && $h < 12) $h += 12;
@@ -293,6 +414,75 @@ class MyAttendanceController extends Controller
             'Graveyard' => (string) ($ps['graveyard_start'] ?? '22:00:00'),
             default => (string) ($ps['morning_start'] ?? '08:00:00'),
         };
+    }
+
+    private static function parseShiftTime($value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+        if (preg_match('/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(AM|PM)?$/i', $value, $m)) {
+            $hour = (int) $m[1];
+            $minute = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : 0;
+            $period = isset($m[3]) ? strtoupper($m[3]) : null;
+            if ($period === 'PM' && $hour < 12) $hour += 12;
+            if ($period === 'AM' && $hour === 12) $hour = 0;
+            if ($hour <= 23 && $minute <= 59) {
+                return sprintf('%02d:%02d:00', $hour, $minute);
+            }
+        }
+        return null;
+    }
+
+    private static function shiftEndFor($shift): string
+    {
+        $endTime = is_object($shift) ? ($shift->end_time ?? null) : null;
+        if ($endTime) {
+            $parsed = self::parseShiftTime($endTime);
+            if ($parsed) {
+                return $parsed;
+            }
+        }
+        $range = is_object($shift) ? ($shift->schedule_range ?? null) : null;
+        if ($range) {
+            $parts = explode('-', (string) $range, 2);
+            $parsed = self::parseShiftTime($parts[1] ?? '');
+            if ($parsed) {
+                return $parsed;
+            }
+        }
+        $type = is_object($shift) ? ($shift->shift_type ?? null) : $shift;
+        $ps = \App\Models\Hrm\PayrollSetting::cached();
+        return match ($type) {
+            'Morning' => (string) ($ps['morning_end'] ?? '17:00:00'),
+            'Afternoon' => (string) ($ps['afternoon_end'] ?? '23:00:00'),
+            'Graveyard' => (string) ($ps['graveyard_end'] ?? '07:00:00'),
+            default => (string) ($ps['morning_end'] ?? '17:00:00'),
+        };
+    }
+
+    private static function canStartSessionNow($shift, Carbon $now): bool
+    {
+        try {
+            $start = Carbon::parse($now->toDateString() . ' ' . self::shiftStartFor($shift), 'Asia/Manila');
+            $end = Carbon::parse($now->toDateString() . ' ' . self::shiftEndFor($shift), 'Asia/Manila');
+            if ($end->lessThanOrEqualTo($start)) {
+                $end->addDay();
+            }
+            $check = $now->copy();
+            if ($check->lt($start)) {
+                return false;
+            }
+            if ($check->gt($end)) {
+                return false;
+            }
+            // Morning shifts use the morning portion of the day for their
+            // first clock-in; later sessions cover the scheduled break.
+            return ! ($start->hour < 12 && $check->hour >= 12);
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     private function onLeave(int $userId, string $date): bool
@@ -323,24 +513,63 @@ class MyAttendanceController extends Controller
         };
     }
 
-    private static function hoursLabel(?string $in, ?string $out): string
+    private static function hoursLabel(?string $in, ?string $out, ?array $sessions = null): string
     {
-        if (! $in || ! $out) {
+        $mins = self::workedMinutes($in, $out, $sessions);
+        if ($mins === null) {
             return '—';
         }
-        try {
-            $start = Carbon::createFromFormat('h:i A', $in);
-            $end = Carbon::createFromFormat('h:i A', $out);
-            if ($end->lessThan($start)) {
-                $end->addDay();
-            }
-            $mins = (int) round($start->floatDiffInMinutes($end));
-            $h = intdiv($mins, 60);
-            $m = $mins % 60;
+        $h = intdiv($mins, 60);
+        $m = $mins % 60;
+        return $m === 0 ? "{$h}h" : "{$h}h {$m}m";
+    }
 
-            return $m === 0 ? "{$h}h" : "{$h}h {$m}m";
+    private static function workedMinutes(?string $in, ?string $out, ?array $sessions = null): ?int
+    {
+        try {
+            $sessions = $sessions ?: [['clock_in' => $in, 'clock_out' => $out]];
+            $minutes = 0;
+            foreach ($sessions as $session) {
+                if (empty($session['clock_in']) || empty($session['clock_out'])) {
+                    continue;
+                }
+                $start = Carbon::createFromFormat('h:i A', (string) $session['clock_in']);
+                $end = Carbon::createFromFormat('h:i A', (string) $session['clock_out']);
+                if ($end->lessThan($start)) {
+                    $end->addDay();
+                }
+                $minutes += (int) round($start->floatDiffInMinutes($end));
+            }
+            return $minutes > 0 ? $minutes : null;
         } catch (\Throwable) {
-            return '—';
+            return null;
         }
+    }
+
+    private static function normalizedSessions(?AttendanceLog $log): array
+    {
+        if (! $log) {
+            return [];
+        }
+        $sessions = is_array($log->sessions) ? $log->sessions : [];
+        if (! $sessions && $log->clock_in) {
+            $sessions = [['clock_in' => $log->clock_in, 'clock_out' => $log->clock_out]];
+        }
+        return array_values($sessions);
+    }
+
+    private static function hasOpenSession(?AttendanceLog $log): bool
+    {
+        foreach (self::normalizedSessions($log) as $session) {
+            if (! empty($session['clock_in']) && empty($session['clock_out'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function sessionRows(?AttendanceLog $log): array
+    {
+        return self::normalizedSessions($log);
     }
 }

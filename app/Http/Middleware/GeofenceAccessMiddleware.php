@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Ceo\CeoLocation;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -11,22 +12,36 @@ class GeofenceAccessMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // Authentication must remain available so an employee can sign in
+        // before the browser requests location permission.
+        if (! $request->user()) {
+            return $next($request);
+        }
+
+        // IT must retain access to the location-management page so it can
+        // create or adjust the company work zones that protect other routes.
+        if ($request->is('dashboard/it/location*')) {
+            return $next($request);
+        }
+
+        // The dashboard is the location-permission bootstrap page. It must
+        // render once so the browser can request GPS permission and attach
+        // coordinates to subsequent internal requests.
+        if ($request->is('dashboard') && $request->isMethod('GET')
+            && ! $request->header('X-User-Lat') && ! $request->header('X-User-Lng')) {
+            return $next($request);
+        }
+
         // 1. CHECK ROLE: THE CEO BYPASS
         // If the user is a CEO, they can access from any location or IP.
         if ($request->user() && $request->user()->role === 'CEO') {
             return $next($request);
         }
 
-        // Fetch ALL active authorized zones for this user (multi-site support)
-        $safeZones = CeoLocation::where('user_id', auth()->id())
-            ->where('is_active', true)
-            ->latest()
-            ->get();
-
-        // Fallback for DBs where the migration hasn't run yet
-        if ($safeZones->isEmpty()) {
-            $safeZones = CeoLocation::where('user_id', auth()->id())->latest()->take(1)->get();
-        }
+        // Locations configured by IT are shared company work sites. They
+        // apply to every internal employee, not only to the IT user who
+        // created the location.
+        $safeZones = CeoLocation::where('is_active', true)->latest()->get();
 
         // If no safe zone is set, we block access for security
         if ($safeZones->isEmpty()) {
@@ -39,7 +54,7 @@ class GeofenceAccessMiddleware
 
         if ($currentLat && $currentLng) {
             foreach ($safeZones as $safeZone) {
-                $distance = $this->calculateDistance(
+                $distance = self::calculateDistance(
                     $safeZone->latitude, $safeZone->longitude,
                     $currentLat, $currentLng
                 );
@@ -74,6 +89,32 @@ class GeofenceAccessMiddleware
         );
     }
 
+    /** Validate a login request before an employee session is created. */
+    public static function allows(Request $request): bool
+    {
+        $user = $request->user();
+        if ($user && $user->role === 'CEO') {
+            return true;
+        }
+
+        $zones = CeoLocation::where('is_active', true)->latest()->get();
+        if ($zones->isEmpty()) return false;
+
+        $lat = $request->header('X-User-Lat');
+        $lng = $request->header('X-User-Lng');
+        if ($lat !== null && $lng !== null) {
+            foreach ($zones as $zone) {
+                if (self::calculateDistance($zone->latitude, $zone->longitude, $lat, $lng) <= $zone->range_radius) {
+                    return true;
+                }
+            }
+        }
+
+        $ip = $request->ip();
+        if ($ip === config('app.office_ip')) return true;
+        return $zones->contains(fn ($zone) => $zone->ip_address && $zone->ip_address === $ip);
+    }
+
     /**
      * Return a geofence denial in the format the caller expects:
      * JSON for API callers, redirect-with-flash for Inertia page visits
@@ -88,10 +129,18 @@ class GeofenceAccessMiddleware
             ], 403);
         }
 
-        return redirect()->back()->with('geofence_error', $message);
+        // End the internal employee session when the device is outside all
+        // permitted sites so the login page remains reachable.
+        Auth::guard('web')->logout();
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
+        return redirect()->route('login')->with('geofence_error', $message);
     }
 
-    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
+    private static function calculateDistance($lat1, $lon1, $lat2, $lon2)
     {
         $earthRadius = 6371000;
         $dLat = deg2rad($lat2 - $lat1);

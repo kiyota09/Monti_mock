@@ -78,7 +78,6 @@ function statusBadge(s: string): string {
     const map: Record<string, string> = {
         Draft: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600',
         Open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
-        'Partially filled': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
         Filled: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
         Cancelled: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800',
         Closed: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600',
@@ -200,6 +199,33 @@ function closeAssignedWorker() {
 const selectedAvailable = computed(() =>
     props.request.available_workers.find((w) => String(w.id) === String(assignForm.worker_id)) || null
 );
+const showReviewConfirm = ref(false);
+const reviewWorkerTarget = ref<any>(null);
+const reviewLoading = ref(false);
+
+function openReviewConfirm() {
+    if (!selectedAvailable.value || selectedAvailable.value.worker_status !== 'Pending') return;
+    reviewWorkerTarget.value = selectedAvailable.value;
+    showReviewConfirm.value = true;
+}
+
+function cancelReviewConfirm() {
+    if (reviewLoading.value) return;
+    showReviewConfirm.value = false;
+    reviewWorkerTarget.value = null;
+}
+
+function confirmReviewApprove() {
+    if (!reviewWorkerTarget.value || reviewLoading.value) return;
+    const url = route('hrm.workers.show', reviewWorkerTarget.value.id) + '?request_id=' + props.request.id;
+    showReviewConfirm.value = false;
+    reviewLoading.value = true;
+    router.visit(url, {
+        onFinish: () => { reviewLoading.value = false; reviewWorkerTarget.value = null; },
+        onCancel: () => { reviewLoading.value = false; },
+    });
+}
+
 const hasAssignableAvailableWorkers = computed(() =>
     props.request.available_workers.some((worker) => worker.worker_status === 'Available')
 );
@@ -223,7 +249,7 @@ const previewEmail = ref('');
 // Deployment start date saved with the completed assignment.
 const previewStartDate = ref('');
 const previewStartDateError = ref('');
-const trainingRequired = ref(false);
+const trainingRequired = ref(true);
 const trainingDateError = ref('');
 const managerError = ref('');
 
@@ -259,13 +285,8 @@ function updateDeploymentStart() {
 }
 
 function resetTraining() {
-    trainingRequired.value = false;
+    trainingRequired.value = true;
     trainingDateError.value = '';
-}
-
-function onTrainingRequiredChange() {
-    trainingDateError.value = '';
-    managerError.value = '';
 }
 
 function formatYearsExperience(value: string | number | null | undefined): string {
@@ -449,7 +470,7 @@ const canAssign = computed(() =>
                     <Pencil class="w-3.5 h-3.5" /> Edit
                 </Link>
                 <button
-                    v-if="['Open', 'Partially filled', 'Filled'].includes(request.status)"
+                    v-if="['Open', 'Filled'].includes(request.status)"
                     @click="confirmAction = 'cancel'; reason = ''; reasonError = ''"
                     class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition"
                 >
@@ -505,6 +526,7 @@ const canAssign = computed(() =>
                             <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Start date</th><td class="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.start_date || '—' }}</td></tr>
                             <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">End date</th><td class="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.end_date || '—' }}</td></tr>
                             <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Shift</th><td class="break-words px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.shift || '—' }}</td></tr>
+                            <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Employment type</th><td class="break-words px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.employment_type || '—' }}</td></tr>
                             <tr><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Agency</th><td class="break-words px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200">{{ request.agency || '—' }}</td></tr>
                             <tr v-if="request.notes"><th scope="row" class="w-1/3 bg-slate-50/70 px-4 py-2.5 text-left align-top text-xs font-semibold text-slate-500 dark:bg-slate-900/30 dark:text-slate-400">Notes</th><td class="whitespace-pre-wrap break-words px-4 py-2.5 text-sm text-slate-600 dark:text-slate-300 [overflow-wrap:anywhere]">{{ request.notes }}</td></tr>
                         </tbody>
@@ -528,12 +550,12 @@ const canAssign = computed(() =>
                         <select v-model="assignForm.worker_id" class="flex-1 min-w-0 px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 dark:text-slate-200">
                             <option value="">Select a matching worker...</option>
                             <option v-for="w in request.available_workers" :key="w.id" :value="w.id">
-                                {{ w.name }}{{ w.proposed_department ? ' · ' + w.proposed_department : '' }}{{ w.position_skill ? ' · ' + w.position_skill : '' }}{{ w.worker_status !== 'Available' ? ' · Pending HR approval' : '' }}
+                                {{ w.name }}
                             </option>
                         </select>
-                        <Link v-if="selectedAvailable?.worker_status === 'Pending'" :href="route('hrm.workers.show', selectedAvailable.id) + '?request_id=' + request.id" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition whitespace-nowrap">
+                        <button v-if="selectedAvailable?.worker_status === 'Pending'" type="button" @click="openReviewConfirm" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition whitespace-nowrap">
                             Review &amp; approve
-                        </Link>
+                        </button>
                         <button v-else type="submit" :disabled="!assignForm.worker_id || assignForm.processing || selectedAvailable?.worker_status !== 'Available'" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-60 whitespace-nowrap">
                             Assign
                         </button>
@@ -615,12 +637,12 @@ const canAssign = computed(() =>
                             <p class="text-slate-500 dark:text-slate-400">proposed {{ p.proposed_at || '' }}{{ p.proposed_by ? ' by ' + p.proposed_by : '' }}</p>
                             <p v-if="p.status !== 'Proposed'" class="text-slate-500 dark:text-slate-400">{{ p.status }}{{ p.reviewed_by ? ' by ' + p.reviewed_by : '' }}{{ p.review_reason ? ' — ' + p.review_reason : '' }}</p>
                         </div>
-                        <div class="flex items-center gap-1">
-                            <button @click="openProposalWorker(p)" class="px-3 py-1.5 text-[11px] font-bold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded-lg transition">View</button>
+                        <div class="flex items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-50/80 p-1 dark:border-slate-700 dark:bg-slate-900/50">
+                            <button @click="openProposalWorker(p)" class="inline-flex min-h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-blue-700 dark:hover:bg-blue-900/30 dark:hover:text-blue-300">View</button>
                             <span v-if="p.status !== 'Proposed'" :class="['px-2 py-0.5 rounded-full text-[10px] font-black uppercase', p.status === 'Accepted' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400']">{{ p.status }}</span>
                             <template v-if="p.status === 'Proposed' && canEdit">
-                                <button @click="openAcceptProposal(p)" class="px-3 py-1.5 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition">Accept</button>
-                                <button @click="openRejectProposal(p.id)" class="px-3 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition">Reject</button>
+                                <button @click="openAcceptProposal(p)" class="inline-flex min-h-8 items-center justify-center rounded-lg bg-emerald-600 px-3 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">Accept</button>
+                                <button @click="openRejectProposal(p.id)" class="inline-flex min-h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-[11px] font-bold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/50">Reject</button>
                             </template>
                         </div>
                     </li>
@@ -723,7 +745,7 @@ const canAssign = computed(() =>
                                     <tr><th class="pr-3 font-medium text-slate-400">Years experience</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.years_experience ? selectedProposal.worker_profile.years_experience + ' years' : '—' }}</td></tr>
                                     <tr><th class="pr-3 font-medium text-slate-400">Proposed dept.</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.proposed_department || '—' }}</td></tr>
                                     <tr><th class="pr-3 font-medium text-slate-400">Availability</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.availability || '—' }}</td></tr>
-                                    <tr><th class="pr-3 font-medium text-slate-400">Arrangement</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.employment_arrangement || '—' }}</td></tr>
+                                    <tr><th class="pr-3 font-medium text-slate-400">Employment arrangement</th><td class="font-semibold text-slate-700 dark:text-slate-200">Agency-deployed</td></tr>
                                     <tr><th class="pr-3 font-medium text-slate-400">Daily rate</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.daily_rate != null ? '₱' + Number(selectedProposal.worker_profile.daily_rate).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '—' }}</td></tr>
                                     <tr><th class="pr-3 font-medium text-slate-400">Birth date</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.birth_date || '—' }}</td></tr>
                                     <tr><th class="pr-3 font-medium text-slate-400">Gender</th><td class="font-semibold text-slate-700 dark:text-slate-200">{{ selectedProposal.worker_profile?.gender || '—' }}</td></tr>
@@ -943,20 +965,20 @@ const canAssign = computed(() =>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                             <div><p class="text-slate-400 font-semibold mb-1">Position</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.position_skill }}</p></div>
                             <div><p class="text-slate-400 font-semibold mb-1">Department</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.department }}</p></div>
-                            <div><p class="text-slate-400 font-semibold mb-1">Department module (users.role)</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.department_module || '—' }}</p><p class="mt-1 text-[10px] text-slate-500">Same mapping as CREATE EMPLOYEE — prefilled from department, display only.</p></div>
-                            <div><p class="text-slate-400 font-semibold mb-1">Employment arrangement</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">Agency Contract</p><p class="mt-1 text-[10px] text-slate-500">Fixed for agency workers — display only.</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Department module (users.role)</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">{{ request.department_module || '—' }}</p></div>
+                            <div><p class="text-slate-400 font-semibold mb-1">Employment arrangement</p><p class="px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold">Agency-deployed</p></div>
                             <div>
                                 <label for="reporting-manager" class="mb-1 block font-semibold text-slate-400">Reporting manager</label>
                                 <select id="reporting-manager" v-model="selectedManagerId" :disabled="hiring_managers.length === 0" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                                     <option value="">{{ hiring_managers.length ? 'Select a reporting manager...' : 'No manager assigned to this department' }}</option>
-                                    <option v-for="manager in hiring_managers" :key="manager.id" :value="manager.id">{{ manager.name }} · {{ manager.position }}</option>
+                                    <option v-for="manager in hiring_managers" :key="manager.id" :value="manager.id">{{ manager.name }}</option>
                                 </select>
                                 <p v-if="managerError" class="mt-1 text-[10px] font-bold text-rose-600">{{ managerError }}</p>
-                                <p v-else class="mt-1 text-[10px] text-slate-500">Managers assigned to {{ request.department }}. Required when training is enabled.</p>
+                                <p v-else class="mt-1 text-[10px] text-slate-500">Managers assigned to {{ request.department }}. Required for this training.</p>
                             </div>
                             <div><p class="text-slate-400 font-semibold mb-1">Deployment start date</p><input v-model="previewStartDate" @input="updateDeploymentStart" type="date" :min="todayDate" required class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm font-semibold" /><p v-if="previewStartDateError" class="mt-1 text-[10px] font-bold text-rose-600">{{ previewStartDateError }}</p><p v-else class="mt-1 text-[10px] text-slate-500">Saved as the worker's deployment start date.</p></div>
-                            <label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                                <input v-model="trainingRequired" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500" @change="onTrainingRequiredChange" />
+                            <label class="flex cursor-default items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-bold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                <input type="checkbox" :checked="true" disabled aria-label="Training required" class="h-4 w-4 rounded border-slate-300 text-amber-600 opacity-100 focus:ring-amber-500" />
                                 Training required
                             </label>
                             <template v-if="trainingRequired">
@@ -1019,9 +1041,28 @@ const canAssign = computed(() =>
                     <Link :href="route('hrm.workers.show', hirePreview.worker_id || hirePreview.id)" class="text-xs font-bold text-blue-600 hover:text-blue-700 transition">Open full worker profile →</Link>
                     <div class="flex items-center gap-2">
                         <button @click="closeHirePreview" :disabled="accepting" class="px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all disabled:opacity-50">Cancel</button>
-                        <button @click="finishHirePreview" :disabled="accepting" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-60">{{ accepting ? 'Working...' : (hireMode === 'direct' ? 'Finish — Assign worker' : 'Finish — Accept worker') }}</button>
+                        <button @click="finishHirePreview" :disabled="accepting" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-60">{{ accepting ? 'Working...' : (hireMode === 'direct' ? 'Assign worker' : 'Accept Worker') }}</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div v-if="showReviewConfirm" class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="presentation" @click.self="cancelReviewConfirm">
+            <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-800" role="alertdialog" aria-modal="true" aria-labelledby="review-worker-title">
+                <h2 id="review-worker-title" class="text-base font-black text-slate-900 dark:text-white">Review worker for approval?</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Open <strong>{{ reviewWorkerTarget?.name }}</strong>’s worker profile to review the submission and decide whether to approve it.</p>
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" @click="cancelReviewConfirm" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700">Cancel</button>
+                    <button type="button" @click="confirmReviewApprove" class="rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-amber-700">Continue to review</button>
+                </div>
+            </section>
+        </div>
+
+        <div v-if="reviewLoading" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="status" aria-live="polite" aria-label="Opening worker review">
+            <div class="w-full max-w-sm rounded-2xl border border-white/15 bg-white p-7 text-center shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border-4 border-amber-100 border-t-amber-600 dark:border-amber-900 dark:border-t-amber-300 animate-spin"></div>
+                <h2 class="mt-5 text-base font-black text-slate-900 dark:text-white">Opening worker review</h2>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-300">Loading the worker profile. Please wait.</p>
             </div>
         </div>
 
@@ -1029,7 +1070,7 @@ const canAssign = computed(() =>
             <div class="w-full max-w-sm rounded-2xl border border-white/15 bg-white p-7 text-center shadow-2xl dark:bg-slate-800 dark:border-slate-700">
                 <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border-4 border-emerald-100 border-t-emerald-600 dark:border-emerald-900 dark:border-t-emerald-400 animate-spin"></div>
                 <h2 class="mt-5 text-base font-black text-slate-900 dark:text-white">{{ hireMode === 'proposal' ? 'Accepting worker proposal' : 'Deploying worker' }}</h2>
-                <p class="mt-2 text-sm text-slate-500 dark:text-slate-300">Creating the worker account and saving the assignment. Please wait.</p>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-300">Creating the worker account, sending the welcome email, and saving the assignment. Please wait.</p>
             </div>
         </div>
     </AuthenticatedLayout>

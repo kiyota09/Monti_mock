@@ -49,7 +49,6 @@ function statusBadge(s: string): string {
     const map: Record<string, string> = {
         Draft: 'bg-slate-100 text-slate-500 border-slate-200',
         Open: 'bg-blue-100 text-blue-700 border-blue-200',
-        'Partially filled': 'bg-amber-100 text-amber-700 border-amber-200',
         Filled: 'bg-emerald-100 text-emerald-700 border-emerald-200',
         Cancelled: 'bg-rose-100 text-rose-700 border-rose-200',
         Closed: 'bg-slate-200 text-slate-600 border-slate-300',
@@ -77,7 +76,7 @@ function statusBadge(s: string): string {
                 </div>
                 <select v-model="status" class="px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200">
                     <option value="All">All statuses</option>
-                    <option>Open</option><option>Partially filled</option><option>Filled</option>
+                    <option>Open</option><option>Filled</option>
                     <option>Closed</option><option>Cancelled</option>
                 </select>
             </div>

@@ -49,6 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'man.role' => \App\Http\Middleware\CheckManufacturingRoleAccess::class,
             'man.department' => \App\Http\Middleware\EnsureManufacturingDepartment::class,
             'client.access' => \App\Http\Middleware\EnsureRepresentativeAccess::class,
+            'applicant.employee' => \App\Http\Middleware\EnsureApplicantIsNotEmployee::class,
         ]);
 
         /**

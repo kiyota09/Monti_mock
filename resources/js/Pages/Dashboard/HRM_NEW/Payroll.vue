@@ -1,7 +1,7 @@
 <script setup>
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Search, Upload, DollarSign, TrendingDown, Wallet, Plus, FileText } from 'lucide-vue-next'
 
 // NOTE (real system): role comes from the login session and is enforced on the
@@ -114,6 +114,11 @@ const initials = (name) => String(name || '?').split(' ').map((n) => n[0]).join(
 // Backend uses back()->withErrors() for rejections and with('message') for
 // success — without this banner every rejection looks like a dead button.
 const flashMsg = computed(() => page.props.flash?.message || page.props.flash?.success || '')
+const generatedPayrollMessage = computed(() => String(flashMsg.value).includes('payroll records generated as Draft.') ? flashMsg.value : '')
+const showPayrollGenerationModal = ref(false)
+watch(generatedPayrollMessage, (message) => {
+    if (message) showPayrollGenerationModal.value = true
+}, { immediate: true })
 const errorMsg = computed(() => {
     const e = page.props.errors || {}
     return e.error || e.ids || Object.values(e)[0] || ''
@@ -262,10 +267,16 @@ const exportCsv = async () => {
                                 class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-72">
                                 <option v-for="p in periodOptions" :key="p.label" :value="p.label">{{ p.label }}{{ p.is_current ? ' · Current' : '' }}{{ p.locked ? ' · Locked' : '' }}{{ p.row_count ? ` (${p.row_count})` : '' }}</option>
                             </select>
-                            <Link :href="route('hrm.payroll.generate')" :class="canEdit ? '' : 'opacity-50 pointer-events-none'"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-[#263c43] hover:bg-[#1e3036] text-white rounded-lg text-sm font-bold transition shadow-md">
-                                <Plus class="w-4 h-4" /> Generate Payroll
-                            </Link>
+                            <div class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap">
+                                <Link :href="route('hrm.payroll.advances.index')"
+                                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition shadow-md">
+                                    <DollarSign class="w-4 h-4 shrink-0" /> Advance Payment
+                                </Link>
+                                <Link :href="route('hrm.payroll.generate')" :class="canEdit ? '' : 'opacity-50 pointer-events-none'"
+                                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-[#263c43] hover:bg-[#1e3036] text-white rounded-lg text-sm font-bold transition shadow-md">
+                                    <Plus class="w-4 h-4 shrink-0" /> Generate Payroll
+                                </Link>
+                            </div>
                         </div>
                     </div>
                     <div v-if="active_period_meta" class="mt-3 flex flex-wrap gap-2 text-xs relative">
@@ -277,7 +288,7 @@ const exportCsv = async () => {
                 </div>
 
                 <div v-if="errorMsg" class="mb-4 px-4 py-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold relative">{{ errorMsg }}</div>
-                <div v-if="flashMsg" class="mb-4 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold relative">{{ flashMsg }}</div>
+                <div v-if="flashMsg && !generatedPayrollMessage" class="mb-4 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold relative">{{ flashMsg }}</div>
                 <div v-if="localMsg" class="mb-4 px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold relative">{{ localMsg }}</div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 relative">
@@ -404,6 +415,21 @@ const exportCsv = async () => {
                 </div>
             </div>
         </div>
+        <div v-if="showPayrollGenerationModal && generatedPayrollMessage" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="presentation" @click.self="showPayrollGenerationModal = false">
+            <section class="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="payroll-generation-title">
+                <header class="border-b border-slate-100 px-5 py-4">
+                    <h2 id="payroll-generation-title" class="text-base font-black text-slate-900">Payroll generation complete</h2>
+                    <p class="mt-1 text-xs text-slate-500">Generated records were saved as Draft.</p>
+                </header>
+                <div class="max-h-[55vh] overflow-y-auto px-5 py-4">
+                    <p class="whitespace-pre-line break-words text-sm leading-6 text-slate-700">{{ generatedPayrollMessage }}</p>
+                </div>
+                <footer class="flex justify-end border-t border-slate-100 bg-slate-50 px-5 py-4">
+                    <button type="button" @click="showPayrollGenerationModal = false" class="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800">Close</button>
+                </footer>
+            </section>
+        </div>
+
         <div v-if="confirmBox" class="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-900/50" @click="closeConfirm"></div>
             <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">

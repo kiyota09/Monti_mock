@@ -92,7 +92,7 @@
                                 <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-amber-600"><Users class="h-4 w-4" /></span>
                                 <select v-model="createForm.applicant_job_application_id" required :disabled="eligibleLoading || !!eligibleLoadError" class="w-full appearance-none rounded-xl border-slate-200 bg-white py-3 pl-10 pr-10 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:cursor-wait disabled:bg-slate-50">
                                     <option value="" disabled>{{ eligibleLoading ? 'Loading applicants…' : eligibleLoadError ? 'Unable to load applicants' : 'Select an eligible applicant' }}</option>
-                                    <option v-for="person in eligibleApplicants" :key="person.job_application_id" :value="person.job_application_id">{{ person.name }} · {{ person.position }} · {{ person.eligibility_status }}{{ person.interview_stage ? ` · ${person.interview_stage}` : '' }}</option>
+                                    <option v-for="person in eligibleApplicants" :key="person.job_application_id" :value="person.job_application_id">{{ person.name }}</option>
                                 </select>
                                 <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400"><ChevronDown class="h-4 w-4" /></span>
                             </span>

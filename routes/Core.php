@@ -122,7 +122,7 @@ Route::get('/', function () {
 | Authenticated User Core Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'geofence'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     // Shown when every page permission is still 'disabled' (IT default).
     Route::get('/awaiting-access', function () {
@@ -175,7 +175,7 @@ Route::middleware(['auth'])->group(function () {
 | Unified Employee UI Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'position:staff,manager'])->prefix('dashboard/employee-ui')->group(function () {
+Route::middleware(['auth', 'geofence', 'position:staff,manager'])->prefix('dashboard/employee-ui')->group(function () {
     Route::get('/', [AppController::class, 'index'])->name('employee.ui.dashboard');
     Route::get('/clock', [ClockController::class, 'clock'])->name('employee.ui.clock');
     Route::post('/clock/toggle', [ClockController::class, 'toggle'])
@@ -193,7 +193,7 @@ Route::middleware(['auth', 'position:staff,manager'])->prefix('dashboard/employe
 | Unified Trainee Portal Routes
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/trainee')->middleware(['auth', 'verified', 'position:trainee'])->group(function () {
+Route::prefix('dashboard/trainee')->middleware(['auth', 'verified', 'geofence', 'position:trainee'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('trainee.dashboard');
     Route::get('/timekeeping', [TraineeTimeKeepingController::class, 'index'])->name('trainee.timekeeping');
     Route::post('/timekeeping/clock', [TraineeTimeKeepingController::class, 'clockInOut'])->name('trainee.timekeeping.clock');

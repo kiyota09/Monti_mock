@@ -23,6 +23,7 @@ use App\Support\OnboardingSnapshot;
 use App\Support\TerminatedAccess;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -304,7 +305,7 @@ class StatusController extends Controller
                 'title' => $onboarding->position ?: $person?->position_applied,
                 'department' => $onboarding->department,
                 'work_location' => $onboarding->work_location,
-                'work_mode' => $employeeUser->work_mode ?: $onboarding->work_mode,
+                'work_mode' => $onboarding->work_mode,
                 'work_schedule' => $onboarding->work_schedule,
                 'employment_type' => $onboarding->employment_type,
                 'salary_min' => null,
@@ -382,16 +383,74 @@ class StatusController extends Controller
                 ->orWhereHas('hrmOrgPosition', fn ($w) => $w->whereIn('management_level', ['Managerial', 'Supervisory', 'Executive'])))
             ->orderBy('name')->take(200)
             ->get(['id', 'name', 'position', 'department', 'role', 'hrm_department_id', 'hrm_position_id', 'is_manufacturing_supervisor', 'supervisor_department']);
-        $norm = fn ($v) => strtolower(trim((string) $v));
+        $norm = fn ($v) => preg_replace('/\s+/', ' ', trim(str_replace('&', 'and', strtolower((string) $v))));
         $target = $norm($appliedDepartment);
         $managerChoices = $seatHolders;
         if ($target !== '') {
             $scoped = $seatHolders->filter(fn ($u) => $norm($u->hrmDepartment?->name) === $target
                 || $norm($u->department) === $target
                 || $norm($u->supervisor_department) === $target)->values();
-            if ($scoped->isNotEmpty()) {
-                $managerChoices = $scoped;
+            $managerChoices = $scoped;
+            if ($managerChoices->isEmpty()) {
+                // Legacy users such as Luis Montano may have no department
+                // columns populated; keep only unassigned manager/supervisor
+                // seats instead of falling back to another department.
+                $managerChoices = $seatHolders->filter(fn ($u) =>
+                    $u->department === null
+                    && $u->supervisor_department === null
+                    && in_array($u->position, ['manager', 'supervisor'], true)
+                    && (str_contains($target, 'order') ? strtoupper((string) $u->role) === 'ORD' : true)
+                )->values();
             }
+            // Never offer HRM users for a non-HR department. Order Management
+            // uses the ORD organizational role (including legacy users whose
+            // department columns are empty).
+            $managerChoices = $managerChoices
+                ->reject(fn ($u) => strtoupper((string) $u->role) === 'HRM')
+                ->values();
+        }
+
+        // Manufacturing hires must use a supervisor assigned to the exact
+        // manufacturing role, rather than any supervisor in the department.
+        $positionText = strtolower((string) ($jaPosting?->title ?: $onboarding->position ?: $person?->position_applied));
+        $manufacturingRole = null;
+        if (str_contains($positionText, 'knitting')) {
+            $manufacturingRole = str_contains($positionText, 'yarn') ? 'knitting_yarn'
+                : (str_contains($positionText, 'mechanic') ? 'knitting_mechanic'
+                    : (str_contains($positionText, 'inspector') ? 'knitting_inspector'
+                        : (str_contains($positionText, 'sample') ? 'knitting_sample' : null)));
+        }
+        if ($manufacturingRole) {
+            $assignedSupervisorIds = DB::table('manufacturing_supervisor_roles')
+                ->where('manufacturing_role', $manufacturingRole)
+                ->pluck('user_id');
+            $assignedSupervisorIds = $assignedSupervisorIds->merge(
+                DB::table('man_supervisor_staff_page_permissions')
+                    ->where('manufacturing_role', $manufacturingRole)
+                    ->whereIn('permission_level', ['view', 'edit'])
+                    ->pluck('supervisor_user_id')
+            )->unique()->values();
+            $managerChoices = $managerChoices
+                ->filter(fn ($u) => $assignedSupervisorIds->contains($u->id))
+                ->values();
+        } elseif ($chainParent) {
+            // For ordinary departments, use the position chain (for example,
+            // Order Management Staff -> Order Processing Manager) so unrelated
+            // department managers are not offered.
+            $chainScoped = $seatHolders
+                ->filter(fn ($u) => ((int) $u->hrm_position_id === (int) $chainParent->id
+                    || ($chainManager && (int) $u->id === (int) $chainManager->id)
+                    || ($u->hrm_position_id === null && in_array($u->position, ['manager', 'supervisor'], true)))
+                    && ($target === ''
+                        || $norm($u->hrmDepartment?->name) === $target
+                        || $norm($u->department) === $target
+                        || $norm($u->supervisor_department) === $target
+                        // Legacy manager records may not have department
+                        // metadata; allow those, but never cross-list a
+                        // manager explicitly belonging to another department.
+                        || ($u->department === null && $u->supervisor_department === null)))
+                ->values();
+            $managerChoices = $chainScoped;
         }
         // Show the resolved department name + seat (Manager/Supervisor) in
         // the picker label.

@@ -131,8 +131,9 @@ class AttendanceController extends Controller
                 'date' => $log->date,
                 'time_in' => $log->clock_in ?: '—',
                 'time_out' => $log->clock_out ?: '—',
-                'hours' => $this->hours($log->clock_in, $log->clock_out),
-                'ot' => $this->ot($log->clock_in, $log->clock_out),
+                'hours' => $this->hours($log->clock_in, $log->clock_out, $log->sessions),
+                'ot' => $this->ot($log->clock_in, $log->clock_out, $log->sessions),
+                'sessions' => is_array($log->sessions) ? $log->sessions : [],
                 'late_minutes' => $lateMinutes,
                 'status' => $status,
                 'status_raw' => $log->status,
@@ -270,8 +271,8 @@ class AttendanceController extends Controller
                         $log->user?->hrmDepartment?->name ?? $log->user?->department ?? $log->user?->role,
                         $shift ? trim(($shift->shift_type ?? '') . ($shift->schedule_range ? ' (' . $shift->schedule_range . ')' : '')) : '',
                         $log->clock_in, $log->clock_out,
-                        $this->hours($log->clock_in, $log->clock_out),
-                        $this->ot($log->clock_in, $log->clock_out),
+                        $this->hours($log->clock_in, $log->clock_out, $log->sessions),
+                        $this->ot($log->clock_in, $log->clock_out, $log->sessions),
                         $late,
                         $this->effectiveStatus($log->status, $late), $log->remarks,
                     ]);
@@ -451,35 +452,39 @@ class AttendanceController extends Controller
         }
     }
 
-    private function workedSeconds(?string $in, ?string $out): ?int
+    private function workedSeconds(?string $in, ?string $out, ?array $sessions = null): ?int
     {
-        if (! $in || ! $out) {
+        $sessions = $sessions ?: [['clock_in' => $in, 'clock_out' => $out]];
+        if (! $sessions) {
             return null;
         }
         try {
-            try {
-                $start = Carbon::createFromFormat('h:i A', $in);
-            } catch (\Throwable) {
-                $start = Carbon::parse($in);
+            $seconds = 0;
+            foreach ($sessions as $session) {
+                if (empty($session['clock_in']) || empty($session['clock_out'])) continue;
+                try {
+                    $start = Carbon::createFromFormat('h:i A', (string) $session['clock_in']);
+                } catch (\Throwable) {
+                    $start = Carbon::parse((string) $session['clock_in']);
+                }
+                try {
+                    $end = Carbon::createFromFormat('h:i A', (string) $session['clock_out']);
+                } catch (\Throwable) {
+                    $end = Carbon::parse((string) $session['clock_out']);
+                }
+                if ($end->lessThan($start)) $end->addDay();
+                $seconds += (int) abs($start->diffInSeconds($end));
             }
-            try {
-                $end = Carbon::createFromFormat('h:i A', $out);
-            } catch (\Throwable) {
-                $end = Carbon::parse($out);
-            }
-            if ($end->lessThan($start)) {
-                $end->addDay();
-            }
-            return (int) abs($start->diffInSeconds($end));
+            return $seconds > 0 ? $seconds : null;
         } catch (\Throwable) {
             return null;
         }
     }
 
     /** Duration as "8h 05m 00s" (clock times only carry minute precision, so seconds are 00). */
-    private function hours(?string $in, ?string $out): string
+    private function hours(?string $in, ?string $out, ?array $sessions = null): string
     {
-        $secs = $this->workedSeconds($in, $out);
+        $secs = $this->workedSeconds($in, $out, $sessions);
         if ($secs === null) return '0h 00m 00s';
         $h = intdiv($secs, 3600);
         $m = intdiv($secs % 3600, 60);
@@ -487,9 +492,10 @@ class AttendanceController extends Controller
         return sprintf('%dh %02dm %02ds', $h, $m, $s);
     }
 
-    private function ot(?string $in, ?string $out): float
+    private function ot(?string $in, ?string $out, ?array $sessions = null): float
     {
-        $h = $this->worked($in, $out);
+        $h = $this->workedSeconds($in, $out, $sessions);
+        $h = $h === null ? null : $h / 3600;
         return $h === null ? 0 : round(max(0, $h - 8), 1);
     }
 }

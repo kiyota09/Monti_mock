@@ -1,8 +1,8 @@
 <template>
   <AuthenticatedLayout>
-    <div class="h-full flex flex-col bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 overflow-hidden -mx-4 -mt-4 px-4 pt-4">
+    <div class="min-h-full flex flex-col bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 overflow-visible -mx-4 -mt-4 px-4 pt-4 pb-6">
 
-      <div class="flex-1 text-slate-900 font-sans relative flex flex-col overflow-hidden">
+      <div class="flex-1 text-slate-900 font-sans relative flex flex-col overflow-visible">
 
         <!-- Subtle Background Pattern -->
         <div class="absolute inset-0 bg-grid-slate-100 [mask-image:linear-gradient(0deg,transparent,black,transparent)] pointer-events-none"></div>
@@ -26,21 +26,26 @@
             <div class="flex flex-wrap items-center justify-end gap-2 shrink-0">
               <button
                 @click="openModal('create')"
-                class="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
+                type="button"
+                aria-label="Create Employment Type"
+                title="Create Employment Type"
+                class="flex h-10 w-10 items-center justify-center bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
-                Create Employment Type
               </button>
 
               <button
                 @click="toggleArchived()"
-                class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                type="button"
+                :aria-label="showArchived ? 'Show active employment types' : 'Show archived employment types'"
+                :title="showArchived ? 'Show active employment types' : 'Show archived employment types'"
+                class="flex h-10 w-10 items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
               >
-                <span v-if="showArchived"><ClipboardList class="w-4 h-4" /></span>
-                <span v-else><Archive class="w-4 h-4" /></span>
-                {{ showArchived ? 'Show Active (' + activeCount + ')' : 'Archived (' + archivedCount + ')' }}
+                <ClipboardList v-if="showArchived" class="w-4 h-4" aria-hidden="true" />
+                <Archive v-else class="w-4 h-4" aria-hidden="true" />
+                <span class="sr-only">{{ showArchived ? 'Show active employment types' : 'Show archived employment types' }}</span>
               </button>
             </div>
           </div>
@@ -77,10 +82,10 @@
         </div>
 
         <!-- TABLE VIEW SECTION - FULL HEIGHT -->
-        <div class="bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm overflow-hidden flex-1 flex flex-col min-h-0">
+        <div class="bg-white rounded-xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 backdrop-blur-sm flex flex-col shrink-0">
 
           <!-- Employment Types Table - Scrollable -->
-          <div class="flex-1 overflow-auto">
+          <div class="overflow-x-auto md:overflow-visible">
             <table class="w-full text-left border-collapse">
               <thead class="sticky top-0 z-10">
                 <tr class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -254,6 +259,13 @@
 
       </div>
     </div>
+    <div v-if="pageLoading" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="status" aria-live="polite">
+      <div class="flex min-w-56 flex-col items-center rounded-2xl border border-slate-200 bg-white px-8 py-7 shadow-2xl">
+        <div class="h-10 w-10 animate-spin rounded-full border-4 border-amber-100 border-t-amber-600"></div>
+        <p class="mt-4 text-sm font-bold text-slate-800">Updating employment types...</p>
+        <p class="mt-1 text-xs text-slate-500">Please wait while this page refreshes.</p>
+      </div>
+    </div>
   </AuthenticatedLayout>
 </template>
 
@@ -279,6 +291,7 @@ const activeModal = ref(null);
 const searchQuery = ref("");
 const saving = ref(false);
 const archiving = ref(false);
+const pageLoading = ref(false);
 const archiveTarget = ref(null);
 const error = ref(false);
 
@@ -372,9 +385,12 @@ const closeModal = () => {
 };
 
 const reloadPage = () => {
-    router.reload({
-        only: ["employmentTypes", "archivedCount", "activeCount", "totalCount"],
-        preserveScroll: true,
+    return new Promise((resolve) => {
+        router.reload({
+            only: ["employmentTypes", "archivedCount", "activeCount", "totalCount"],
+            preserveScroll: true,
+            onFinish: () => resolve(),
+        });
     });
 };
 
@@ -426,15 +442,17 @@ const cancelArchive = () => {
 const confirmArchive = async () => {
     if (!archiveTarget.value || archiving.value) return;
     archiving.value = true;
+    pageLoading.value = true;
     try {
         const res = await axios.delete(route("hrm.workforce.employment-types.destroy", { employmentType: archiveTarget.value.id }));
         toast.success(res.data?.message || "Employment type archived successfully.");
         archiveTarget.value = null;
-        reloadPage();
+        await reloadPage();
     } catch (e) {
         toast.error(e.response?.data?.message || "Failed to archive employment type.");
     } finally {
         archiving.value = false;
+        pageLoading.value = false;
     }
 };
 

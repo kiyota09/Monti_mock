@@ -10,6 +10,7 @@ const props = defineProps<{
     agencies: Array<{ id: number; code: string; name: string }>;
     departments: Array<{ id: number; code: string; name: string }>;
     positions: Array<{ id: number; name: string; department_id: number | null; approved_headcount?: number; filled_positions?: number; available_headcount?: number }>;
+    employmentTypes: Array<{ id: number; name: string; is_active: boolean; archived_at: string | null }>;
     shifts: Array<{ id: number; code: string; name: string; start_time: string | null; end_time: string | null }>;
 }>();
 
@@ -37,6 +38,7 @@ const form = useForm({
     start_date: props.request?.start_date || '',
     end_date: props.request?.end_date || '',
     shift: props.request?.shift || '',
+    employment_type_id: props.request?.employment_type_id || '',
     notes: props.request?.notes || '',
     agency_id: props.request?.agency_id || '',
 });
@@ -66,7 +68,7 @@ const missingRequiredFields = computed(() => {
 });
 const hasFormInput = computed(() => isEdit
     ? form.isDirty
-    : Boolean(form.code.trim() || form.department || form.position_skill || form.start_date || form.end_date || form.shift || form.notes.trim() || form.agency_id || Number(form.headcount) !== 1));
+    : Boolean(form.code.trim() || form.department || form.position_skill || form.start_date || form.end_date || form.shift || form.employment_type_id || form.notes.trim() || form.agency_id || Number(form.headcount) !== 1));
 
 const removeNavigationGuard = router.on('before', (event: any) => {
     if (bypassNavigationGuard) {
@@ -257,6 +259,17 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                         <p v-if="form.errors.position_skill" class="mt-1 text-xs text-rose-600">{{ form.errors.position_skill }}</p>
                         <p v-else-if="!form.department" class="mt-1 text-xs text-slate-400">Select a department first to see its positions.</p>
                         <p v-else-if="form.department && filteredPositions.length === 0" class="mt-1 text-xs text-amber-600">No positions under this department — add one under HRM → Positions first.</p>
+                    </div>
+                    <div>
+                        <label :class="labelCls">Employment type</label>
+                        <select v-model="form.employment_type_id" :class="inputCls">
+                            <option value="">Select employment type...</option>
+                            <option v-for="type in employmentTypes" :key="type.id" :value="type.id">
+                                {{ type.name }}{{ !type.is_active || type.archived_at ? ' (Inactive)' : '' }}
+                            </option>
+                        </select>
+                        <p v-if="form.errors.employment_type_id" class="mt-1 text-xs text-rose-600">{{ form.errors.employment_type_id }}</p>
+                        <p v-else-if="employmentTypes.length === 0" class="mt-1 text-xs text-slate-400">Add an active type under HRM → Employment Types.</p>
                     </div>
                     <div>
                         <label :class="labelCls">Headcount needed <span class="text-red-500">*</span></label>

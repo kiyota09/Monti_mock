@@ -9,7 +9,7 @@ const props = defineProps({ employees: { type: Array, default: () => [] }, evalu
 const sections = [
   { id: 'dashboard', label: 'KPI Dashboard', icon: BarChart3 },
   { id: 'evaluations', label: 'Employee Evaluations', icon: Award },
-  { id: 'reviews', label: 'Manager & HR Reviews', icon: ShieldCheck },
+  { id: 'reviews', label: 'Final Review', icon: ShieldCheck },
   { id: 'history', label: 'Evaluation History', icon: Clock3 }, { id: 'reports', label: 'Reports & Analytics', icon: FileText },
   { id: 'promotions', label: 'Qualified Promotion', icon: TrendingUp },
 ];
@@ -388,7 +388,7 @@ function evaluationHref(evaluation, evidence) { return `/dashboard/hrm/workforce
       <div class="mx-auto max-w-screen-2xl space-y-6">
         <header v-if="!templatesOnly" class="flex flex-wrap items-end justify-between gap-4">
           <div><p class="text-xs font-bold uppercase tracking-widest text-blue-700">HRM / Workforce</p><h1 class="mt-1 text-2xl font-black sm:text-3xl">{{ kpiEvaluationsOnly ? 'KPI Evaluation' : 'Performance Management' }}</h1><p class="mt-2 max-w-3xl text-sm text-slate-600">{{ kpiEvaluationsOnly ? 'Review evaluation assignments, scores, and approval status.' : 'Position-based KPI evaluations for active Monti employees, with manual ratings, automatic scoring, manager review, and HR finalization.' }}</p></div>
-          <div class="flex gap-2"><a href="/dashboard/hrm/workforce/performance-kpi/export" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold"><Download class="h-4 w-4"/>Export CSV</a></div>
+          <div class="flex gap-2"><a href="/dashboard/hrm/workforce/performance-kpi/export" title="Export CSV" aria-label="Export KPI report as CSV" class="performance-export-icon inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"><Download class="h-4 w-4"/></a></div>
         </header>
         <div v-if="!templatesOnly && !kpiEvaluationsOnly" class="rounded-xl bg-slate-50 p-2 shadow-sm"><div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><article v-for="[label, value, icon] in cards" :key="label" class="flex items-start justify-between rounded-xl border border-slate-200 bg-white p-3"><div><p class="text-xs font-semibold text-slate-500">{{ label }}</p><p class="mt-1 text-xl font-black">{{ value }}</p></div><component :is="icon" class="h-4 w-4 shrink-0 text-blue-600"/></article></div></div>
         <nav v-if="!templatesOnly && !kpiEvaluationsOnly" class="flex gap-1.5 overflow-x-auto rounded-md border border-slate-300 bg-white p-1.5 shadow-sm" aria-label="Performance management sections">
@@ -409,7 +409,7 @@ function evaluationHref(evaluation, evidence) { return `/dashboard/hrm/workforce
         </section>
 
         <section v-else-if="activeTab === 'evaluations' || activeTab === 'reviews' || activeTab === 'history'" :class="['flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white', isHr && activeTab === 'evaluations' && !kpiEvaluationsOnly ? 'kpi-evaluation-panel' : '']">
-          <div class="order-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5"><div><h2 class="font-bold">{{ activeTab === 'evaluations' ? 'Employee evaluations' : activeTab === 'reviews' ? 'Manager and HR review queue' : 'Evaluation history' }}</h2><p class="mt-1 text-sm text-slate-500">{{ activeTab === 'history' ? 'Finalized records retain their original template and approval history.' : 'Access is restricted to your HR role, assigned evaluations, and your own finalized results.' }}</p></div></div>
+          <div class="order-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5"><div><h2 class="font-bold">{{ activeTab === 'evaluations' ? 'Employee evaluations' : activeTab === 'reviews' ? 'Final Review' : 'Evaluation history' }}</h2><p class="mt-1 text-sm text-slate-500">{{ activeTab === 'history' ? 'Finalized records retain their original template and approval history.' : 'Access is restricted to your HR role, assigned evaluations, and your own finalized results.' }}</p></div></div>
           <section v-if="isHr && activeTab === 'evaluations' && !kpiEvaluationsOnly" class="order-2 border-b border-slate-100 bg-white">
             <div class="flex flex-wrap items-center justify-between gap-2 p-5"><div><h3 class="font-bold">Official employees and KPI templates</h3><p class="mt-1 text-sm text-slate-500">Active non-probationary employees are matched to active templates by position and department. New templates appear here automatically.</p></div><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{{ filteredEmployees.length }} employees</span></div>
             <div class="overflow-x-auto">
@@ -631,4 +631,16 @@ html[data-theme='dark'] .performance-kpi-page .bg-sky-100 { background-color: #0
 html[data-theme='dark'] .performance-kpi-page .text-sky-800 { color: #7dd3fc !important; }
 html[data-theme='dark'] .performance-kpi-page .kpi-evaluation-panel,
 html[data-theme='dark'] .performance-kpi-page .kpi-evaluation-panel .bg-white { background-color: #18181b !important; }
+@keyframes performance-export-icon-bounce {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-6px); }
+  65% { transform: translateY(1px); }
+  82% { transform: translateY(-2px); }
+}
+.performance-export-icon:hover svg,
+.performance-export-icon:focus-visible svg { animation: performance-export-icon-bounce 480ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .performance-export-icon:hover svg,
+  .performance-export-icon:focus-visible svg { animation: none; }
+}
 </style>

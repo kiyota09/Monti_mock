@@ -270,7 +270,7 @@ function limitPhoneDigits(event: Event) {
     const input = event.target as HTMLInputElement;
     let digitCount = 0;
     input.value = [...input.value].filter((char, index) => {
-        if (/\d/.test(char)) return ++digitCount <= 12;
+        if (/\d/.test(char)) return ++digitCount <= 11;
         return char === ' ' || (char === '+' && index === 0);
     }).join('');
     form.phone = input.value;
@@ -457,7 +457,6 @@ const reviewSections = computed(() => [
     { title: 'Work and Deployment', fields: [
         ['Department / assignment', form.proposed_department], ['Position / skill', form.position_skill],
         ['Years of experience', form.years_experience], ['Availability date', form.availability],
-        ['Employment arrangement', form.employment_arrangement],
         ['Daily rate', form.daily_rate === '' ? '' : `₱${form.daily_rate}`],
     ] },
     { title: 'Government ID', fields: [
@@ -904,18 +903,6 @@ const errCls = 'mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-ro
                         <p v-if="err('availability') || availabilityError" :class="errCls">{{ err('availability') || availabilityError }}</p>
                     </div>
                     <div>
-                        <label :class="labelCls">Employment arrangement</label>
-                        <select v-model="form.employment_arrangement" :class="fieldCls('employment_arrangement')">
-                            <option value="">Select arrangement...</option>
-                            <option>Full-time</option>
-                            <option>Part-time</option>
-                            <option>Contractual</option>
-                            <option>Project-based</option>
-                            <option>Seasonal</option>
-                        </select>
-                        <p v-if="err('employment_arrangement')" :class="errCls">{{ err('employment_arrangement') }}</p>
-                    </div>
-                    <div>
                         <label :class="labelCls">Daily rate (₱)</label>
                         <input v-model="form.daily_rate" type="number" min="0" step="0.01" placeholder="e.g. 650" :class="fieldCls('daily_rate')" />
                         <p v-if="err('daily_rate')" :class="errCls">{{ err('daily_rate') }}</p>
@@ -964,7 +951,7 @@ const errCls = 'mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-ro
                                 <button type="button" @click.stop="removeNewResume" title="Remove resume" aria-label="Remove resume" class="shrink-0 rounded-lg p-2 text-rose-600 transition hover:bg-rose-50 hover:text-rose-800 dark:hover:bg-rose-900/20"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6" /></svg></button>
                             </li>
                             <li v-for="doc in existingDocs" :key="`saved-${doc.id}`" @click="openRemotePreview(doc.url, doc.original_name || doc.label || doc.doc_type)" class="grid cursor-pointer grid-cols-[minmax(0,1fr)_7rem_2.5rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-zinc-800">
-                                <div class="min-w-0"><p class="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{{ doc.label || doc.original_name || doc.doc_type }}</p><p v-if="doc.label && doc.original_name && doc.label !== doc.original_name" class="truncate text-xs text-slate-500">{{ doc.original_name }}</p><p v-if="doc.description" class="truncate text-xs text-slate-500">{{ doc.description }}</p></div>
+                                <div class="min-w-0"><p class="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{{ doc.label || doc.original_name || doc.doc_type }}</p><p v-if="doc.label && doc.original_name && doc.label !== doc.original_name" class="truncate text-xs text-slate-500">{{ doc.original_name }}</p><p v-if="doc.description" class="truncate text-xs text-slate-500">{{ doc.description }}</p><p v-if="doc.review_note" class="mt-1 text-xs font-semibold text-rose-700 dark:text-rose-300">HR note: {{ doc.review_note }}</p></div>
                                 <span class="justify-self-center rounded-full border px-2 py-0.5 text-center text-[10px] font-bold" :class="docStatusCls(doc.status)">{{ documentStatus(doc) }}</span>
                                 <button type="button" @click.stop="deleteUploadedDocument(doc)" :disabled="deletingDocId === doc.id" title="Remove document" aria-label="Remove document" class="justify-self-end rounded-lg p-2 text-rose-600 transition hover:bg-rose-50 hover:text-rose-800 disabled:opacity-40 dark:hover:bg-rose-900/20"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6" /></svg></button>
                             </li>

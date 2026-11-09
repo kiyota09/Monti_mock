@@ -127,6 +127,8 @@ onMounted(() => {
 
             axios.defaults.headers.common['X-User-Lat'] = lat;
             axios.defaults.headers.common['X-User-Lng'] = lng;
+            sessionStorage.setItem('erp-user-lat', String(lat));
+            sessionStorage.setItem('erp-user-lng', String(lng));
             page.props.auth.location = { lat, lng };
             console.log(`📡 GPS Synced: ${lat}, ${lng}`);
         };
@@ -235,7 +237,7 @@ const reloadPage = () => {
    so neutralise those at the outer two levels only. Only centered wrappers
    (mx-auto) are widened, and fixed/dialog elements (modals) are excluded so
    they keep their designed width and are never stretched. */
-html:not([data-module="it"]):not([data-module="supplier"]) .app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
+html:not([data-module="it"]):not([data-module="supplier"]) .app-viewport:not(.hrm-natural-sections):not(.applicant-portal-viewport) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
     min-height: 100% !important;
 }
 /* IT and supplier pages render sibling sections in the layout slot. Let each
@@ -247,9 +249,13 @@ html[data-module="supplier"] .app-viewport > *:not(.fixed):not([role="dialog"]):
 }
 .app-viewport.applicant-portal-viewport > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"]):not(.it-page-hero) {
     min-height: 0 !important;
+    width: 100%;
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
 }
-.app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
-.app-viewport:not(.hrm-natural-sections) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
+.app-viewport:not(.hrm-natural-sections):not(.applicant-portal-viewport) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"],
+.app-viewport:not(.hrm-natural-sections):not(.applicant-portal-viewport) > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])
     > *:not(.fixed):not([role="dialog"]):not([aria-modal="true"]):not([class*="modal"])[class*="mx-auto"] {
     max-width: none !important;
     margin-left: 0 !important;

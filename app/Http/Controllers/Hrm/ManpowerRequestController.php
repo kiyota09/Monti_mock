@@ -8,6 +8,7 @@ use App\Models\Core\User;
 use App\Models\Hrm\Agency;
 use App\Models\Hrm\AgencyActivity;
 use App\Models\Hrm\HrmDepartment;
+use App\Models\Hrm\HrmEmploymentType;
 use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\HrmShift;
 use App\Models\Hrm\ManpowerAssignment;
@@ -17,6 +18,7 @@ use App\Models\Hrm\Worker;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -27,10 +29,9 @@ use Inertia\Inertia;
 /**
  * Manpower requests (HRM > Requests, Pages 8-10).
  *
- * Lifecycle: Draft → Open → Partially filled → Filled → Closed, with
- * Cancelled reachable from Open/Partially filled/Filled (reason required).
- * Partially filled/Filled are derived from assigned vs needed — never set
- * by hand. Assign/release flips the worker Available ⇄ Deployed.
+ * Lifecycle: Draft → Open → Filled → Closed, with Cancelled reachable from
+ * Open/Filled (reason required). Filled is derived from assigned vs needed.
+ * Assign/release flips the worker Available ⇄ Deployed.
  */
 class ManpowerRequestController extends Controller
 {
@@ -106,6 +107,7 @@ class ManpowerRequestController extends Controller
             'agencies' => Agency::where('status', Agency::STATUS_ACTIVE)->orderBy('name')->get(['id', 'code', 'name']),
             'departments' => \App\Models\Hrm\HrmDepartment::whereNull('archived_at')->orderBy('name')->get(['id', 'code', 'name']),
             'positions' => $this->requestFormPositions(),
+            'employmentTypes' => $this->requestFormEmploymentTypes(),
             'shifts' => \App\Models\Hrm\HrmShift::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'start_time', 'end_time']),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
@@ -147,6 +149,7 @@ class ManpowerRequestController extends Controller
             'agencies' => Agency::where('status', Agency::STATUS_ACTIVE)->orderBy('name')->get(['id', 'code', 'name']),
             'departments' => \App\Models\Hrm\HrmDepartment::whereNull('archived_at')->orderBy('name')->get(['id', 'code', 'name']),
             'positions' => $this->requestFormPositions(),
+            'employmentTypes' => $this->requestFormEmploymentTypes($manpowerRequest->employment_type_id),
             'shifts' => \App\Models\Hrm\HrmShift::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'start_time', 'end_time']),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
@@ -231,7 +234,7 @@ class ManpowerRequestController extends Controller
         $request->validate(['reason' => 'required|string|max:2000']);
 
         if ($manpowerRequest->status !== ManpowerRequest::STATUS_OPEN) {
-            return back()->with('error', 'Only Open requests (including partially filled / filled) can be cancelled.');
+            return back()->with('error', 'Only Open requests can be cancelled.');
         }
 
         $manpowerRequest->update(['status' => ManpowerRequest::STATUS_CANCELLED, 'cancel_reason' => $request->reason]);
@@ -311,7 +314,7 @@ class ManpowerRequestController extends Controller
      * Shared assignment guards (HR direct assign + proposal acceptance).
      * Returns the refusal message, or null when assignment may proceed.
      */
-    protected function assignmentRefusal(ManpowerRequest $manpowerRequest, Worker $worker): ?string
+    protected function assignmentRefusal(ManpowerRequest $manpowerRequest, Worker $worker, bool $allowPending = false): ?string
     {
         if ($manpowerRequest->status !== ManpowerRequest::STATUS_OPEN) {
             return 'Workers can only be assigned to Open requests.';
@@ -328,7 +331,8 @@ class ManpowerRequestController extends Controller
         if (! $this->workerMatchesRequest($manpowerRequest, $worker)) {
             return 'The worker department and position must match this request.';
         }
-        if ($worker->status !== Worker::STATUS_AVAILABLE) {
+        if ($worker->status !== Worker::STATUS_AVAILABLE
+            && ! ($allowPending && $worker->status === Worker::STATUS_PENDING)) {
             return 'Only Available workers can be assigned.';
         }
         if ($worker->activeAssignment()->exists()) {
@@ -467,7 +471,9 @@ class ManpowerRequestController extends Controller
 
         $worker = $proposal->worker;
         [$trainingRequired, $trainingEndDate] = $this->trainingSchedule($data, $manpowerRequest, $worker);
-        $refusal = $this->assignmentRefusal($manpowerRequest, $worker);
+        // Agency proposals are submitted as Pending workers until HR accepts
+        // them; a pending proposal is valid for this acceptance flow.
+        $refusal = $this->assignmentRefusal($manpowerRequest, $worker, true);
         if ($refusal) {
             return back()->withErrors(['worker_id' => $refusal]);
         }
@@ -513,23 +519,60 @@ class ManpowerRequestController extends Controller
      */
     protected function hiringManagerOptions(ManpowerRequest $manpowerRequest): array
     {
-        $department = HrmDepartment::with('head:id,name,position,is_active,hrm_department_id,department')
+        $department = HrmDepartment::with('head:id,name,position,role,is_active,hrm_department_id,department')
             ->where('name', $manpowerRequest->department)
             ->first();
 
+        $manufacturingRole = $this->manufacturingRoleForRequest($manpowerRequest);
         $options = User::where('is_active', true)
-            ->whereIn('position', ['manager', 'supervisor'])
-            ->where(function ($query) use ($department, $manpowerRequest) {
+            ->where(function ($query) use ($manufacturingRole) {
+                $query->whereIn('position', ['manager', 'supervisor']);
+                if ($manufacturingRole) {
+                    $query->orWhere('is_manufacturing_supervisor', true);
+                }
+            })
+            ->where(function ($query) use ($department, $manpowerRequest, $manufacturingRole) {
                 if ($department) {
                     $query->where('hrm_department_id', $department->id);
                 }
                 $query->orWhere('department', $manpowerRequest->department);
+                if ($manufacturingRole) {
+                    $query->orWhereExists(function ($roles) use ($manufacturingRole) {
+                        $roles->selectRaw('1')->from('manufacturing_supervisor_roles as msr')
+                            ->whereColumn('msr.user_id', 'users.id')
+                            ->where('msr.manufacturing_role', $manufacturingRole);
+                    })->orWhereExists(function ($permissions) use ($manufacturingRole) {
+                        $permissions->selectRaw('1')->from('man_supervisor_staff_page_permissions as mspp')
+                            ->whereColumn('mspp.supervisor_user_id', 'users.id')
+                            ->where('mspp.manufacturing_role', $manufacturingRole)
+                            ->whereIn('mspp.permission_level', ['view', 'edit']);
+                    });
+                }
+            })
+            ->when($manufacturingRole, function ($query) use ($manufacturingRole) {
+                $query->where(function ($scope) use ($manufacturingRole) {
+                    $scope->whereExists(function ($roles) use ($manufacturingRole) {
+                        $roles->selectRaw('1')->from('manufacturing_supervisor_roles as msr')
+                            ->whereColumn('msr.user_id', 'users.id')
+                            ->where('msr.manufacturing_role', $manufacturingRole);
+                    })->orWhereExists(function ($permissions) use ($manufacturingRole) {
+                        $permissions->selectRaw('1')->from('man_supervisor_staff_page_permissions as mspp')
+                            ->whereColumn('mspp.supervisor_user_id', 'users.id')
+                            ->where('mspp.manufacturing_role', $manufacturingRole)
+                            ->whereIn('mspp.permission_level', ['view', 'edit']);
+                    });
+                });
             })
             ->orderBy('name')
-            ->get(['id', 'name', 'position']);
+            ->get(['id', 'name', 'position', 'role'])
+            ->reject(fn ($manager) => strtoupper(trim((string) $manager->role)) === 'CEO'
+                || strtoupper(trim((string) $manager->position)) === 'CEO')
+            ->values();
 
         $head = $department?->head;
-        if ($head && $head->is_active && ! $options->contains('id', $head->id)) {
+        $headIsCeo = $head && (strtoupper(trim((string) $head->role)) === 'CEO'
+            || strtoupper(trim((string) $head->position)) === 'CEO');
+        if ($head && $head->is_active && ! $headIsCeo && ! $options->contains('id', $head->id)) {
             $options->push($head);
         }
 
@@ -545,6 +588,17 @@ class ManpowerRequestController extends Controller
             : ($options->first()['id'] ?? null);
 
         return ['options' => $options->all(), 'default_id' => $defaultId];
+    }
+
+    private function manufacturingRoleForRequest(ManpowerRequest $request): ?string
+    {
+        $position = strtolower((string) $request->position_skill);
+        if (! str_contains($position, 'knitting')) return null;
+        if (str_contains($position, 'yarn')) return 'knitting_yarn';
+        if (str_contains($position, 'mechanic')) return 'knitting_mechanic';
+        if (str_contains($position, 'inspector')) return 'knitting_inspector';
+        if (str_contains($position, 'sample')) return 'knitting_sample';
+        return null;
     }
 
     protected function validHiringManager(ManpowerRequest $manpowerRequest, mixed $managerId): bool
@@ -772,6 +826,7 @@ class ManpowerRequestController extends Controller
             'start_date' => optional($request->start_date)->toDateString(),
             'end_date' => optional($request->end_date)->toDateString(),
             'shift' => $request->shift,
+            'employment_type' => $request->employmentType?->name,
             'status' => $request->effective_status,
             'stored_status' => $request->status,
         ];
@@ -854,6 +909,8 @@ class ManpowerRequestController extends Controller
             'start_date' => optional($request->start_date)->toDateString(),
             'end_date' => optional($request->end_date)->toDateString(),
             'shift' => $request->shift,
+            'employment_type_id' => $request->employment_type_id,
+            'employment_type' => $request->employmentType?->name,
             'notes' => $request->notes,
             'agency_id' => $request->agency_id,
             'agency' => $request->agency?->name,
@@ -975,6 +1032,7 @@ class ManpowerRequestController extends Controller
             'start_date' => 'nullable|date|after_or_equal:today',
             'end_date' => 'nullable|date|after_or_equal:today',
             'shift' => 'nullable|string|max:255',
+            'employment_type_id' => ['nullable', 'integer', Rule::exists('hrm_employment_types', 'id')],
             'notes' => 'nullable|string|max:2000',
             'agency_id' => 'required|exists:agencies,id',
             'submit' => 'nullable|boolean',
@@ -1042,6 +1100,19 @@ class ManpowerRequestController extends Controller
                 'available_headcount' => max(0, (int) $position->approved_headcount - (int) $position->filled_positions),
             ])
             ->values();
+    }
+
+    protected function requestFormEmploymentTypes(?int $includeId = null)
+    {
+        return HrmEmploymentType::query()
+            ->where(function ($query) use ($includeId) {
+                $query->where('is_active', true)->whereNull('archived_at');
+                if ($includeId) {
+                    $query->orWhere('id', $includeId);
+                }
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_active', 'archived_at']);
     }
 
     protected static function nextCode(): string

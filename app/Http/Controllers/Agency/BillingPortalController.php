@@ -11,6 +11,7 @@ use App\Support\BillingCalc;
 use App\Support\StatementExportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -50,6 +51,31 @@ class BillingPortalController extends Controller
             'to' => $to,
             'today' => today()->toDateString(),
             'preview' => BillingCalc::preview($agency, $from, $to),
+            'attachmentHistory' => DB::table('agency_billing_uploads')
+                ->where('agency_id', $agency->id)
+                ->orderByDesc('id')
+                ->get(['id', 'original_name', 'size_bytes', 'period_start', 'period_end', 'created_at'])
+                ->map(fn ($file) => [
+                    'id' => 'upload-' . $file->id,
+                    'name' => $file->original_name,
+                    'uploaded_at' => $file->created_at,
+                    'size' => $file->size_bytes,
+                    'period' => $file->period_start . ' – ' . $file->period_end,
+                    'url' => route('agency.billing.uploads.show', $file->id),
+                ])
+                ->concat(BillingStatement::where('agency_id', $agency->id)
+                    ->whereNotNull('attachments')
+                    ->orderByDesc('id')
+                    ->get(['id', 'code', 'attachments', 'created_at'])
+                    ->flatMap(fn ($statement) => collect($statement->attachments ?? [])->map(fn ($file, $index) => [
+                        'id' => 'invoice-' . $statement->id . '-' . $index,
+                        'name' => $file['name'],
+                        'uploaded_at' => $statement->created_at,
+                        'size' => $file['size'] ?? 0,
+                        'period' => $statement->code,
+                        'url' => route('agency.billing.attachment', [$statement, $index]),
+                    ])))
+                ->sortByDesc('uploaded_at')->values(),
         ]);
     }
 
@@ -58,6 +84,8 @@ class BillingPortalController extends Controller
         $data = $request->validate([
             'period_start' => 'required|date|before_or_equal:today',
             'period_end' => 'required|date|before_or_equal:today|after_or_equal:period_start',
+            'attachments' => 'nullable|array|max:10',
+            'attachments.*' => 'file|max:10240',
         ], [
             'period_start.required' => 'Period from is required.',
             'period_start.before_or_equal' => 'Period from cannot be later than today.',
@@ -111,44 +139,63 @@ class BillingPortalController extends Controller
             return $statement;
         });
 
+        if ($request->hasFile('attachments')) {
+            $statement->attachments = collect($request->file('attachments'))->map(function ($file) use ($statement) {
+                return [
+                    'name' => $file->getClientOriginalName(),
+                    'path' => $file->store("agency-invoices/{$statement->id}"),
+                    'mime' => $file->getClientMimeType(),
+                    'size' => $file->getSize(),
+                ];
+            })->all();
+            $statement->save();
+        }
+
         return redirect()->route('agency.billing.show', $statement)
             ->with('message', "Invoice {$statement->code} created.");
     }
 
+    public function uploadAttachments(Request $request)
+    {
+        $data = $request->validate([
+            'period_start' => 'required|date|before_or_equal:today',
+            'period_end' => 'required|date|before_or_equal:today|after_or_equal:period_start',
+            'attachments' => 'required|array|min:1|max:10',
+            'attachments.*' => 'file|max:10240',
+        ]);
+
+        $agencyId = $this->agencyId($request);
+        foreach ($request->file('attachments') as $file) {
+            DB::table('agency_billing_uploads')->insert([
+                'agency_id' => $agencyId,
+                'period_start' => $data['period_start'],
+                'period_end' => $data['period_end'],
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $file->store("agency-billing-uploads/{$agencyId}"),
+                'mime_type' => $file->getClientMimeType(),
+                'size_bytes' => $file->getSize(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return back()->with('message', 'Invoice documents uploaded.');
+    }
+
+    public function downloadUpload(Request $request, int $upload)
+    {
+        $file = DB::table('agency_billing_uploads')
+            ->where('id', $upload)
+            ->where('agency_id', $this->agencyId($request))
+            ->first();
+        abort_unless($file && Storage::exists($file->path), 404);
+
+        return Storage::response($file->path, $file->original_name);
+    }
+
     public function index(Request $request)
     {
-        $query = BillingStatement::where('agency_id', $this->agencyId($request))
-            ->whereIn('status', [BillingStatement::STATUS_ISSUED, BillingStatement::STATUS_PAID]);
-
-        if ($from = $request->get('from')) {
-            $query->whereDate('period_start', '>=', $from);
-        }
-        if ($to = $request->get('to')) {
-            $query->whereDate('period_end', '<=', $to);
-        }
-
-        $statements = $query->orderByDesc('id')->paginate(15)->withQueryString();
-
-        return Inertia::render('Agency/Billing/Index', [
-            'statements' => collect($statements->items())->map(fn ($s) => [
-                'id' => $s->id,
-                'code' => $s->code,
-                'period' => BillingCalc::periodLabel($s->period_start->toDateString(), $s->period_end->toDateString()),
-                'labor_cost' => $s->labor_cost,
-                'service_fee' => $s->service_fee,
-                'total' => $s->total,
-                'status' => $s->status,
-                'paid_at' => optional($s->paid_at)->toDateString(),
-                'payment_reference' => $s->payment_reference,
-            ])->values()->all(),
-            'pagination' => [
-                'current_page' => $statements->currentPage(),
-                'last_page' => $statements->lastPage(),
-                'per_page' => $statements->perPage(),
-                'total' => $statements->total(),
-            ],
-            'filters' => $request->only(['from', 'to']),
-        ]);
+        return redirect()->route('agency.billing.create');
     }
 
     public function show(Request $request, BillingStatement $statement)
@@ -176,8 +223,21 @@ class BillingPortalController extends Controller
                 'record_count' => $calc['count'],
                 'paid_at' => optional($statement->paid_at)->toDateString(),
                 'payment_reference' => $statement->payment_reference,
+                'attachments' => collect($statement->attachments ?? [])->map(fn ($file, $index) => [
+                    'name' => $file['name'],
+                    'url' => route('agency.billing.attachment', [$statement, $index]),
+                ])->values(),
             ],
         ]);
+    }
+
+    public function downloadAttachment(Request $request, BillingStatement $statement, int $index)
+    {
+        abort_unless((int) $statement->agency_id === $this->agencyId($request), 404);
+        $file = $statement->attachments[$index] ?? null;
+        abort_unless($file && Storage::exists($file['path']), 404);
+
+        return Storage::response($file['path'], $file['name']);
     }
 
     public function exportPdf(Request $request, BillingStatement $statement)

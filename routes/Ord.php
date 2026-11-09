@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Route;
 | module + IT Access Control.
 |
 */
-Route::prefix('dashboard/ord')->name('ord.')->middleware(['auth', 'verified', 'module.access:ORD'])->group(function () {
+Route::prefix('dashboard/ord')->name('ord.')->middleware(['auth', 'verified', 'module.access:ORD', 'geofence'])->group(function () {
 
     // Command center
     Route::get('/', [OrdDashboardController::class, 'index'])

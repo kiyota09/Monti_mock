@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class HrmDepartment extends Model
 {
     protected $table = 'hrm_departments';
-    protected $fillable = ['code', 'name', 'category', 'description', 'head_id', 'status', 'archived_at', 'created_by'];
+    protected $fillable = ['code', 'name', 'category', 'control_department', 'description', 'head_id', 'status', 'archived_at', 'created_by'];
     protected $casts = ['archived_at' => 'datetime'];
 
     public function head(): BelongsTo

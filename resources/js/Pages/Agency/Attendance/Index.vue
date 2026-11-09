@@ -2,6 +2,7 @@
 // Worker Attendance — view only (search + department filter + date).
 import { computed, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import { FileSpreadsheet, FileText } from 'lucide-vue-next';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
 
 const props = defineProps<{
@@ -33,6 +34,59 @@ const filteredRows = computed(() => {
     if (!q) return rows.value;
     return rows.value.filter((r) => ((r.worker_name || '') + ' ' + (r.position_skill || '')).toLowerCase().includes(q));
 });
+
+function csvCell(value: unknown): string {
+    let text = String(value ?? '');
+    if (/^[=+\-@]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+}
+
+function reportFilename(extension: string): string {
+    const department = selectedDepartment.value || 'all-departments';
+    const safeDepartment = department.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return `worker-attendance-${safeDepartment}-${pickedDate.value}.${extension}`;
+}
+
+function downloadCsv() {
+    const headers = ['Worker', 'Department', 'Job position', 'Shift', 'Time in', 'Time out', 'Late', 'Overtime hours', 'Status'];
+    const records = filteredRows.value.map((row) => [
+        row.worker_name, row.department, row.position_skill, row.shift,
+        fmtTime(row.time_in), fmtTime(row.time_out), lateOf(row.time_in, row.shift),
+        row.overtime_hours, row.status,
+    ]);
+    const csv = [headers, ...records].map((record) => record.map(csvCell).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = reportFilename('csv');
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function escapeHtml(value: unknown): string {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function downloadPdf() {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.opener = null;
+    const headers = ['Worker', 'Department', 'Job position', 'Shift', 'Time in', 'Time out', 'Late', 'OT hours', 'Status'];
+    const bodyRows = filteredRows.value.map((row) => [
+        row.worker_name, row.department, row.position_skill, row.shift,
+        fmtTime(row.time_in), fmtTime(row.time_out), lateOf(row.time_in, row.shift),
+        row.overtime_hours, row.status,
+    ]).map((record) => `<tr>${record.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('');
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(reportFilename('pdf'))}</title><style>
+        body{font:12px Arial,sans-serif;color:#172033;margin:32px}h1{font-size:20px;margin:0 0 6px}p{color:#526078;margin:0 0 18px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:7px;text-align:left;vertical-align:top}th{background:#e2e8f0;font-size:10px;text-transform:uppercase}@media print{body{margin:14mm}tr{break-inside:avoid}}
+        </style></head><body><h1>Worker Attendance</h1><p>${escapeHtml(selectedDepartment.value || 'All departments')} · ${escapeHtml(pickedDate.value)} · ${filteredRows.value.length} worker(s)</p><table><thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${bodyRows || `<tr><td colspan="9">No workers found.</td></tr>`}</tbody></table><script>window.onload=()=>window.print();<\/script></body></html>`);
+    printWindow.document.close();
+}
 
 const fmtTime = (t: string | null) => {
     if (!t || t === '') return '—';
@@ -95,6 +149,14 @@ function lateOf(timeIn: string | null, shift: string | null): string {
                 <label class="block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Date</label>
                 <input v-model="pickedDate" type="date" class="px-3 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200" />
             </div>
+            <div class="flex items-end gap-2">
+                <button type="button" @click="downloadCsv" aria-label="Download CSV" title="Download CSV" class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white transition hover:bg-emerald-700">
+                    <FileSpreadsheet class="h-5 w-5" aria-hidden="true" />
+                </button>
+                <button type="button" @click="downloadPdf" aria-label="Download PDF" title="Download PDF" class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white transition hover:bg-rose-700 dark:bg-rose-700 dark:hover:bg-rose-800">
+                    <FileText class="h-5 w-5" aria-hidden="true" />
+                </button>
+            </div>
         </div>
 
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -105,11 +167,7 @@ function lateOf(timeIn: string | null, shift: string | null): string {
                 </p>
             </div>
 
-            <div v-if="filteredRows.length === 0" class="py-10 text-center text-sm font-bold text-slate-900 dark:text-white">
-                {{ search ? 'No workers match your search.' : 'No workers found.' }}
-            </div>
-
-            <div v-else class="overflow-x-auto">
+            <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[1100px]">
                     <thead>
                         <tr class="bg-slate-800 text-[10px] font-bold uppercase tracking-wider text-white/90">
@@ -125,6 +183,9 @@ function lateOf(timeIn: string | null, shift: string | null): string {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                        <tr v-if="filteredRows.length === 0">
+                            <td colspan="9" class="py-10 text-center text-sm font-bold text-slate-500 dark:text-slate-400">{{ search ? 'No workers match your search.' : 'No workers found.' }}</td>
+                        </tr>
                         <tr v-for="r in filteredRows" :key="r.worker_id" class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
                             <td class="py-2 px-4 text-sm font-bold text-slate-900 dark:text-white">{{ r.worker_name }}</td>
                             <td class="py-2 px-4 text-xs text-slate-500 dark:text-slate-400">{{ r.department || '—' }}</td>

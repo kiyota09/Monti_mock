@@ -11,7 +11,7 @@ const props = defineProps<{
         id: number; code: string; department: string; position_skill: string;
         agency?: string | null;
         needed: number; filled: number; start_date: string | null; end_date: string | null;
-        shift: string | null; notes: string | null; status: string; stored_status: string;
+        shift: string | null; employment_type: string | null; notes: string | null; status: string; stored_status: string;
         accepted: Array<{ worker_code: string | null; worker_name: string | null }>;
     };
     proposals: Array<{
@@ -88,6 +88,7 @@ function progressPct(): number {
                     <div class="space-y-1 p-4 sm:p-5">
                         <div class="flex items-start gap-3 rounded-2xl px-3 py-3"><span class="mt-0.5 text-slate-400"><MapPin class="h-4 w-4" /></span><div class="min-w-0 flex-1"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Department</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{{ request.department }}</p></div></div>
                         <div class="flex items-start gap-3 rounded-2xl px-3 py-3"><span class="mt-0.5 text-slate-400"><BriefcaseBusiness class="h-4 w-4" /></span><div class="min-w-0 flex-1"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Position / skill</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{{ request.position_skill }}</p></div></div>
+                        <div v-if="request.employment_type" class="flex items-start gap-3 rounded-2xl px-3 py-3"><span class="mt-0.5 text-slate-400"><BriefcaseBusiness class="h-4 w-4" /></span><div class="min-w-0 flex-1"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Employment type</p><p class="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{{ request.employment_type }}</p></div></div>
                         <div class="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 dark:border-slate-700">
                             <div class="rounded-2xl bg-slate-50 p-3 dark:bg-slate-900/50"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Headcount</p><p class="mt-1 text-lg font-black text-slate-900 dark:text-white">{{ request.needed }}</p></div>
                             <div class="rounded-2xl bg-slate-50 p-3 dark:bg-slate-900/50"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Current fill</p><p class="mt-1 text-lg font-black text-slate-900 dark:text-white">{{ progressPct() }}%</p></div>

@@ -82,8 +82,8 @@ class DepartmentController extends Controller
                     'hrm_department_id' => $u->hrm_department_id,
                 ])->values()->all(),
             // Active role codes are canonical values shared with users.role.
-            'categories' => HrmRole::where('is_active', true)->orderBy('code')->pluck('code')
-                ->filter()->unique()->values()->map(fn ($c) => ['value' => $c])->all(),
+            'categories' => HrmRole::where('is_active', true)->orderBy('code')->get(['code', 'name'])
+                ->map(fn ($role) => ['value' => $role->code, 'label' => $role->name ?: $role->code])->values()->all(),
             'permissions' => $this->getPagePermissionsForModule('HRM'),
         ]);
     }
@@ -94,11 +94,15 @@ class DepartmentController extends Controller
             'code' => 'required|string|max:30|unique:hrm_departments,code',
             'name' => 'required|string|max:255',
             'category' => 'required|string|max:60|exists:hrm_roles,code',
+            'control_department' => 'nullable|in:Knitting,Dyeing,Finishing,Boiler,Maintenance',
             'description' => 'nullable|string',
             'head_id' => 'nullable|exists:users,id',
             'status' => 'nullable|in:active,inactive',
         ]);
         $data['created_by'] = $request->user()->id;
+        if (($data['category'] ?? '') !== 'MAN') {
+            $data['control_department'] = null;
+        }
         HrmDepartment::create($data);
 
         return back()->with('success', 'Department created.');
@@ -110,10 +114,14 @@ class DepartmentController extends Controller
             'code' => 'sometimes|string|max:30|unique:hrm_departments,code,' . $department->id,
             'name' => 'sometimes|string|max:255',
             'category' => 'required|string|max:60|exists:hrm_roles,code',
+            'control_department' => 'nullable|in:Knitting,Dyeing,Finishing,Boiler,Maintenance',
             'description' => 'nullable|string',
             'head_id' => 'nullable|exists:users,id',
             'status' => 'nullable|in:active,inactive',
         ]);
+        if (($data['category'] ?? $department->category) !== 'MAN') {
+            $data['control_department'] = null;
+        }
         $department->update($data);
 
         return back()->with('success', 'Department updated.');

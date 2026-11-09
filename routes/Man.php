@@ -42,7 +42,7 @@ use Illuminate\Support\Facades\Route;
 | native shortcut (all manufacturing_role holders are MAN/staff).
 |--------------------------------------------------------------------------
 */
-Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'module.access:MAN'])->group(function () {
+Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'module.access:MAN', 'geofence'])->group(function () {
 
     // ---- These routes are now inside the manager middleware group below ----
     // Route::get('/interview', [InterviewController::class, 'index'])->name('interview.index');

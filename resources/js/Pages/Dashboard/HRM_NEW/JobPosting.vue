@@ -25,33 +25,39 @@
             <!-- Quick Actions - Right Aligned -->
             <div class="flex flex-wrap items-center justify-end gap-2">
               <button
+                type="button"
                 @click="openModal('create')"
-                class="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
+                aria-label="Create job posting"
+                title="Create job posting"
+                class="posting-icon-button inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-white transition-all duration-200 shadow-lg hover:from-blue-500 hover:to-blue-600 hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                 </svg>
-                Create Job Posting
               </button>
 
               <button
+                type="button"
                 @click="toggleArchived()"
-                class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                :aria-label="showArchived ? 'Show active job postings' : 'Show archived job postings'"
+                :title="showArchived ? 'Show active job postings' : 'Show archived job postings'"
+                class="posting-icon-button inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-all duration-200 shadow-sm hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
                 </svg>
-                {{ showArchived ? 'Show Active' : 'Archived (' + archivedCount + ')' }}
               </button>
 
               <button
+                type="button"
                 @click="exportReport"
-                class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                aria-label="Export job postings report"
+                title="Export report"
+                class="posting-icon-button inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-all duration-200 shadow-sm hover:bg-slate-50 hover:shadow-md hover:-translate-y-0.5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
                 </svg>
-                Export Report
               </button>
             </div>
           </div>
@@ -1623,4 +1629,21 @@ const exportReport = () => {
 .bg-grid-slate-100 { background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px); background-size: 24px 24px; }
 .bg-clip-text { -webkit-background-clip: text; background-clip: text; }
 .backdrop-blur-sm { backdrop-filter: blur(8px); }
+
+@keyframes posting-icon-bounce {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-6px); }
+  65% { transform: translateY(1px); }
+  82% { transform: translateY(-2px); }
+}
+
+.posting-icon-button:hover svg,
+.posting-icon-button:focus-visible svg {
+  animation: posting-icon-bounce 480ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .posting-icon-button:hover svg,
+  .posting-icon-button:focus-visible svg { animation: none; }
+}
 </style>

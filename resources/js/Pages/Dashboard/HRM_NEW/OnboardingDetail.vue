@@ -442,7 +442,7 @@
                                                     >
                                                         Action
                                                     </button>
-                                                    <div v-if="statusEditorItemId === item.id" class="absolute right-0 top-full z-30 mt-1 flex w-40 flex-col gap-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 shadow-lg">
+                                                    <div v-if="statusEditorItemId === item.id" class="absolute right-0 bottom-full z-50 mb-1 flex w-40 flex-col gap-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 shadow-lg">
                                                         <button
                                                             v-for="s in (item.is_task ? taskStatuses.filter(status => status !== 'Blocked') : itemStatuses)"
                                                             :key="s"
@@ -703,13 +703,11 @@
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">System Position * (users.position)</label>
                                     <select v-model="hireForm.position_rank" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
-                                        <option value="trainee">Trainee</option>
                                         <option value="staff">Staff</option>
                                         <option value="supervisor">Supervisor</option>
                                         <option value="manager">Manager</option>
                                         <option value="secretary">Secretary</option>
                                         <option value="special_officer">Special Officer</option>
-                                        <option value="vice_president">Vice-President</option>
                                     </select>
                                     <p class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Controls login access rank. Job title above stays as org title.</p>
                                 </div>
@@ -755,7 +753,6 @@
                                     <select v-model="hireForm.reporting_manager" @change="syncReportingManagerId" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <option value="">-- Select manager --</option>
                                         <option v-for="m in (managers || [])" :key="m.id" :value="m.name">{{ m.name }} — {{ m.department || m.role }} · {{ caps(m.seat || m.position) }}</option>
-                                        <option v-if="hireForm.reporting_manager && !(managers || []).some((m) => m.name === hireForm.reporting_manager)" :value="hireForm.reporting_manager">{{ hireForm.reporting_manager }}</option>
                                     </select>
                                     <p v-if="(conversion?.reporting?.chain || []).length" class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Position chain: {{ conversion.reporting.chain.join(' → ') }}</p>
                                 </div>
@@ -799,7 +796,7 @@
                                         <option v-if="hireForm.shift && !(shifts || []).some((sh) => sh.name === hireForm.shift)" :value="hireForm.shift">{{ hireForm.shift }}</option>
                                     </select>
                                 </div>
-                                <div class="md:col-span-2">
+                                <div>
                                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Schedule *</label>
                                     <div class="flex items-center gap-2">
                                         <select v-model="hireForm.work_schedule_start" class="w-36 px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
@@ -811,7 +808,7 @@
                                         </select>
                                     </div>
                                 </div>
-                                <div class="md:col-span-2">
+                                <div>
                                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Work Hours</label>
                                     <div class="flex items-center gap-2">
                                         <select v-model="hireForm.work_hours_start" class="w-36 px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
@@ -869,10 +866,9 @@
                                     </div>
                                 </div>
                                 <div class="flex items-end gap-4 pb-1">
-                                    <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-zinc-200 cursor-pointer">
-                                        <input v-model="hireForm.create_account" type="checkbox" @change="onToggleCreateAccount" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                    <span class="text-xs font-semibold text-slate-700 dark:text-zinc-200">
                                         Create Company Account ✓ Yes
-                                    </label>
+                                    </span>
                                 </div>
                                 <div class="md:col-span-2 text-xs text-slate-500 dark:text-zinc-300">Account Status: <span class="font-bold text-amber-600">Pending Activation</span> — a company email is auto-generated when left blank, and a temporary password plus the training schedule are emailed to the employee's personal email.</div>
                             </div>
@@ -1440,6 +1436,7 @@ const onToggleCreateAccount = () => {
 const syncReportingManagerId = () => {
     const hit = (props.managers || []).find((m) => m.name === hireForm.value.reporting_manager);
     hireForm.value.reporting_manager_id = hit ? hit.id : '';
+    if (!hit) hireForm.value.reporting_manager = '';
 };
 
 // Explicit system-role options (users.role). Server list wins; hardcoded
@@ -1498,6 +1495,8 @@ const openHireModal = () => {
         emergency_contact_relationship: d.emergency_relationship || props.profile?.emergency_contact?.relationship || '',
         emergency_contact_number: d.emergency_phone || props.profile?.emergency_contact?.phone || '',
     };
+    // Do not retain an auto-filled manager that is outside the filtered list.
+    syncReportingManagerId();
     // Shift drives Work Hours: apply the suggestion on open too (not only on
     // change), so Morning opens at 8:00 AM – 5:00 PM right away. Still editable.
     // Duration stays blank — end is set once HR types start + duration.
@@ -1553,6 +1552,7 @@ const hireDocsTotal = computed(() =>
     (props.conversion?.documents || []).length);
 
 const submitHire = () => {
+    hireForm.value.create_account = true;
     const f = hireForm.value;
     if (!f.position?.trim()) { toast.error('Position is required.'); return; }
     const allowedRanks = ['trainee', 'staff', 'supervisor', 'manager', 'secretary', 'special_officer', 'vice_president'];
@@ -1619,7 +1619,7 @@ const openModal = (type) => {
 
 const closeModal = () => {
     if (activeModal.value === 'create-employee') {
-        Swal.fire({
+        dialog.fire({
             title: 'Discard employee data?',
             text: 'Your changes will be lost if you close this form.',
             icon: 'warning',

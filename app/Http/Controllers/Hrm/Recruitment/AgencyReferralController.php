@@ -334,7 +334,11 @@ class AgencyReferralController extends Controller
         return ApplicantJobApplication::query()
             ->with(['applicant.documents', 'jobPosting'])
             ->whereNotNull('job_posting_id')
-            ->whereNotIn('status', ['Rejected', 'Withdrawn', 'Hired'])
+            // A completed onboarding can still need an agency referral when
+            // an older workflow already advanced the application to Hired.
+            // The onboarding page only exposes referral when no employee
+            // account exists, so keep those completed records eligible.
+            ->whereNotIn('status', ['Rejected', 'Withdrawn'])
             ->where(function (Builder $query) {
                 $query->whereNotIn('status', ['Onboard', 'Onboarding'])
                     ->orWhereExists(function ($completedOnboarding) {

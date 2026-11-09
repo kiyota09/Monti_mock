@@ -9,6 +9,7 @@ use App\Models\Crm\CrmContact;
 use App\Models\Hrm\AgencyUser;
 use App\Models\Hrm\Applicant;
 use App\Models\Pro\Supplier;
+use App\Http\Middleware\GeofenceAccessMiddleware;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -162,6 +163,15 @@ class UnifiedLoginController extends Controller
         if ($employee->position === 'trainee') {
             throw ValidationException::withMessages([
                 'identity' => 'Trainee accounts are not permitted to use this portal until promoted.',
+            ]);
+        }
+
+        // IT accounts must be able to sign in from any location so they can
+        // maintain the company geofence and troubleshoot access issues.
+        if (strtoupper((string) $employee->role) !== 'IT'
+            && ! GeofenceAccessMiddleware::allows($request)) {
+            throw ValidationException::withMessages([
+                'identity' => 'Access denied: this employee account can only sign in from an authorized work location.',
             ]);
         }
 
