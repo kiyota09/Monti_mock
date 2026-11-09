@@ -15,6 +15,7 @@ use App\Models\Eco\EcoProductVariantPrice;
 use App\Models\Man\BomRecord;
 use App\Models\Ord\SalesOrder;
 use App\Models\Ord\PurchaseOrder;
+use App\Services\Ord\OrderLifecycleService;
 use App\Models\Inv\Material;
 use App\Support\ConversationRealtime;
 use App\Support\InquiryHash;
@@ -153,19 +154,23 @@ class CrmInquiryController extends Controller
         $selectionPricing = [];
         $productSelections = $inquiry->product_selections ?? [];
         $selectionSets = collect($productSelections['products'] ?? []);
-        if ($selectionSets->isEmpty() && ! empty($productSelections['yarns']) && ! empty($productSelections['pantones'])) {
+        if ($selectionSets->isEmpty() && ! empty($productSelections['yarns']) && (! empty($productSelections['pantones']) || ! empty($productSelections['colorways']))) {
             $selectionSets = collect([[
                 ...$productSelections,
                 'product_id' => $productSelections['product_id'] ?? $inquiry->product_id,
             ]]);
         }
         foreach ($selectionSets as $selectionSet) {
-            if (empty($selectionSet['yarns']) || empty($selectionSet['pantones'])) continue;
+            $pricingPantones = collect($selectionSet['pantones'] ?? [])
+                ->merge(collect($selectionSet['colorways'] ?? [])->map(fn ($colorway) => $colorway['pantone'] ?? null)->filter())
+                ->unique(fn ($pantone) => (int) ($pantone['id'] ?? 0))
+                ->values();
+            if (empty($selectionSet['yarns']) || $pricingPantones->isEmpty()) continue;
             $productId = (int) ($selectionSet['product_id'] ?? 0);
             $prices = EcoProductVariantPrice::query()
                 ->where('product_id', $productId)
                 ->whereIn('material_id', collect($selectionSet['yarns'])->pluck('id'))
-                ->whereIn('color_group', collect($selectionSet['pantones'])->pluck('color_category')->filter()->unique())
+                ->whereIn('color_group', $pricingPantones->pluck('color_category')->filter()->unique())
                 ->get(['material_id', 'color_group', 'price']);
             foreach ($prices as $price) {
                 $selectionPricing[$productId.':'.$price->material_id.':'.$price->color_group] = $price->price === null ? null : (float) $price->price;
@@ -258,9 +263,9 @@ class CrmInquiryController extends Controller
         $clientPurchaseOrders = PurchaseOrder::with(['items.product', 'items.quotationItem'])
             ->where('inquiry_id', $inquiry->id)->latest()->get()
             ->map(fn (PurchaseOrder $po) => [
-                'id' => $po->id, 'po_number' => $po->po_number, 'status' => $po->status,
+                'id' => $po->id, 'po_number' => $po->po_number, 'client_po_number' => $po->client_po_number, 'attachment_path' => $po->attachment_path, 'status' => $po->status,
                 'total_amount' => (float) $po->total_amount,
-                'pushed' => $po->salesOrders()->exists(),
+                'pushed' => $po->hasBeenPassedToEco(),
                 'items' => $po->items->map(function ($item) use ($approvedRecipeSamples) {
                     $options = $approvedRecipeSamples->filter(function ($sample) use ($item) {
                         if ((int) $sample->product_id !== (int) $item->product_id) return false;
@@ -418,6 +423,9 @@ class CrmInquiryController extends Controller
             $allowedSelectionsByProduct = $quoteSelectionSets->keyBy(fn ($set) => (int) $set['product_id']);
             $allowedPairs = collect(InquiryColorwayPairs::fromSelections($selections, (int) $inquiry->product_id))
                 ->map(fn ($pair) => $pair['product_id'].':'.$pair['pantone_id'].':'.$pair['yarn_id']);
+            $pantoneNames = \App\Models\Man\PantoneReference::query()
+                ->whereIn('id', collect($validated['items'])->pluck('pantone_id')->unique())
+                ->pluck('name', 'id');
             $actualPairs = collect($validated['items'])->map(function ($item) use ($allowedSelectionsByProduct, $allowedPairs) {
                 $pantoneId = (int) $item['pantone_id'];
                 $yarnId = (int) $item['fabric_type_id'];
@@ -431,12 +439,10 @@ class CrmInquiryController extends Controller
 
                 return $productId.':'.$pantoneId.':'.$yarnId;
             });
-            $expectedPairs = collect(InquiryColorwayPairs::fromSelections($selections, (int) $inquiry->product_id))
-                ->map(fn ($pair) => $pair['product_id'].':'.$pair['pantone_id'].':'.$pair['yarn_id']);
             if ($actualPairs->unique()->count() !== $actualPairs->count()
-                || $actualPairs->sort()->values()->all() !== $expectedPairs->sort()->values()->all()) {
+                || $actualPairs->diff($allowedPairs)->isNotEmpty()) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'items' => 'Include one quotation line for each selected Pantone color and yarn combination.',
+                    'items' => 'Quotation lines must be unique selected product, Pantone, and yarn combinations from this inquiry.',
                 ]);
             }
         }
@@ -457,6 +463,31 @@ class CrmInquiryController extends Controller
 
         DB::beginTransaction();
         try {
+            if ($specificSelectionQuote) {
+                Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+                $alreadyQuotedItems = EcoQuotationItem::query()
+                    ->whereHas('quotation', fn ($query) => $query
+                        ->where('inquiry_id', $inquiry->id)
+                        ->whereIn('status', ['sent', 'accepted', 'approved']))
+                    ->get(['product_id', 'fabric_type_id', 'color']);
+
+                foreach ($validated['items'] as $item) {
+                    $pantoneName = mb_strtolower(trim((string) $pantoneNames->get((int) $item['pantone_id'], '')));
+                    $duplicate = $alreadyQuotedItems->first(fn ($quoted) =>
+                        (int) $quoted->product_id === (int) $item['product_id']
+                        && (int) $quoted->fabric_type_id === (int) $item['fabric_type_id']
+                        && mb_strtolower(trim((string) $quoted->color)) === $pantoneName
+                    );
+                    if ($duplicate) {
+                        $productName = \App\Models\Inv\Product::whereKey($item['product_id'])->value('name') ?: 'This product';
+                        $yarnName = $fabricTypes->get((int) $item['fabric_type_id'])?->display_name ?: 'selected yarn';
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'items' => "{$productName} already has a sent or accepted quotation for {$pantoneNames->get((int) $item['pantone_id'])} with {$yarnName}. The client must reject that quotation before this combination can be quoted again.",
+                        ]);
+                    }
+                }
+            }
+
             $quotation = EcoQuotation::create([
                 'client_id'        => $inquiry->client_id,
                 'inquiry_id'       => $inquiry->id,
@@ -546,6 +577,9 @@ class CrmInquiryController extends Controller
             return back()->with('success', 'Quotation sent successfully!');
         } catch (\Exception $e) {
             DB::rollBack();
+            if ($e instanceof \Illuminate\Validation\ValidationException) {
+                throw $e;
+            }
             Log::error('Quotation Error: ' . $e->getMessage());
             return back()->withErrors(['error' => 'Database Error: ' . $e->getMessage()])->withInput();
         }
@@ -837,7 +871,7 @@ class CrmInquiryController extends Controller
     public function saveClientPurchaseOrderRecipes(Request $request, Inquiry $inquiry, PurchaseOrder $purchaseOrder)
     {
         abort_unless((int) $purchaseOrder->inquiry_id === (int) $inquiry->id, 404);
-        abort_if($purchaseOrder->salesOrders()->exists(), 422, 'This purchase order has already been passed to ECO Push Center.');
+        abort_if($purchaseOrder->hasBeenPassedToEco(), 422, 'This purchase order has already been passed to ECO Push Center.');
         $data = $request->validate([
             'items' => ['required', 'array', 'min:1'],
             'items.*.purchase_order_item_id' => ['required', 'integer', 'distinct', 'exists:purchase_order_items,id'],
@@ -874,7 +908,7 @@ class CrmInquiryController extends Controller
     public function pushClientPurchaseOrderToEco(Inquiry $inquiry, PurchaseOrder $purchaseOrder)
     {
         abort_unless((int) $purchaseOrder->inquiry_id === (int) $inquiry->id, 404);
-        abort_if($purchaseOrder->salesOrders()->exists(), 422, 'This purchase order has already been passed to ECO Push Center.');
+        abort_if($purchaseOrder->hasBeenPassedToEco(), 422, 'This purchase order has already been passed to ECO Push Center.');
         $samples = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
             ->where('status', FabricSampleRequest::STATUS_APPROVED)->whereNotNull('recipe_id')->get();
         $selections = $inquiry->product_selections ?? [];
@@ -886,7 +920,7 @@ class CrmInquiryController extends Controller
             abort_unless($isApproved, 422, 'Every client-selected color and yarn combination must have an approved recipe before pushing this order.');
         }
 
-        $purchaseOrder->load(['items.product', 'items.quotationItem.quotation']);
+        $purchaseOrder->load(['items.product']);
         $resolved = [];
         foreach ($purchaseOrder->items as $item) {
             $sample = $samples->first(function ($sample) use ($item) {
@@ -906,8 +940,7 @@ class CrmInquiryController extends Controller
             $joNumber = 'JO-'.now()->format('Ymd').'-'.strtoupper(Str::random(4));
             foreach ($resolved as [$item, $sample]) {
                 $subtotal = round((float) $item->quantity * (float) $item->unit_price, 2);
-                $quotation = $item->quotationItem?->quotation;
-                $tax = $quotation?->vat_type === 'inclusive' ? round($subtotal * .12, 2) : 0;
+                $tax = round($subtotal * .12, 2);
                 $control = 'CTL-'.now()->format('y').strtoupper(substr(preg_replace('/[^A-Z0-9]/i', '', (string) $item->color), 0, 3)).'-'.strtoupper(Str::random(5));
                 SalesOrder::create([
                     'purchase_order_id' => $purchaseOrder->po_number, 'client_id' => $purchaseOrder->client_id,
@@ -918,9 +951,18 @@ class CrmInquiryController extends Controller
                     'recipe_id' => $sample->recipe_id, 'status' => 'pending', 'created_by' => Auth::id(),
                 ]);
             }
+            if ($purchaseOrder->status === 'crm_recipe_review') {
+                app(OrderLifecycleService::class)->transitionPurchaseOrder(
+                    $purchaseOrder,
+                    'approved',
+                    Auth::user(),
+                    'CRM linked approved recipes and passed the client PO to ECO Push Center'
+                );
+            }
+            $purchaseOrder->update(['crm_passed_to_eco_at' => now()]);
             ConversationMessage::create([
                 'inquiry_id' => $inquiry->id, 'sender_type' => 'eco', 'is_system_event' => true,
-                'message' => "Client purchase order {$purchaseOrder->po_number} passed to the ECO Push Center with ".count($resolved).' approved product, color, and yarn line(s).',
+                'message' => "Client purchase order ".($purchaseOrder->client_po_number ?: $purchaseOrder->po_number)." passed to the ECO Push Center with ".count($resolved).' approved product, color, and yarn line(s).',
             ]);
             $inquiry->update(['last_message_at' => now()]);
         });

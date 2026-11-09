@@ -23,14 +23,20 @@ class OrdProductionsController extends Controller
                 'salesOrder.bomRecord.client',
                 'salesOrder.client',
                 'purchaseOrder.client',
+                'purchaseOrder.items.product',
+                'fabrics',
             ])
-            ->where('status', '!=', 'completed')
+            ->whereIn('status', ['pending', 'in_progress'])
             ->latest()
             ->get()
             ->map(function ($mo) {
                 $totalQty = (float) $mo->total_quantity;
-                $completedQty = max(0, $totalQty - (float) $mo->remaining_quantity);
-                $progress = $totalQty > 0 ? round(($completedQty / $totalQty) * 100) : 0;
+                // remaining_quantity is not decremented as fabrics are recorded.
+                // Use the actual accepted fabric records for progress instead.
+                $recordedQty = (float) $mo->fabrics
+                    ->where('status', '!=', 'rejected')
+                    ->sum(fn ($fabric) => (float) $fabric->weight);
+                $progress = $totalQty > 0 ? (int) round(($recordedQty / $totalQty) * 100) : 0;
 
                 $orderNumber = $mo->salesOrder?->jo_number
                     ?? $mo->purchaseOrder?->po_number
@@ -42,7 +48,11 @@ class OrdProductionsController extends Controller
 
                 $productName = $mo->salesOrder
                     ? ($mo->salesOrder->bomRecord?->product?->name ?? $mo->salesOrder->design ?? 'N/A')
-                    : 'N/A';
+                    : ($mo->purchaseOrder?->items
+                        ->map(fn ($item) => $item->product?->name ?? $item->design ?? $item->fabric ?? $item->color)
+                        ->filter()
+                        ->unique()
+                        ->implode(', ') ?: 'N/A');
 
                 return [
                     'id' => $mo->id,
@@ -51,8 +61,7 @@ class OrdProductionsController extends Controller
                     'client_name' => $clientName,
                     'product_name' => $productName,
                     'total_quantity' => $totalQty,
-                    'completed_quantity' => $completedQty,
-                    'remaining_quantity' => (float) $mo->remaining_quantity,
+                    'recorded_quantity' => round($recordedQty, 2),
                     'unit' => 'kg',
                     'progress' => $progress,
                     'status' => $mo->status,
@@ -67,7 +76,7 @@ class OrdProductionsController extends Controller
                 'confirmed', 'in_planning',
                 'pushed_to_ordermgmt', 'pushed_to_scm', 'inv_check', 'inv_checked',
             ])
-            ->whereDoesntHave('manufacturingOrder', fn ($q) => $q->whereIn('status', ['pending', 'in_progress']))
+            ->whereDoesntHave('manufacturingOrders', fn ($q) => $q->whereIn('status', ['pending', 'in_progress']))
             ->latest()
             ->limit(50)
             ->get()

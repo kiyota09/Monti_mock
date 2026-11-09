@@ -27,27 +27,70 @@ class DyeingLabChemistController extends ManufacturingStaffController
 {
     public function index()
     {
-        $pendingCount = LabDipRequest::whereIn('status', ['pending', 'in_progress', 'awaiting_spectro'])->count();
+        $activeSampleStatuses = [
+            FabricSampleRequest::STATUS_REQUESTED,
+            FabricSampleRequest::STATUS_IN_PROGRESS,
+            FabricSampleRequest::STATUS_ADJUSTMENT_REQUESTED,
+        ];
+        $sampleRequests = FabricSampleRequest::whereIn('status', $activeSampleStatuses);
+        $pendingCount = LabDipRequest::whereIn('status', ['pending', 'in_progress', 'awaiting_spectro'])->count()
+            + (clone $sampleRequests)->count();
         $recentDips = LabDipRequest::with('salesOrder')
             ->where('operator_id', $this->staff()->id)
             ->latest()
             ->take(10)
-            ->get();
+            ->get()
+            ->map(fn (LabDipRequest $dip) => [
+                'id' => 'dip-'.$dip->id,
+                'code' => $dip->code,
+                'pantone_code' => $dip->pantone_code,
+                'customer_ref' => $dip->customer_ref,
+                'urgency' => $dip->urgency,
+                'status' => $dip->status,
+                'created_at' => $dip->created_at,
+            ])
+            ->concat((clone $sampleRequests)->latest()->take(10)->get()->map(fn (FabricSampleRequest $sample) => [
+                'id' => 'sample-'.$sample->id,
+                'code' => $sample->code,
+                'pantone_code' => null,
+                'customer_ref' => $sample->color_description ?: $sample->fabric_name,
+                'urgency' => $sample->urgency,
+                'status' => $sample->status,
+                'created_at' => $sample->created_at,
+            ]))
+            ->sortByDesc('created_at')
+            ->take(10)
+            ->values();
 
-        $nextQueue = LabDipRequest::with('salesOrder')
-            ->where('status', 'pending')
-            ->orderByRaw("FIELD(urgency, 'urgent', 'high', 'normal', 'low')")
+        $staffId = $this->staff()->id;
+        $formulations = FabricSampleFormulation::where('submitted_by', $staffId);
+        $efficiency = $this->staffEfficiency(LabDipRequest::class);
+        $efficiency['my_today'] += (clone $formulations)->whereDate('created_at', today())->count();
+        $efficiency['my_week'] += (clone $formulations)->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count();
+        $efficiency['my_total'] += (clone $formulations)->count();
+
+        $nextQueue = (clone $sampleRequests)
+            ->orderByRaw("CASE urgency WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END")
             ->orderBy('created_at', 'asc')
             ->take(3)
-            ->get(['id', 'code', 'urgency', 'pantone_code', 'created_at']);
+            ->get(['id', 'code', 'urgency', 'created_at'])
+            ->concat(LabDipRequest::with('salesOrder')
+            ->where('status', 'pending')
+            ->orderByRaw("CASE urgency WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END")
+            ->orderBy('created_at', 'asc')
+            ->take(3)
+            ->get(['id', 'code', 'urgency', 'pantone_code', 'created_at']))
+            ->take(3)
+            ->values();
 
         return Inertia::render('Dashboard/MAN/Employee/DyeingLabChemist/Index', [
             'stats' => [
                 'pending' => $pendingCount,
-                'total_today' => LabDipRequest::whereDate('processed_at', today())->count(),
+                'total_today' => LabDipRequest::whereDate('processed_at', today())->count()
+                    + (clone $formulations)->whereDate('created_at', today())->count(),
             ],
             'recentDips' => $recentDips,
-            'efficiency' => $this->staffEfficiency(LabDipRequest::class),
+            'efficiency' => $efficiency,
             'labMetrics' => $this->labMetrics(),
             'nextQueue' => $nextQueue,
         ]);
@@ -109,7 +152,7 @@ class DyeingLabChemistController extends ManufacturingStaffController
             ->take(30)
             ->get(['id', 'jo_number', 'color', 'design', 'yarn_type']);
 
-        $sampleRequests = FabricSampleRequest::with(['inquiry.client', 'product', 'parent', 'pantoneReference', 'requester:id,name', 'formulations.submitter:id,name', 'formulations.reviewer:id,name'])
+        $sampleRequests = FabricSampleRequest::with(['inquiry.client', 'product', 'parent', 'pantoneReference', 'requester:id,name', 'formulations.submitter:id,name', 'formulations.reviewer:id,name', 'formulations.knittingSampleRequest:id,code'])
             ->whereIn('status', [FabricSampleRequest::STATUS_REQUESTED, FabricSampleRequest::STATUS_IN_PROGRESS, FabricSampleRequest::STATUS_ADJUSTMENT_REQUESTED, FabricSampleRequest::STATUS_DISCARDED])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -121,6 +164,38 @@ class DyeingLabChemistController extends ManufacturingStaffController
                     $sample->setAttribute('color_description', count($colors) . ' Pantone colors requested');
                 }
             });
+
+        $knitRequestsBySample = KnittingSampleRequest::query()
+            ->with(['machine:id,machine_no', 'operator:id,name'])
+            ->whereIn('fabric_sample_request_id', $sampleRequests->modelKeys())
+            ->latest()
+            ->get()
+            ->groupBy('fabric_sample_request_id');
+        $linkedKnitRequestIds = FabricSampleFormulation::query()
+            ->whereNotNull('knitting_sample_request_id')
+            ->pluck('knitting_sample_request_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $sampleRequests->each(function (FabricSampleRequest $sample) use ($knitRequestsBySample, $linkedKnitRequestIds) {
+            $sample->setAttribute('knit_fabric_requests', $knitRequestsBySample->get($sample->id, collect())->map(fn (KnittingSampleRequest $knit) => [
+                'id' => $knit->id,
+                'code' => $knit->code,
+                'color_index' => (int) $knit->color_index,
+                'fabric_design' => $knit->fabric_design,
+                'texture' => $knit->texture,
+                'gsm' => $knit->gsm,
+                'yarn_type' => $knit->yarn_type,
+                'requested_weight' => (float) $knit->requested_weight,
+                'produced_weight' => $knit->produced_weight === null ? null : (float) $knit->produced_weight,
+                'status' => $knit->status,
+                'remarks' => $knit->remarks,
+                'processed_at' => $knit->processed_at,
+                'machine_no' => $knit->machine?->machine_no,
+                'operator_name' => $knit->operator?->name,
+                'created_at' => $knit->created_at,
+                'formulation_id' => in_array((int) $knit->id, $linkedKnitRequestIds, true),
+            ])->values()->all());
+        });
 
         return Inertia::render('Dashboard/MAN/Employee/DyeingLabChemist/Shades', [
             'dips' => $dips,
@@ -525,23 +600,28 @@ class DyeingLabChemistController extends ManufacturingStaffController
             'dyestuffs' => 'nullable|array',
             'dyestuffs.*.material_id' => 'required|exists:materials,id',
             'dyestuffs.*.name' => 'nullable|string|max:255',
-            'dyestuffs.*.pct' => 'nullable|numeric|min:0',
+            'dyestuffs.*.grams' => 'nullable|numeric|min:0',
             'auxiliary_agents' => 'nullable|array',
             'auxiliary_agents.*.material_id' => 'required|exists:materials,id',
             'auxiliary_agents.*.name' => 'nullable|string|max:255',
-            'auxiliary_agents.*.gpl' => 'nullable|numeric|min:0',
+            'auxiliary_agents.*.grams' => 'nullable|numeric|min:0',
             'basic_chemicals' => 'nullable|array',
             'basic_chemicals.*.material_id' => 'required|exists:materials,id',
             'basic_chemicals.*.name' => 'nullable|string|max:255',
-            'basic_chemicals.*.gpl' => 'nullable|numeric|min:0',
+            'basic_chemicals.*.grams' => 'nullable|numeric|min:0',
             'post_treatment' => 'nullable|array',
             'post_treatment.*.material_id' => 'required|exists:materials,id',
             'post_treatment.*.name' => 'nullable|string|max:255',
-            'post_treatment.*.gpl' => 'nullable|numeric|min:0',
+            'post_treatment.*.grams' => 'nullable|numeric|min:0',
             'liquor_ratio' => 'nullable|string|max:32',
             'notes' => 'nullable|string|max:2000',
+            'color_index' => 'required|integer|min:0',
+            'knitting_sample_request_id' => 'nullable|integer|exists:knitting_sample_requests,id',
             'sample_photo' => 'required|file|mimes:jpg,jpeg,png,webp,pdf|max:10240',
         ]);
+
+        $colors = $this->pantoneColorEntries($sampleRequest);
+        abort_unless(array_key_exists((int) $validated['color_index'], $colors), 422, 'The selected color is not part of this fabric request.');
 
         $version = (int) $sampleRequest->formulations()->max('version') + 1;
         $file = $request->file('sample_photo');
@@ -554,18 +634,33 @@ class DyeingLabChemistController extends ManufacturingStaffController
         $baseFormula = $sampleRequest->formula ?: ($sampleRequest->pantone_formula ?: []);
         unset($baseFormula['dye_stuffs'], $baseFormula['auxiliaries']);
         $formula = array_merge($baseFormula, [
-            'dyestuffs' => $this->resolveFormulaRows($validated['dyestuffs'] ?? [], 'pct'),
-            'auxiliary_agents' => $this->resolveFormulaRows($validated['auxiliary_agents'] ?? [], 'gpl'),
-            'basic_chemicals' => $this->resolveFormulaRows($validated['basic_chemicals'] ?? [], 'gpl'),
-            'post_treatment' => $this->resolveFormulaRows($validated['post_treatment'] ?? [], 'gpl'),
+            'dyestuffs' => $this->resolveFormulaRows($validated['dyestuffs'] ?? [], 'grams'),
+            'auxiliary_agents' => $this->resolveFormulaRows($validated['auxiliary_agents'] ?? [], 'grams'),
+            'basic_chemicals' => $this->resolveFormulaRows($validated['basic_chemicals'] ?? [], 'grams'),
+            'post_treatment' => $this->resolveFormulaRows($validated['post_treatment'] ?? [], 'grams'),
             'liquor_ratio' => $validated['liquor_ratio'] ?? ($baseFormula['liquor_ratio'] ?? null),
             'notes' => $validated['notes'] ?? null,
         ]);
 
         try {
-            DB::transaction(function () use ($sampleRequest, $formula, $version, $file, $attachmentPath) {
+            DB::transaction(function () use ($sampleRequest, $formula, $version, $file, $attachmentPath, $validated) {
+                $knitRequestId = $validated['knitting_sample_request_id'] ?? null;
+                if ($knitRequestId) {
+                    $knitRequest = KnittingSampleRequest::query()
+                        ->whereKey($knitRequestId)
+                        ->where('fabric_sample_request_id', $sampleRequest->id)
+                        ->where('color_index', $validated['color_index'])
+                        ->where('status', 'completed')
+                        ->lockForUpdate()
+                        ->first();
+                    abort_unless($knitRequest, 422, 'Choose a completed fabric sample for this color.');
+                    abort_if(FabricSampleFormulation::where('knitting_sample_request_id', $knitRequest->id)->exists(), 422, 'That fabric sample is already linked to a formulation.');
+                }
+
                 $formulation = FabricSampleFormulation::create([
                     'fabric_sample_request_id' => $sampleRequest->id,
+                    'knitting_sample_request_id' => $knitRequestId,
+                    'color_index' => $validated['color_index'],
                     'version' => $version,
                     'formula' => $formula,
                     'attachment_path' => $attachmentPath,
@@ -607,6 +702,10 @@ class DyeingLabChemistController extends ManufacturingStaffController
             return back()->with('message', "Formulation v{$version} sent to CRM for review.");
         } catch (\Throwable $e) {
             Storage::disk('public')->delete($attachmentPath);
+
+            if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface) {
+                throw $e;
+            }
 
             return back()->withErrors(['error' => 'Failed to submit formulation: ' . $e->getMessage()]);
         }
@@ -688,6 +787,10 @@ class DyeingLabChemistController extends ManufacturingStaffController
 
         // [group, qty key, to-kg-per-kg converter]
         $groups = [
+            ['dyestuffs', 'grams', fn ($v) => ((float) $v) / 1000],
+            ['auxiliary_agents', 'grams', fn ($v) => ((float) $v) / 1000],
+            ['basic_chemicals', 'grams', fn ($v) => ((float) $v) / 1000],
+            ['post_treatment', 'grams', fn ($v) => ((float) $v) / 1000],
             ['dyestuffs', 'pct', fn ($v) => ((float) $v) / 100],
             ['auxiliary_agents', 'gpl', fn ($v) => ((float) $v) * $lr / 1000],
             ['basic_chemicals', 'gpl', fn ($v) => ((float) $v) * $lr / 1000],
@@ -701,7 +804,8 @@ class DyeingLabChemistController extends ManufacturingStaffController
         foreach ($groups as [$group, $qtyKey, $convert]) {
             foreach ($formula[$group] ?? [] as $item) {
                 $mid = (int) ($item['material_id'] ?? 0);
-                $qty = $convert($item[$qtyKey] ?? 0);
+                $rawQuantity = $item[$qtyKey] ?? ($qtyKey === 'grams' && ($item['unit'] ?? null) === 'g' ? ($item['amount'] ?? 0) : 0);
+                $qty = $convert($rawQuantity);
                 if ($mid > 0) {
                     $materials[$mid] = ($materials[$mid] ?? 0) + $qty;
                 } elseif (! empty($item['name'])) {

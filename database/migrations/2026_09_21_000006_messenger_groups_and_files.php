@@ -29,12 +29,16 @@ return new class extends Migration
         });
 
         // Body becomes optional (file-only messages allowed).
-        DB::statement('ALTER TABLE `chat_messages` MODIFY COLUMN `body` TEXT NULL');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE `chat_messages` MODIFY COLUMN `body` TEXT NULL');
+        }
     }
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE `chat_messages` MODIFY COLUMN `body` TEXT NOT NULL');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE `chat_messages` MODIFY COLUMN `body` TEXT NOT NULL');
+        }
 
         Schema::table('chat_messages', function (Blueprint $table) {
             $table->dropColumn(['file_path', 'file_name', 'file_type']);

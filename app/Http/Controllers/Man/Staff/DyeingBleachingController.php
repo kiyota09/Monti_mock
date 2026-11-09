@@ -7,6 +7,7 @@ use App\Models\Man\Fabric;
 use App\Models\Man\DyeingBatchFabric;
 use App\Models\Man\DyeingStageRecord;
 use App\Models\Man\ManufacturingInventoryItem;
+use App\Services\Man\DyeingMachineQueueService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -79,9 +80,11 @@ class DyeingBleachingController extends ManufacturingStaffController
             $items=DyeingBatchFabric::with(['batch.machine','fabric'])->whereIn('fabric_id',$validated['fabric_ids'])->lockForUpdate()->get();
             abort_unless($items->count()===count($validated['fabric_ids']),422,'One or more fabrics are not in a dyeing batch.');
             $first=$items->first(); $batch=$first->batch;
-            abort_unless($items->every(fn($item)=>$item->dyeing_batch_id===$first->dyeing_batch_id && $item->current_stage==='bleaching' && $item->status==='active'),422,'Select active fabrics from the same JO and machine awaiting bleaching.');
+            abort_unless($items->every(fn($item)=>$item->batch?->machine_id===$batch?->machine_id && $item->current_stage==='bleaching' && $item->status==='active'),422,'Select active fabrics assigned to the same machine awaiting bleaching.');
             foreach ($items as $item) abort_unless($this->isAssignedFabric((int) $item->fabric_id, $item->fabric->manufacturing_order_id, $item->fabric->sales_order_id),403,'This fabric code is not assigned to you by the Dyeing Supervisor.');
-            abort_if($items->sum(fn($item)=>(float)$item->fabric->weight)>(float)$batch->load_capacity_kg+0.001,422,'Selected fabrics exceed the assigned machine load capacity.');
+            $queue = app(DyeingMachineQueueService::class);
+            $assignments = $queue->assertCanRecord((int) $this->staff()->id, (int) $batch->machine_id, 'bleaching', $items->pluck('fabric_id')->all());
+            foreach($items->groupBy('dyeing_batch_id') as $batchItems) abort_if($batchItems->sum(fn($item)=>(float)$item->fabric->weight)>(float)$batchItems->first()->batch->load_capacity_kg+0.001,422,'Selected fabrics exceed a batch machine load capacity.');
             $used=[];
             foreach($validated['materials_used'] as $row){
                 $stock=ManufacturingInventoryItem::with('material')->where('department','dyeing')->lockForUpdate()->findOrFail($row['inventory_item_id']);
@@ -102,6 +105,7 @@ class DyeingBleachingController extends ManufacturingStaffController
                     'review_status'=>'awaiting_review','processed_at'=>now()]);
                 $item->update(['status'=>'awaiting_review']);
             }
+            $queue->completeSubmitted($assignments);
         });
 
         return back()->with('message', 'Bleaching recorded. Awaiting quality check.');

@@ -4,6 +4,7 @@ import { Head, useForm, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { FlaskConical, Sparkles, PlusCircle, ClipboardList, Beaker, ArrowRight, X, ChevronDown, Search, Check, Palette, Trash2, Scissors } from 'lucide-vue-next';
 import { usePageAccess } from '@/composables/usePageAccess';
+import { confirmModal, successModal } from '@/lib/feedback';
 
 const { canEdit } = usePageAccess();
 const canEditProduction = computed(() => canEdit('MAN', 'dyeing_lab_chemist'));
@@ -45,16 +46,17 @@ const advanceDip = (dip, next) => router.patch(route('man.staff.dyeing-lab-chemi
 const sampleExpanded = ref(null);
 const formulationPantone = ref(null);
 const sampleForm = useForm({
-    dyestuffs: [{ material_id: '', name: '', pct: '' }],
-    auxiliary_agents: [{ material_id: '', name: '', gpl: '' }],
-    basic_chemicals: [{ material_id: '', name: '', gpl: '' }],
-    post_treatment: [{ material_id: '', name: '', gpl: '' }],
-    notes: '', sample_photo: null,
+    dyestuffs: [{ material_id: '', name: '', grams: '' }],
+    auxiliary_agents: [{ material_id: '', name: '', grams: '' }],
+    basic_chemicals: [{ material_id: '', name: '', grams: '' }],
+    post_treatment: [{ material_id: '', name: '', grams: '' }],
+    notes: '', sample_photo: null, color_index: 0, link_fabric: false, knitting_sample_request_id: '',
 });
-const openSampleFormulate = (s) => {
+const openSampleFormulate = (s, color, colorIndex) => {
     sampleExpanded.value = s.id;
     sampleForm.reset();
-    const pantone = (s.pantone_colors || []).find((color) => color.pantone_reference_id && color.formula)
+    sampleForm.color_index = colorIndex;
+    const pantone = color || (s.pantone_colors || []).find((color) => color.pantone_reference_id && color.formula)
         || (s.pantone_colors || []).find((color) => color.formula)
         || s.pantone_colors?.[0]
         || null;
@@ -62,15 +64,14 @@ const openSampleFormulate = (s) => {
     const defaults = pantone?.formula || s.pantone_formula || {};
     const dyes = defaults.dye_stuffs || defaults.dyestuffs || [];
     const rows = (items, quantityKey) => (items || []).map((row) => ({ material_id: row.material_id || '', name: row.name || '', [quantityKey]: row.amount ?? row[quantityKey] ?? '' }));
-    if (dyes.length) sampleForm.dyestuffs = rows(dyes, 'pct');
-    if (defaults.auxiliary_agents?.length) sampleForm.auxiliary_agents = rows(defaults.auxiliary_agents, 'gpl');
-    if (defaults.basic_chemicals?.length) sampleForm.basic_chemicals = rows(defaults.basic_chemicals, 'gpl');
-    if (defaults.post_treatment?.length) sampleForm.post_treatment = rows(defaults.post_treatment, 'gpl');
-    else if (defaults.auxiliaries?.length) sampleForm.auxiliary_agents = rows(defaults.auxiliaries, 'gpl');
+    if (dyes.length) sampleForm.dyestuffs = rows(dyes, 'grams');
+    if (defaults.auxiliary_agents?.length) sampleForm.auxiliary_agents = rows(defaults.auxiliary_agents, 'grams');
+    if (defaults.basic_chemicals?.length) sampleForm.basic_chemicals = rows(defaults.basic_chemicals, 'grams');
+    if (defaults.post_treatment?.length) sampleForm.post_treatment = rows(defaults.post_treatment, 'grams');
+    else if (defaults.auxiliaries?.length) sampleForm.auxiliary_agents = rows(defaults.auxiliaries, 'grams');
 };
 const addSampleRow = (list) => {
-    if (list === sampleForm.dyestuffs) return list.push({ material_id: '', name: '', pct: '' });
-    return list.push({ material_id: '', name: '', gpl: '' });
+    return list.push({ material_id: '', name: '', grams: '' });
 };
 const removeSampleRow = (list, i) => list.splice(i, 1);
 const startSample = (s) => router.patch(route('man.staff.dyeing-lab-chemist.sample.start', s.id), {}, { preserveScroll: true });
@@ -81,13 +82,27 @@ const openKnitRequest = (sample, color, colorIndex) => {
     knitRequestTarget.value = sample;
     knitRequestForm.reset();
     knitRequestForm.color_index = colorIndex;
-    knitRequestForm.fabric_design = sample.fabric_name || '';
+    knitRequestForm.fabric_design = sample.product?.name || sample.sample_fabric_design || sample.fabric_name || '';
     knitRequestForm.texture = color.texture || sample.texture || '';
     knitRequestForm.gsm = color.gsm || sample.gsm || '';
 };
-const submitKnitRequest = () => knitRequestForm.post(route('man.staff.dyeing-lab-chemist.sample.request-knit-fabric', knitRequestTarget.value.id), {
-    preserveScroll: true, onSuccess: () => { knitRequestTarget.value = null; knitRequestForm.reset(); },
-});
+const submitKnitRequest = async () => {
+    const confirmed = await confirmModal('Are you sure you want to request this fabric?', {
+        title: 'Request Fabric',
+        confirmButtonText: 'Yes, request fabric',
+        cancelButtonText: 'No, cancel',
+    });
+    if (!confirmed || !knitRequestTarget.value) return;
+
+    knitRequestForm.post(route('man.staff.dyeing-lab-chemist.sample.request-knit-fabric', knitRequestTarget.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            knitRequestTarget.value = null;
+            knitRequestForm.reset();
+            successModal('Fabric requested successfully.', { title: 'Fabric Requested' });
+        },
+    });
+};
 const relatedColors = (sample) => (props.sampleRequests || []).filter((candidate) => {
     if (sample.parent_id) return Number(candidate.parent_id) === Number(sample.parent_id);
     if (sample.request_method === 'pantone') {
@@ -107,6 +122,30 @@ const activeSampleRequests = computed(() => sampleRequestsNewest.value.filter((s
 const discardedSampleRequests = computed(() => sampleRequestsNewest.value.filter((sample) => sample.status === 'discarded'));
 const selectedSampleRequests = computed(() => activeRequestTab.value === 'discarded' ? discardedSampleRequests.value : activeSampleRequests.value);
 const openColorCount = computed(() => activeSampleRequests.value.reduce((total, sample) => total + Math.max(1, sample.pantone_colors?.length || 1), 0));
+const colorTabSelection = ref({});
+const colorTabKey = (sample, colorIndex) => `${sample.id}:${colorIndex}`;
+const activeColorTab = (sample, colorIndex) => colorTabSelection.value[colorTabKey(sample, colorIndex)] || 'color';
+const setActiveColorTab = (sample, colorIndex, tab) => { colorTabSelection.value[colorTabKey(sample, colorIndex)] = tab; };
+const knitRequestsForColor = (sample, colorIndex) => (sample.knit_fabric_requests || [])
+    .filter((request) => Number(request.color_index) === Number(colorIndex));
+const knitFabricStatus = (sample, colorIndex) => {
+    const requests = knitRequestsForColor(sample, colorIndex).filter((request) => request.status !== 'discarded');
+    if (requests.some((request) => request.status === 'completed')) {
+        return { label: 'Fabric Available', class: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300' };
+    }
+    if (requests.length) {
+        return { label: 'Fabric Requested', class: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' };
+    }
+    return { label: 'Fabric Not Requested', class: 'bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300' };
+};
+const availableKnitFabrics = (sample, colorIndex) => knitRequestsForColor(sample, colorIndex)
+    .filter((fabric) => fabric.status === 'completed' && !fabric.formulation_id);
+const knitRequestStatusLabel = (status) => status === 'completed' ? 'Done' : status === 'discarded' ? 'Cancelled' : status === 'in_progress' ? 'In progress' : 'Not started';
+const knitRequestStatusClass = (status) => status === 'completed'
+    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+    : status === 'discarded' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
+    : status === 'in_progress' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+    : 'bg-slate-200 text-slate-700 dark:bg-zinc-700 dark:text-zinc-200';
 const sampleClientKey = (sample) => String(sample.client_id ?? sample.inquiry?.client_id ?? 'unknown');
 const clientTabs = computed(() => {
     const clients = new Map();
@@ -152,11 +191,11 @@ const discardSample = (sample) => {
 const formulaSections = (sample, color = null) => {
     const formula = color?.formula || (sample.pantone_colors?.length === 1 ? sample.pantone_formula || sample.formula : {}) || {};
     return [
-        { label: 'Dye stuffs', rows: formula.dye_stuffs || formula.dyestuffs || [], amountKey: 'amount', unit: '%' },
-        { label: 'Auxiliary agents', rows: formula.auxiliary_agents || [], amountKey: 'amount', unit: 'g/L' },
-        { label: 'Basic chemicals', rows: formula.basic_chemicals || [], amountKey: 'amount', unit: 'g/L' },
-        { label: 'Post-treatment', rows: formula.post_treatment || [], amountKey: 'amount', unit: 'g/L' },
-        { label: 'Other auxiliaries', rows: formula.auxiliaries || [], amountKey: 'gpl', unit: 'g/L' },
+        { label: 'Dye stuffs', rows: formula.dye_stuffs || formula.dyestuffs || [], amountKey: 'amount', unit: 'g' },
+        { label: 'Auxiliary agents', rows: formula.auxiliary_agents || [], amountKey: 'amount', unit: 'g' },
+        { label: 'Basic chemicals', rows: formula.basic_chemicals || [], amountKey: 'amount', unit: 'g' },
+        { label: 'Post-treatment', rows: formula.post_treatment || [], amountKey: 'amount', unit: 'g' },
+        { label: 'Other auxiliaries', rows: formula.auxiliaries || [], amountKey: 'amount', unit: 'g' },
     ].filter((section) => section.rows.length);
 };
 const formulaAmount = (row, section) => {
@@ -164,14 +203,21 @@ const formulaAmount = (row, section) => {
     return amount === null || amount === undefined || amount === '' ? '' : `${amount} ${row.unit || section.unit}`;
 };
 const formulationSummary = (formula) => [
-    ...(formula?.dyestuffs || []).map((row) => `${row.name} ${row.pct ?? row.amount ?? ''}%`),
-    ...['auxiliary_agents', 'basic_chemicals', 'post_treatment', 'auxiliaries'].flatMap((key) => (formula?.[key] || []).map((row) => `${row.name} ${row.gpl ?? row.amount ?? ''} g/L`)),
+    ...(formula?.dyestuffs || formula?.dye_stuffs || []).map((row) => `${row.name} ${row.grams ?? row.amount ?? row.pct ?? ''} g`),
+    ...['auxiliary_agents', 'basic_chemicals', 'post_treatment', 'auxiliaries'].flatMap((key) => (formula?.[key] || []).map((row) => `${row.name} ${row.grams ?? row.amount ?? row.gpl ?? ''} g`)),
 ].join(' · ');
 const submitSampleFormulate = () => sampleForm
-    .transform((data) => stripEmptyRows(data))
+    .transform((data) => stripEmptyRows({
+        ...data,
+        knitting_sample_request_id: data.link_fabric ? data.knitting_sample_request_id : null,
+    }))
     .post(route('man.staff.dyeing-lab-chemist.sample.formulate', sampleExpanded.value), {
         preserveScroll: true, forceFormData: true,
-        onSuccess: () => { sampleExpanded.value = null; formulationPantone.value = null; },
+        onSuccess: () => {
+            sampleExpanded.value = null;
+            formulationPantone.value = null;
+            successModal('The formulation was saved and sent to CRM for review.', { title: 'Sent to CRM Review' });
+        },
     });
 
 // ── Pantone swatch picker (visual replacement for the native <select>) ──
@@ -243,8 +289,21 @@ const closePantoneOnOutsideClick = (e) => {
     if (pantoneOpen.value !== null && !e.target.closest('[data-pantone-picker]')) pantoneOpen.value = null;
     if (yarnDropdownOpen.value !== null && !e.target.closest('[data-yarn-picker]')) yarnDropdownOpen.value = null;
 };
-onMounted(() => document.addEventListener('click', closePantoneOnOutsideClick));
-onBeforeUnmount(() => document.removeEventListener('click', closePantoneOnOutsideClick));
+let knitStatusRefreshTimer = null;
+const refreshKnitRequestStatuses = () => {
+    if (document.visibilityState !== 'visible' || sampleExpanded.value || knitRequestTarget.value || sampleForm.processing || knitRequestForm.processing) return;
+    router.reload({ only: ['sampleRequests'], preserveState: true, preserveScroll: true });
+};
+onMounted(() => {
+    document.addEventListener('click', closePantoneOnOutsideClick);
+    window.addEventListener('focus', refreshKnitRequestStatuses);
+    knitStatusRefreshTimer = window.setInterval(refreshKnitRequestStatuses, 30000);
+});
+onBeforeUnmount(() => {
+    document.removeEventListener('click', closePantoneOnOutsideClick);
+    window.removeEventListener('focus', refreshKnitRequestStatuses);
+    if (knitStatusRefreshTimer) window.clearInterval(knitStatusRefreshTimer);
+});
 
 // ── Inventory-connected material picker ─────────────────────────────
 // Dyestuff / auxiliary names must come from the materials table —
@@ -255,10 +314,10 @@ onBeforeUnmount(() => document.removeEventListener('click', closePantoneOnOutsid
 const dyeOptions = computed(() => (props.materials || []).filter((m) => ['dye', 'dye stuff'].includes(String(m.category || '').toLowerCase())));
 const auxOptions = computed(() => (props.materials || []).filter((m) => ['dye', 'dye stuff', 'supplies', 'auxillary agent', 'basic chemicals', 'post-treatment', 'pre-treatment', 'bio-processing enzymes', 'care agents'].includes(String(m.category || '').toLowerCase())));
 const formulationInputGroups = [
-    { key: 'dyestuffs', label: 'Dye stuffs', listId: 'sample-dye-list', quantityKey: 'pct', quantityLabel: '%', placeholder: 'Pick a dye…', options: dyeOptions },
-    { key: 'auxiliary_agents', label: 'Auxiliary agents', listId: 'sample-aux-agents-list', quantityKey: 'gpl', quantityLabel: 'g/L', placeholder: 'Pick an agent…', options: auxOptions },
-    { key: 'basic_chemicals', label: 'Basic chemicals', listId: 'sample-basic-chemicals-list', quantityKey: 'gpl', quantityLabel: 'g/L', placeholder: 'Pick a chemical…', options: auxOptions },
-    { key: 'post_treatment', label: 'Post-treatment', listId: 'sample-post-treatment-list', quantityKey: 'gpl', quantityLabel: 'g/L', placeholder: 'Pick a treatment…', options: auxOptions },
+    { key: 'dyestuffs', label: 'Dye stuffs', listId: 'sample-dye-list', quantityKey: 'grams', quantityLabel: 'grams', placeholder: 'Pick a dye…', options: dyeOptions },
+    { key: 'auxiliary_agents', label: 'Auxiliary agents', listId: 'sample-aux-agents-list', quantityKey: 'grams', quantityLabel: 'grams', placeholder: 'Pick an agent…', options: auxOptions },
+    { key: 'basic_chemicals', label: 'Basic chemicals', listId: 'sample-basic-chemicals-list', quantityKey: 'grams', quantityLabel: 'grams', placeholder: 'Pick a chemical…', options: auxOptions },
+    { key: 'post_treatment', label: 'Post-treatment', listId: 'sample-post-treatment-list', quantityKey: 'grams', quantityLabel: 'grams', placeholder: 'Pick a treatment…', options: auxOptions },
 ];
 const yarnOptions = computed(() => (props.materials || []).filter((m) => String(m.category || '').toLowerCase() === 'yarn'));
 const materialOptionLabel = (m) => `${m.display_name || m.name} (${m.mat_id})`;
@@ -400,28 +459,31 @@ const statusBadge = (s) => s === 'approved'
                 </div>
 
                 <section v-for="inquiryGroup in visibleInquiryGroups" :key="inquiryGroup.key" class="space-y-3">
-                    <header class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-100/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
+                    <header class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                         <div class="min-w-0">
                             <p class="truncate text-xs font-black text-slate-800 dark:text-zinc-100">{{ inquiryGroup.clientName }}</p>
                             <p class="mt-0.5 truncate text-[11px] text-slate-500 dark:text-zinc-400">Inquiry {{ inquiryGroup.inquiryLabel }}</p>
                         </div>
-                        <span class="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">{{ inquiryGroup.requests.length }} request(s)</span>
+                        <span class="shrink-0 rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-black text-teal-800 dark:bg-teal-950/50 dark:text-teal-200">{{ inquiryGroup.requests.length }} request(s)</span>
                     </header>
 
                 <!-- NOTE: no overflow-hidden here so the Pantone dropdown can extend past the card edge -->
-                <div v-for="s in inquiryGroup.requests" :key="s.id" class="relative bg-white/80 dark:bg-zinc-900/80 rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm" :class="pantoneOpen === s.id || yarnDropdownOpen?.startsWith(`${s.id}:`) ? 'z-30' : ''">
+                <div v-for="s in inquiryGroup.requests" :key="s.id" class="relative rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-900/[0.02] transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:ring-white/[0.03]" :class="pantoneOpen === s.id || yarnDropdownOpen?.startsWith(`${s.id}:`) ? 'z-30' : ''">
                     <!-- Color-coded accent edge: shows the linked Pantone at a glance -->
                     <div class="absolute inset-x-0 top-0 h-1.5 rounded-t-3xl" :style="{ backgroundColor: s.pantone_colors?.[0]?.hex || s.pantone_reference?.hex || 'transparent' }" />
-                    <div class="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-zinc-800">
-                        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-600 via-emerald-600 to-green-600 text-white shadow-lg"><FlaskConical class="h-4 w-4" /></span>
-                        <div class="min-w-0 flex-1">
-                            <p class="font-mono text-xs font-bold">{{ s.code }} <span class="font-sans text-[11px] text-gray-400">· {{ s.urgency }} · {{ s.fabric_name }}</span></p>
-                            <p class="text-xs text-gray-500 truncate">Request {{ s.inquiry?.hash_key || s.inquiry_id }} · {{ s.inquiry?.client?.company_name ?? 'Client' }} · {{ s.product?.name || s.fabric_name }} · {{ s.color_description }}</p>
+                    <div class="flex flex-wrap items-start gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-4 dark:border-zinc-800 dark:bg-zinc-950/40 sm:px-5">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm"><FlaskConical class="h-4 w-4" /></span>
+                        <div class="min-w-0 flex-1 space-y-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-mono text-xs font-black text-slate-900 dark:text-white">{{ s.code }}</span>
+                                <span class="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold capitalize text-slate-500 ring-1 ring-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700">{{ s.urgency }} priority</span>
+                            </div>
+                            <p class="truncate text-xs font-semibold text-slate-800 dark:text-zinc-100">{{ s.product?.name || s.fabric_name }}</p>
+                            <p class="truncate text-[11px] text-slate-500 dark:text-zinc-400">{{ s.inquiry?.client?.company_name ?? 'Client' }} <span class="mx-1 text-slate-300 dark:text-zinc-600">·</span> Inquiry {{ s.inquiry?.hash_key || s.inquiry_id }}</p>
                         </div>
                         <span :class="statusBadge(s.status)" class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1">{{ String(s.status).replace('_', ' ') }}</span>
-                        <div class="flex gap-1.5">
-                            <button v-if="s.status === 'requested' && canEditProduction" @click="startSample(s)" class="text-[11px] font-black text-teal-700 hover:underline">Start</button>
-                            <button v-if="['requested', 'in_progress', 'adjustment_requested'].includes(s.status) && canEditProduction" @click="openSampleFormulate(s)" class="inline-flex items-center gap-1 text-[11px] font-black text-indigo-700 hover:underline">{{ s.status === 'adjustment_requested' ? 'Reformulate' : 'Formulate' }} <ArrowRight class="h-3 w-3" /></button>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button v-if="s.status === 'requested' && canEditProduction" @click="startSample(s)" class="rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-[11px] font-bold text-teal-800 transition hover:bg-teal-50 dark:border-teal-900 dark:bg-zinc-900 dark:text-teal-300 dark:hover:bg-teal-950/40">Start</button>
                         </div>
                     </div>
                     <div v-if="relatedColors(s).length > 1" class="px-6 pt-3">
@@ -433,22 +495,35 @@ const statusBadge = (s) => s === 'approved'
                         </div>
                     </div>
 
-                    <article v-for="(color, colorIndex) in s.pantone_colors" :key="`${s.id}-pantone-${colorIndex}`" class="mx-6 my-3 rounded-2xl border border-slate-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-900/70 p-4 shadow-sm">
-                        <div class="flex flex-wrap items-center gap-3">
-                            <span class="h-10 w-10 shrink-0 rounded-xl border border-black/10 shadow-inner" :style="{ backgroundColor: color.color_hex || color.hex || '#e2e8f0' }" />
-                            <div class="min-w-0 flex-1">
-                                <p class="text-sm font-bold text-slate-900 dark:text-white">{{ color.pantone_name || color.label }}</p>
-                                <p v-if="color.pantone_code" class="font-mono text-[11px] text-slate-500 dark:text-zinc-400">{{ color.pantone_code }}</p>
-                                <p v-if="color.texture || color.gsm" class="text-[11px] text-slate-500 dark:text-zinc-400">
+                    <article v-for="(color, colorIndex) in s.pantone_colors" :key="`${s.id}-pantone-${colorIndex}`" class="mx-3 my-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/70 sm:mx-5">
+                        <div class="mb-4 flex gap-1 border-b border-slate-200 dark:border-zinc-700" role="tablist" :aria-label="`Details for ${color.pantone_name || color.label}`">
+                            <button type="button" role="tab" :aria-selected="activeColorTab(s, colorIndex) === 'color'" @click="setActiveColorTab(s, colorIndex, 'color')" class="border-b-2 px-3 py-2 text-sm font-semibold transition" :class="activeColorTab(s, colorIndex) === 'color' ? 'border-indigo-600 text-indigo-700 dark:text-indigo-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white'">Color details</button>
+                            <button type="button" role="tab" :aria-selected="activeColorTab(s, colorIndex) === 'fabrics'" @click="setActiveColorTab(s, colorIndex, 'fabrics')" class="border-b-2 px-3 py-2 text-sm font-semibold transition" :class="activeColorTab(s, colorIndex) === 'fabrics' ? 'border-teal-600 text-teal-700 dark:text-teal-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white'">Fabrics <span class="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">{{ knitRequestsForColor(s, colorIndex).length }}</span></button>
+                        </div>
+                        <template v-if="activeColorTab(s, colorIndex) === 'color'">
+                        <div class="flex items-start gap-4">
+                            <span class="h-14 w-14 shrink-0 rounded-xl border border-black/10 shadow-inner ring-4 ring-slate-50 dark:ring-zinc-800" :style="{ backgroundColor: color.color_hex || color.hex || '#e2e8f0' }" />
+                            <div class="min-w-0 flex-1 space-y-1">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Requested color</p>
+                                    <span class="rounded-full px-2.5 py-1 text-[10px] font-black" :class="knitFabricStatus(s, colorIndex).class">{{ knitFabricStatus(s, colorIndex).label }}</span>
+                                </div>
+                                <p class="text-lg font-extrabold leading-snug text-slate-900 dark:text-white">{{ color.pantone_name || color.label }}</p>
+                                <p v-if="color.pantone_code" class="font-mono text-sm text-slate-600 dark:text-zinc-300">{{ color.pantone_code }}</p>
+                                <p v-if="color.yarn_type" class="pt-1 text-sm font-semibold leading-relaxed text-blue-800 dark:text-blue-200"><span class="mr-1 rounded-md bg-blue-50 px-2 py-1 text-xs font-bold dark:bg-blue-950/40">Yarn</span>{{ color.yarn_type }}</p>
+                                <p v-if="color.texture || color.gsm" class="pt-1 text-sm leading-relaxed text-slate-600 dark:text-zinc-300">
                                     <span v-if="color.texture">Texture: {{ color.texture }}</span>
                                     <span v-if="color.texture && color.gsm"> · </span>
                                     <span v-if="color.gsm">{{ color.gsm }} GSM</span>
                                 </p>
-                                <a v-if="color.color_image_path" :href="`/storage/${color.color_image_path}`" target="_blank" class="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 underline dark:text-indigo-300">
+                                <a v-if="color.color_image_path" :href="`/storage/${color.color_image_path}`" target="_blank" class="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-indigo-600 underline dark:text-indigo-300">
                                     <img :src="`/storage/${color.color_image_path}`" alt="Client color reference" class="h-8 w-8 rounded border border-slate-200 object-cover dark:border-zinc-700" />
                                     View client color image
                                 </a>
                             </div>
+                        </div>
+                        <div v-if="activeRequestTab === 'active'" class="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4 dark:border-zinc-700">
+                            <button v-if="['requested', 'in_progress', 'adjustment_requested'].includes(s.status) && canEditProduction" type="button" @click="openSampleFormulate(s, color, colorIndex)" class="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700">{{ s.status === 'adjustment_requested' ? 'Reformulate this color' : 'Formulate this color' }} <ArrowRight class="h-3.5 w-3.5" /></button>
                             <div v-if="activeRequestTab === 'active'" class="relative" data-pantone-picker @keydown.esc="pantoneOpen = null">
                                 <button type="button" :disabled="!canEditProduction" @click="togglePantone(s, colorIndex)" aria-haspopup="listbox"
                                     class="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-zinc-200 shadow-sm hover:border-indigo-300 disabled:opacity-60">
@@ -496,8 +571,8 @@ const statusBadge = (s) => s === 'approved'
                                 <Trash2 class="h-3.5 w-3.5" /> Discard color
                             </button>
                         </div>
-                        <div class="mt-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-500/5 p-3">
-                            <p class="text-[10px] font-black uppercase tracking-wide text-indigo-800 dark:text-indigo-200">Formula for {{ color.pantone_name || color.label }}<span v-if="color.yarn_type"> · {{ color.yarn_type }}</span></p>
+                        <div class="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3.5 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+                            <p class="text-[10px] font-black uppercase tracking-wide text-indigo-800 dark:text-indigo-200">Recipe details <span class="normal-case tracking-normal text-indigo-700 dark:text-indigo-300">· {{ color.pantone_name || color.label }}<template v-if="color.yarn_type"> · {{ color.yarn_type }}</template></span></p>
                             <div v-if="formulaSections(s, color).length" class="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                                 <div v-for="section in formulaSections(s, color)" :key="section.label" class="rounded-lg bg-white/80 dark:bg-zinc-900/80 p-2.5">
                                     <p class="text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-400">{{ section.label }}</p>
@@ -509,6 +584,33 @@ const statusBadge = (s) => s === 'approved'
                                 </div>
                             </div>
                             <p v-else class="mt-1 text-xs text-slate-500 dark:text-zinc-400">Link this Pantone to load its fabric-specific formula.</p>
+                        </div>
+                        </template>
+                        <div v-else class="space-y-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <h3 class="text-base font-bold text-slate-900 dark:text-white">Knit fabric requests</h3>
+                                    <p class="mt-0.5 text-sm text-slate-500 dark:text-zinc-400">Requests for this Pantone and yarn combination.</p>
+                                </div>
+                                <span class="rounded-full bg-teal-50 px-3 py-1 text-sm font-bold text-teal-800 dark:bg-teal-950/50 dark:text-teal-200">{{ availableKnitFabrics(s, colorIndex).length }} unused · {{ knitRequestsForColor(s, colorIndex).filter((request) => request.formulation_id).length }} used · {{ knitRequestsForColor(s, colorIndex).filter((request) => !['completed', 'discarded'].includes(request.status)).length }} pending</span>
+                            </div>
+                            <p v-if="!knitRequestsForColor(s, colorIndex).length" class="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-zinc-700 dark:text-zinc-400">No fabric requests for this color yet. Formulation is still available; request a fabric sample when one is needed.</p>
+                            <div v-for="request in knitRequestsForColor(s, colorIndex)" :key="request.id" class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+                                <div class="flex flex-wrap items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="font-mono text-sm font-bold text-slate-900 dark:text-white">{{ request.code }} <span class="font-sans font-normal text-slate-500 dark:text-zinc-400">· {{ request.fabric_design || 'Fabric sample' }}</span></p>
+                                        <p class="mt-1 text-sm text-slate-600 dark:text-zinc-300">Requested {{ request.requested_weight }} kg<span v-if="request.texture"> · {{ request.texture }}</span><span v-if="request.gsm"> · {{ request.gsm }} GSM</span></p>
+                                    </div>
+                                    <span class="shrink-0 rounded-full px-3 py-1 text-xs font-bold" :class="request.formulation_id ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300' : request.status === 'completed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300' : knitRequestStatusClass(request.status)">{{ request.formulation_id ? 'Used in formulation' : request.status === 'completed' ? 'Unused fabric' : knitRequestStatusLabel(request.status) }}</span>
+                                </div>
+                                <div class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600 dark:text-zinc-300">
+                                    <span v-if="request.produced_weight !== null">Produced: <strong>{{ request.produced_weight }} kg</strong></span>
+                                    <span v-if="request.machine_no">Machine: <strong>{{ request.machine_no }}</strong></span>
+                                    <span v-if="request.operator_name">Knit staff: <strong>{{ request.operator_name }}</strong></span>
+                                    <span v-if="request.processed_at">Completed: <strong>{{ new Date(request.processed_at).toLocaleString() }}</strong></span>
+                                </div>
+                                <p v-if="request.remarks" class="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-600 dark:bg-zinc-900 dark:text-zinc-300">{{ request.remarks }}</p>
+                            </div>
                         </div>
                     </article>
 
@@ -586,7 +688,7 @@ const statusBadge = (s) => s === 'approved'
                     </div>
                     <section v-if="s.formulations?.length" class="mx-6 mb-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
                         <div class="mb-3 flex items-center justify-between gap-3"><div><h3 class="text-xs font-black uppercase tracking-wide text-slate-800 dark:text-zinc-100">Formulation history</h3><p class="mt-1 text-[11px] text-slate-500">Each saved attempt stays attached to this client color request.</p></div><span class="rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-black text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-200">{{ s.formulations.length }} version(s)</span></div>
-                        <div class="space-y-2"><article v-for="attempt in s.formulations" :key="attempt.id" class="rounded-xl border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900"><div class="flex flex-wrap items-center justify-between gap-2"><div><p class="text-xs font-black text-slate-900 dark:text-white">Version {{ attempt.version }} <span class="ml-1 rounded-full bg-slate-100 px-2 py-0.5 font-bold capitalize text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">{{ String(attempt.status).replaceAll('_', ' ') }}</span></p><p class="mt-1 text-[11px] text-slate-500">{{ attempt.submitter?.name || 'Lab chemist' }} · {{ attempt.created_at }}</p></div><a :href="`/storage/${attempt.attachment_path}`" target="_blank" class="max-w-56 truncate text-xs font-bold text-indigo-600 underline dark:text-indigo-300">{{ attempt.attachment_name }}</a></div><p class="mt-2 text-xs text-slate-600 dark:text-zinc-300">{{ formulationSummary(attempt.formula) || 'No chemicals listed' }}</p><p v-if="attempt.review_notes" class="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">CRM note: {{ attempt.review_notes }}</p></article></div>
+                        <div class="space-y-2"><article v-for="attempt in s.formulations" :key="attempt.id" class="rounded-xl border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900"><div class="flex flex-wrap items-center justify-between gap-2"><div><p class="text-xs font-black text-slate-900 dark:text-white">Version {{ attempt.version }} <span class="ml-1 rounded-full bg-slate-100 px-2 py-0.5 font-bold capitalize text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">{{ String(attempt.status).replaceAll('_', ' ') }}</span></p><p class="mt-1 text-[11px] text-slate-500"><span v-if="attempt.color_index !== null && s.pantone_colors?.[attempt.color_index]">{{ s.pantone_colors[attempt.color_index].pantone_name || s.pantone_colors[attempt.color_index].label }} · </span>{{ attempt.submitter?.name || 'Lab chemist' }} · {{ attempt.created_at }}<span v-if="attempt.knitting_sample_request?.code"> · Fabric {{ attempt.knitting_sample_request.code }}</span><span v-else> · No fabric linked</span></p></div><a :href="`/storage/${attempt.attachment_path}`" target="_blank" class="max-w-56 truncate text-xs font-bold text-indigo-600 underline dark:text-indigo-300">{{ attempt.attachment_name }}</a></div><p class="mt-2 text-xs text-slate-600 dark:text-zinc-300">{{ formulationSummary(attempt.formula) || 'No chemicals listed' }}</p><p v-if="attempt.review_notes" class="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">CRM note: {{ attempt.review_notes }}</p></article></div>
                     </section>
                     <div class="h-4" />
 
@@ -603,6 +705,21 @@ const statusBadge = (s) => s === 'approved'
                             <div class="flex flex-wrap items-center justify-between gap-2"><div><h3 class="text-xs font-black uppercase tracking-wide text-indigo-900 dark:text-indigo-100">Default Pantone formula</h3><p class="mt-1 text-xs text-indigo-700 dark:text-indigo-300">Starting reference for {{ formulationPantone?.pantone_name || formulationPantone?.label || s.color_description }}. Adjusted values are entered below.</p></div><span v-if="formulationPantone?.hex" class="h-7 w-7 rounded-lg border border-black/10" :style="{ backgroundColor: formulationPantone.hex }" /></div>
                             <div v-if="formulaSections(s, formulationPantone).length" class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"><div v-for="section in formulaSections(s, formulationPantone)" :key="section.label" class="rounded-xl bg-white p-3 dark:bg-zinc-900"><p class="text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-400">{{ section.label }}</p><ul class="mt-2 space-y-1"><li v-for="(row, index) in section.rows" :key="row.material_id || row.name || index" class="flex justify-between gap-2 text-xs"><span class="truncate text-slate-700 dark:text-zinc-200">{{ row.name || row.material_name || 'Material' }}</span><span class="shrink-0 font-bold text-slate-600 dark:text-zinc-300">{{ formulaAmount(row, section) }}</span></li></ul></div></div>
                             <p v-else class="mt-3 rounded-xl bg-white/80 p-3 text-xs text-amber-800 dark:bg-zinc-900 dark:text-amber-200">No default formula is linked to this Pantone yet. Add the formula values below before submitting.</p>
+                        </section>
+                        <section class="rounded-2xl border border-teal-200 bg-teal-50/60 p-4 dark:border-teal-900/60 dark:bg-teal-950/20">
+                            <label class="flex cursor-pointer items-start gap-3">
+                                <input v-model="sampleForm.link_fabric" type="checkbox" :disabled="!availableKnitFabrics(s, sampleForm.color_index).length" @change="sampleForm.knitting_sample_request_id = sampleForm.link_fabric ? (availableKnitFabrics(s, sampleForm.color_index)[0]?.id || '') : ''" class="mt-0.5 rounded border-teal-400 text-teal-700 focus:ring-teal-600 disabled:opacity-50" />
+                                <span><span class="block text-sm font-bold text-teal-950 dark:text-teal-100">Link an unused fabric to this color formulation</span><span class="mt-0.5 block text-xs text-teal-800 dark:text-teal-300">Optional. A linked fabric is marked used so the team can see when another sample is needed.</span></span>
+                            </label>
+                            <div v-if="sampleForm.link_fabric" class="mt-3">
+                                <label class="block text-xs font-bold text-teal-900 dark:text-teal-100">Completed unused fabric
+                                    <select v-model="sampleForm.knitting_sample_request_id" required class="mt-1.5 w-full rounded-xl border-teal-200 bg-white text-sm dark:border-teal-900 dark:bg-zinc-900">
+                                        <option value="">Select fabric sample</option>
+                                        <option v-for="fabric in availableKnitFabrics(s, sampleForm.color_index)" :key="fabric.id" :value="fabric.id">{{ fabric.code }} · {{ fabric.produced_weight || fabric.requested_weight }} kg · {{ fabric.fabric_design || 'Fabric sample' }}</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <p v-else-if="!availableKnitFabrics(s, sampleForm.color_index).length" class="mt-2 text-xs font-semibold text-amber-800 dark:text-amber-200">No unused completed fabric is available for this color. You can formulate without linking one; request another fabric sample when needed.</p>
                         </section>
                         <div class="rounded-2xl border border-slate-200 p-4 dark:border-zinc-700"><p class="mb-3 text-xs font-black uppercase tracking-wide text-slate-700 dark:text-zinc-200">Adjusted formulation</p>
                         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">

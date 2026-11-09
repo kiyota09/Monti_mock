@@ -18,6 +18,7 @@ class ApplicantLoginFlowTest extends TestCase
             $table->string('first_name');
             $table->string('last_name');
             $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
             $table->string('phone_number')->nullable();
             $table->string('password')->nullable();
             $table->string('street_address')->nullable();
@@ -49,6 +50,20 @@ class ApplicantLoginFlowTest extends TestCase
             $table->foreignId('user_id');
             $table->string('module');
             $table->timestamps();
+        });
+        Schema::create('app_settings', function (Blueprint $table) {
+            $table->id();
+            $table->string('key', 80)->unique();
+            $table->text('value')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('theme_preferences', function (Blueprint $table) {
+            $table->id();
+            $table->string('guard', 24);
+            $table->unsignedBigInteger('user_id');
+            $table->string('theme', 16);
+            $table->timestamps();
+            $table->unique(['guard', 'user_id']);
         });
         // Tables touched by the applicant profile payload (minimal stubs).
         Schema::create('hrm_job_postings', function (Blueprint $table) {
@@ -102,6 +117,7 @@ class ApplicantLoginFlowTest extends TestCase
             'first_name' => 'Flow',
             'last_name' => 'Test',
             'email' => 'flow@test.com',
+            'email_verified_at' => now(),
             'phone_number' => '+630000000000',
             'password' => 'secret123',
             'position_applied' => 'Tester',
@@ -133,6 +149,7 @@ class ApplicantLoginFlowTest extends TestCase
             'first_name' => 'Flow',
             'last_name' => 'Test',
             'email' => 'flow@test.com',
+            'email_verified_at' => now(),
             'password' => 'secret123',
             'status' => 'Submitted',
             'archived' => false,

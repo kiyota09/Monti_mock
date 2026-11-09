@@ -35,18 +35,26 @@ class OrderReturn extends Model
     protected $fillable = [
         'return_number',
         'sales_order_id',
+        'client_id',
         'type',
+        'request_type',
+        'package_ids',
         'quantity',
         'reason',
+        'image_path',
         'status',
         'created_by',
         'resolved_by',
         'resolved_at',
         'resolution_notes',
+        'discount_amount',
+        'replacement_sales_order_id',
     ];
 
     protected $casts = [
         'quantity' => 'decimal:2',
+        'package_ids' => 'array',
+        'discount_amount' => 'decimal:2',
         'resolved_at' => 'datetime',
     ];
 
@@ -63,5 +71,10 @@ class OrderReturn extends Model
     public function resolvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'resolved_by');
+    }
+
+    public function replacementSalesOrder(): BelongsTo
+    {
+        return $this->belongsTo(SalesOrder::class, 'replacement_sales_order_id');
     }
 }

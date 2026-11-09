@@ -14,7 +14,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement("ALTER TABLE `packages` MODIFY `status` ENUM('pending','checked','rejected','assigned','delivered') NOT NULL DEFAULT 'pending'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE `packages` MODIFY `status` ENUM('pending','checked','rejected','assigned','delivered') NOT NULL DEFAULT 'pending'");
+        } else {
+            Schema::table('packages', function (Blueprint $table) {
+                $table->enum('status', ['pending', 'checked', 'rejected', 'assigned', 'delivered'])->default('pending')->change();
+            });
+        }
 
         Schema::table('packages', function (Blueprint $table) {
             $table->foreignId('checked_by')->nullable()->after('status')->constrained('users')->nullOnDelete();
@@ -30,6 +36,12 @@ return new class extends Migration
             $table->dropColumn(['checked_at', 'check_remarks']);
         });
 
-        DB::statement("ALTER TABLE `packages` MODIFY `status` ENUM('pending','assigned','delivered') NOT NULL DEFAULT 'pending'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE `packages` MODIFY `status` ENUM('pending','assigned','delivered') NOT NULL DEFAULT 'pending'");
+        } else {
+            Schema::table('packages', function (Blueprint $table) {
+                $table->enum('status', ['pending', 'assigned', 'delivered'])->default('pending')->change();
+            });
+        }
     }
 };

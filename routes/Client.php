@@ -77,6 +77,10 @@ Route::middleware(['auth:client', 'client.access'])->prefix('partner')->name('cl
         ->name('conversation.attachment.approve');
 
     // Fabric sample delivery acknowledgements and final decision.
+    Route::post('/sample-requests/bulk-noted', [ClientConversationController::class, 'bulkNoteSampleDeliveries'])
+        ->name('sample.bulk-noted');
+    Route::post('/sample-requests/bulk-received', [ClientConversationController::class, 'bulkReceiveDeliveredSamples'])
+        ->name('sample.bulk-received');
     Route::post('/sample-requests/{sampleRequest}/noted', [ClientConversationController::class, 'noteSampleDelivery'])
         ->name('sample.noted');
     Route::post('/sample-requests/{sampleRequest}/received', [ClientConversationController::class, 'receiveDeliveredSample'])
@@ -88,20 +92,15 @@ Route::middleware(['auth:client', 'client.access'])->prefix('partner')->name('cl
 
     // Direct line to Monti Textiles (no inquiry needed)
     Route::get('/messages', [ClientMessageController::class, 'index'])->name('messages');
-    Route::get('/messages/incoming-calls', [ClientMessageController::class, 'incomingCalls'])->name('messages.incoming-calls');
     Route::get('/messages/feed', [ClientMessageController::class, 'feed'])->name('messages.feed');
     Route::post('/messages', [ClientMessageController::class, 'store'])->name('messages.store');
     Route::post('/messages/{message}/unsend-for-me', [ClientMessageController::class, 'unsendForMe'])->name('messages.unsend-for-me');
     Route::post('/messages/{message}/unsend-for-everyone', [ClientMessageController::class, 'unsendForEveryone'])->name('messages.unsend-for-everyone');
     Route::post('/messages/{message}/react', [ClientMessageController::class, 'toggleReaction'])->name('messages.react');
-    Route::post('/messages/calls/start', [ClientMessageController::class, 'startCall'])->name('messages.calls.start');
-    Route::post('/messages/calls/{message}/end', [ClientMessageController::class, 'endCall'])->name('messages.calls.end');
-    Route::post('/messages/calls/{message}/answer', [ClientMessageController::class, 'answerCall'])->name('messages.calls.answer');
-    Route::post('/messages/calls/{message}/signal', [ClientMessageController::class, 'signalCall'])->name('messages.calls.signal');
-    Route::get('/messages/calls/{message}/signals', [ClientMessageController::class, 'callSignals'])->name('messages.calls.signals');
 
     // Orders & Invoices (legacy support)
     Route::get('/orders', [OrdersController::class, 'orders'])->name('orders');
+    Route::get('/orders/{order}', [OrdersController::class, 'show'])->name('orders.show');
     Route::post('/orders/{order}/accept', [OrdersController::class, 'acceptPurchaseOrder'])->name('orders.accept');
     // Order Tracking (B2B tracking UI — mirrors PRO/ORD tracking)
     Route::get('/tracking', [ClientTrackingController::class, 'index'])->name('tracking');
@@ -121,6 +120,7 @@ Route::middleware(['auth:client', 'client.access'])->prefix('partner')->name('cl
     Route::get('/payments/checkout/return', [ClientPaymentController::class, 'checkoutReturn'])->name('payments.checkout.return');
     // Receiving (delivery confirmation)
     Route::get('/receiving', [ClientReceivingController::class, 'index'])->name('receiving');
+    Route::post('/receiving/{delivery}/returns', [ClientReceivingController::class, 'requestReturn'])->name('receiving.returns.store');
     Route::post('/receiving/{order}/mark', [ClientReceivingController::class, 'markReceived'])->name('receiving.mark');
     Route::post('/receiving/{delivery}/rate', [ClientReceivingController::class, 'rate'])->name('receiving.rate');
 

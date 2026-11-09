@@ -2,7 +2,7 @@
 import {
     Factory, LayoutDashboard, ClipboardList, XCircle, Boxes, CheckCircle2,
     Eye, Award, FileText, Sparkles, Palette, Wrench, History, Cog, Flag, FlaskConical,
-    ClipboardCheck, ArrowRightLeft, Leaf, HardHat, Flame, Layers, Package, Scissors, Waves, UserCheck,
+    ClipboardCheck, ArrowRightLeft, Leaf, HardHat, Flame, Layers, Package, Scissors, Waves, UserCheck, CalendarDays,
 } from 'lucide-vue-next'
 
 // Static config for the "single manufacturing role" staff view (Case 2 below)
@@ -150,6 +150,9 @@ export const manModule = {
             { label: 'Rejected Items', href: route('man.manager.rejected'), icon: XCircle, permKey: 'reject' },
             { label: 'Production Inventory', href: route('man.inventory.index'), icon: Boxes, permKey: 'inventory' },
         ]
+        if (isManufacturingSupervisor && ['knitting', 'dyeing', 'finishing'].includes(user?.supervisor_department)) {
+            managerChildren.splice(4, 0, { label: 'Department Calendar', href: `/dashboard/man/assignments/calendar?department=${user.supervisor_department}`, icon: CalendarDays, permKey: 'assignments' })
+        }
         if (isManufacturingSupervisor && user?.supervisor_department === 'knitting') {
             managerChildren.splice(3, 0, { label: 'Knitting Machines', href: route('man.knitting-machines.index'), icon: Cog, permKey: 'knitting_machines' })
         }

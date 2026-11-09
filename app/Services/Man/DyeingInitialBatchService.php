@@ -14,7 +14,15 @@ use Illuminate\Support\Str;
 class DyeingInitialBatchService
 {
     /** Create the work items required by the first assigned dyeing stage. */
-    public function prepare(ManufacturingOrder $order, string $stage, int $staffId, ?int $assignedBy = null, ?array $fabricIds = null): bool
+    public function prepare(
+        ManufacturingOrder $order,
+        string $stage,
+        int $staffId,
+        ?int $assignedBy = null,
+        ?array $fabricIds = null,
+        ?int $machineId = null,
+        ?string $process = null,
+    ): bool
     {
         $expectedStage = $order->dyeing_bleaching_required ? 'dyeing_bleaching' : 'dyeing_pre_treatment';
         if ($stage !== $expectedStage || $order->dyeing_bleaching_required === null) {
@@ -37,11 +45,18 @@ class DyeingInitialBatchService
             ->whereDoesntHave('dyeingBatchFabric')->orderBy('id')->get();
         if ($fabrics->isEmpty()) return false;
 
-        $machines = KnittingMachineStaffAssignment::with('machine')
-            ->where('staff_id', $staffId)->get()->pluck('machine')
-            ->filter(fn ($machine) => $machine && $machine->type === 'dyeing'
-                && $machine->status === 'available')
-            ->unique('id')->values();
+        $preferredMachine = $machineId
+            ? \App\Models\Man\Machine::whereKey($machineId)
+                ->where('type', 'dyeing')->where('status', 'available')->first()
+            : null;
+
+        $machines = $preferredMachine
+            ? collect([$preferredMachine])
+            : KnittingMachineStaffAssignment::with('machine')
+                ->where('staff_id', $staffId)->get()->pluck('machine')
+                ->filter(fn ($machine) => $machine && $machine->type === 'dyeing'
+                    && $machine->status === 'available')
+                ->unique('id')->values();
         // Dyeing machines may be assigned to the department rather than linked
         // directly to an operator. Let the first available dyeing machine run
         // this batch in that case; machine capacity is informational and must

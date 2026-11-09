@@ -133,7 +133,7 @@ class ScmSalesOrderController extends Controller
         if (($result['verdict'] ?? null) === 'insufficient') {
             $lines = collect($result['materials'] ?? [])
                 ->filter(fn ($m) => ($m['shortage'] ?? 0) > 0)
-                ->map(fn ($m) => "{$m['material_name']}: needs {$m['required']}{$m['unit']}, ATP {$m['atp']}{$m['unit']} (short {$m['shortage']}{$m['unit']})")
+                ->map(fn ($m) => "{$m['material_name']}: needs {$m['required']}{$m['unit']}, available stock after accepted orders is {$m['atp']}{$m['unit']} (short {$m['shortage']}{$m['unit']})")
                 ->implode('; ');
 
             return redirect()->back()->withErrors(['error' => "Push blocked: live stock cannot sustain {$result['jo_number']}. {$lines}. File procurement from the ECO Push Center DSS check."]);

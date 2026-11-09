@@ -15,11 +15,18 @@ class BoilerSteamService
         }
 
         $latestLogs = BoilerLog::query()->whereIn('machine_id', $boilerIds)
-            ->whereDate('processed_at', today())
             ->orderByDesc('processed_at')
-            ->get(['machine_id', 'steam_available'])
+            ->get(['machine_id', 'steam_available', 'operating_hours', 'processed_at'])
             ->unique('machine_id');
 
-        return $latestLogs->contains(fn (BoilerLog $log) => (bool) $log->steam_available);
+        return $latestLogs->contains(function (BoilerLog $log) {
+            if (! $log->steam_available || ! $log->processed_at || (float) $log->operating_hours <= 0) {
+                return false;
+            }
+
+            return $log->processed_at->copy()
+                ->addMinutes((int) round((float) $log->operating_hours * 60))
+                ->isFuture();
+        });
     }
 }

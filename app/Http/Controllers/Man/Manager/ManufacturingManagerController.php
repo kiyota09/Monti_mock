@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Man\Fabric;
 use App\Models\Man\DyeJob;
 use App\Models\Man\DyeingBatchFabric;
+use App\Models\Man\DyeingRemakeRequest;
 use App\Models\Inv\Material;
 use App\Models\Man\Machine;
 use App\Models\Man\BoilerLog;
@@ -254,6 +255,7 @@ class ManufacturingManagerController extends Controller
                     }
                     $weight = (float) ($item->fabric?->weight ?? 0);
                     $liquorRatio = (float) ($formula['liquor_ratio'] ?? 10);
+                    $sampleWeightGrams = max(0.0001, (float) ($formula['sample_weight_g'] ?? 100));
                     $recipeGroups = [];
                     $groupDefinitions = [
                         'dyestuffs' => ['aliases' => ['dyestuffs', 'dye_stuffs'], 'dose' => 'pct'],
@@ -265,8 +267,12 @@ class ManufacturingManagerController extends Controller
                         $rows = collect($definition['aliases'])->flatMap(fn ($key) => $formula[$key] ?? [])->values();
                         $materialIds = $rows->pluck('material_id')->filter()->unique();
                         $materials = $materialIds->isEmpty() ? collect() : Material::whereIn('id', $materialIds)->get()->keyBy('id');
-                        $recipeGroups[$group] = $rows->map(function ($row) use ($definition, $weight, $liquorRatio, $materials) {
-                            $dose = (float) ($row[$definition['dose']] ?? $row['quantity'] ?? 0);
+                        $recipeGroups[$group] = $rows->map(function ($row) use ($definition, $weight, $liquorRatio, $sampleWeightGrams, $materials) {
+                            $dose = array_key_exists($definition['dose'], $row)
+                                ? (float) $row[$definition['dose']]
+                                : (array_key_exists('grams', $row)
+                                    ? ((float) $row['grams'] / $sampleWeightGrams * ($definition['dose'] === 'pct' ? 100 : 1000 / $liquorRatio))
+                                    : (float) ($row['quantity'] ?? 0));
                             $amount = $definition['dose'] === 'pct' ? $weight * $dose / 100 : $dose * $liquorRatio * $weight / 1000;
                             $material = $materials->get($row['material_id'] ?? null);
                             return [
@@ -342,6 +348,7 @@ class ManufacturingManagerController extends Controller
             });
 
         $knittingHandoffs = collect();
+        $knittingReplacementHandoffs = collect();
         if ($department === 'knitting') {
             $knittingHandoffs = SalesOrder::with('client')
                 ->whereNotNull('knitting_handoff_requested_at')
@@ -367,12 +374,40 @@ class ManufacturingManagerController extends Controller
                         'submitted_at' => $salesOrder->knitting_handoff_requested_at?->format('M d, Y h:i A'),
                         'staff' => $allocations->map(fn ($allocation) => $allocation->assignee?->name)->filter()->unique()->values(),
                         'fabrics' => $fabrics->map(fn ($fabric) => [
+                            'id' => $fabric->id,
                             'code' => $fabric->code,
                             'weight' => (float) $fabric->weight,
                             'operator' => $fabric->operator?->name,
                         ])->values(),
                     ];
                 })->values();
+
+            $knittingReplacementHandoffs = DyeingRemakeRequest::with([
+                'salesOrder:id,jo_number',
+                'assignee:id,name',
+                'fabrics.originalFabric:id,code,weight,yarn_type',
+                'fabrics.replacementFabric:id,code,weight,yarn_type,status,operator_id',
+                'fabrics.replacementFabric.operator:id,name',
+            ])->where('status', 'awaiting_supervisor_review')->latest()->get()
+                ->map(fn (DyeingRemakeRequest $remake) => [
+                    'id' => $remake->id,
+                    'code' => $remake->code,
+                    'jo_number' => $remake->salesOrder?->jo_number,
+                    'staff' => $remake->assignee?->name,
+                    'reason' => $remake->reason,
+                    'original_fabric' => $remake->fabrics->first()?->originalFabric ? [
+                        'code' => $remake->fabrics->first()->originalFabric->code,
+                        'weight' => (float) $remake->fabrics->first()->originalFabric->weight,
+                        'yarn_type' => $remake->fabrics->first()->originalFabric->yarn_type,
+                    ] : null,
+                    'replacement_fabric' => $remake->fabrics->first()?->replacementFabric ? [
+                        'id' => $remake->fabrics->first()->replacementFabric->id,
+                        'code' => $remake->fabrics->first()->replacementFabric->code,
+                        'weight' => (float) $remake->fabrics->first()->replacementFabric->weight,
+                        'yarn_type' => $remake->fabrics->first()->replacementFabric->yarn_type,
+                        'operator' => $remake->fabrics->first()->replacementFabric->operator?->name,
+                    ] : null,
+                ])->values();
         }
 
         return Inertia::render('Dashboard/MAN/Manager/Production', [
@@ -384,6 +419,7 @@ class ManufacturingManagerController extends Controller
             'packages' => $packages,
             'finishingReadyOrders' => $finishingReadyOrders,
             'knittingHandoffs' => $knittingHandoffs,
+            'knittingReplacementHandoffs' => $knittingReplacementHandoffs,
         ]);
     }
 

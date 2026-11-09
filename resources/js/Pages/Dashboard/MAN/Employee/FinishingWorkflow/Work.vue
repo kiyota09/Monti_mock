@@ -1,7 +1,8 @@
 <script setup>
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import WorkSubmissionDialogs from '@/Components/Manufacturing/WorkSubmissionDialogs.vue'
 
 const props = defineProps({
     orders: { type: Array, default: () => [] },
@@ -12,12 +13,40 @@ const props = defineProps({
 })
 
 const forms = reactive({})
+const pendingItem = ref(null)
+const confirmWork = ref(false)
+const workSubmitting = ref(false)
+const workResult = ref(null)
 props.orders.forEach((order) => order.items.forEach((item) => {
     forms[item.id] = { chemical_material_id: '', temperature_c: '', remarks: '' }
 }))
 
-function submit(item) {
-    useForm({ ...forms[item.id] }).post(route(`${props.routePrefix}.work.complete`, item.id), { preserveScroll: true })
+function requestSubmit(item) {
+    pendingItem.value = item
+    workResult.value = null
+    confirmWork.value = true
+}
+
+function submit() {
+    if (!pendingItem.value || workSubmitting.value) return
+    const item = pendingItem.value
+    workSubmitting.value = true
+    useForm({ ...forms[item.id] }).post(route(`${props.routePrefix}.work.complete`, item.id), {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            workResult.value = { success: true, title: 'Work recorded', message: page.props.flash?.success || 'The completed roll was submitted successfully.' }
+            confirmWork.value = false
+        },
+        onError: (errors) => {
+            workResult.value = { success: false, title: 'Could not record work', message: Object.values(errors || {}).flat().find(Boolean) || 'The server could not save this work record. Review the form and try again.' }
+            confirmWork.value = false
+        },
+        onHttpException: () => {
+            workResult.value = { success: false, title: 'Could not record work', message: 'The server returned an error while saving. Your form is still open so you can try again.' }
+            confirmWork.value = false
+        },
+        onFinish: () => { workSubmitting.value = false },
+    })
 }
 </script>
 
@@ -35,6 +64,7 @@ function submit(item) {
 
             <section v-for="order in orders" :key="order.id" class="rounded-2xl border bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
                 <h2 class="text-lg font-black">{{ order.jo_number }} · {{ order.method }}</h2>
+                <p v-if="order.deadline" class="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">Assignment deadline: {{ new Date(`${order.deadline}T00:00:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) }}</p>
 
                 <div class="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
                     <p class="text-xs font-black uppercase text-indigo-800 dark:text-indigo-200">Recipe for this JO</p>
@@ -86,9 +116,10 @@ function submit(item) {
                     <label class="text-xs font-bold">Remarks
                         <input v-model="forms[item.id].remarks" class="mt-1 w-full rounded-lg border p-2 dark:border-zinc-700 dark:bg-zinc-800" />
                     </label>
-                    <button @click="submit(item)" :disabled="order.method === 'squeezer' && !chemicalMaterials.length" class="self-end rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Submit completed roll</button>
+                    <button @click="requestSubmit(item)" :disabled="order.method === 'squeezer' && !chemicalMaterials.length" class="self-end rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Submit completed roll</button>
                 </div>
             </section>
         </main>
+        <WorkSubmissionDialogs :show-confirm="confirmWork" confirm-title="Confirm finishing work" :confirm-message="`Submit ${pendingItem?.code || 'this roll'} as completed for ${methodLabel}?`" confirm-detail="This will record your finishing work and move the roll to the next step." :submitting="workSubmitting" :result="workResult" @cancel="confirmWork = false" @confirm="submit" @close-result="workResult = null" />
     </AuthenticatedLayout>
 </template>

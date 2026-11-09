@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * The packaging role moves out of the Dyeing department into Finishing, so the
@@ -148,6 +150,14 @@ return new class extends Migration
     {
         $list = implode(",", array_map(fn ($v) => "'{$v}'", $values));
 
-        DB::statement("ALTER TABLE `{$table}` MODIFY `manufacturing_role` ENUM({$list}) NULL");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE `{$table}` MODIFY `manufacturing_role` ENUM({$list}) NULL");
+
+            return;
+        }
+
+        Schema::table($table, function (Blueprint $blueprint) use ($values) {
+            $blueprint->enum('manufacturing_role', $values)->nullable()->change();
+        });
     }
 };

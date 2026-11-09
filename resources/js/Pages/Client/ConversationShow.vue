@@ -533,25 +533,41 @@
                                 <span class="min-w-0">
                                     <span class="block text-sm font-semibold text-slate-900 dark:text-white">Send purchase order</span>
                                     <span class="block text-xs text-slate-500 dark:text-zinc-400">
-                                        {{ canSendPurchaseOrder ? 'Enter kg by product, yarn, and color' : (!allRequestedColorwaysApproved ? 'Approve all requested color swatches first' : 'A quotation must be sent first') }}
+                                         {{ canSendPurchaseOrder ? 'Enter kg for an accepted quotation' : (hasRequestedColorways ? 'Accept an eligible quotation after its swatches are approved' : 'Accept a quotation before ordering') }}
                                     </span>
                                 </span>
                             </button>
                             <p v-if="!canSendPurchaseOrder" class="text-xs text-slate-500 dark:text-zinc-400 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 px-3 py-2.5 rounded-xl text-center">
-                                {{ !allRequestedColorwaysApproved ? 'Every requested Pantone and yarn swatch must be approved first.' : 'Available once a quotation has been sent.' }}
+                                {{ hasRequestedColorways ? 'A purchase order is available after you accept a quotation whose color and yarn swatches are approved.' : 'Accept a quotation first to enable purchase orders.' }}
                             </p>
-                            <p v-if="!canSendPurchaseOrder && hasRequestedColorways" class="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-900 px-3 py-2.5 rounded-xl text-center">Approve every Pantone and yarn swatch before sending a purchase order.</p>
                         </div>
                     </div>
 
                     <section v-if="clientSampleRequests.length" aria-label="Color swatches and deliveries" class="rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-                        <div class="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 dark:border-zinc-800"><FlaskConical class="h-4 w-4 text-emerald-600"/><h2 class="text-sm font-semibold text-slate-900 dark:text-white">Color swatches</h2></div>
+                        <div class="flex flex-wrap items-center gap-2 px-5 py-3.5 border-b border-slate-100 dark:border-zinc-800">
+                            <FlaskConical class="h-4 w-4 text-emerald-600"/>
+                            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Color swatches</h2>
+                            <div v-if="selectableSamples.length" class="ml-auto flex flex-wrap items-center gap-2">
+                                <label class="inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                                    <input type="checkbox" :checked="allSelectableSelected" @change="toggleSelectAllSamples" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                                    Select all
+                                </label>
+                                <button type="button" :disabled="!selectedSampleIds.length || bulkProcessing" @click="bulkNoteSamples" class="rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/40">Noted</button>
+                                <button type="button" :disabled="!selectedSampleIds.length || bulkProcessing" @click="bulkReceiveSamples" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">Received</button>
+                            </div>
+                        </div>
                         <div class="p-3 space-y-2">
                             <article v-for="sample in clientSampleRequests" :key="sample.id" class="rounded-xl border border-slate-200 dark:border-zinc-700 p-3 space-y-2">
-                                <div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="text-sm font-semibold text-slate-900 dark:text-white">{{ sample.sample_fabric_design || sample.fabric_name }}</p><p class="text-xs text-slate-500 dark:text-zinc-400">{{ sample.sample_yarn_type }} · {{ sample.color_description }} · {{ sample.code }}</p></div><span class="shrink-0 rounded-full bg-slate-100 dark:bg-zinc-800 px-2 py-1 text-[10px] font-semibold">{{ sampleStatusLabel(sample.status) }}</span></div>
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex min-w-0 items-start gap-2">
+                                        <input v-if="isSampleSelectable(sample)" type="checkbox" :checked="selectedSampleIds.includes(sample.id)" @change="toggleSampleSelection(sample.id)" :aria-label="`Select swatch ${sample.code}`" class="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                                        <div class="min-w-0"><p class="text-sm font-semibold text-slate-900 dark:text-white">{{ sample.sample_fabric_design || sample.fabric_name }}</p><p class="text-xs text-slate-500 dark:text-zinc-400">{{ sample.sample_yarn_type }} · {{ sample.color_description }} · {{ sample.code }}</p></div>
+                                    </div>
+                                    <span class="shrink-0 rounded-full bg-slate-100 dark:bg-zinc-800 px-2 py-1 text-[10px] font-semibold">{{ sampleStatusLabel(sample.status) }}</span>
+                                </div>
                                 <p v-if="sample.delivery_courier" class="text-xs text-slate-600 dark:text-zinc-300">{{ sample.delivery_courier }} · Tracking {{ sample.delivery_tracking_reference }}</p>
                                 <p v-if="sample.delivery_notes" class="rounded-lg bg-slate-50 dark:bg-zinc-800 p-2 text-xs text-slate-600 dark:text-zinc-300">{{ sample.delivery_notes }}</p>
-                                <a v-if="sample.sample_image_path" :href="getFullUrl(sample.sample_image_path)" target="_blank" class="inline-flex items-center gap-2 text-xs font-semibold text-indigo-600 underline dark:text-indigo-300"><img v-if="!String(sample.sample_image_path).toLowerCase().endsWith('.pdf')" :src="getFullUrl(sample.sample_image_path)" alt="Swatch" class="h-10 w-10 rounded border object-cover"/>{{ String(sample.sample_image_path).toLowerCase().endsWith('.pdf') ? 'View swatch PDF' : 'View swatch' }}</a>
+                                <button v-if="sample.sample_image_path" type="button" @click="openSwatchModal(sample)" class="inline-flex items-center gap-2 text-xs font-semibold text-indigo-600 underline dark:text-indigo-300"><img v-if="!String(sample.sample_image_path).toLowerCase().endsWith('.pdf')" :src="getFullUrl(sample.sample_image_path)" alt="Swatch" class="h-10 w-10 rounded border object-cover"/>{{ String(sample.sample_image_path).toLowerCase().endsWith('.pdf') ? 'View swatch PDF' : 'View swatch' }}</button>
                                 <div v-if="sample.status === 'forwarded' && !sample.client_noted_at" class="flex gap-2"><button type="button" @click="noteSampleDelivery(sample.id)" class="rounded-lg border px-3 py-1.5 text-xs font-semibold">Noted</button></div>
                                 <div v-else-if="sample.status === 'forwarded' && !sample.client_received_at" class="flex items-center justify-between gap-2"><span class="text-xs text-slate-500">Confirm the physical swatch arrived.</span><button type="button" @click="receiveSampleDelivery(sample.id)" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white">Received</button></div>
                                 <div v-else-if="sample.status === 'forwarded' && sample.client_received_at" class="flex flex-wrap gap-2"><button type="button" @click="approveSample(sample.id)" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">Approve swatch</button><button type="button" @click="openAdjustModal(sample)" class="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">Request new formulation</button></div>
@@ -699,36 +715,35 @@
                     <!-- Body -->
                     <form @submit.prevent="submitPo" class="flex min-h-0 flex-1 flex-col">
                         <div class="space-y-4 overflow-y-auto p-5">
-                            <div v-if="availablePoQuotations.length > 1">
-                                <label for="po-quotation" class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Quotation</label>
-                                <select id="po-quotation" :value="poModal.quotationId" @change="selectPoQuotation($event.target.value)" class="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white">
-                                    <option v-for="quote in availablePoQuotations" :key="quote.id" :value="quote.id">{{ quote.quotation_number }} · {{ quote.status }}</option>
-                                </select>
+                            <p class="rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-800 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200">Enter the PO number issued by your company. Add an order group for each separate PO, then check the quotation lines to include. Lines from multiple quotations can share one PO.</p>
+                            <div v-for="(group, groupIndex) in poModal.orderGroups" :key="group.key" class="space-y-3 rounded-2xl border border-slate-200 p-4 dark:border-zinc-700">
+                                <div class="grid gap-3 sm:grid-cols-2">
+                                    <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Client PO Number
+                                        <input v-model.trim="group.client_po_number" required maxlength="100" class="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold normal-case text-slate-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" placeholder="e.g. PO-2026-0003" />
+                                    </label>
+                                    <label class="text-xs font-bold uppercase tracking-wide text-slate-500">PO image (optional)
+                                        <input type="file" accept="image/jpeg,image/png,image/webp" @change="setPoImage(groupIndex, $event)" class="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2 text-xs font-normal normal-case text-slate-700 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200" />
+                                        <span v-if="group.image" class="mt-1 block truncate text-[10px] font-normal normal-case text-slate-500">{{ group.image.name }}</span>
+                                    </label>
+                                    <button v-if="poModal.orderGroups.length > 1" type="button" @click="removePoGroup(groupIndex)" class="mt-5 rounded-lg px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50">Remove</button>
+                                </div>
+                                <section v-for="quote in eligiblePoQuotations" :key="quote.id" class="space-y-2">
+                                    <h4 class="text-xs font-black text-indigo-700 dark:text-indigo-300">{{ quote.quotation_number }}</h4>
+                                    <label v-for="line in quote.items" :key="line.id" class="flex items-start gap-3 rounded-xl border border-slate-100 p-3 dark:border-zinc-800" :class="isPoLineInOtherGroup(groupIndex, quote.id, line.id) ? 'opacity-50' : ''">
+                                        <input type="checkbox" :checked="isPoLineSelected(groupIndex, quote.id, line.id)" :disabled="isPoLineInOtherGroup(groupIndex, quote.id, line.id)" @change="togglePoLine(groupIndex, quote, line, $event.target.checked)" class="mt-1 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                                        <span class="min-w-0 flex-1"><span class="block text-sm font-bold text-slate-900 dark:text-white">{{ line.product?.name || line.fabric || 'Product' }}</span><span class="mt-1 block text-xs text-slate-600 dark:text-zinc-300">{{ line.fabric_type || 'Yarn not specified' }} · {{ line.color || 'Color not specified' }}<span v-if="line.design"> · {{ line.design }}</span></span><span class="mt-1 block text-[11px] text-slate-500">{{ formatPrice(line.unit_price) }}/kg<span v-if="poMinimum(line) > 0"> · Min {{ poMinimum(line).toLocaleString() }} kg</span></span></span>
+                                        <input v-if="isPoLineSelected(groupIndex, quote.id, line.id)" v-model.number="poGroupLine(groupIndex, quote.id, line.id).kilos" type="number" :min="poMinimum(line) || 0.01" step="0.01" inputmode="decimal" class="w-28 rounded-xl border border-slate-200 bg-white p-2 text-right text-sm font-bold dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" placeholder="kg" aria-label="Order quantity in kilograms" />
+                                    </label>
+                                </section>
+                                <p v-if="!group.items.length" class="text-xs text-slate-500">Select at least one product/color line for this PO.</p>
                             </div>
-                            <div v-if="selectedPoQuotation" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-xs dark:border-indigo-900/50 dark:bg-indigo-950/30">
-                                <div><p class="font-black text-indigo-900 dark:text-indigo-100">{{ selectedPoQuotation.quotation_number }}</p><p class="mt-0.5 text-indigo-700 dark:text-indigo-300">Payment: {{ selectedPoQuotation.payment_terms }}</p></div>
-                                <p class="text-right text-indigo-700 dark:text-indigo-300">Enter kg for the lines you want to order.<br />Sending a PO accepts this quotation.</p>
-                            </div>
-                            <div v-if="selectedPoQuotation?.items?.length" class="space-y-3">
-                                <article v-for="(line, index) in selectedPoQuotation.items" :key="line.id" class="rounded-2xl border border-slate-200 p-4 dark:border-zinc-700">
-                                    <div class="flex flex-wrap items-start justify-between gap-3">
-                                        <div class="min-w-0 flex-1">
-                                            <p class="font-bold text-slate-900 dark:text-white">{{ line.product?.name || line.fabric || 'Product' }}</p>
-                                            <p class="mt-1 text-xs text-slate-600 dark:text-zinc-300">{{ line.fabric_type || 'Yarn not specified' }} <span class="text-slate-400">·</span> {{ line.color || 'Color not specified' }}<span v-if="line.design"> <span class="text-slate-400">·</span> {{ line.design }}</span></p>
-                                            <p class="mt-1 text-[11px] text-slate-500">Quoted at {{ formatPrice(line.unit_price) }}/kg<span v-if="poMinimum(line) > 0"> · Minimum {{ poMinimum(line).toLocaleString() }} kg; enter 0 to skip</span></p>
-                                        </div>
-                                        <label class="w-36 shrink-0 text-xs font-bold text-slate-600 dark:text-zinc-300">Order kg
-                                            <input v-model.number="poModal.items[index].kilos" type="number" min="0" step="0.01" inputmode="decimal" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right text-sm font-black text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" placeholder="0.00" />
-                                        </label>
-                                    </div>
-                                    <p v-if="Number(poModal.items[index]?.kilos || 0) > 0 && !isPoLineQuantityValid(line, poModal.items[index].kilos)" class="mt-2 text-xs font-semibold text-rose-600">This line must meet its minimum of {{ poMinimum(line).toLocaleString() }} kg.</p>
-                                    <p v-else-if="Number(poModal.items[index]?.kilos || 0) > 0" class="mt-2 text-right text-xs font-semibold text-slate-600 dark:text-zinc-300">Line estimate: ₱{{ (Number(poModal.items[index].kilos) * Number(line.unit_price) * (selectedPoQuotation.vat_type === 'inclusive' ? 1.12 : 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
-                                </article>
-                            </div>
-                            <p v-else class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">This quotation has no orderable product lines. Please contact CRM.</p>
+                            <button type="button" @click="addPoGroup" class="w-full rounded-xl border border-dashed border-indigo-300 px-4 py-3 text-xs font-bold text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300">+ Add another PO (separate order)</button>
                             <div class="rounded-2xl bg-slate-50 p-4 dark:bg-zinc-800/70">
-                                <div class="flex justify-between text-xs text-slate-600 dark:text-zinc-300"><span>Total quantity</span><strong>{{ Number(poTotalKilos).toLocaleString() }} kg</strong></div>
-                                <div class="mt-2 flex justify-between text-base font-black text-slate-900 dark:text-white"><span>Estimated total</span><span>₱{{ Number(poEstimatedTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                                <div class="flex justify-between text-xs text-slate-600 dark:text-zinc-300"><span>Selected order lines</span><strong>{{ poSelectedLineCount }}</strong></div>
+                                <div class="mt-2 flex justify-between text-xs text-slate-600 dark:text-zinc-300"><span>Total quantity</span><strong>{{ Number(poTotalKilos).toLocaleString() }} kg</strong></div>
+                                <div class="mt-3 flex justify-between text-sm font-bold text-slate-800 dark:text-zinc-100"><span>Estimated total</span><span>₱{{ Number(poEstimatedTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                                <div class="mt-1 flex justify-between text-xs text-slate-600 dark:text-zinc-300"><span>VAT (+12%)</span><span>₱{{ Number(poVatAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                                <div class="mt-2 flex justify-between border-t border-slate-200 pt-2 text-base font-black text-slate-900 dark:border-zinc-700 dark:text-white"><span>Total amount with +12% VAT</span><span>₱{{ Number(poTotalWithVat).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
                             </div>
                             <div>
                                 <label class="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500">Notes (optional)</label>
@@ -743,6 +758,30 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+            </Transition>
+        </Teleport>
+
+        <!-- ════════════════════════════════════════════
+             SWATCH PREVIEW MODAL
+             ════════════════════════════════════════════ -->
+        <Teleport to="body">
+            <Transition name="modal">
+            <div v-if="swatchModal.show"
+                class="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+                @click.self="swatchModal.show = false">
+                <button @click="swatchModal.show = false"
+                    class="absolute top-5 right-5 p-2 bg-white/10 hover:bg-white/20 hover:rotate-90 rounded-2xl transition-all z-[95]">
+                    <X class="h-5 w-5 text-white" />
+                </button>
+                <div class="w-full max-w-4xl max-h-[88vh] flex flex-col gap-3">
+                    <p class="text-xs font-black uppercase tracking-[0.2em] text-white/60 px-1">{{ swatchModal.title }}</p>
+                    <div class="flex-1 min-h-0 bg-black/40 rounded-3xl overflow-hidden border border-white/10 flex items-center justify-center">
+                        <img v-if="!swatchModal.isPdf" :src="swatchModal.url" :alt="swatchModal.title"
+                            class="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl" />
+                        <iframe v-else :src="swatchModal.url" title="Swatch PDF" class="h-[80vh] w-full bg-white"></iframe>
+                    </div>
                 </div>
             </div>
             </Transition>
@@ -1433,7 +1472,9 @@ const {
 const mobilePanel = ref('chat');
 
 // Structured order submission based on quotation lines.
-const poModal = ref({ show: false, quotationId: null, items: [], notes: '', submitting: false });
+let poGroupKey = 0;
+const makePoGroup = () => ({ key: ++poGroupKey, client_po_number: '', image: null, items: [] });
+const poModal = ref({ show: false, orderGroups: [], notes: '', submitting: false });
 
 const rejectModal = ref({ show: false, quotation: null, reason: '', requestNew: false, submitting: false });
 const acceptModal = ref({ show: false, quotation: null, notes: '', submitting: false });
@@ -1449,50 +1490,81 @@ const dialog = ref({ show: false, type: 'info', title: '', message: '', onConfir
 const showDialog = (type, title, message, onConfirm = null) => { dialog.value = { show: true, type, title, message, onConfirm }; };
 const handleDialogAction = () => { if (dialog.value.onConfirm) dialog.value.onConfirm(); dialog.value.show = false; };
 
-// A sent quote can be accepted by submitting the PO; accepted quotes can be ordered too.
-const requestedColorwayKeys = computed(() => {
+// A quotation must be accepted by the client before it can be ordered.
+const requestedColorwayPairs = computed(() => {
     const selections = props.inquiry?.product_selections ?? {};
     const rows = Array.isArray(selections.products) && selections.products.length ? selections.products : [selections];
-    const keys = new Set();
+    const pairs = new Map();
     rows.forEach((row) => {
         const productId = row.product_id ?? props.inquiry?.product_id;
-        (row.pantones ?? []).forEach((pantone) => (row.yarns ?? []).forEach((yarn) => keys.add(`${Number(productId)}:${Number(pantone.id)}:${Number(yarn.id)}`)));
-        (row.colorways ?? []).forEach((colorway) => (colorway.yarn_ids ?? []).forEach((yarnId) => keys.add(`${Number(productId)}:${Number(colorway.pantone?.id ?? colorway.pantone_id)}:${Number(yarnId)}`)));
+        (row.pantones ?? []).forEach((pantone) => (row.yarns ?? []).forEach((yarn) => {
+            const pair = { product_id: Number(productId), pantone_id: Number(pantone.id), pantone_name: pantone.name, yarn_id: Number(yarn.id), yarn_name: yarn.name || yarn.display_name || '' };
+            pairs.set(`${pair.product_id}:${pair.pantone_id}:${pair.yarn_id}`, pair);
+        }));
+        (row.colorways ?? []).forEach((colorway) => (colorway.yarn_ids ?? []).forEach((yarnId) => {
+            const pantoneId = Number(colorway.pantone?.id ?? colorway.pantone_id);
+            const pantone = props.pantoneReferences.find((reference) => Number(reference.id) === pantoneId);
+            const yarn = (row.yarns ?? []).find((entry) => Number(entry.id) === Number(yarnId));
+            const pair = { product_id: Number(productId), pantone_id: pantoneId, pantone_name: colorway.pantone?.name || pantone?.name || '', yarn_id: Number(yarnId), yarn_name: yarn?.name || yarn?.display_name || '' };
+            pairs.set(`${pair.product_id}:${pair.pantone_id}:${pair.yarn_id}`, pair);
+        }));
     });
-    return [...keys];
+    return [...pairs.values()];
 });
+const requestedColorwayKeys = computed(() => requestedColorwayPairs.value.map((pair) => `${pair.product_id}:${pair.pantone_id}:${pair.yarn_id}`));
 const hasRequestedColorways = computed(() => requestedColorwayKeys.value.length > 0);
-const allRequestedColorwaysApproved = computed(() => {
-    if (!hasRequestedColorways.value) return true;
-    const approvedProductKeys = clientSampleRequests.value.filter((sample) => sample.status === 'approved').flatMap((sample) => (sample.pantone_colors ?? []).map((color) => `${Number(sample.product_id)}:${Number(color.pantone_reference_id)}:${Number(color.yarn_material_id)}`));
-    return requestedColorwayKeys.value.every((key) => approvedProductKeys.includes(key));
-});
-const canSendPurchaseOrder = computed(() =>
-    allRequestedColorwaysApproved.value && (props.quotations ?? []).some(q => ['sent', 'accepted'].includes(q.status) && q.items?.length)
-);
 const availablePoQuotations = computed(() =>
-    (props.quotations ?? []).filter(q => ['sent', 'accepted'].includes(q.status) && q.items?.length)
+    (props.quotations ?? []).filter(q => q.status === 'accepted' && q.items?.length)
 );
-const selectedPoQuotation = computed(() =>
-    availablePoQuotations.value.find(q => Number(q.id) === Number(poModal.value.quotationId)) || null
-);
+const approvedColorwayKeys = computed(() => new Set(clientSampleRequests.value
+    .filter((sample) => sample.status === 'approved')
+    .flatMap((sample) => (sample.pantone_colors ?? []).map((color) => `${Number(sample.product_id)}:${Number(color.pantone_reference_id)}:${Number(color.yarn_material_id)}`))));
+const isPoQuotationEligible = (quotation) => !hasRequestedColorways.value
+    || (quotation?.items ?? []).length > 0 && quotation.items.every((item) => {
+        const pair = requestedColorwayPairs.value.find((candidate) =>
+            candidate.product_id === Number(item.product_id)
+            && candidate.yarn_id === Number(item.fabric_type_id)
+            && String(candidate.pantone_name || '').trim().toLocaleLowerCase() === String(item.color || '').trim().toLocaleLowerCase()
+        );
+        return pair && approvedColorwayKeys.value.has(`${pair.product_id}:${pair.pantone_id}:${pair.yarn_id}`);
+    });
+const eligiblePoQuotations = computed(() => availablePoQuotations.value.filter(isPoQuotationEligible));
+const canSendPurchaseOrder = computed(() => eligiblePoQuotations.value.length > 0);
 const poMinimum = (line) => Number(line.product?.minimum_order_quantity ?? props.inquiry.product?.minimum_order_quantity ?? 0);
-const isPoLineQuantityValid = (line, kilos) => {
-    const quantity = Number(kilos || 0);
-    return quantity === 0 || quantity >= poMinimum(line);
+const poGroupLine = (groupIndex, quotationId, itemId) => poModal.value.orderGroups[groupIndex]?.items.find((item) => item.quotation_id === Number(quotationId) && item.quotation_item_id === Number(itemId));
+const isPoLineSelected = (groupIndex, quotationId, itemId) => Boolean(poGroupLine(groupIndex, quotationId, itemId));
+const isPoLineInOtherGroup = (groupIndex, quotationId, itemId) => poModal.value.orderGroups.some((group, index) => index !== groupIndex && group.items.some((item) => item.quotation_id === Number(quotationId) && item.quotation_item_id === Number(itemId)));
+const togglePoLine = (groupIndex, quote, line, checked) => {
+    const group = poModal.value.orderGroups[groupIndex];
+    if (!group) return;
+    const existingIndex = group.items.findIndex((item) => item.quotation_id === Number(quote.id) && item.quotation_item_id === Number(line.id));
+    if (checked && existingIndex < 0) group.items.push({ quotation_id: Number(quote.id), quotation_item_id: Number(line.id), kilos: poMinimum(line) || 1 });
+    if (!checked && existingIndex >= 0) group.items.splice(existingIndex, 1);
 };
-const poTotalKilos = computed(() => poModal.value.items.reduce((sum, item) => sum + (Number(item.kilos) || 0), 0));
-const poSubtotal = computed(() => {
-    const quote = selectedPoQuotation.value;
-    if (!quote) return 0;
-    return quote.items.reduce((sum, line, index) => sum + (Number(poModal.value.items[index]?.kilos) || 0) * (Number(line.unit_price) || 0), 0);
-});
-const poEstimatedTotal = computed(() => poSubtotal.value * (selectedPoQuotation.value?.vat_type === 'inclusive' ? 1.12 : 1));
-const canSubmitPo = computed(() => {
-    const quote = selectedPoQuotation.value;
-    if (!quote || poModal.value.submitting || poTotalKilos.value <= 0) return false;
-    return quote.items.every((line, index) => isPoLineQuantityValid(line, poModal.value.items[index]?.kilos));
-});
+const addPoGroup = () => poModal.value.orderGroups.push(makePoGroup());
+const removePoGroup = (index) => { if (poModal.value.orderGroups.length > 1) poModal.value.orderGroups.splice(index, 1); };
+const setPoImage = (groupIndex, event) => { poModal.value.orderGroups[groupIndex].image = event.target.files?.[0] || null; };
+const poSelectedLineCount = computed(() => poModal.value.orderGroups.reduce((sum, group) => sum + group.items.length, 0));
+const poTotalKilos = computed(() => poModal.value.orderGroups.flatMap((group) => group.items).reduce((sum, item) => sum + (Number(item.kilos) || 0), 0));
+const poEstimatedTotal = computed(() => poModal.value.orderGroups.reduce((sum, group) => sum + group.items.reduce((groupSum, selected) => {
+    const quote = eligiblePoQuotations.value.find((item) => Number(item.id) === selected.quotation_id);
+    const line = quote?.items.find((item) => Number(item.id) === selected.quotation_item_id);
+    return groupSum + Math.round((Number(selected.kilos) || 0) * (Number(line?.unit_price) || 0) * 100) / 100;
+}, 0), 0));
+const poVatAmount = computed(() => Math.round(poModal.value.orderGroups.reduce((sum, group) => sum + group.items.reduce((groupSum, selected) => {
+    const quote = eligiblePoQuotations.value.find((item) => Number(item.id) === selected.quotation_id);
+    const line = quote?.items.find((item) => Number(item.id) === selected.quotation_item_id);
+    const lineSubtotal = Math.round((Number(selected.kilos) || 0) * (Number(line?.unit_price) || 0) * 100) / 100;
+    return groupSum + Math.round(lineSubtotal * 0.12 * 100) / 100;
+}, 0), 0) * 100) / 100);
+const poTotalWithVat = computed(() => poEstimatedTotal.value + poVatAmount.value);
+const canSubmitPo = computed(() => !poModal.value.submitting && poModal.value.orderGroups.length > 0 && poModal.value.orderGroups.every((group) =>
+    group.client_po_number.trim() && group.items.length > 0 && group.items.every((selected) => {
+        const quote = eligiblePoQuotations.value.find((item) => Number(item.id) === selected.quotation_id);
+        const line = quote?.items.find((item) => Number(item.id) === selected.quotation_item_id);
+        return line && Number(selected.kilos) >= (poMinimum(line) || 0.01);
+    })
+));
 
 // Active vs trash tabs (trash = rejected + trashed)
 const quotationTab = ref('active');
@@ -1596,6 +1668,48 @@ const approveSample = (sampleId) => {
 const noteSampleDelivery = (sampleId) => router.post(route('client.sample.noted', sampleId), {}, { preserveScroll: true });
 const receiveSampleDelivery = (sampleId) => router.post(route('client.sample.received', sampleId), {}, { preserveScroll: true });
 
+// ── Bulk delivery acknowledgement + swatch preview ──
+const selectedSampleIds = ref([]);
+const bulkProcessing = ref(false);
+const swatchModal = ref({ show: false, url: '', title: '', isPdf: false });
+
+const isSampleSelectable = (sample) => sample.status === 'forwarded' && !sample.client_received_at;
+const selectableSamples = computed(() => clientSampleRequests.value.filter(isSampleSelectable));
+const allSelectableSelected = computed(() => selectableSamples.value.length > 0
+    && selectableSamples.value.every((sample) => selectedSampleIds.value.includes(sample.id)));
+
+const toggleSampleSelection = (sampleId) => {
+    const index = selectedSampleIds.value.indexOf(sampleId);
+    if (index === -1) selectedSampleIds.value.push(sampleId);
+    else selectedSampleIds.value.splice(index, 1);
+};
+
+const toggleSelectAllSamples = () => {
+    selectedSampleIds.value = allSelectableSelected.value ? [] : selectableSamples.value.map((sample) => sample.id);
+};
+
+const openSwatchModal = (sample) => {
+    if (!sample.sample_image_path) return;
+    swatchModal.value = {
+        show: true,
+        url: getFullUrl(sample.sample_image_path),
+        title: sample.code || sample.fabric_name || 'Swatch',
+        isPdf: String(sample.sample_image_path).toLowerCase().endsWith('.pdf'),
+    };
+};
+
+const bulkAcknowledgeSamples = (routeName) => {
+    if (!selectedSampleIds.value.length || bulkProcessing.value) return;
+    bulkProcessing.value = true;
+    router.post(route(routeName), { sample_ids: [...selectedSampleIds.value] }, {
+        preserveScroll: true,
+        onSuccess: () => { selectedSampleIds.value = []; },
+        onFinish: () => { bulkProcessing.value = false; },
+    });
+};
+const bulkNoteSamples = () => bulkAcknowledgeSamples('client.sample.bulk-noted');
+const bulkReceiveSamples = () => bulkAcknowledgeSamples('client.sample.bulk-received');
+
 const openAdjustModal = (sample) => {
     adjustModal.value = { show: true, sample, notes: '', submitting: false };
 };
@@ -1619,35 +1733,30 @@ const submitAdjust = () => {
 
 // PO Modal functions
 const openPoModal = () => {
-    const quotation = availablePoQuotations.value.find(q => q.status === 'accepted') || availablePoQuotations.value[0];
-    if (!quotation) return;
+    if (!eligiblePoQuotations.value.length) return;
     poModal.value = {
         show: true,
-        quotationId: quotation.id,
-        items: quotation.items.map(item => ({ quotation_item_id: item.id, kilos: 0 })),
+        orderGroups: [makePoGroup()],
         notes: '',
         submitting: false,
     };
 };
 
-const selectPoQuotation = (quotationId) => {
-    const quotation = availablePoQuotations.value.find(q => Number(q.id) === Number(quotationId));
-    if (!quotation) return;
-    poModal.value.quotationId = quotation.id;
-    poModal.value.items = quotation.items.map(item => ({ quotation_item_id: item.id, kilos: 0 }));
-};
-
 const submitPo = () => {
-    if (!canSubmitPo.value || !selectedPoQuotation.value) return;
+    if (!canSubmitPo.value) return;
     poModal.value.submitting = true;
     router.post(route('client.conversation.send-po', props.inquiry.hash_key), {
-        quotation_id: poModal.value.quotationId,
-        items: poModal.value.items,
+        order_groups: poModal.value.orderGroups.map((group) => ({
+            client_po_number: group.client_po_number.trim(),
+            image: group.image,
+            items: group.items,
+        })),
         notes: poModal.value.notes || '',
     }, {
         preserveScroll: true,
+        forceFormData: true,
         onSuccess: () => {
-            poModal.value = { show: false, quotationId: null, items: [], notes: '', submitting: false };
+            poModal.value = { show: false, orderGroups: [], notes: '', submitting: false };
             showDialog('success', 'Order submitted', 'Your purchase order has been sent to the team for review.');
             scrollToBottom();
         },

@@ -31,7 +31,7 @@ const props = defineProps({
                                 <Sparkles class="h-3.5 w-3.5" /> MAN · Color Request
                             </p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Color Request Dashboard</h1>
-                            <p class="text-sm text-blue-100/90">{{ stats.pending }} open dips · FTR {{ labMetrics.ftr_rate }}% · {{ stats.total_today }} logged today</p>
+                            <p class="text-sm text-blue-100/90">{{ stats.pending }} open lab requests · FTR {{ labMetrics.ftr_rate }}% · {{ stats.total_today }} logged today</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <Link :href="route('man.staff.dyeing-lab-chemist.page')"
@@ -85,7 +85,7 @@ const props = defineProps({
                                 <FlaskConical class="h-6 w-6" />
                             </div>
                             <div class="min-w-0">
-                                <p class="text-[10px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">Open Dip Requests</p>
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">Open Lab Requests</p>
                                 <p class="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{{ stats.pending }}</p>
                             </div>
                             <span class="ml-auto flex h-8 w-8 items-center justify-center rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
@@ -126,9 +126,9 @@ const props = defineProps({
                 <div class="animate-fade-up bg-white/80 dark:bg-zinc-900/80 backdrop-blur rounded-3xl border border-gray-100 dark:border-zinc-800 shadow-sm overflow-hidden" style="animation-delay: 160ms">
                     <div class="px-6 py-4 border-b border-gray-100 dark:border-zinc-800 flex items-center gap-3">
                         <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/20"><ListOrdered class="h-4 w-4 text-amber-500" /></span>
-                        <h2 class="text-sm font-black text-gray-900 dark:text-white tracking-tight">My Recent Dip Requests</h2>
+                        <h2 class="text-sm font-black text-gray-900 dark:text-white tracking-tight">Recent Lab Requests</h2>
                         <span class="ml-auto text-[9px] font-black uppercase px-2.5 py-1 rounded-full ring-1 bg-indigo-100 text-indigo-700 ring-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/30 flex items-center gap-1">
-                            <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> {{ recentDips.length }} dips
+                            <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> {{ recentDips.length }} requests
                         </span>
                     </div>
                     <div class="overflow-x-auto">
@@ -154,7 +154,7 @@ const props = defineProps({
                                             <div class="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/30 rounded-full mb-3 animate-bounce-soft">
                                                 <FlaskConical class="h-7 w-7 text-indigo-400" />
                                             </div>
-                                            <p class="text-sm font-black text-gray-700 dark:text-gray-200">No dip requests logged yet.</p>
+                                            <p class="text-sm font-black text-gray-700 dark:text-gray-200">No lab requests found.</p>
                                         </div>
                                     </td>
                                 </tr>

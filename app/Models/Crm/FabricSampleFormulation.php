@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 class FabricSampleFormulation extends Model
 {
     protected $fillable = [
-        'fabric_sample_request_id', 'version', 'formula', 'attachment_path', 'attachment_name',
+        'fabric_sample_request_id', 'knitting_sample_request_id', 'color_index', 'version', 'formula', 'attachment_path', 'attachment_name',
         'attachment_mime', 'submitted_by', 'status', 'reviewed_by', 'reviewed_at',
         'review_notes', 'conversation_message_id',
     ];
@@ -22,6 +22,11 @@ class FabricSampleFormulation extends Model
     public function sampleRequest()
     {
         return $this->belongsTo(FabricSampleRequest::class, 'fabric_sample_request_id');
+    }
+
+    public function knittingSampleRequest()
+    {
+        return $this->belongsTo(\App\Models\Man\KnittingSampleRequest::class, 'knitting_sample_request_id');
     }
 
     public function submitter()

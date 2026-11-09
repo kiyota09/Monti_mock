@@ -80,6 +80,9 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
         Route::post('/production/dyeing-stages/{record}/review', [DyeingWorkflowController::class, 'review'])
             ->middleware(['man.department:dyeing', 'page.permission:production,edit'])
             ->name('manager.production.dyeing.review');
+        Route::post('/production/knitting/replacements/{remake}/review', [ManAssignmentController::class, 'reviewDyeingReplacement'])
+            ->middleware(['man.department:knitting', 'page.permission:production,edit'])
+            ->name('manager.production.knitting.replacements.review');
         Route::post('/production/finishing-work-orders/{workOrder}/push-to-logistics', [FinishingWorkflowController::class, 'sendToLogistics'])
             ->middleware(['man.department:finishing', 'page.permission:production,edit'])
             ->name('manager.production.finishing.push-to-logistics');
@@ -131,10 +134,22 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
         // ── Job Order assignment board ────────────────────────────────────────
         Route::get('/assignments', [ManAssignmentController::class, 'index'])
             ->middleware('page.permission:assignments,view')->name('assignments.index');
+        Route::get('/assignments/calendar', [ManAssignmentController::class, 'calendar'])
+            ->middleware('page.permission:assignments,view')->name('assignments.calendar');
         Route::post('/assignments', [ManAssignmentController::class, 'store'])
             ->middleware('page.permission:assignments,edit')->name('assignments.store');
+        Route::post('/assignments/dyeing-replacements/{remake}/assign', [ManAssignmentController::class, 'assignDyeingReplacement'])
+            ->middleware(['man.department:knitting', 'page.permission:assignments,edit'])->name('assignments.dyeing-replacements.assign');
         Route::patch('/assignments/{order}/dyeing-route', [ManAssignmentController::class, 'updateDyeingRoute'])
             ->middleware(['man.department:dyeing', 'page.permission:assignments,edit'])->name('assignments.dyeing-route');
+        Route::patch('/assignments/{order}/dyeing-color-group', [ManAssignmentController::class, 'updateDyeingColorGroup'])
+            ->middleware(['man.department:dyeing', 'page.permission:assignments,edit'])->name('assignments.dyeing-color-group');
+        Route::patch('/assignments/{order}/dyeing-process', [ManAssignmentController::class, 'updateDyeingProcess'])
+            ->middleware(['man.department:dyeing', 'page.permission:assignments,edit'])->name('assignments.dyeing-process');
+        Route::patch('/assignments/dyeing/queue', [ManAssignmentController::class, 'reorderDyeingQueue'])
+            ->middleware(['man.department:dyeing', 'page.permission:assignments,edit'])->name('assignments.dyeing-queue');
+        Route::patch('/assignments/dyeing/staff-order', [ManAssignmentController::class, 'reorderDyeingStaff'])
+            ->middleware(['man.department:dyeing', 'page.permission:assignments,edit'])->name('assignments.dyeing-staff-order');
         Route::post('/assignments/{order}/release-knitting', [ManAssignmentController::class, 'releaseKnitting'])
             ->middleware(['man.department:knitting', 'page.permission:assignments,edit'])->name('assignments.knitting.release');
         Route::post('/production/orders/{order}/decline-knitting', [ManAssignmentController::class, 'declineKnittingHandoff'])
@@ -153,6 +168,10 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
             ->middleware(['man.department:knitting', 'page.permission:knitting_machines,edit'])->name('knitting-machines.unassign');
         Route::post('/knitting-machines', [KnittingMachineController::class, 'registerKnitting'])
             ->middleware(['man.department:knitting', 'page.permission:knitting_machines,edit'])->name('knitting-machines.store');
+        Route::put('/knitting-machines/{machine}/needles', [KnittingMachineController::class, 'updateNeedleCount'])
+            ->middleware(['man.department:knitting', 'page.permission:knitting_machines,edit'])->name('knitting-machines.needles.update');
+        Route::post('/knitting-machines/{machine}/needles/replace', [KnittingMachineController::class, 'replaceNeedles'])
+            ->middleware(['man.department:knitting', 'page.permission:knitting_machines,edit'])->name('knitting-machines.needles.replace');
         Route::get('/dyeing-machines', [KnittingMachineController::class, 'dyeing'])
             ->middleware(['man.department:dyeing', 'page.permission:dyeing_machines,view'])->name('dyeing-machines.index');
         Route::put('/dyeing-machines/{machine}/assign', [KnittingMachineController::class, 'assignDyeing'])
@@ -169,8 +188,6 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
             ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-workflow.batches.store');
         Route::post('/dyeing-workflow/stages/{record}/review', [DyeingWorkflowController::class, 'review'])
             ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-workflow.review');
-        Route::post('/dyeing-workflow/remakes/{remake}/release', [DyeingWorkflowController::class, 'releaseRemake'])
-            ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-workflow.remakes.release');
         Route::post('/dyeing-workflow/remakes/{remake}/release', [DyeingWorkflowController::class, 'releaseRemake'])
             ->middleware(['man.department:dyeing', 'page.permission:dyeing_workflow,edit'])->name('dyeing-workflow.remakes.release');
         Route::post('/dyeing-workflow/orders/{order}/release', [DyeingWorkflowController::class, 'release'])
@@ -362,6 +379,8 @@ Route::prefix('dashboard/man')->name('man.')->middleware(['auth', 'verified', 'm
                 Route::get('/reports', 'reports')->middleware('page.permission:reports,view')->name('reports');
                 Route::patch('/{sample}/start', 'start')->middleware('page.permission:knitting_sample,edit')->name('start');
                 Route::post('/{sample}/complete', 'complete')->middleware('page.permission:knitting_sample,edit')->name('complete');
+                Route::post('/queue/bulk-complete', 'bulkComplete')->middleware('page.permission:knitting_sample,edit')->name('bulk-complete');
+                Route::patch('/{sample}/discard', 'discard')->middleware('page.permission:knitting_sample,edit')->name('discard');
             });
 
         // Dyeing Color

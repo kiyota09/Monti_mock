@@ -38,7 +38,7 @@ class KnittingMechanicController extends ManufacturingStaffController
             'recentSetups' => $recentSetups,
             'efficiency' => array_merge(
                 $this->staffEfficiency(KnittingMachineSetup::class),
-                ['machines' => $this->machineAvailability('knitting')]
+                ['machines' => $this->machineAvailability(Machine::TYPE_CIRCULAR_KNITTING)]
             ),
             'nextQueue' => $nextQueue,
         ]);
@@ -50,7 +50,7 @@ class KnittingMechanicController extends ManufacturingStaffController
      */
     public function setups()
     {
-        $machines = Machine::where('type', 'knitting')
+        $machines = Machine::where('type', Machine::TYPE_CIRCULAR_KNITTING)
             ->orderBy('machine_no')
             ->get(['id', 'machine_no', 'status']);
 
@@ -128,8 +128,8 @@ class KnittingMechanicController extends ManufacturingStaffController
         ]);
 
         $machine = Machine::findOrFail($validated['machine_id']);
-        if ($machine->type !== 'knitting') {
-            return back()->withErrors(['machine_id' => 'Only knitting machines belong to this department.']);
+        if ($machine->type !== Machine::TYPE_CIRCULAR_KNITTING) {
+            return back()->withErrors(['machine_id' => 'Only Circular Knitting machines belong to this department.']);
         }
 
         KnittingMachineSetup::create([
@@ -213,7 +213,7 @@ class KnittingMechanicController extends ManufacturingStaffController
 
     public function reports()
     {
-        $machines = Machine::where('type', 'knitting')->get(['id', 'machine_no', 'status']);
+        $machines = Machine::where('type', Machine::TYPE_CIRCULAR_KNITTING)->get(['id', 'machine_no', 'status']);
         $myReports = MachineReport::where('reported_by', $this->staff()->id)
             ->with('machine')->latest()->get();
 
@@ -238,8 +238,8 @@ class KnittingMechanicController extends ManufacturingStaffController
         ]);
 
         $machine = Machine::findOrFail($validated['machine_id']);
-        if ($machine->type !== 'knitting') {
-            return back()->withErrors(['machine_id' => 'Only knitting machines belong to this department.']);
+        if ($machine->type !== Machine::TYPE_CIRCULAR_KNITTING) {
+            return back()->withErrors(['machine_id' => 'Only Circular Knitting machines belong to this department.']);
         }
 
         MachineReport::create([

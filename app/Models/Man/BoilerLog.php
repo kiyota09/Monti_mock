@@ -10,6 +10,7 @@ class BoilerLog extends Model
     protected $fillable = [
         'code', 'machine_id', 'steam_pressure', 'water_level',
         'fuel_used', 'fuel_unit', 'blowdown_done', 'chemical_dosing',
+        'chemical_doses',
         'operating_hours', 'steam_available', 'remarks', 'operator_id', 'shift', 'processed_at',
     ];
 
@@ -17,6 +18,7 @@ class BoilerLog extends Model
         'steam_pressure' => 'decimal:2',
         'fuel_used' => 'decimal:2',
         'operating_hours' => 'decimal:2',
+        'chemical_doses' => 'array',
         'blowdown_done' => 'boolean',
         'steam_available' => 'boolean',
         'processed_at' => 'datetime',

@@ -125,7 +125,10 @@ class ActivityController extends Controller
             $emailedTo = $this->emailScheduledDetails($activity);
         }
 
-        $base = $done ? 'Activity logged as done.' : ($isRequest ? 'Meeting request sent.' : 'Activity scheduled.');
+        $base = $done ? 'Activity logged as done.' : ($isRequest ? 'Meeting request scheduled.' : 'Activity scheduled.');
+        if (! $done && ! $emailedTo) {
+            $base .= ' Email was not delivered; check the opportunity email and hosted mail settings.';
+        }
 
         return back()->with('message', $emailedTo ? "{$base} Emailed to {$emailedTo}." : $base);
     }
@@ -146,13 +149,18 @@ class ActivityController extends Controller
                 ?? $opp->lead?->company_name
                 ?? $opp->contact?->organization
                 ?? $opp->title;
-            $recipient = $opp->contact?->email;
+            // The Opportunities board presents the opportunity's explicit
+            // email as its primary client address; use the same precedence
+            // when sending meeting requests and schedule notices.
+            $recipient = $opp->email;
             $name = $opp->contact?->name;
+            if (! $recipient) {
+                $recipient = $opp->contact?->email;
+            }
             if (! $recipient) {
                 $recipient = $opp->client?->email;
                 $name ??= $opp->client?->contact_person;
             }
-            $recipient ??= $opp->email;
             $recipient ??= $opp->lead?->email;
         } elseif ($activity->client_id) {
             $client = Client::find($activity->client_id);
@@ -343,7 +351,7 @@ class ActivityController extends Controller
 
         return back()->with('message', $emailedTo
             ? "New {$activity->type} request emailed to {$emailedTo}."
-            : 'Schedule updated.');
+            : 'Schedule updated, but the email was not delivered. Check the opportunity email and hosted mail settings.');
     }
 
     /**

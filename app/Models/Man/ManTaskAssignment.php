@@ -16,11 +16,14 @@ class ManTaskAssignment extends Model
         'fabric_id',
         'department',
         'stage',
+        'process',
         'assigned_role',
         'assigned_to',
         'assigned_by',
+        'deadline',
         'status',
         'sequence',
+        'queue_position',
         'notes',
         'assigned_weight',
         'dyeing_remake_request_id',
@@ -30,6 +33,7 @@ class ManTaskAssignment extends Model
 
     protected $casts = [
         'completed_at' => 'datetime',
+        'deadline' => 'date',
         'assigned_weight' => 'decimal:2',
         'machine_ids' => 'array',
     ];

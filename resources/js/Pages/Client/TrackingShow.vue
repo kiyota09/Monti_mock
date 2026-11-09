@@ -19,6 +19,7 @@
                         <div class="min-w-0 flex-1">
                             <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100">Order tracking · {{ orderType === 'PO' ? 'Purchase order' : 'Job order' }}</p>
                             <h1 class="text-2xl sm:text-3xl font-black tracking-tight">{{ order.number }}</h1>
+                            <p v-if="order.monti_number" class="mt-1 text-xs text-gray-500">Monti reference: {{ order.monti_number }}</p>
                             <p class="text-sm text-blue-100/90">
                                 <span v-if="orderType === 'SO'">{{ order.product_name }} · {{ order.quantity }} pcs · </span>ETA {{ order.expected_ship_date || order.delivery_date || '—' }}
                             </p>
@@ -147,7 +148,7 @@ defineProps({
 });
 
 const formatCurrency = (v) => Number(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 });
-const formatStatus = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const formatStatus = (s) => s === 'crm_recipe_review' ? 'CRM Recipe Linking' : String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const shipBadge = (status) => {
     const map = { dispatched: 'bg-amber-100 text-amber-700', in_transit: 'bg-blue-100 text-blue-700', delivered: 'bg-emerald-100 text-emerald-700' };
     return map[status] || 'bg-gray-100 text-gray-600';

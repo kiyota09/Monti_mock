@@ -24,8 +24,8 @@ Route::middleware('guest:applicant')->group(function () {
     Route::get('applicant/verify-otp', [ApplicantAuthController::class, 'showVerifyForm'])->name('applicant.verify-otp.show');
     Route::post('applicant/verify-otp', [ApplicantAuthController::class, 'verifyOtp'])->middleware('throttle:10,1')->name('applicant.verify-otp.store');
     Route::post('applicant/resend-otp', [ApplicantAuthController::class, 'resendOtp'])->middleware('throttle:6,1')->name('applicant.resend-otp');
-    Route::get('applicant/login', fn () => redirect()->route('login'))->name('applicant.login');
-    Route::post('applicant/login', fn () => redirect()->route('login'))->name('applicant.login.store');
+    Route::get('applicant/login', [ApplicantAuthController::class, 'showLogin'])->name('applicant.login');
+    Route::post('applicant/login', [ApplicantAuthController::class, 'login'])->middleware('throttle:6,1')->name('applicant.login.store');
     Route::post('applicant/reactivate', [PortalProfileController::class, 'reactivate'])->middleware('throttle:6,1')->name('applicant.reactivate');
     Route::post('applicant/password/recover', [PasswordRecoveryController::class, 'applicant'])->middleware('throttle:6,1')->name('applicant.password.recover');
 });

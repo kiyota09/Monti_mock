@@ -50,7 +50,7 @@ class KnittingYarnController extends ManufacturingStaffController
             // NEW — personal efficiency (own output only) + next queue + machine context.
             'efficiency' => array_merge(
                 $this->staffEfficiency(Fabric::class),
-                ['machines' => $this->machineAvailability('knitting')]
+                ['machines' => $this->machineAvailability(Machine::TYPE_CIRCULAR_KNITTING)]
             ),
             'nextQueue' => $nextQueue,
         ]);
@@ -72,7 +72,7 @@ class KnittingYarnController extends ManufacturingStaffController
 
     public function knittingYarn()
     {
-        $machines = Machine::where('type', 'knitting')
+        $machines = Machine::where('type', Machine::TYPE_CIRCULAR_KNITTING)
             ->where('status', 'available')
             ->whereIn('id', KnittingMachineStaffAssignment::where('staff_id', $this->staff()->id)->select('machine_id'))
             ->get(['id', 'machine_no']);
@@ -138,7 +138,8 @@ class KnittingYarnController extends ManufacturingStaffController
                     ->where('assigned_to', $this->staff()->id)->where('sales_order_id', $order->id)
                     ->active()->latest()->first();
                 if (! $assignment) return null;
-                $assignment->load('dyeingRemakeRequest.fabrics.originalFabric');
+                $assignment->load('dyeingRemakeRequest.fabrics.originalFabric', 'dyeingRemakeRequest.fabrics.replacementFabric');
+                $remakeRequest = $assignment->dyeingRemakeRequest;
                 $producedQuery = Fabric::where('sales_order_id', $order->id)->where('operator_id', $this->staff()->id)->where('status', '!=', 'rejected');
                 if ($assignment->dyeing_remake_request_id) $producedQuery->where('dyeing_remake_request_id', $assignment->dyeing_remake_request_id);
                 $producedWeight = (float) $producedQuery->sum('weight');
@@ -250,7 +251,13 @@ class KnittingYarnController extends ManufacturingStaffController
                     'produced_weight'  => $producedWeight,
                     'remaining_assigned_weight' => max(0, round((float) $assignment->assigned_weight - $producedWeight, 2)),
                     'assignment_id'    => $assignment->id,
+                    'deadline'         => $assignment->deadline?->toDateString(),
                     'remake_request_code' => $assignment->dyeingRemakeRequest?->code,
+                    'remake_request_id' => $remakeRequest?->id,
+                    'replacement_handoff_requested' => $remakeRequest?->status === 'awaiting_supervisor_review',
+                    'can_submit_replacement_handoff' => $remakeRequest?->status === 'awaiting_staff_handoff'
+                        && $remakeRequest->fabrics->isNotEmpty()
+                        && $remakeRequest->fabrics->every(fn ($pair) => $pair->replacementFabric?->status === 'knitting_approved'),
                     'remake_fabrics' => $assignment->dyeingRemakeRequest?->fabrics?->map(fn($pair) => [
                         'id'=>$pair->id,'code'=>$pair->originalFabric?->code,
                         'yarn_type'=>$pair->originalFabric?->yarn_type,'weight'=>(float)($pair->originalFabric?->weight ?? 0),
@@ -336,7 +343,22 @@ class KnittingYarnController extends ManufacturingStaffController
         $assignment = ManTaskAssignment::where('department', 'knitting')->where('stage', 'knitting')
             ->where('sales_order_id', $salesOrder->id)->where('assigned_to', $this->staff()->id)
             ->active()->latest()->firstOrFail();
+        if ($assignment->dyeing_remake_request_id) {
+            DB::transaction(function () use ($assignment) {
+                $remake = \App\Models\Man\DyeingRemakeRequest::with('fabrics.replacementFabric')
+                    ->lockForUpdate()->findOrFail($assignment->dyeing_remake_request_id);
+                abort_unless($remake->status === 'awaiting_staff_handoff', 422, 'The replacement must be approved by the Knitting Inspector before supervisor handoff.');
+                abort_unless($remake->fabrics->count() === 1
+                    && $remake->fabrics->first()?->replacementFabric?->status === 'knitting_approved',
+                    422, 'The approved replacement fabric for this request could not be found.');
+                $remake->update(['status' => 'awaiting_supervisor_review']);
+            });
+
+            return back()->with('message', 'The approved replacement fabric was sent to the Knitting Supervisor for review.');
+        }
+
         abort_if($salesOrder->knitting_handoff_requested_at, 422, 'This Job Order was already sent to the supervisor.');
+
         $order = $assignment->manufacturingOrder;
         abort_unless($order, 422, 'The manufacturing Job Order could not be found.');
         $approvedWeight = (float) Fabric::where('manufacturing_order_id', $order->id)
@@ -429,14 +451,6 @@ class KnittingYarnController extends ManufacturingStaffController
         if (! $setup || $setup->status !== 'done' || ($latestRejectedAt && (! $setup->processed_at || Carbon::parse($setup->processed_at)->lt($latestRejectedAt)))) {
             return back()->withErrors(['machine_id' => 'The mechanic must finish setup for this machine and JO before production.']);
         }
-        $producedQuery = Fabric::where('sales_order_id', $validated['sales_order_id'])
-            ->where('operator_id', $this->staff()->id)->where('status', '!=', 'rejected');
-        if ($assignment->dyeing_remake_request_id) $producedQuery->where('dyeing_remake_request_id', $assignment->dyeing_remake_request_id);
-        $alreadyProduced = (float) $producedQuery->sum('weight');
-        if ($alreadyProduced + (float) $validated['weight'] > (float) $assignment->assigned_weight + 0.001) {
-            return back()->withErrors(['weight' => 'This cycle would exceed your assigned JO weight.']);
-        }
-
         $insufficient = [];
         foreach ($validated['yarns_used'] as $usage) {
             $item      = ManufacturingInventoryItem::find($usage['inventory_item_id']);
@@ -455,12 +469,32 @@ class KnittingYarnController extends ManufacturingStaffController
         DB::beginTransaction();
         try {
             $lockedAssignment = ManTaskAssignment::whereKey($assignment->id)->lockForUpdate()->firstOrFail();
-            $currentProducedQuery = Fabric::where('sales_order_id', $validated['sales_order_id'])
-                ->where('operator_id', $this->staff()->id)->where('status', '!=', 'rejected');
-            if ($lockedAssignment->dyeing_remake_request_id) $currentProducedQuery->where('dyeing_remake_request_id', $lockedAssignment->dyeing_remake_request_id);
-            $currentProduced = (float) $currentProducedQuery->sum('weight');
-            if ($currentProduced + (float) $validated['weight'] > (float) $lockedAssignment->assigned_weight + 0.001) {
-                throw new \RuntimeException('This cycle would exceed your assigned JO weight.');
+            $replacement = null;
+            if ($lockedAssignment->dyeing_remake_request_id) {
+                $pendingReplacements = \App\Models\Man\DyeingRemakeRequestFabric::with('originalFabric')
+                    ->where('dyeing_remake_request_id', $lockedAssignment->dyeing_remake_request_id)
+                    ->whereNull('replacement_fabric_id')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($pendingReplacements->isEmpty()) {
+                    throw new \RuntimeException('This replacement request already has a fabric recorded. Ask the Knitting Supervisor to review the existing roll.');
+                }
+
+                // A request for one rejected fabric has one unambiguous target;
+                // link its replacement even if the produced weight differs a
+                // little from the original. Keep attribute matching for legacy
+                // multi-fabric requests where the target must be identified.
+                $replacement = $pendingReplacements->count() === 1
+                    ? $pendingReplacements->first()
+                    : $pendingReplacements->first(fn ($pair) => $pair->originalFabric
+                        && mb_strtolower(trim((string) $pair->originalFabric->yarn_type)) === mb_strtolower(trim((string) $validated['yarn_type']))
+                        && abs((float) $pair->originalFabric->weight - (float) $validated['weight']) <= 0.01);
+
+                if (! $replacement) {
+                    throw new \RuntimeException('This yarn type and weight do not match any remaining fabric on the replacement request.');
+                }
             }
 
             $fabric = Fabric::create([
@@ -478,14 +512,7 @@ class KnittingYarnController extends ManufacturingStaffController
                 'status'                 => 'pending',
             ]);
 
-            if ($lockedAssignment->dyeing_remake_request_id) {
-                $replacement = \App\Models\Man\DyeingRemakeRequestFabric::with('originalFabric')
-                    ->where('dyeing_remake_request_id',$lockedAssignment->dyeing_remake_request_id)
-                    ->whereNull('replacement_fabric_id')->orderBy('id')->lockForUpdate()->get()
-                    ->first(fn($pair) => $pair->originalFabric
-                        && $pair->originalFabric->yarn_type === $validated['yarn_type']
-                        && abs((float)$pair->originalFabric->weight - (float)$validated['weight']) <= 0.01);
-                if (! $replacement) throw new \RuntimeException('All rejected fabric codes already have replacement rolls; no extra remake output is allowed.');
+            if ($replacement) {
                 $replacement->update(['replacement_fabric_id'=>$fabric->id]);
                 $remake = \App\Models\Man\DyeingRemakeRequest::with('fabrics')->findOrFail($lockedAssignment->dyeing_remake_request_id);
                 if ($remake->fabrics->every(fn($pair) => $pair->replacement_fabric_id)) {
@@ -553,7 +580,7 @@ class KnittingYarnController extends ManufacturingStaffController
 
     public function reports()
     {
-        $machines  = Machine::where('type', 'knitting')->get(['id', 'machine_no', 'status']);
+        $machines  = Machine::where('type', Machine::TYPE_CIRCULAR_KNITTING)->get(['id', 'machine_no', 'status']);
         $myReports = MachineReport::where('reported_by', $this->staff()->id)
             ->with('machine')->latest()->get();
 
@@ -586,7 +613,7 @@ class KnittingYarnController extends ManufacturingStaffController
      */
     public function flagReports()
     {
-        $machines = Machine::where('type', 'knitting')
+        $machines = Machine::where('type', Machine::TYPE_CIRCULAR_KNITTING)
             ->orderBy('machine_no')
             ->get(['id', 'machine_no', 'status']);
 
@@ -612,8 +639,8 @@ class KnittingYarnController extends ManufacturingStaffController
 
         if (! empty($validated['machine_id'])) {
             $machine = Machine::findOrFail($validated['machine_id']);
-            if ($machine->type !== 'knitting') {
-                return back()->withErrors(['machine_id' => 'Only knitting machines belong to this department.']);
+            if ($machine->type !== Machine::TYPE_CIRCULAR_KNITTING) {
+                return back()->withErrors(['machine_id' => 'Only Circular Knitting machines belong to Knitting Yarn.']);
             }
         }
 

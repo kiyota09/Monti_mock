@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { useForm, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import JobOrderDetails from '@/Components/Manufacturing/JobOrderDetails.vue';
+import WorkSubmissionDialogs from '@/Components/Manufacturing/WorkSubmissionDialogs.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
 
 const { canEdit } = usePageAccess();
@@ -56,6 +57,7 @@ const closeRecipeModal = () => { recipeModal.value = false; recipeModalFabric.va
 
 // ─── Dye Modal ────────────────────────────────────────────────────────────────
 const dyeModal      = ref(false);
+const confirmWork = ref(false), workSubmitting = ref(false), workResult = ref(null);
 const currentFabric = ref(null);
 const selectedFabricIds = ref([]);
 const currentGroup = ref(null);
@@ -85,12 +87,13 @@ const batchOptions = computed(() => {
     return [...batches.values()];
 });
 const selectedBatch = computed(() => batchOptions.value.find(batch => String(batch.id) === String(selectedBatchId.value)) ?? null);
-const groupedCandidates = computed(() => currentGroup.value?.fabrics.filter(f => String(batchId(f)) === String(selectedBatchId.value)) ?? []);
+const groupedCandidates = computed(() => currentGroup.value?.fabrics.filter(f => !selectedBatch.value || f.batch_machine_id === selectedBatch.value.machine_id) ?? []);
+const selectedMachineCapacity = computed(() => batchOptions.value.filter(batch => batch.machine_id === selectedBatch.value?.machine_id).reduce((sum, batch) => sum + batch.capacity, 0));
 const selectedFabricWeight = computed(() => groupedCandidates.value.filter(f => selectedFabricIds.value.some(id => Number(id) === Number(f.id))).reduce((sum, f) => sum + Number(f.weight || 0), 0));
 const exceedsBatchCapacity = computed(() => selectedBatch.value
-    && selectedFabricWeight.value > selectedBatch.value.capacity + 0.001);
+    && selectedFabricWeight.value > selectedMachineCapacity.value + 0.001);
 const capacityPercent = computed(() => {
-    const cap = Number(selectedBatch.value?.capacity || 0);
+    const cap = Number(selectedMachineCapacity.value || 0);
     if (!cap) return 0;
     return Math.min(100, Math.round((selectedFabricWeight.value / cap) * 100));
 });
@@ -179,6 +182,12 @@ const canSubmit = computed(() =>
 
 // ─── Submit ───────────────────────────────────────────────────────────────────
 const submitDye = () => {
+    workResult.value = null;
+    confirmWork.value = true;
+};
+const saveDye = () => {
+    if (workSubmitting.value) return;
+    workSubmitting.value = true;
     form.fabric_ids = selectedFabricIds.value;
     form.dyes_used = dyeUsageForEntry.value.map((item) => ({
         material_id: item.materialId,
@@ -186,10 +195,26 @@ const submitDye = () => {
     }));
     form.post(route('man.staff.dyeing-color.store-dye'), {
         preserveScroll: true,
-        onSuccess: () => {
-            closeDyeModal();
-            router.reload({ only: ['fabrics', 'dyes'] });
+        onSuccess: (page) => {
+            const error = page.props.flash?.error;
+            workResult.value = error
+                ? { success: false, title: 'Could not record dye job', message: error }
+                : { success: true, title: 'Dye job recorded', message: page.props.flash?.message || 'The dye job was recorded successfully.' };
+            confirmWork.value = false;
+            if (!error) {
+                closeDyeModal();
+                router.reload({ only: ['fabrics', 'dyes'] });
+            }
         },
+        onError: (errors) => {
+            workResult.value = { success: false, title: 'Could not record dye job', message: Object.values(errors || {}).flat().find(Boolean) || 'The server could not save this dye job. Review the form and try again.' };
+            confirmWork.value = false;
+        },
+        onHttpException: () => {
+            workResult.value = { success: false, title: 'Could not record dye job', message: 'The server returned an error while saving. Your work form is still open so you can try again.' };
+            confirmWork.value = false;
+        },
+        onFinish: () => { workSubmitting.value = false; },
     });
 };
 </script>
@@ -272,6 +297,7 @@ const submitDye = () => {
                                 <div class="min-w-0">
                                     <p class="truncate font-mono text-sm font-bold text-slate-900 dark:text-white">{{ order.reference }}</p>
                                     <p v-if="order.client" class="truncate text-xs text-slate-500 dark:text-zinc-400">{{ order.client }}</p>
+                                    <p v-if="order.deadline" class="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">Deadline: {{ new Date(`${order.deadline}T00:00:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) }}</p>
                                 </div>
                                 <span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset" :class="stageClass(order)">{{ stageLabel(order) }}</span>
                             </div>
@@ -497,7 +523,7 @@ const submitDye = () => {
 
                             <div class="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 text-xs dark:bg-zinc-800">
                                 <span class="flex items-center gap-1.5 font-semibold text-slate-600 dark:text-zinc-300"><Cog class="h-4 w-4 text-slate-400" /> {{ selectedBatch?.machine || 'Select a machine batch' }}</span>
-                                <span class="font-semibold tabular-nums text-slate-700 dark:text-zinc-200">{{ selectedFabricIds.length }} selected · {{ selectedFabricWeight.toFixed(2) }} / {{ selectedBatch?.capacity ?? 0 }} kg</span>
+                                <span class="font-semibold tabular-nums text-slate-700 dark:text-zinc-200">{{ selectedFabricIds.length }} selected · {{ selectedFabricWeight.toFixed(2) }} / {{ selectedMachineCapacity }} kg across this machine's batches</span>
                             </div>
                             <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
                                 <div class="h-full rounded-full transition-all duration-300" :class="exceedsBatchCapacity ? 'bg-red-500' : 'bg-indigo-500'" :style="{ width: capacityPercent + '%' }" />
@@ -516,7 +542,7 @@ const submitDye = () => {
                                     <span class="tabular-nums text-slate-600 dark:text-zinc-300">{{ fmtNum(fabric.weight) }} kg</span>
                                 </label>
                                 <p v-if="form.errors.fabric_ids" class="text-xs text-red-600">{{ form.errors.fabric_ids }}</p>
-                                <p v-if="exceedsBatchCapacity" class="flex items-center gap-1.5 text-xs font-semibold text-red-600"><AlertTriangle class="h-3.5 w-3.5" /> Selected fabrics exceed this batch's {{ fmtNum(selectedBatch.capacity) }} kg capacity.</p>
+                                <p v-if="exceedsBatchCapacity" class="flex items-center gap-1.5 text-xs font-semibold text-red-600"><AlertTriangle class="h-3.5 w-3.5" /> Selected fabrics exceed this machine's available batch capacity.</p>
                             </div>
 
                             <p v-if="!steamReady" class="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
@@ -591,6 +617,8 @@ const submitDye = () => {
                 </div>
             </div>
         </Transition>
+
+        <WorkSubmissionDialogs :show-confirm="confirmWork" confirm-title="Confirm dye job" :confirm-message="`Record Dyeing Color work for ${currentGroup?.reference || 'this JO'}?`" :confirm-detail="`${selectedFabricIds.length} fabric code(s) selected${selectedBatch?.machine ? ` on ${selectedBatch.machine}` : ''}.`" :submitting="workSubmitting" :result="workResult" @cancel="confirmWork = false" @confirm="saveDye" @close-result="workResult = null" />
 
     </AuthenticatedLayout>
 </template>

@@ -42,7 +42,7 @@ const statusStyle = (status) => {
         production: 'bg-amber-100 text-amber-700 border-amber-200',
         shipping: 'bg-violet-100 text-violet-700 border-violet-200',
         delivered: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-        completed: 'bg-slate-100 text-slate-700 border-slate-200'
+        completed: 'bg-emerald-100 text-emerald-700 border-emerald-200'
     };
     return map[status] || 'bg-slate-100 text-slate-700 border-slate-200';
 };
@@ -52,6 +52,7 @@ const statusText = (status) => {
     if (status === 'production') return 'In Production';
     if (status === 'shipping') return 'Shipped (For Warehouse)';
     if (status === 'delivered') return 'Delivered (Received)';
+    if (status === 'completed') return 'Received by Warehouse';
     return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
@@ -97,7 +98,7 @@ const TRACK_STEPS = [
     { key: 'production', label: 'In production' },
     { key: 'shipping', label: 'Shipped' },
     { key: 'delivered', label: 'Delivered' },
-    { key: 'completed', label: 'Completed' },
+    { key: 'completed', label: 'Received by warehouse' },
 ];
 const tracked = ref(null);
 const openTracking = (order) => { tracked.value = order; };
@@ -107,7 +108,7 @@ const stepState = (order, key) => {
     const idx = TRACK_STEPS.findIndex((s) => s.key === key);
     if (orderIdx === -1) return 'todo';
     if (idx < orderIdx) return 'done';
-    if (idx === orderIdx) return 'current';
+    if (idx === orderIdx) return order.status === 'completed' ? 'done' : 'current';
     return 'todo';
 };
 const trackProgress = (order) => {
@@ -132,7 +133,7 @@ const trackProgress = (order) => {
                     <option value="sent">New Orders</option>
                     <option value="production">In Production</option>
                     <option value="shipping">Shipped</option>
-                    <option value="delivered">Delivered (Received)</option>
+                    <option value="completed">Received by Warehouse</option>
                 </select>
                 <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>

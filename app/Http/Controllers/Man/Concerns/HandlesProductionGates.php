@@ -135,8 +135,10 @@ trait HandlesProductionGates
             if ($fabric->dyeing_remake_request_id) {
                 $remake = \App\Models\Man\DyeingRemakeRequest::with('fabrics.replacementFabric')->lockForUpdate()->findOrFail($fabric->dyeing_remake_request_id);
                 if ($remake->fabrics->isNotEmpty() && $remake->fabrics->every(fn($pair) => $pair->replacementFabric?->status === 'knitting_approved')) {
-                    $remake->update(['status'=>'ready_for_dyeing']);
-                    \App\Models\Man\ManTaskAssignment::where('dyeing_remake_request_id',$remake->id)->update(['status'=>'completed','completed_at'=>now()]);
+                    // Replacement output follows the full knitting chain: the
+                    // inspector approves it, then the yarn staff submits that
+                    // specific roll to the knitting supervisor for final review.
+                    $remake->update(['status'=>'awaiting_staff_handoff']);
                 }
             }
         });

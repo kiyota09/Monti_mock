@@ -8,6 +8,7 @@ use App\Models\Man\DyeingStageRecord;
 use App\Models\Man\ManTaskAssignment;
 use App\Models\Man\ManufacturingInventoryItem;
 use App\Services\Man\DyeingInitialBatchService;
+use App\Services\Man\DyeingMachineQueueService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -106,9 +107,14 @@ class DyeingTreatmentController extends ManufacturingStaffController
             $items = DyeingBatchFabric::with(['batch.machine','fabric'])->whereIn('fabric_id',$data['fabric_ids'])->lockForUpdate()->get();
             abort_unless($items->count() === count($data['fabric_ids']),422,'One or more selected fabrics are not in a dyeing batch.');
             $first = $items->first(); $batch = $first->batch;
-            abort_unless($items->every(fn($item) => $item->dyeing_batch_id === $first->dyeing_batch_id && $item->current_stage === $stage && $item->status === 'active'),422,'Select active fabrics from the same Job Order and machine at this stage.');
-            abort_if($items->sum(fn($item)=>(float)$item->fabric->weight) > (float)$batch->load_capacity_kg + 0.001,422,'Selected fabrics exceed the assigned machine load capacity.');
+            abort_unless($items->every(fn($item) => $item->batch?->machine_id === $batch?->machine_id && $item->current_stage === $stage && $item->status === 'active'),422,'Select active fabrics assigned to the same machine at this stage.');
+            foreach ($items->groupBy('dyeing_batch_id') as $batchItems) {
+                $capacity = (float) $batchItems->first()->batch->load_capacity_kg;
+                abort_if($batchItems->sum(fn($item) => (float) $item->fabric->weight) > $capacity + 0.001,422,'Selected fabrics exceed a batch machine load capacity.');
+            }
             foreach ($items as $item) abort_unless($this->isAssignedFabric((int) $item->fabric_id, $item->fabric->manufacturing_order_id, $item->fabric->sales_order_id),403,'This fabric code is not assigned to you by the Dyeing Supervisor.');
+            $queue = app(DyeingMachineQueueService::class);
+            $assignments = $queue->assertCanRecord((int) $this->staff()->id, (int) $batch->machine_id, $stage, $items->pluck('fabric_id')->all());
             $used = [];
             $expectedCategory = $stage === 'pre_treatment' ? 'pretreatment' : 'posttreatment';
             foreach ($data['materials_used'] as $row) {
@@ -128,21 +134,34 @@ class DyeingTreatmentController extends ManufacturingStaffController
                     'review_status'=>'awaiting_review','processed_at'=>now()]);
                 $item->update(['status'=>'awaiting_review']);
             }
+            $queue->completeSubmitted($assignments);
         });
         return back()->with('message','Treatment recorded and sent to the Dyeing Supervisor for inspection.');
     }
 
     public function history()
     {
-        $query = $this->stageFabrics();
+        $stage = $this->staff()->manufacturing_role === 'dyeing_pre_treatment' ? 'pre_treatment' : 'post_treatment';
+        $query = DyeingStageRecord::with(['operator:id,name', 'batchFabric.fabric:id,code,yarn_type,weight'])
+            ->where('operator_id', $this->staff()->id)
+            ->where('stage', $stage);
         if ($search = request('search')) {
-            $query->where('code', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('code', 'like', "%{$search}%")
+                    ->orWhereHas('batchFabric.fabric', fn ($fabric) => $fabric->where('code', 'like', "%{$search}%"));
+            });
+        }
+        if ($from = request('from')) {
+            $query->whereDate('processed_at', '>=', $from);
+        }
+        if ($to = request('to')) {
+            $query->whereDate('processed_at', '<=', $to);
         }
 
         return Inertia::render('Dashboard/MAN/Employee/DyeingTreatment/History', [
             'treatmentLabel' => $this->roleLabel(),
             'routePrefix' => $this->staff()->manufacturing_role === 'dyeing_pre_treatment' ? 'man.staff.dyeing-pre-treatment' : 'man.staff.dyeing-treatment',
-            'fabrics' => $query->latest('updated_at')->paginate(20)->withQueryString(),
+            'records' => $query->latest('processed_at')->paginate(20)->withQueryString(),
         ]);
     }
 

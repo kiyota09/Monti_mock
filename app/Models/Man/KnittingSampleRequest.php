@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class KnittingSampleRequest extends Model
 {
+    public const STATUS_DISCARDED = 'discarded';
+
     protected $fillable = [
         'code', 'fabric_sample_request_id', 'color_index', 'fabric_design', 'texture', 'gsm',
         'yarn_material_id', 'yarn_type', 'pantone_name', 'pantone_hex', 'formula',

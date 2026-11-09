@@ -35,8 +35,21 @@ return new class extends Migration
         Schema::table('squeezer_jobs', function (Blueprint $table) {
             $table->foreignId('fabric_id')->nullable()->after('softener_job_id')->constrained()->cascadeOnDelete();
         });
-        DB::statement('UPDATE squeezer_jobs sj INNER JOIN softener_jobs so ON so.id = sj.softener_job_id SET sj.fabric_id = so.fabric_id');
-        DB::statement('ALTER TABLE `squeezer_jobs` MODIFY `softener_job_id` BIGINT UNSIGNED NULL');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('UPDATE squeezer_jobs sj INNER JOIN softener_jobs so ON so.id = sj.softener_job_id SET sj.fabric_id = so.fabric_id');
+            DB::statement('ALTER TABLE `squeezer_jobs` MODIFY `softener_job_id` BIGINT UNSIGNED NULL');
+        } else {
+            $fabricIds = DB::table('squeezer_jobs')
+                ->join('softener_jobs', 'softener_jobs.id', '=', 'squeezer_jobs.softener_job_id')
+                ->select('squeezer_jobs.id', 'softener_jobs.fabric_id')
+                ->get();
+            foreach ($fabricIds as $row) {
+                DB::table('squeezer_jobs')->where('id', $row->id)->update(['fabric_id' => $row->fabric_id]);
+            }
+            Schema::table('squeezer_jobs', function (Blueprint $table) {
+                $table->foreignId('softener_job_id')->nullable()->change();
+            });
+        }
 
         Schema::create('bleaching_jobs', function (Blueprint $table) {
             $table->id();
@@ -161,6 +174,14 @@ return new class extends Migration
     private function setRoleEnum(string $table, array $values): void
     {
         $list = implode(',', array_map(fn ($value) => "'{$value}'", $values));
-        DB::statement("ALTER TABLE `{$table}` MODIFY `manufacturing_role` ENUM({$list}) NULL");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE `{$table}` MODIFY `manufacturing_role` ENUM({$list}) NULL");
+
+            return;
+        }
+
+        Schema::table($table, function (Blueprint $blueprint) use ($values) {
+            $blueprint->enum('manufacturing_role', $values)->nullable()->change();
+        });
     }
 };

@@ -35,7 +35,7 @@
                                 class="w-full rounded-2xl border-0 bg-white/95 py-3 pl-11 pr-4 text-sm font-medium text-gray-900 shadow-lg placeholder:text-gray-400 focus:ring-2 focus:ring-white/70 outline-none transition" />
                         </div>
                         <div class="flex gap-2 overflow-x-auto">
-                            <button v-for="opt in [['all','All'],['pending_client_approval','Pending'],['approved','Approved'],['credit_review','Credit'],['tier_assignment','Tier'],['rejected','Rejected']]" :key="opt[0]" @click="statusFilter = opt[0]"
+                            <button v-for="opt in [['all','All'],['crm_recipe_review','CRM Review'],['pending_client_approval','Pending'],['approved','Approved'],['credit_review','Credit'],['tier_assignment','Tier'],['rejected','Rejected']]" :key="opt[0]" @click="statusFilter = opt[0]"
                                 :class="statusFilter === opt[0] ? 'bg-white text-indigo-700 shadow-lg scale-105' : 'bg-white/15 text-white hover:bg-white/25'"
                                 class="whitespace-nowrap rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wide backdrop-blur transition-all duration-200 active:scale-95">
                                 {{ opt[1] }}
@@ -120,7 +120,9 @@
                                             <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform shrink-0">
                                                 <FileText class="h-5 w-5" />
                                             </div>
-                                            <span class="font-mono text-sm font-black text-gray-900 dark:text-white">{{ order.po_number }}</span>
+                                            <Link :href="route('client.orders.show', order.id)" class="font-mono text-sm font-black text-indigo-700 hover:text-indigo-900 hover:underline dark:text-indigo-300 dark:hover:text-indigo-200">
+                                                {{ order.po_number }}
+                                            </Link>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{{ formatDate(order.created_at) }}</td>
@@ -213,7 +215,7 @@
 
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import { ShoppingCart, RefreshCw, Search, FileText, X, Loader2, Check, Sparkles } from 'lucide-vue-next';
 
@@ -257,6 +259,7 @@ const formatDate = (date) => new Date(date).toLocaleDateString('en-PH', { year: 
 
 const getStatusBadge = (status) => {
     const map = {
+        crm_recipe_review: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
         credit_review: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',
         tier_assignment: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
         pending_client_approval: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
@@ -268,6 +271,7 @@ const getStatusBadge = (status) => {
 
 const formatStatus = (status) => {
     const map = {
+        crm_recipe_review: 'CRM Recipe Linking',
         credit_review: 'Credit Review',
         tier_assignment: 'Tier Assignment',
         pending_client_approval: 'Pending Approval',

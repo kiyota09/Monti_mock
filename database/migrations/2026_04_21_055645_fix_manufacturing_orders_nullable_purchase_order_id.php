@@ -9,6 +9,10 @@ return new class extends Migration
 {
     public function up()
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         Schema::table('manufacturing_orders', function (Blueprint $table) {
             // 1. Find and drop the existing foreign key for purchase_order_id
             $pkConstraint = null;
@@ -55,6 +59,10 @@ return new class extends Migration
 
     public function down()
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         Schema::table('manufacturing_orders', function (Blueprint $table) {
             $table->dropForeign(['purchase_order_id']);
             $table->unsignedBigInteger('purchase_order_id')->nullable(false)->change();

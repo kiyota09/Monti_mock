@@ -91,6 +91,12 @@ const singleQty = ref(0);
 const singleUrgency = ref('Medium');
 const singleNotes = ref('');
 const singleSending = ref(false);
+const procurementResult = ref(null);
+
+const firstErrorMessage = (errors) => {
+    const first = Object.values(errors || {})[0];
+    return Array.isArray(first) ? first[0] : (first || 'The procurement request could not be sent. Please try again.');
+};
 
 const openSingleProcure = (material) => {
     singleMat.value = material;
@@ -113,6 +119,15 @@ const submitSingle = () => {
         onSuccess: () => {
             showSingleModal.value = false;
             singleMat.value = null;
+            procurementResult.value = { success: true, message: 'The procurement request was sent to SCM successfully.' };
+        },
+        onError: (errors) => {
+            showSingleModal.value = false;
+            procurementResult.value = { success: false, message: firstErrorMessage(errors) };
+        },
+        onNetworkError: () => {
+            showSingleModal.value = false;
+            procurementResult.value = { success: false, message: 'The server could not be reached. Please try again.' };
         },
         onFinish: () => {
             singleSending.value = false;
@@ -196,7 +211,16 @@ const submitBulk = () => {
         preserveScroll: true,
         onSuccess: () => {
             showBulkModal.value = false;
+            procurementResult.value = { success: true, message: `${bulkLines.value.length} procurement request(s) were sent to SCM successfully.` };
             clearBulk();
+        },
+        onError: (errors) => {
+            showBulkModal.value = false;
+            procurementResult.value = { success: false, message: firstErrorMessage(errors) };
+        },
+        onNetworkError: () => {
+            showBulkModal.value = false;
+            procurementResult.value = { success: false, message: 'The server could not be reached. Please try again.' };
         },
         onFinish: () => {
             bulkSending.value = false;
@@ -490,6 +514,23 @@ const openedBadge = (label) => {
                                 {{ bulkSending ? 'Sending...' : `Confirm & Send ${bulkLines.length} Request${bulkLines.length !== 1 ? 's' : ''}` }}
                             </button>
                         </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- Procurement result feedback -->
+        <Teleport to="body">
+            <Transition name="modal">
+                <div v-if="procurementResult" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" @click.self="procurementResult = null">
+                    <div class="modal-panel w-full max-w-md rounded-3xl border border-gray-100 bg-white p-6 text-center shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+                        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl" :class="procurementResult.success ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300'">
+                            <CheckCircle v-if="procurementResult.success" class="h-7 w-7" />
+                            <AlertCircle v-else class="h-7 w-7" />
+                        </div>
+                        <h3 class="mt-4 text-lg font-black text-gray-900 dark:text-white">{{ procurementResult.success ? 'Sent to SCM' : 'Request failed' }}</h3>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ procurementResult.message }}</p>
+                        <button @click="procurementResult = null" class="mt-5 rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-black uppercase tracking-wide text-white transition hover:bg-indigo-700">Close</button>
                     </div>
                 </div>
             </Transition>

@@ -91,7 +91,7 @@
                                 <div class="bg-gray-50 dark:bg-zinc-800/60 p-3 rounded-2xl border border-gray-100 dark:border-zinc-700">
                                     <p class="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">PO
                                         Number</p>
-                                    <p class="text-[10px] font-mono font-bold text-gray-700 dark:text-gray-300">{{ jo.purchase_order_id }}
+                                    <p class="text-[10px] font-mono font-bold text-gray-700 dark:text-gray-300">{{ displayPoNumber(jo) }}
                                     </p>
                                 </div>
                             </div>
@@ -140,15 +140,10 @@
                                     class="flex-1 py-3 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 hover:text-indigo-700 transition-colors flex justify-center items-center gap-2 active:scale-95">
                                     <Eye class="h-4 w-4" /> Summary
                                 </button>
-                                <button @click="openDss(jo)" :disabled="dssChecking[jo.id]"
-                                    class="flex-1 py-3 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-100 transition-colors flex justify-center items-center gap-2 active:scale-95 disabled:opacity-50">
-                                    <Loader2 v-if="dssChecking[jo.id]" class="h-4 w-4 animate-spin" />
-                                    <Activity v-else class="h-4 w-4" /> Check Inv
-                                </button>
-                                <button v-if="canEditPush" @click="openConfirm(jo, 'scm')" :disabled="pushing[jo.id]"
+                                <button v-if="canEditPush" @click="openCreditCheck(jo)" :disabled="pushing[jo.id] || dssChecking[jo.id]"
                                     class="flex-1 py-3 bg-gradient-to-br from-indigo-600 to-violet-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex justify-center items-center gap-2 shadow-lg shadow-indigo-500/25 hover:scale-[1.02] active:scale-95">
-                                    <Loader2 v-if="pushing[jo.id]" class="h-4 w-4 animate-spin" />
-                                    Push SCM
+                                    <Loader2 v-if="pushing[jo.id] || dssChecking[jo.id]" class="h-4 w-4 animate-spin" />
+                                    <Shield v-else class="h-4 w-4" /> Credit & Inventory Check
                                 </button>
                             </div>
                         </div>
@@ -204,7 +199,7 @@
                                                         <span class="text-[9px] font-black uppercase text-gray-400">PO
                                                             Number:</span>
                                                         <span class="text-[10px] font-mono font-bold text-gray-600 dark:text-gray-300">{{
-                                                            jo.purchase_order_id
+                                                            displayPoNumber(jo)
                                                         }}</span>
                                                     </div>
                                                 </div>
@@ -284,15 +279,10 @@
                                                 class="p-3 rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-400 hover:bg-indigo-600 hover:text-white transition-all active:scale-95">
                                                 <Eye class="h-4 w-4" />
                                             </button>
-                                            <button @click="openDss(jo)" :disabled="dssChecking[jo.id]" title="Inventory check"
-                                                class="p-3 rounded-xl bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 transition-all active:scale-95 disabled:opacity-50">
-                                                <Loader2 v-if="dssChecking[jo.id]" class="h-4 w-4 animate-spin" />
-                                                <Activity v-else class="h-4 w-4" />
-                                            </button>
-                                            <button v-if="canEditPush" @click="openConfirm(jo, 'scm')" :disabled="pushing[jo.id]"
+                                            <button v-if="canEditPush" @click="openCreditCheck(jo)" :disabled="pushing[jo.id] || dssChecking[jo.id]"
                                                 class="px-5 py-3 bg-gradient-to-br from-indigo-600 to-violet-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-indigo-500/25 hover:scale-[1.02] active:scale-95">
-                                                <Loader2 v-if="pushing[jo.id]" class="h-3 w-3 animate-spin" />
-                                                Push SCM
+                                                <Loader2 v-if="pushing[jo.id] || dssChecking[jo.id]" class="h-3 w-3 animate-spin" />
+                                                <Shield v-else class="h-3 w-3" /> Credit & Inventory Check
                                             </button>
                                         </div>
                                     </td>
@@ -344,7 +334,7 @@
                             <div class="relative bg-gray-50 dark:bg-zinc-800/60 p-3 rounded-2xl border border-gray-100 dark:border-zinc-700">
                                 <p class="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">PO
                                     Number</p>
-                                <p class="text-xs font-mono font-bold text-gray-700 dark:text-gray-300">{{ order.purchase_order_id }}</p>
+                                <p class="text-xs font-mono font-bold text-gray-700 dark:text-gray-300">{{ displayPoNumber(order) }}</p>
                             </div>
                         </div>
                     </TransitionGroup>
@@ -391,7 +381,7 @@
                                                     Number</span>
                                                 <span
                                                     class="font-mono text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-gray-100 dark:border-zinc-700">{{
-                                                        order.purchase_order_id }}</span>
+                                                        displayPoNumber(order) }}</span>
                                             </div>
                                         </div>
                                     </td>
@@ -425,6 +415,36 @@
              INVENTORY CHECK MODAL (single stock check for ECO + SCM — the old
              SCM check-inv buttons now live here)
              ══════════════════════════════════════════════════════════════════ -->
+        <Teleport to="body">
+            <Transition name="modal">
+                <div v-if="creditModal.show" class="fixed inset-0 z-[160] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" @click.self="creditModal.show = false">
+                    <div class="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-zinc-900">
+                        <div class="flex items-start justify-between bg-gradient-to-br from-amber-600 to-orange-700 px-6 py-5 text-white">
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-[0.2em] text-amber-100">Credit check</p>
+                                <h3 class="mt-1 text-xl font-black">{{ creditModal.order?.client?.company_name || 'Client' }}</h3>
+                                <p class="mt-1 text-xs text-amber-100">Order {{ creditModal.order?.jo_number }}</p>
+                            </div>
+                            <button @click="creditModal.show = false" class="rounded-xl bg-white/15 p-2 hover:bg-white/25"><X class="h-5 w-5" /></button>
+                        </div>
+                        <div class="space-y-4 p-6">
+                            <div :class="creditModal.order?.credit?.is_good_payer ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200' : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'" class="rounded-2xl border p-4">
+                                <p class="font-black">{{ creditModal.order?.credit?.is_good_payer ? 'Credit status: Good standing' : 'Credit status: Review recommended' }}</p>
+                                <p class="mt-1 text-xs">Outstanding balance: ₱{{ formatPrice(creditModal.order?.credit?.outstanding_balance) }}</p>
+                                <p class="mt-1 text-xs">Pending payments: {{ creditModal.order?.credit?.pending_count || 0 }}</p>
+                                <p v-if="creditModal.order?.credit?.over_limit" class="mt-1 text-xs font-black">This order may exceed the client’s credit limit of ₱{{ formatPrice(creditModal.order?.credit?.credit_limit) }}.</p>
+                            </div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Credit flags are advisory. You can stop here or proceed to check inventory before sending this order to SCM.</p>
+                            <div class="flex gap-3">
+                                <button @click="creditModal.show = false" class="flex-1 rounded-2xl bg-gray-100 py-3 text-xs font-black uppercase tracking-widest text-gray-600 hover:bg-gray-200 dark:bg-zinc-800 dark:text-gray-300">Cancel</button>
+                                <button @click="proceedToInventory" class="flex-1 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg hover:opacity-90">Proceed to inventory</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
         <Teleport to="body">
             <Transition name="modal">
                 <div v-if="dssModal.show"
@@ -477,7 +497,7 @@
                                                 <th class="px-3 py-2 text-right">Committed · accepted</th>
                                                 <th class="px-3 py-2 text-right">Total needed</th>
                                                 <th class="px-3 py-2 text-right">On-hand</th>
-                                                <th class="px-3 py-2 text-right">ATP</th>
+                                                <th class="px-3 py-2 text-right">Available after accepted orders</th>
                                                 <th class="px-3 py-2 text-center">OK?</th>
                                                 <th class="px-3 py-2 text-center">Procure</th>
                                             </tr>
@@ -553,9 +573,10 @@
                                 class="flex-1 py-3.5 rounded-2xl bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-colors active:scale-95">
                                 Close
                             </button>
-                            <button v-if="canEditPush && dssModal.result && dssModal.result.verdict !== 'insufficient'" @click="pushFromDss"
+                            <button v-if="canEditPush && dssModal.result?.verdict === 'sufficient'" @click="pushFromDss" :disabled="pushing[dssModal.order?.id]"
                                 class="flex-1 py-3.5 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white text-xs font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95">
-                                <Send class="h-4 w-4" /> Push to SCM
+                                <Loader2 v-if="pushing[dssModal.order?.id]" class="h-4 w-4 animate-spin" />
+                                <Send v-else class="h-4 w-4" /> Push SCM
                             </button>
                         </div>
                     </div>
@@ -715,7 +736,7 @@
                                 <div class="flex justify-between items-center border-t border-gray-100 dark:border-zinc-700 pt-3">
                                     <span class="text-[9px] font-black uppercase text-gray-400 tracking-widest">PO Number</span>
                                     <span class="text-xs font-mono font-bold text-gray-600 dark:text-gray-300 bg-white dark:bg-zinc-800 px-2 py-1 rounded-lg border border-gray-100 dark:border-zinc-700">
-                                        {{ confirmModal.order.purchase_order_id ?? 'N/A' }}
+                                        {{ displayPoNumber(confirmModal.order) }}
                                     </span>
                                 </div>
                                 <div class="flex justify-between items-center border-t border-gray-100 dark:border-zinc-700 pt-3">
@@ -841,7 +862,7 @@
                                     </p>
                                     <p
                                         class="font-bold font-mono text-gray-700 dark:text-gray-300 text-sm bg-white dark:bg-zinc-800 px-2 py-1 rounded-lg w-fit border border-gray-100 dark:border-zinc-700">
-                                        {{ summaryModal.data.purchase_order_id }}</p>
+                                        {{ displayPoNumber(summaryModal.data) }}</p>
                                 </div>
                             </div>
 
@@ -947,7 +968,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import { usePageAccess } from '@/composables/usePageAccess';
-import { Send, RefreshCw, Search, Loader2, X, Eye, Check, Sparkles, Activity, TriangleAlert, CheckCircle2, ClipboardList, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-vue-next';
+import { Send, RefreshCw, Search, Loader2, X, Eye, Check, Sparkles, Activity, TriangleAlert, CheckCircle2, ClipboardList, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Shield } from 'lucide-vue-next';
 import axios from 'axios';
 
 const { canEdit } = usePageAccess();
@@ -964,6 +985,7 @@ const activeTab = ref('pending');
 const searchQuery = ref('');
 const pushing = ref({});
 const summaryModal = ref({ show: false, data: {} });
+const creditModal = ref({ show: false, order: null });
 
 // Confirmation modal state
 const confirmModal = ref({ show: false, order: null, module: null });
@@ -1046,6 +1068,16 @@ const toggleDssRow = (materialId) => {
     dssExpanded.value[materialId] = !dssExpanded.value[materialId];
 };
 
+const openCreditCheck = (order) => {
+    creditModal.value = { show: true, order };
+};
+
+const proceedToInventory = () => {
+    const order = creditModal.value.order;
+    creditModal.value.show = false;
+    if (order) openDss(order);
+};
+
 const openDss = async (order) => {
     dssModal.value = { show: true, loading: true, order, result: null };
     dssExpanded.value = {};
@@ -1066,10 +1098,11 @@ const openDss = async (order) => {
 
 const pushFromDss = () => {
     const order = dssModal.value.order;
+    if (!order || dssModal.value.result?.verdict !== 'sufficient') return;
     dssModal.value.show = false;
-    deliveryDate.value = order?.expected_ship_date ? String(order.expected_ship_date).slice(0, 10) : '';
-    focusCalendarOn(deliveryDate.value);
-    confirmModal.value = { show: true, order, module: 'scm' };
+    // Continue to the confirmation step so the user can choose the
+    // scheduled delivery date in its calendar before the order is pushed.
+    openConfirm(order, 'scm');
 };
 
 // Per-material procurement request state (shortfall rows only).
@@ -1100,6 +1133,7 @@ const requestProcurement = async (m) => {
 const toast = ref({ show: false, message: '', type: 'success' });
 
 // ── Computed lists ─────────────────────────────────────────────────────────
+const displayPoNumber = (order) => order?.client_po_number || order?.purchase_order_id || 'N/A';
 const localPending = computed(() => props.salesOrders || []);
 const localPushed = computed(() => props.pushedOrders || []);
 
@@ -1110,6 +1144,7 @@ const filteredPendingOrders = computed(() => {
         (jo) =>
             jo.jo_number?.toLowerCase().includes(s) ||
             jo.purchase_order_id?.toLowerCase().includes(s) ||
+            jo.client_po_number?.toLowerCase().includes(s) ||
             jo.client?.company_name?.toLowerCase().includes(s) ||
             jo.color?.toLowerCase().includes(s) ||
             jo.design?.toLowerCase().includes(s) ||
@@ -1127,6 +1162,7 @@ const filteredPushedOrders = computed(() => {
         (po) =>
             po.jo_number?.toLowerCase().includes(s) ||
             po.purchase_order_id?.toLowerCase().includes(s) ||
+            po.client_po_number?.toLowerCase().includes(s) ||
             po.client?.company_name?.toLowerCase().includes(s) ||
             po.pushed_to?.toLowerCase().includes(s)
     );
@@ -1147,9 +1183,7 @@ const openSummary = (jo) => {
 const openConfirmFromSummary = () => {
     const order = summaryModal.value.data;
     summaryModal.value.show = false;
-    deliveryDate.value = order?.expected_ship_date ? String(order.expected_ship_date).slice(0, 10) : '';
-    focusCalendarOn(deliveryDate.value);
-    confirmModal.value = { show: true, order, module: 'scm' };
+    openCreditCheck(order);
 };
 
 // Open confirmation modal (from table / card buttons)
@@ -1171,14 +1205,13 @@ const executePush = () => {
         route(module === 'scm' ? 'eco.push.scm' : 'eco.push.ordermgmt', order.id),
         deliveryDate.value ? { delivery_date: deliveryDate.value } : {},
         {
+            preserveState: true,
             preserveScroll: true,
             onSuccess: () => {
                 showToast(
                     `Order ${order.jo_number} successfully pushed to ${module === 'scm' ? 'SCM' : 'Order Management'}!`
                 );
                 deliveryDate.value = '';
-                // Auto-switch to the "Already Pushed" tab
-                activeTab.value = 'pushed';
             },
             onError: (errors) => {
                 const msg = errors?.error ?? 'Failed to push order. Please try again.';

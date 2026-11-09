@@ -21,7 +21,7 @@ class ClientDashboardController extends Controller
 
         $orders = PurchaseOrder::where('client_id', $client->id)->latest();
         $totalOrders = (clone $orders)->count();
-        $recentOrders = (clone $orders)->take(5)->get(['id', 'po_number', 'total_amount', 'status', 'created_at']);
+        $recentOrders = (clone $orders)->take(5)->get(['id', 'po_number', 'client_po_number', 'total_amount', 'status', 'created_at']);
 
         $pendingDeliveries = Delivery::with('route')
             ->whereHas('route', fn ($q) => $q->where('client_id', $client->id))

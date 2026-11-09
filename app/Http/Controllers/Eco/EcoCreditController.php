@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Eco;
 use App\Http\Controllers\Controller;
 use App\Models\Crm\Client;
 use App\Models\Ord\PurchaseOrder;
+use App\Models\Ord\OrderReturn;
 use App\Services\Fin\FinanceService;
 use App\Services\Ord\OrderLifecycleService;
 use Illuminate\Http\Request;
@@ -20,8 +21,15 @@ class EcoCreditController extends Controller
         // Use Finance's receivables ledger as the balance source so this page
         // stays aligned with FIN's invoice/payment records.
         $receivablesByClient = $finance->invoiceRows()->groupBy('client_id');
+        $returnAdjustmentsByClient = OrderReturn::with('salesOrder')
+            ->whereNotNull('client_id')
+            ->where('status', 'credited')
+            ->whereIn('request_type', ['price_adjustment', 'cancelled'])
+            ->latest('resolved_at')
+            ->get()
+            ->groupBy('client_id');
 
-        $clients = Client::with(['creditAccount', 'purchaseOrders.items'])->get()->map(function ($client) use ($receivablesByClient) {
+        $clients = Client::with(['creditAccount', 'purchaseOrders.items'])->get()->map(function ($client) use ($receivablesByClient, $returnAdjustmentsByClient) {
             $receivables = $receivablesByClient->get($client->id, collect())->map(function ($invoice) {
                 return [
                     'id' => $invoice['id'],
@@ -53,6 +61,14 @@ class EcoCreditController extends Controller
                 'receivables_count' => $receivables->count(),
                 'open_receivables_count' => $receivables->whereIn('status', ['unpaid', 'partial', 'overdue'])->count(),
                 'receivables' => $receivables,
+                'return_adjustments' => ($returnAdjustmentsByClient->get($client->id) ?? collect())->map(fn ($return) => [
+                    'return_number' => $return->return_number,
+                    'request_type' => $return->request_type,
+                    'jo_number' => $return->salesOrder?->jo_number,
+                    'amount' => (float) $return->discount_amount,
+                    'reason' => $return->resolution_notes,
+                    'resolved_at' => $return->resolved_at?->format('Y-m-d'),
+                ])->values(),
                 'due_dates' => $dueDates,
                 'is_good_payer' => (bool) ($client->creditAccount?->is_good_payer ?? true) && $overdueBalance <= 0,
                 'orders_count' => $client->purchaseOrders->count(),

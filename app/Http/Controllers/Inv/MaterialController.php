@@ -24,6 +24,7 @@ class MaterialController extends Controller
         'Pre-Treatment',
         'Bio-Processing Enzymes',
         'Care Agents',
+        'Needles',
     ];
 
     // Let existing records keep their classification until staff reassign them.
@@ -223,7 +224,7 @@ class MaterialController extends Controller
             'name'          => 'required|string|max:255',
             'category'      => ['required', Rule::in([...self::MATERIAL_CATEGORIES, ...self::LEGACY_CATEGORIES])],
             'yarn_tier'     => [$request->input('category') === 'Yarn' ? 'required' : 'nullable', Rule::in(self::YARN_TIERS)],
-            'unit'          => 'required|in:Rolls,Kg,Pcs',
+            'unit'          => ['required', Rule::in($request->input('category') === 'Needles' ? ['Pcs'] : ['Rolls', 'Kg', 'Pcs'])],
             'reorder_point' => 'required|numeric|min:0',
         ]);
 
@@ -249,7 +250,7 @@ class MaterialController extends Controller
             'name'          => 'required|string|max:255',
             'category'      => ['required', Rule::in(self::MATERIAL_CATEGORIES)],
             'yarn_tier'     => [$request->input('category') === 'Yarn' ? 'required' : 'nullable', Rule::in(self::YARN_TIERS)],
-            'unit'          => 'required|in:Rolls,Kg,Pcs',
+            'unit'          => ['required', Rule::in($request->input('category') === 'Needles' ? ['Pcs'] : ['Rolls', 'Kg', 'Pcs'])],
             'reorder_point' => 'required|integer|min:0',
         ]);
 

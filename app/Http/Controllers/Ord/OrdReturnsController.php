@@ -23,7 +23,7 @@ class OrdReturnsController extends Controller
             'search' => trim((string) $request->get('search', '')),
         ];
 
-        $all = OrderReturn::with(['salesOrder.client', 'createdBy', 'resolvedBy'])
+        $all = OrderReturn::with(['salesOrder.client', 'createdBy', 'resolvedBy', 'replacementSalesOrder'])
             ->latest()
             ->get();
 
@@ -50,12 +50,21 @@ class OrdReturnsController extends Controller
                 'jo_number' => $r->salesOrder?->jo_number ?? 'N/A',
                 'client_name' => $r->salesOrder?->client?->company_name ?? 'N/A',
                 'type' => $r->type,
+                'request_type' => $r->request_type,
+                'package_ids' => $r->package_ids ?? [],
+                'packages' => \App\Models\War\WarehousePackage::with('product')
+                    ->whereIn('id', $r->package_ids ?? [])
+                    ->get()
+                    ->map(fn ($package) => ['number' => $package->package_number, 'product' => $package->product?->name]),
+                'image_url' => $r->image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($r->image_path) : null,
+                'discount_amount' => (float) $r->discount_amount,
+                'replacement_jo_number' => $r->replacementSalesOrder?->jo_number,
                 'quantity' => (float) $r->quantity,
                 'unit' => 'kg',
                 'reason' => $r->reason,
                 'status' => $r->status,
                 'transitions' => OrderReturn::allowedTransitions($r->status),
-                'created_by' => $r->createdBy?->name,
+                'created_by' => $r->client_id ? ($r->salesOrder?->client?->company_name ?? 'Partner client') : $r->createdBy?->name,
                 'resolved_by' => $r->resolvedBy?->name,
                 'resolved_at' => $r->resolved_at?->format('Y-m-d H:i'),
                 'resolution_notes' => $r->resolution_notes,
@@ -141,12 +150,87 @@ class OrdReturnsController extends Controller
     public function resolve(Request $request, int $id)
     {
         $data = $request->validate([
-            'status' => 'required|in:inspected,credited,rejected,closed',
+            'status' => 'nullable|in:inspected,credited,rejected,closed',
+            'decision' => 'nullable|in:replacement,price_adjustment,cancelled,rejected',
+            'discount_amount' => 'nullable|numeric|min:0',
             'resolution_notes' => 'nullable|string|max:2000',
         ]);
 
         $ret = DB::transaction(function () use ($data, $id) {
             $ret = OrderReturn::whereKey($id)->lockForUpdate()->firstOrFail();
+            if ($ret->request_type) {
+                if ($ret->status !== 'pending') {
+                    throw ValidationException::withMessages(['status' => 'This partner request has already been reviewed.']);
+                }
+                $decision = $data['decision'] ?? '';
+                if (! in_array($decision, ['replacement', 'price_adjustment', 'cancelled', 'rejected'], true)) {
+                    throw ValidationException::withMessages(['decision' => 'Choose how to resolve this partner request.']);
+                }
+                if ($decision === 'rejected' && blank($data['resolution_notes'] ?? null)) {
+                    throw ValidationException::withMessages(['resolution_notes' => 'A reason is required when rejecting a request.']);
+                }
+
+                $so = SalesOrder::whereKey($ret->sales_order_id)->lockForUpdate()->firstOrFail();
+                if ($decision === 'replacement') {
+                    $replacement = $so->replicate();
+                    $replacement->jo_number = $this->lifecycle->nextJoNumber();
+                    $replacement->control_number = $this->lifecycle->nextControlNumber($replacement->jo_number);
+                    $replacement->quantity = $ret->quantity > 0 ? $ret->quantity : $so->quantity;
+                    $scale = (float) $so->quantity > 0 ? (float) $replacement->quantity / (float) $so->quantity : 1;
+                    $replacement->subtotal = round((float) $so->subtotal * $scale, 2);
+                    $replacement->tax_amount = round((float) $so->tax_amount * $scale, 2);
+                    $replacement->total_amount = round((float) $so->total_amount * $scale, 2);
+                    $replacement->status = 'pending';
+                    $replacement->pushed_to = null;
+                    $replacement->expected_ship_date = null;
+                    $replacement->confirmed_at = null;
+                    $replacement->confirmed_by = null;
+                    $replacement->production_started_at = null;
+                    $replacement->production_done_at = null;
+                    $replacement->delivered_at = null;
+                    $replacement->cancel_reason = null;
+                    $replacement->on_hold_reason = null;
+                    $replacement->knitting_done_at = null;
+                    $replacement->knitting_done_by = null;
+                    $replacement->knitting_handoff_requested_at = null;
+                    $replacement->knitting_handoff_requested_by = null;
+                    $replacement->inv_check_sufficient = false;
+                    $replacement->payment_status = 'unpaid';
+                    $replacement->receipt_file = null;
+                    $replacement->replacement_return_id = $ret->id;
+                    $replacement->save();
+                    $ret->replacement_sales_order_id = $replacement->id;
+                } elseif (in_array($decision, ['price_adjustment', 'cancelled'], true)) {
+                    $base = (float) $so->total_amount;
+                    $discount = $decision === 'cancelled'
+                        ? round($base * min(1, (float) $ret->quantity / max(0.01, (float) $so->quantity)), 2)
+                        : (float) ($data['discount_amount'] ?? 0);
+                    if ($decision === 'price_adjustment' && ($discount <= 0 || $discount > $base)) {
+                        throw ValidationException::withMessages(['discount_amount' => 'Enter a discount greater than zero and no more than the order total.']);
+                    }
+                    $so->total_amount = round(max(0, $base - $discount), 2);
+                    $taxMultiplier = 1 + ((float) $so->tax_rate / 100);
+                    $so->subtotal = round($so->total_amount / max(1, $taxMultiplier), 2);
+                    $so->tax_amount = round($so->total_amount - $so->subtotal, 2);
+                    if ($decision === 'cancelled' && $so->total_amount <= 0) {
+                        $so->status = 'cancelled';
+                    }
+                    $so->save();
+                    $ret->discount_amount = $discount;
+                }
+
+                $ret->update([
+                    'status' => $decision === 'rejected' ? 'rejected' : 'credited',
+                    'resolution_notes' => $data['resolution_notes'] ?? ucfirst(str_replace('_', ' ', $decision)).' approved by ECO.',
+                    'resolved_by' => auth()->id(),
+                    'resolved_at' => now(),
+                ]);
+                return $ret;
+            }
+
+            if (empty($data['status'])) {
+                throw ValidationException::withMessages(['status' => 'Choose a return status.']);
+            }
             $allowed = OrderReturn::allowedTransitions($ret->status);
             if (! in_array($data['status'], $allowed, true)) {
                 throw ValidationException::withMessages([
@@ -169,6 +253,8 @@ class OrdReturnsController extends Controller
             return $ret;
         }, 3);
 
-        return back()->with('success', "Return {$ret->return_number} marked {$data['status']}.");
+        return back()->with('success', $ret->request_type
+            ? "Request {$ret->return_number} resolved as ".str_replace('_', ' ', $data['decision']).'.'
+            : "Return {$ret->return_number} marked {$data['status']}.");
     }
 }

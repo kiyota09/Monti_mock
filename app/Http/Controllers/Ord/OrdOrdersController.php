@@ -9,6 +9,7 @@ use App\Models\Ord\OrderStatusHistory;
 use App\Models\Ord\PurchaseOrder;
 use App\Models\Ord\SalesOrder;
 use App\Services\Ord\OrderLifecycleService;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -353,6 +354,7 @@ class OrdOrdersController extends Controller
                 $joNumber = $this->lifecycle->nextJoNumber();
                 $so = SalesOrder::create([
                     'purchase_order_id' => $po->po_number,
+                    'purchase_order_item_id' => $item->id,
                     'client_id' => $po->client_id,
                     'jo_number' => $joNumber,
                     'control_number' => $this->lifecycle->nextControlNumber($joNumber),
@@ -496,7 +498,10 @@ class OrdOrdersController extends Controller
 
     private function poQuery(array $filters)
     {
-        return PurchaseOrder::with('client')
+        return PurchaseOrder::with([
+            'client', 'quotation', 'items.quotationItem.quotation',
+            'salesOrders.purchaseOrderItem.quotationItem.quotation',
+        ])
             ->when($filters['client_id'], fn ($q, $v) => $q->where('client_id', $v))
             ->when($filters['status'] !== '', fn ($q) => $q->where('status', $filters['status']))
             ->when($filters['priority'] !== '', fn ($q) => $q->where('priority', $filters['priority']))
@@ -520,7 +525,10 @@ class OrdOrdersController extends Controller
             ->keys()
             ->all();
 
-        return SalesOrder::with(['client', 'bomRecord.product', 'bomRecord.client'])
+        return SalesOrder::with([
+            'client', 'bomRecord.product', 'bomRecord.client', 'purchaseOrder.quotation',
+            'purchaseOrder.items.quotationItem.quotation', 'purchaseOrderItem.quotationItem.quotation',
+        ])
             ->when($filters['client_id'], fn ($q, $v) => $q->where('client_id', $v))
             ->when($filters['status'] !== '', function ($q) use ($filters, $aliases) {
                 $q->whereIn('status', array_values(array_unique([$filters['status'], ...$aliases])));
@@ -587,6 +595,24 @@ class OrdOrdersController extends Controller
 
     private function poRow($po): array
     {
+        $expectedDelivery = $po->salesOrders->pluck('expected_ship_date')->filter()
+            ->map(fn ($date) => Carbon::parse($date)->toDateString())->sort()->last()
+            ?: $po->expected_ship_date?->toDateString();
+        $deliveryDates = $po->salesOrders->pluck('delivered_at')->filter();
+        $actualDelivery = $po->salesOrders->isNotEmpty() && $deliveryDates->count() === $po->salesOrders->count()
+            ? $deliveryDates->map(fn ($date) => Carbon::parse($date)->toDateString())->sort()->last()
+            : null;
+        $paymentTermsList = collect([$po->quotation?->payment_terms])
+            ->merge($po->items->map(fn ($item) => $item->quotationItem?->quotation?->payment_terms))
+            ->merge($po->salesOrders->map(fn ($salesOrder) => $this->paymentTermsForSalesOrder($salesOrder)))
+            ->filter()->map(fn ($terms) => trim((string) $terms))->filter()->unique()->values();
+        $paymentTerms = $paymentTermsList->implode(' / ');
+        $paymentStartDates = $actualDelivery
+            ? $po->salesOrders->map(fn ($salesOrder) => $this->paymentStartDate(
+                $this->paymentTermsForSalesOrder($salesOrder), $salesOrder->delivered_at
+            ))->filter()->unique()->values()->all()
+            : [];
+
         return [
             'id' => $po->id,
             'type' => 'PO',
@@ -601,7 +627,10 @@ class OrdOrdersController extends Controller
             'payment_status' => $po->payment_status ?? 'unpaid',
             'receipt_file' => $po->receipt_file,
             'priority' => $po->priority ?? 'normal',
-            'expected_ship_date' => $po->expected_ship_date?->format('Y-m-d'),
+            'payment_terms' => $paymentTerms ?: null,
+            'expected_ship_date' => $expectedDelivery,
+            'delivery_date' => $actualDelivery,
+            'payment_start_dates' => $paymentStartDates,
             'date' => $po->created_at?->format('Y-m-d'),
             'created_at' => $po->created_at?->format('Y-m-d H:i'),
         ];
@@ -612,6 +641,8 @@ class OrdOrdersController extends Controller
         $clientName = $so->client?->company_name
             ?? $so->bomRecord?->client?->company_name
             ?? 'N/A';
+        $paymentTerms = $this->paymentTermsForSalesOrder($so);
+        $actualDelivery = $so->delivered_at;
 
         return [
             'id' => $so->id,
@@ -629,10 +660,48 @@ class OrdOrdersController extends Controller
             'receipt_file' => $so->receipt_file,
             'priority' => $so->priority ?? 'normal',
             'quantity' => (float) $so->quantity,
+            'payment_terms' => $paymentTerms,
             'expected_ship_date' => $so->expected_ship_date?->format('Y-m-d'),
+            'delivery_date' => $actualDelivery?->format('Y-m-d'),
+            'payment_start_dates' => array_values(array_filter([$this->paymentStartDate($paymentTerms, $actualDelivery)])),
             'date' => $so->created_at?->format('Y-m-d'),
             'created_at' => $so->created_at?->format('Y-m-d H:i'),
         ];
+    }
+
+    private function paymentStartDate(?string $paymentTerms, $deliveryDate): ?string
+    {
+        if (! $paymentTerms || ! $deliveryDate) {
+            return null;
+        }
+
+        $terms = trim($paymentTerms);
+        if (preg_match('/\bnet[\s-]*(\d{1,3})\b/i', $terms, $matches)
+            || preg_match('/\b(\d{1,3})\s*(?:calendar\s*)?days?\b/i', $terms, $matches)) {
+            return Carbon::parse($deliveryDate)->addDays((int) $matches[1])->toDateString();
+        }
+
+        if (preg_match('/\b(cash\s+on\s+delivery|cod|due\s+on\s+delivery|upon\s+delivery|due\s+upon\s+receipt|due\s+immediately)\b/i', $terms)) {
+            return Carbon::parse($deliveryDate)->toDateString();
+        }
+
+        return null;
+    }
+
+    private function paymentTermsForSalesOrder(SalesOrder $salesOrder): ?string
+    {
+        $quotationItem = $salesOrder->purchaseOrderItem?->quotationItem;
+        if (! $quotationItem && $salesOrder->purchaseOrder) {
+            $matchingItems = $salesOrder->purchaseOrder->items->filter(fn ($item) =>
+                mb_strtolower(trim((string) $item->fabric_type)) === mb_strtolower(trim((string) $salesOrder->yarn_type))
+                && mb_strtolower(trim((string) $item->color)) === mb_strtolower(trim((string) $salesOrder->color))
+                && mb_strtolower(trim((string) $item->design)) === mb_strtolower(trim((string) $salesOrder->design))
+            );
+            if ($matchingItems->count() === 1) $quotationItem = $matchingItems->first()->quotationItem;
+        }
+
+        return $quotationItem?->quotation?->payment_terms
+            ?? $salesOrder->purchaseOrder?->quotation?->payment_terms;
     }
 
     private function historyRows($order): array

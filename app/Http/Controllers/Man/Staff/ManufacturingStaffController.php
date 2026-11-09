@@ -155,10 +155,10 @@ abstract class ManufacturingStaffController extends Controller
     protected function dyeingFormulaGroups(?array $formula, float $productionWeightKg = 0): array
     {
         $definitions = [
-            ['label' => 'Dye stuffs', 'aliases' => ['dyestuffs', 'dye_stuffs'], 'quantity_keys' => ['pct', 'percentage', 'quantity'], 'dose' => 'pct'],
-            ['label' => 'Basic Chemicals', 'aliases' => ['basic_chemicals', 'basic_chemical'], 'quantity_keys' => ['gpl', 'g_per_liter', 'quantity'], 'dose' => 'gpl'],
-            ['label' => 'Auxiliary Agents', 'aliases' => ['auxiliary_agents', 'auxiliaries', 'auxiliary'], 'quantity_keys' => ['gpl', 'g_per_liter', 'quantity'], 'dose' => 'gpl'],
-            ['label' => 'Post Treatment', 'aliases' => ['post_treatment', 'post_treatment_agents'], 'quantity_keys' => ['gpl', 'g_per_liter', 'quantity'], 'dose' => 'gpl'],
+            ['label' => 'Dye stuffs', 'aliases' => ['dyestuffs', 'dye_stuffs'], 'quantity_keys' => ['grams', 'amount', 'pct', 'percentage', 'quantity'], 'dose' => 'grams'],
+            ['label' => 'Basic Chemicals', 'aliases' => ['basic_chemicals', 'basic_chemical'], 'quantity_keys' => ['grams', 'amount', 'gpl', 'g_per_liter', 'quantity'], 'dose' => 'grams'],
+            ['label' => 'Auxiliary Agents', 'aliases' => ['auxiliary_agents', 'auxiliaries', 'auxiliary'], 'quantity_keys' => ['grams', 'amount', 'gpl', 'g_per_liter', 'quantity'], 'dose' => 'grams'],
+            ['label' => 'Post Treatment', 'aliases' => ['post_treatment', 'post_treatment_agents'], 'quantity_keys' => ['grams', 'amount', 'gpl', 'g_per_liter', 'quantity'], 'dose' => 'grams'],
         ];
         $itemsByGroup = collect($definitions)->mapWithKeys(fn ($definition) => [
             $definition['label'] => collect($definition['aliases'])
@@ -172,9 +172,10 @@ abstract class ManufacturingStaffController extends Controller
             : Material::whereIn('id', $materialIds)->get()->keyBy('id');
 
         $liquorRatio = $this->dyeingLiquorRatio($formula['liquor_ratio'] ?? null);
+        $sampleWeightGrams = max(0.0001, (float) ($formula['sample_weight_g'] ?? 100));
 
-        return collect($definitions)->map(function ($definition) use ($itemsByGroup, $materials, $productionWeightKg, $liquorRatio) {
-            $rows = $itemsByGroup->get($definition['label'], collect())->map(function ($item) use ($definition, $materials, $productionWeightKg, $liquorRatio) {
+        return collect($definitions)->map(function ($definition) use ($itemsByGroup, $materials, $productionWeightKg, $liquorRatio, $sampleWeightGrams) {
+            $rows = $itemsByGroup->get($definition['label'], collect())->map(function ($item) use ($definition, $materials, $productionWeightKg, $liquorRatio, $sampleWeightGrams) {
                 $materialId = $item['material_id'] ?? null;
                 $material = $materialId ? $materials->get($materialId) : null;
                 $labQuantity = null;
@@ -184,13 +185,27 @@ abstract class ManufacturingStaffController extends Controller
                         break;
                     }
                 }
-                $quantity = $definition['dose'] === 'pct'
-                    ? $productionWeightKg * (float) $labQuantity / 100
-                    : (float) $labQuantity * $liquorRatio * $productionWeightKg / 1000;
+                $labGrams = array_key_exists('grams', $item)
+                    ? (float) $item['grams']
+                    : (array_key_exists('pct', $item) || array_key_exists('percentage', $item)
+                        ? (float) ($item['pct'] ?? $item['percentage']) * $sampleWeightGrams / 100
+                        : (array_key_exists('gpl', $item) || array_key_exists('g_per_liter', $item)
+                            ? (float) ($item['gpl'] ?? $item['g_per_liter']) * $liquorRatio * $sampleWeightGrams / 1000
+                            : (float) $labQuantity));
+                $percentageWof = $labGrams / $sampleWeightGrams * 100;
+                $quantity = $definition['dose'] === 'grams'
+                    ? $productionWeightKg * ($labGrams / $sampleWeightGrams)
+                    : ($definition['dose'] === 'pct'
+                        ? $productionWeightKg * (float) $labQuantity / 100
+                        : (float) $labQuantity * $liquorRatio * $productionWeightKg / 1000);
                 $displayDose = rtrim(rtrim(number_format((float) $labQuantity, 4, '.', ''), '0'), '.');
                 $weight = number_format($productionWeightKg, 2, '.', '');
-                $calculation = $definition['dose'] === 'pct'
-                    ? "{$weight} kg × {$displayDose}% ÷ 100"
+                $sampleWeight = number_format($sampleWeightGrams, 2, '.', '');
+                $rateKgPerKg = $labGrams / $sampleWeightGrams;
+                $rateDisplay = rtrim(rtrim(number_format($rateKgPerKg, 6, '.', ''), '0'), '.');
+                $percentageDisplay = rtrim(rtrim(number_format($percentageWof, 4, '.', ''), '0'), '.');
+                $calculation = $definition['dose'] === 'grams'
+                    ? "{$labGrams} g ÷ {$sampleWeight} g = {$rateDisplay} kg/kg; {$rateDisplay} kg/kg × {$weight} kg"
                     : "{$displayDose} g/L × {$liquorRatio} L/kg × {$weight} kg ÷ 1000";
 
                 return [
@@ -198,8 +213,8 @@ abstract class ManufacturingStaffController extends Controller
                     'name' => $material?->display_name ?? ($item['name'] ?? $item['material_name'] ?? 'Material'),
                     'quantity' => round($quantity, 4),
                     'unit' => 'kg',
-                    'lab_quantity' => $labQuantity,
-                    'lab_unit' => $definition['dose'] === 'pct' ? '% OWF' : 'g/L',
+                    'lab_quantity' => $labGrams,
+                    'lab_unit' => 'g',
                     'calculation' => $calculation,
                 ];
             })->values();
@@ -443,6 +458,14 @@ abstract class ManufacturingStaffController extends Controller
                     : ($reviewCount > 0 ? 'awaiting_review'
                         : ($unbatchedCount > 0 ? 'awaiting_batch' : 'waiting_previous_stage'));
 
+                // Keep an assignment visible only while its fabric codes still
+                // belong to this staff member's dyeing stage. Assignment rows
+                // can remain active until the whole JO is released, even after
+                // this stage has passed supervisor review.
+                if ($department === 'dyeing' && $stageState === 'waiting_previous_stage') {
+                    return null;
+                }
+
                 return [
                     'assignment_id' => $assignment->id,
                     'fabric_code' => $assignment->fabric?->code,
@@ -473,6 +496,7 @@ abstract class ManufacturingStaffController extends Controller
                     ] : null,
                     'recipe' => $recipeData,
                     'stage' => $assignment->stage,
+                    'deadline' => $assignment->deadline?->toDateString(),
                     'status' => $assignment->status,
                     'notes' => $assignment->notes,
                     'ready_fabric_count' => $readyCount,

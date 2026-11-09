@@ -434,6 +434,9 @@ class ClientConversationController extends Controller
     public function sendPO(Request $request, Inquiry $inquiry)
     {
         $this->authorizeClient($inquiry);
+        if ($request->has('order_groups')) {
+            return $this->sendGroupedPO($request, $inquiry);
+        }
 
         $data = $request->validate([
             'quotation_id' => ['required', 'integer', 'exists:eco_quotations,id'],
@@ -448,26 +451,44 @@ class ClientConversationController extends Controller
                 ->whereKey($data['quotation_id'])
                 ->where('inquiry_id', $inquiry->id)
                 ->where('client_id', Auth::guard('client')->id())
-                ->whereIn('status', ['sent', 'accepted'])
+                ->where('status', 'accepted')
                 ->with('items.product')
                 ->lockForUpdate()
                 ->firstOrFail();
 
             $selections = $inquiry->product_selections ?? [];
             $selectionSets = collect($selections['products'] ?? []);
-            if ($selectionSets->isEmpty() && ! empty($selections['pantones']) && ! empty($selections['yarns'])) {
+            if ($selectionSets->isEmpty() && (! empty($selections['pantones']) || ! empty($selections['colorways'])) && ! empty($selections['yarns'])) {
                 $selectionSets = collect([[...$selections, 'product_id' => $selections['product_id'] ?? $inquiry->product_id]]);
             }
             if ($selectionSets->isNotEmpty()) {
-                $requiredPairs = InquiryColorwayPairs::fromSelections($selections, (int) $inquiry->product_id);
+                $requiredPairs = collect(InquiryColorwayPairs::fromSelections($selections, (int) $inquiry->product_id));
+                $requiredKeys = $requiredPairs->map(fn ($pair) => implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']]))->all();
                 $approvedPairs = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
                     ->where('status', FabricSampleRequest::STATUS_APPROVED)->get()->flatMap(fn ($sample) => collect($sample->pantone_colors ?? [])->map(fn ($color) => [
                         'product_id' => (int) $sample->product_id, 'pantone_id' => (int) ($color['pantone_reference_id'] ?? 0), 'yarn_id' => (int) ($color['yarn_material_id'] ?? 0),
                     ]));
-                $approvedKeys = $approvedPairs->map(fn ($pair) => implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']]));
-                $missing = collect($requiredPairs)->contains(fn ($pair) => ! $approvedKeys->contains(implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']])));
-                if ($missing) {
-                    throw ValidationException::withMessages(['items' => 'Approve every requested Pantone color and yarn swatch before sending a purchase order.']);
+                $approvedKeys = $approvedPairs->map(fn ($pair) => implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']]))->all();
+
+                if ($requiredPairs->isNotEmpty()) {
+                    $pantoneNames = \App\Models\Man\PantoneReference::query()
+                        ->whereIn('id', $requiredPairs->pluck('pantone_id')->unique())
+                        ->pluck('name', 'id');
+                    foreach ($quotation->items as $quoteItem) {
+                        $colorName = mb_strtolower(trim((string) $quoteItem->color));
+                        $pair = $requiredPairs->first(fn ($candidate) =>
+                            (int) $candidate['product_id'] === (int) $quoteItem->product_id
+                            && (int) $candidate['yarn_id'] === (int) $quoteItem->fabric_type_id
+                            && mb_strtolower(trim((string) $pantoneNames->get($candidate['pantone_id'], ''))) === $colorName
+                        );
+                        if (! $pair) {
+                            throw ValidationException::withMessages(['quotation_id' => 'This quotation contains a product, color, or yarn that is not selected for this inquiry.']);
+                        }
+                        $pairKey = implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']]);
+                        if (! in_array($pairKey, $requiredKeys, true) || ! in_array($pairKey, $approvedKeys, true)) {
+                            throw ValidationException::withMessages(['quotation_id' => 'Approve the swatches for this quotation’s color and yarn lines before sending its purchase order.']);
+                        }
+                    }
                 }
             }
 
@@ -517,7 +538,7 @@ class ClientConversationController extends Controller
             }
 
             $taxRate = 12.0;
-            $taxAmount = $quotation->vat_type === 'inclusive' ? round($subtotal * ($taxRate / 100), 2) : 0.0;
+            $taxAmount = round($subtotal * ($taxRate / 100), 2);
             $total = $subtotal + $taxAmount;
             $clientNotes = trim((string) ($data['notes'] ?? ''));
             $orderNotes = 'From quotation '.$quotation->quotation_number
@@ -534,7 +555,7 @@ class ClientConversationController extends Controller
                 'tax_rate' => $taxRate,
                 'tax_amount' => $taxAmount,
                 'total_amount' => $total,
-                'status' => 'credit_review',
+                'status' => 'crm_recipe_review',
                 'priority' => 'normal',
                 'notes' => $orderNotes,
                 'payment_status' => 'unpaid',
@@ -556,11 +577,7 @@ class ClientConversationController extends Controller
                 ]);
             }
 
-            $lifecycle->recordHistory($order, 'PO', null, 'credit_review', null, 'Client order from quotation '.$quotation->quotation_number);
-            if ($quotation->status === 'sent') {
-                $quotation->update(['status' => 'accepted']);
-            }
-
+            $lifecycle->recordHistory($order, 'PO', null, 'crm_recipe_review', null, 'Client order received by CRM for recipe linking from quotation '.$quotation->quotation_number);
             $summary = collect($orderedLines)->map(function ($line) {
                 $item = $line['quote_item'];
                 return "- {$line['product_name']} / ".($item->fabric_type ?: 'Yarn unspecified')." / {$item->color}: {$line['kilos']} kg";
@@ -582,6 +599,117 @@ class ClientConversationController extends Controller
         );
 
         return back()->with('success', "Purchase order {$poNumber} submitted for review.");
+    }
+
+    /** Submit one or more client POs, each containing selected lines from accepted quotations. */
+    private function sendGroupedPO(Request $request, Inquiry $inquiry)
+    {
+        $data = $request->validate([
+            'order_groups' => ['required', 'array', 'min:1', 'max:20'],
+            'order_groups.*.client_po_number' => ['required', 'string', 'max:100', 'distinct'],
+            'order_groups.*.image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'order_groups.*.items' => ['required', 'array', 'min:1'],
+            'order_groups.*.items.*.quotation_id' => ['required', 'integer', 'exists:eco_quotations,id'],
+            'order_groups.*.items.*.quotation_item_id' => ['required', 'integer', 'exists:eco_quotation_items,id'],
+            'order_groups.*.items.*.kilos' => ['required', 'numeric', 'min:0.01', 'max:99999999.99'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $allLines = collect($data['order_groups'])->flatMap(fn ($group) => $group['items']);
+        if ($allLines->pluck('quotation_item_id')->map(fn ($id) => (int) $id)->unique()->count() !== $allLines->count()) {
+            throw ValidationException::withMessages(['order_groups' => 'Each product/color line can be assigned to only one purchase order.']);
+        }
+
+        $storedImages = [];
+        try {
+            foreach ($data['order_groups'] as $index => $group) {
+                $image = $request->file("order_groups.{$index}.image");
+                if ($image) $storedImages[$index] = $image->storePublicly('purchase-orders/client', 'public');
+            }
+
+        $clientPoNumbers = DB::transaction(function () use ($data, $inquiry, $storedImages) {
+            $clientId = (int) Auth::guard('client')->id();
+            $quotationIds = collect($data['order_groups'])->flatMap(fn ($group) => collect($group['items'])->pluck('quotation_id'))->map(fn ($id) => (int) $id)->unique();
+            $quotations = EcoQuotation::query()->whereIn('id', $quotationIds)->where('inquiry_id', $inquiry->id)
+                ->where('client_id', $clientId)->where('status', 'accepted')->with('items.product')->lockForUpdate()->get()->keyBy('id');
+            if ($quotations->count() !== $quotationIds->count()) {
+                throw ValidationException::withMessages(['order_groups' => 'Only accepted quotations on this conversation can be ordered.']);
+            }
+
+            $selections = $inquiry->product_selections ?? [];
+            $selectionSets = collect($selections['products'] ?? []);
+            if ($selectionSets->isEmpty() && (! empty($selections['pantones']) || ! empty($selections['colorways'])) && ! empty($selections['yarns'])) {
+                $selectionSets = collect([[...$selections, 'product_id' => $selections['product_id'] ?? $inquiry->product_id]]);
+            }
+            $requiredPairs = $selectionSets->isNotEmpty() ? collect(InquiryColorwayPairs::fromSelections($selections, (int) $inquiry->product_id)) : collect();
+            if ($requiredPairs->isNotEmpty()) {
+                $pantoneNames = \App\Models\Man\PantoneReference::query()->whereIn('id', $requiredPairs->pluck('pantone_id')->unique())->pluck('name', 'id');
+                $approvedKeys = FabricSampleRequest::query()->where('inquiry_id', $inquiry->id)
+                    ->where('status', FabricSampleRequest::STATUS_APPROVED)->get()->flatMap(fn ($sample) => collect($sample->pantone_colors ?? [])->map(fn ($color) => implode(':', [(int) $sample->product_id, (int) ($color['pantone_reference_id'] ?? 0), (int) ($color['yarn_material_id'] ?? 0)])))->all();
+                foreach ($quotations as $quotation) foreach ($quotation->items as $quoteItem) {
+                    $pair = $requiredPairs->first(fn ($candidate) => (int) $candidate['product_id'] === (int) $quoteItem->product_id
+                        && (int) $candidate['yarn_id'] === (int) $quoteItem->fabric_type_id
+                        && mb_strtolower(trim((string) $pantoneNames->get($candidate['pantone_id'], ''))) === mb_strtolower(trim((string) $quoteItem->color)));
+                    if (! $pair || ! in_array(implode(':', [$pair['product_id'], $pair['pantone_id'], $pair['yarn_id']]), $approvedKeys, true)) {
+                        throw ValidationException::withMessages(['order_groups' => 'Approve the swatches for each quotation color and yarn line before ordering.']);
+                    }
+                }
+            }
+
+            $lifecycle = app(OrderLifecycleService::class);
+            $created = [];
+            foreach ($data['order_groups'] as $groupIndex => $group) {
+                $lines = [];
+                $usedQuotes = collect();
+                $subtotal = 0.0;
+                $tax = 0.0;
+                foreach ($group['items'] as $lineIndex => $row) {
+                    $quote = $quotations->get((int) $row['quotation_id']);
+                    $quoteItem = $quote?->items->firstWhere('id', (int) $row['quotation_item_id']);
+                    if (! $quoteItem) throw ValidationException::withMessages(["order_groups.{$groupIndex}.items.{$lineIndex}" => 'The selected line does not belong to its quotation.']);
+                    $usedQuotes->put($quote->id, $quote);
+                    $kilos = round((float) $row['kilos'], 2);
+                    $productId = $quoteItem->product_id ?: $inquiry->product_id;
+                    $product = $quoteItem->product ?: ($productId ? \App\Models\Inv\Product::find($productId) : null);
+                    if (! $product) throw ValidationException::withMessages(['order_groups' => 'A quoted line is missing its Inventory product. Ask CRM to correct the quotation.']);
+                    $minimum = (float) ($product->minimum_order_quantity ?? 0);
+                    if ($minimum > 0 && $kilos < $minimum) throw ValidationException::withMessages(["order_groups.{$groupIndex}.items.{$lineIndex}.kilos" => "Order at least {$minimum} kg for {$product->name}."]);
+                    $lineTotal = round($kilos * (float) $quoteItem->unit_price, 2);
+                    $subtotal += $lineTotal;
+                    $tax += round($lineTotal * 0.12, 2);
+                    $lines[] = [$quoteItem, $product->id, $kilos, (float) $quoteItem->unit_price, $lineTotal];
+                }
+                $quoteNumbers = $usedQuotes->pluck('quotation_number')->implode(', ');
+                $order = PurchaseOrder::create([
+                    'client_id' => $clientId, 'inquiry_id' => $inquiry->id,
+                    'eco_quotation_id' => $usedQuotes->count() === 1 ? $usedQuotes->first()->id : null,
+                    'po_number' => $lifecycle->nextPoNumber(), 'client_po_number' => trim($group['client_po_number']),
+                    'attachment_path' => $storedImages[$groupIndex] ?? null,
+                    'subtotal' => $subtotal, 'discount_amount' => 0, 'tax_rate' => 12.0, 'tax_amount' => $tax,
+                    'total_amount' => $subtotal + $tax, 'status' => 'crm_recipe_review', 'priority' => 'normal',
+                    'notes' => 'From quotation'.($usedQuotes->count() === 1 ? '' : 's')." {$quoteNumbers}".(trim((string) ($data['notes'] ?? '')) !== '' ? "\nClient notes: ".trim($data['notes']) : ''),
+                    'payment_status' => 'unpaid',
+                ]);
+                foreach ($lines as [$quoteItem, $productId, $kilos, $unitPrice, $lineTotal]) {
+                    $order->items()->create(['product_id' => $productId, 'eco_quotation_item_id' => $quoteItem->id, 'quantity' => $kilos, 'unit_price' => $unitPrice,
+                        'fabric' => $quoteItem->fabric, 'fabric_type' => $quoteItem->fabric_type, 'design' => $quoteItem->design, 'color' => $quoteItem->color, 'kilos' => $kilos, 'price' => $lineTotal]);
+                }
+                $lifecycle->recordHistory($order, 'PO', null, 'crm_recipe_review', null, 'Client order received by CRM for recipe linking from quotation(s) '.$quoteNumbers);
+                $lineSummary = collect($lines)->map(fn ($line) => '- '.$line[0]->fabric.' / '.($line[0]->fabric_type ?: 'Yarn unspecified').' / '.$line[0]->color.': '.$line[2].' kg')->implode("\n");
+                ConversationMessage::create(['inquiry_id' => $inquiry->id, 'sender_type' => 'client', 'message' => "Client PO {$order->client_po_number} (Monti ref {$order->po_number}) submitted from quotation(s) {$quoteNumbers}.\n{$lineSummary}\nTotal: PHP ".number_format($subtotal + $tax, 2), 'is_system_event' => true]);
+                $created[] = $order->client_po_number;
+            }
+            $inquiry->update(['last_message_at' => now()]);
+            return $created;
+        }, 3);
+        } catch (\Throwable $exception) {
+            if ($storedImages) Storage::disk('public')->delete(array_values($storedImages));
+            throw $exception;
+        }
+
+        Notification::notifyPage('CRM', 'inquiry', 'client_purchase_order', 'Client submitted a purchase order',
+            'Client PO'.(count($clientPoNumbers) === 1 ? '' : 's').' '.implode(', ', $clientPoNumbers).' submitted from an inquiry and ready for review.', 'crm.inquiries');
+        return back()->with('success', 'Client PO'.(count($clientPoNumbers) === 1 ? '' : 's').' '.implode(', ', $clientPoNumbers).' submitted for review.');
     }
 
     /**
@@ -657,6 +785,90 @@ class ClientConversationController extends Controller
         return back()->with('success', 'Sample receipt confirmed. You can now approve the swatch or request an adjustment.');
     }
 
+    public function bulkNoteSampleDeliveries(Request $request)
+    {
+        return $this->bulkAcknowledgeSampleDeliveries($request, false);
+    }
+
+    public function bulkReceiveDeliveredSamples(Request $request)
+    {
+        return $this->bulkAcknowledgeSampleDeliveries($request, true);
+    }
+
+    /**
+     * Mark several forwarded fabric samples as noted/received in one action.
+     * When receiving, a sample that was not noted yet is noted automatically so
+     * the client can acknowledge a whole batch at once.
+     */
+    private function bulkAcknowledgeSampleDeliveries(Request $request, bool $received)
+    {
+        $validated = $request->validate([
+            'sample_ids' => ['required', 'array', 'min:1'],
+            'sample_ids.*' => ['integer', 'exists:fabric_sample_requests,id'],
+        ]);
+
+        $samples = FabricSampleRequest::whereIn('id', $validated['sample_ids'])
+            ->with('inquiry')
+            ->get();
+
+        $updated = 0;
+
+        DB::transaction(function () use ($samples, $received, &$updated) {
+            foreach ($samples as $sampleRequest) {
+                $inquiry = $sampleRequest->inquiry;
+                if (! $inquiry) {
+                    continue;
+                }
+
+                $this->authorizeClient($inquiry);
+
+                if ($sampleRequest->status !== FabricSampleRequest::STATUS_FORWARDED) {
+                    continue;
+                }
+                if ($sampleRequest->client_received_at) {
+                    continue;
+                }
+
+                $notedNow = false;
+                if (! $sampleRequest->client_noted_at) {
+                    $sampleRequest->update(['client_noted_at' => now()]);
+                    ConversationMessage::create([
+                        'inquiry_id' => $inquiry->id,
+                        'sender_type' => 'client',
+                        'message' => "Client noted the delivery details for fabric sample {$sampleRequest->code}.",
+                        'is_system_event' => true,
+                        'visible_to_client' => false,
+                        'sample_request_id' => $sampleRequest->id,
+                    ]);
+                    $notedNow = true;
+                }
+
+                if ($received) {
+                    $sampleRequest->update(['client_received_at' => now()]);
+                    ConversationMessage::create([
+                        'inquiry_id' => $inquiry->id,
+                        'sender_type' => 'client',
+                        'message' => "Client confirmed receipt of fabric sample {$sampleRequest->code}.",
+                        'is_system_event' => true,
+                        'visible_to_client' => false,
+                        'sample_request_id' => $sampleRequest->id,
+                    ]);
+                }
+
+                if ($notedNow || $received) {
+                    $inquiry->update(['last_message_at' => now()]);
+                    $updated++;
+                }
+            }
+        });
+
+        $message = $received
+            ? "{$updated} swatch(es) marked as received."
+            : "{$updated} swatch(es) marked as noted.";
+
+        return back()->with('success', $message);
+    }
+
     public function approveSample(Request $request, FabricSampleRequest $sampleRequest)
     {
         $inquiry = $sampleRequest->inquiry;
@@ -673,30 +885,41 @@ class ClientConversationController extends Controller
         DB::transaction(function () use ($sampleRequest, $inquiry) {
             $sampleRequest->refresh();
             $formulation = $sampleRequest->formulations()->where('status', 'forwarded_to_client')->latest('version')->first();
-            if (! $sampleRequest->recipe_id) {
-                $formula = $sampleRequest->formula ?? [];
-                $liquorRatio = (string) ($formula['liquor_ratio'] ?? '1:10');
-                $liquor = preg_match('/(?:^|:)\s*(\d+(?:\.\d+)?)\s*$/', $liquorRatio, $match) ? (float) $match[1] : 10.0;
-                $materials = [];
-                foreach ([['dyestuffs', 'pct'], ['auxiliary_agents', 'gpl'], ['basic_chemicals', 'gpl'], ['post_treatment', 'gpl']] as [$group, $quantityKey]) {
-                    foreach ($formula[$group] ?? [] as $row) {
-                        $id = (int) ($row['material_id'] ?? 0);
-                        if (! $id) continue;
-                        $quantity = (float) ($row[$quantityKey] ?? $row['amount'] ?? 0);
-                        $materials[$id] = ($materials[$id] ?? 0) + ($group === 'dyestuffs' ? $quantity / 100 : $quantity * $liquor / 1000);
+            $formula = $formulation?->formula ?: ($sampleRequest->formula ?? []);
+            $liquorRatio = (string) ($formula['liquor_ratio'] ?? '1:10');
+            $liquor = preg_match('/(?:^|:)\s*(\d+(?:\.\d+)?)\s*$/', $liquorRatio, $match) ? (float) $match[1] : 10.0;
+            $materials = [];
+            foreach ([
+                ['dyestuffs', ['dye_stuffs'], 'grams'],
+                ['auxiliary_agents', ['auxiliaries', 'auxiliary'], 'grams'],
+                ['basic_chemicals', ['basic_chemical'], 'grams'],
+                ['post_treatment', ['post_treatment_agents'], 'grams'],
+            ] as [$group, $aliases, $quantityKey]) {
+                $rows = $formula[$group] ?? null;
+                if (! is_array($rows)) {
+                    foreach ($aliases as $alias) {
+                        if (isset($formula[$alias]) && is_array($formula[$alias])) {
+                            $rows = $formula[$alias];
+                            break;
+                        }
                     }
                 }
-                if (! array_key_exists('auxiliary_agents', $formula)) {
-                    foreach ($formula['auxiliaries'] ?? [] as $row) {
-                        $id = (int) ($row['material_id'] ?? 0);
-                        if ($id) $materials[$id] = ($materials[$id] ?? 0) + ((float) ($row['gpl'] ?? 0) * $liquor / 1000);
-                    }
-                }
-                $yarns = $formula['yarns'] ?? [];
-                foreach ($yarns as $row) {
+                foreach ($rows ?? [] as $row) {
                     $id = (int) ($row['material_id'] ?? 0);
-                    if ($id) $materials[$id] = ($materials[$id] ?? 0) + (float) ($row['qty'] ?? 0);
+                    if (! $id) continue;
+                    $legacyKey = $group === 'dyestuffs' ? 'pct' : 'gpl';
+                    $usesGrams = array_key_exists('grams', $row) || array_key_exists('amount', $row) && ($row['unit'] ?? null) === 'g';
+                    $quantity = (float) ($row[$quantityKey] ?? ($usesGrams ? ($row['amount'] ?? 0) : ($row[$legacyKey] ?? $row['quantity'] ?? 0)));
+                    $materials[$id] = ($materials[$id] ?? 0) + ($usesGrams ? $quantity / 1000 : ($legacyKey === 'pct' ? $quantity / 100 : $quantity * $liquor / 1000));
                 }
+            }
+            $yarns = $formula['yarns'] ?? [];
+            foreach ($yarns as $row) {
+                $id = (int) ($row['material_id'] ?? 0);
+                if ($id) $materials[$id] = ($materials[$id] ?? 0) + (float) ($row['qty'] ?? $row['quantity'] ?? 0);
+            }
+
+            if (! $sampleRequest->recipe_id) {
                 $recipe = BomRecord::create([
                     'client_id' => $sampleRequest->client_id,
                     'product_id' => $sampleRequest->product_id,
@@ -706,9 +929,14 @@ class ClientConversationController extends Controller
                     'dye_color' => $sampleRequest->color_description,
                     'weave_design' => $formula['weave_design'] ?? $sampleRequest->fabric_name,
                     'materials' => $materials,
+                    'dyeing_formula' => $formula,
                 ]);
                 $sampleRequest->update(['recipe_id' => $recipe->id, 'status' => FabricSampleRequest::STATUS_APPROVED]);
             } else {
+                BomRecord::query()
+                    ->whereKey($sampleRequest->recipe_id)
+                    ->where('client_id', $sampleRequest->client_id)
+                    ->update(['materials' => $materials, 'dyeing_formula' => $formula]);
                 $sampleRequest->update(['status' => FabricSampleRequest::STATUS_APPROVED]);
             }
             $formulation?->update(['status' => 'client_approved']);

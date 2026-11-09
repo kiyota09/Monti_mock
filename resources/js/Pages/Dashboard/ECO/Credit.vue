@@ -329,6 +329,16 @@
                                     <div><span class="block text-[11px] text-gray-500 dark:text-gray-400 sm:text-sm">Status</span> <span :class="selectedClient.is_good_payer ? 'text-emerald-600' : 'text-amber-600'" class="inline-flex items-center gap-1 text-sm font-black sm:text-base"><span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ selectedClient.is_good_payer ? 'Good Payer' : 'At Risk' }}</span></div>
                                 </div>
 
+                                <section v-if="selectedClient.return_adjustments?.length" class="mb-6">
+                                    <h4 class="mb-3 text-sm font-black text-gray-700 dark:text-gray-200">Approved return credits</h4>
+                                    <div class="space-y-2">
+                                        <article v-for="adjustment in selectedClient.return_adjustments" :key="adjustment.return_number" class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-900 dark:bg-emerald-900/10">
+                                            <div><p class="text-xs font-black text-gray-900 dark:text-white">{{ adjustment.return_number }} · {{ formatLabel(adjustment.request_type) }}</p><p class="mt-0.5 text-[11px] text-gray-500">{{ adjustment.jo_number }} · {{ adjustment.resolved_at }} · {{ adjustment.reason }}</p></div>
+                                            <span class="text-sm font-black text-emerald-700 dark:text-emerald-300">−₱{{ formatCurrency(adjustment.amount) }}</span>
+                                        </article>
+                                    </div>
+                                </section>
+
                                 <section class="mb-6">
                                     <div class="mb-3 flex items-center justify-between gap-2">
                                         <h4 class="text-sm font-black text-gray-700 dark:text-gray-200">Finance Receivables</h4>
@@ -470,6 +480,8 @@ const formatCurrency = (val) => {
 const formatDate = (date) => {
     return new Date(date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
 };
+
+const formatLabel = (value) => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const showToast = (type, message) => {
     toast.value = { show: true, type, message };

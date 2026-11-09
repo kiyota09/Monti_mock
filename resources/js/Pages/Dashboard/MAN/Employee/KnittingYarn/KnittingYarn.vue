@@ -20,6 +20,10 @@ const props = defineProps({
 });
 
 const page = usePage();
+const recordResult = ref(null);
+const closeRecordResult = () => { recordResult.value = null; };
+const pendingSupervisorHandoff = ref(null);
+const supervisorHandoffProcessing = ref(false);
 
 // ─── Flash ────────────────────────────────────────────────────────────────────
 const showFlash    = ref(!!page.props.flash?.message);
@@ -39,9 +43,17 @@ const dismissFlash = () => { showFlash.value = false; };
 // Produced JOs are removed server-side (recorded in work history) and only
 // return here if the knitting supervisor rejects the output for a remake.
 const filteredOrders = computed(() => props.jobOrders);
-const submitForSupervisor = (order) => router.post(
-    route('man.staff.knitting-yarn.submit-for-supervisor', order.id), {}, { preserveScroll: true },
-);
+const submitForSupervisor = (order) => { pendingSupervisorHandoff.value = order; };
+const confirmSupervisorHandoff = () => {
+    const order = pendingSupervisorHandoff.value;
+    if (!order || supervisorHandoffProcessing.value) return;
+    supervisorHandoffProcessing.value = true;
+    router.post(route('man.staff.knitting-yarn.submit-for-supervisor', order.id), {}, {
+        preserveScroll: true,
+        onSuccess: () => { pendingSupervisorHandoff.value = null; },
+        onFinish: () => { supervisorHandoffProcessing.value = false; },
+    });
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getYarnById = (id) => props.yarns.find(y => y.id == id) ?? null;
@@ -128,6 +140,14 @@ const mainYarnMenuOpen = ref(false);
 const additionalYarnSearch = ref([]);
 const additionalYarnMenuOpen = ref([]);
 const selectedMainYarn   = computed(() => getYarnById(selectedMainYarnId.value));
+watch(() => props.yarns, () => {
+    if (selectedMainYarnId.value && !selectedMainYarn.value) {
+        selectedMainYarnId.value = '';
+        mainYarnSearch.value = '';
+        mainYarnKgUsed.value = '';
+        mainYarnMenuOpen.value = false;
+    }
+}, { deep: true });
 const yarnsForSelectedOrder = computed(() => {
     const requestedName = selectedProductionOrder.value?.recipe?.requested_yarn;
     const requestedMaterialId = Number(selectedProductionOrder.value?.recipe?.requested_yarn_material_id || 0);
@@ -178,17 +198,13 @@ const removeYarnRow = (index) => {
 const onAdditionalYarnChange = (row) => { row.weight_kg = ''; recalcWeight(); };
 
 // ─── Weight Computation ───────────────────────────────────────────────────────
-const weightIsPartial = ref(false);
-
 const recalcWeight = () => {
     let total = 0;
-    let allHaveUnitWeight = true;
 
     const mainYarn  = selectedMainYarn.value;
     const mainKg = parseFloat(mainYarnKgUsed.value);
     if (mainYarn && mainKg > 0) {
         total += mainKg;
-        if (!mainYarn.unit_weight) allHaveUnitWeight = false;
     }
 
     for (const row of additionalYarnItems.value) {
@@ -196,7 +212,6 @@ const recalcWeight = () => {
         const kg = parseFloat(row.weight_kg);
         if (yarn && kg > 0) {
             total += kg;
-            if (!yarn.unit_weight) allHaveUnitWeight = false;
         }
     }
 
@@ -204,23 +219,7 @@ const recalcWeight = () => {
         additionalYarnItems.value.some(r => getYarnById(r.inventory_item_id) && parseFloat(r.weight_kg) > 0);
 
     form.weight = hasEntry ? total.toFixed(2) : '';
-    weightIsPartial.value = hasEntry && !allHaveUnitWeight;
 };
-
-const weightBreakdown = computed(() => {
-    const parts = [];
-    const mainYarn = selectedMainYarn.value;
-    const mainKg = parseFloat(mainYarnKgUsed.value);
-    if (mainYarn && mainKg > 0 && mainYarn.unit_weight)
-        parts.push(`${mainYarn.material_name}: ${mainKg.toFixed(2)} kg = ${(mainKg / parseFloat(mainYarn.unit_weight)).toFixed(2)} roll equivalents`);
-    for (const row of additionalYarnItems.value) {
-        const yarn = getYarnById(row.inventory_item_id);
-        const kg = parseFloat(row.weight_kg);
-        if (yarn && kg > 0 && yarn.unit_weight)
-            parts.push(`${yarn.material_name}: ${kg.toFixed(2)} kg = ${(kg / parseFloat(yarn.unit_weight)).toFixed(2)} roll equivalents`);
-    }
-    return parts;
-});
 
 watch(mainYarnKgUsed, recalcWeight);
 watch(additionalYarnItems, recalcWeight, { deep: true });
@@ -265,10 +264,36 @@ const submitFabric = () => {
     ];
     form.post(route('man.staff.knitting-yarn.store-fabric'), {
         preserveScroll: true,
-        onSuccess: () => {
-            form.reset();
-            selectedMainYarnId.value = ''; mainYarnKgUsed.value = '';
-            additionalYarnItems.value = []; weightIsPartial.value = false;
+        onSuccess: (responsePage) => {
+            const failureMessage = responsePage.props.flash?.error;
+            recordResult.value = failureMessage
+                ? { type: 'error', title: 'Fabric was not recorded', message: failureMessage }
+                : { type: 'success', title: 'Fabric recorded successfully', message: responsePage.props.flash?.message || 'The fabric cycle was recorded and yarn inventory was updated.' };
+            if (failureMessage) return;
+            // Keep the JO, machine, and primary lot selected for the next
+            // fabric cycle. Clear only the quantities that were just consumed.
+            form.reset('weight', 'remarks', 'yarns_used');
+            mainYarnKgUsed.value = '';
+            additionalYarnItems.value = [];
+            additionalYarnSearch.value = []; additionalYarnMenuOpen.value = [];
+            if (!selectedMainYarn.value) {
+                selectedMainYarnId.value = '';
+                mainYarnSearch.value = '';
+                mainYarnMenuOpen.value = false;
+            }
+        },
+        onError: (errors) => {
+            recordResult.value = {
+                type: 'error',
+                title: 'Fabric was not recorded',
+                message: Object.values(errors ?? {})[0] || 'The fabric could not be recorded. Review the form and try again.',
+            };
+        },
+        onHttpException: () => {
+            recordResult.value = { type: 'error', title: 'Fabric was not recorded', message: 'The server could not complete the fabric record. Please try again.' };
+        },
+        onNetworkError: () => {
+            recordResult.value = { type: 'error', title: 'Fabric was not recorded', message: 'A network error interrupted the request. Check your connection and try again.' };
         },
     });
 };
@@ -416,9 +441,10 @@ const submitFabric = () => {
                             <div v-if="order.assignment_id" class="mb-2 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
                                 <p v-if="order.remake_request_code" class="mb-2 rounded-lg bg-amber-100 px-2 py-1 text-[10px] font-black uppercase text-amber-900 dark:bg-amber-500/15 dark:text-amber-200">Dyeing batch remake · {{ order.remake_request_code }} · replace each rejected fabric code</p>
                                 <div v-if="order.remake_fabrics?.length" class="mb-2 grid gap-1 sm:grid-cols-2"><p v-for="target in order.remake_fabrics" :key="target.id" class="rounded-lg bg-white px-2 py-1 text-[10px] dark:bg-zinc-900"><span class="font-mono font-black">{{ target.code }}</span> · {{ target.yarn_type }} · {{ fmtNum(target.weight) }} kg · {{ target.replacement_created ? 'replacement recorded' : 'replacement needed' }}</p></div>
-                                <div class="flex justify-between text-[10px] font-black uppercase tracking-wide text-indigo-700 dark:text-indigo-200"><span>Your shift target</span><span>{{ fmtNum(order.produced_weight) }} / {{ fmtNum(order.assigned_weight) }} kg</span></div>
+                                <p v-if="order.deadline" class="mb-2 rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">Finish this assignment by {{ new Date(`${order.deadline}T00:00:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) }}</p>
+                                <div class="flex justify-between text-[10px] font-black uppercase tracking-wide text-indigo-700 dark:text-indigo-200"><span>Your output / assigned target</span><span>{{ fmtNum(order.produced_weight) }} / {{ fmtNum(order.assigned_weight) }} kg</span></div>
                                 <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-indigo-100 dark:bg-zinc-800"><div class="h-full rounded-full bg-indigo-600" :style="{ width: `${Math.min(100, order.assigned_weight ? order.produced_weight / order.assigned_weight * 100 : 0)}%` }"/></div>
-                                <p class="mt-1 text-[10px] text-indigo-700 dark:text-indigo-200">{{ fmtNum(order.remaining_assigned_weight) }} kg remaining in your JO allocation</p>
+                                <p class="mt-1 text-[10px] text-indigo-700 dark:text-indigo-200">{{ fmtNum(order.remaining_assigned_weight) }} kg minimum remaining to meet your assigned JO target. Extra weight is accepted.</p>
                                 <div class="mt-2 flex flex-wrap gap-1.5">
                                     <div v-for="machine in order.assigned_machines" :key="machine.id" class="flex items-center gap-1.5 rounded-lg bg-white px-2 py-1 dark:bg-zinc-900">
                                         <span class="text-[10px] font-bold">{{ machine.machine_no }}</span>
@@ -439,7 +465,9 @@ const submitFabric = () => {
                                     <Layers class="w-3.5 h-3.5" /> Full Recipe
                                 </button>
                                 <template v-if="order.assignment_id">
-                                    <button v-if="order.handoff_requested" type="button" disabled class="flex-1 rounded-2xl bg-amber-50 px-3 py-2.5 text-center text-[10px] font-black text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">Sent to Supervisor</button>
+                                    <button v-if="order.remake_request_code && order.replacement_handoff_requested" type="button" disabled class="flex-1 rounded-2xl bg-amber-50 px-3 py-2.5 text-center text-[10px] font-black text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">Replacement sent to Supervisor</button>
+                                    <button v-else-if="order.can_submit_replacement_handoff && canEditProduction" type="button" @click="submitForSupervisor(order)" class="flex-1 rounded-2xl bg-emerald-600 px-3 py-2.5 text-center text-xs font-black text-white transition hover:bg-emerald-700">Send replacement to Supervisor</button>
+                                    <button v-else-if="order.handoff_requested" type="button" disabled class="flex-1 rounded-2xl bg-amber-50 px-3 py-2.5 text-center text-[10px] font-black text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">Sent to Supervisor</button>
                                     <button v-else-if="order.can_submit_handoff && canEditProduction" type="button" @click="submitForSupervisor(order)" class="flex-1 rounded-2xl bg-emerald-600 px-3 py-2.5 text-center text-xs font-black text-white transition hover:bg-emerald-700">Send JO to Supervisor</button>
                                     <span v-else class="flex-1 self-center text-center text-[10px] font-bold text-slate-500">Waiting for Inspector approval</span>
                                 </template>
@@ -495,7 +523,7 @@ const submitFabric = () => {
                                     <label class="block text-xs font-black text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5">Assigned Job Order <span class="text-red-500">*</span></label>
                                     <select v-model="form.sales_order_id" @change="form.machine_id = ''; form.yarn_type = selectedProductionOrder?.yarn_type || ''" required class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
                                         <option value="">— Select your assigned JO —</option>
-                                        <option v-for="order in jobOrders" :key="order.id" :value="order.id">{{ order.jo_number }} · {{ order.remaining_assigned_weight }} kg remaining</option>
+                                        <option v-for="order in jobOrders" :key="order.id" :value="order.id">{{ order.jo_number }} · {{ fmtNum(order.assigned_weight) }} kg target</option>
                                     </select>
                                 </div>
                                 <div>
@@ -631,24 +659,6 @@ const submitFabric = () => {
                                             Enter the kilograms used from each yarn lot. The remaining full rolls are calculated automatically.
                                         </p>
                                     </div>
-                                </div>
-
-                                <div>
-                                    <label class="block text-xs font-black text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1.5">
-                                        Total Fabric Weight (kg) <span class="text-red-500">*</span>
-                                        <span v-if="weightBreakdown.length" class="text-indigo-500 font-normal normal-case ml-1">(auto-calculated)</span>
-                                    </label>
-                                    <input type="number" step="0.01" min="0.01" v-model="form.weight" required
-                                        class="w-full border border-gray-200 dark:border-zinc-700 rounded-2xl px-3 py-2.5 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                                        placeholder="0.00" />
-                                    <p class="mt-1 text-[11px] text-slate-500">You may record any cycle weight up to your remaining JO allocation of {{ selectedProductionOrder?.remaining_assigned_weight ?? 0 }} kg.</p>
-                                    <div v-if="weightBreakdown.length" class="mt-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700 rounded-2xl px-3 py-2 space-y-0.5">
-                                        <p v-for="(line, i) in weightBreakdown" :key="i" class="pl-1">+ {{ line }}</p>
-                                        <p class="pl-1 font-black text-gray-700 dark:text-gray-200 border-t border-gray-200 dark:border-zinc-700 pt-1 mt-1">= {{ form.weight }} kg total</p>
-                                    </div>
-                                    <p v-if="weightIsPartial" class="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
-                                        <AlertTriangle class="w-3 h-3" /> Some yarns have no unit weight — verify total manually.
-                                    </p>
                                 </div>
 
                                 <div>
@@ -949,6 +959,27 @@ const submitFabric = () => {
                 </div>
             </div>
         </Transition>
+
+        <div v-if="recordResult" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4" @click.self="closeRecordResult">
+            <section role="dialog" aria-modal="true" aria-labelledby="record-result-title" class="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900">
+                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl" :class="recordResult.type === 'success' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'">
+                    <CheckCircle2 v-if="recordResult.type === 'success'" class="h-7 w-7" />
+                    <AlertTriangle v-else class="h-7 w-7" />
+                </div>
+                <h2 id="record-result-title" class="mt-4 text-xl font-black text-slate-900 dark:text-white">{{ recordResult.title }}</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-zinc-300">{{ recordResult.message }}</p>
+                <button type="button" @click="closeRecordResult" class="mt-6 rounded-xl px-5 py-2.5 text-sm font-bold text-white" :class="recordResult.type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'">Done</button>
+            </section>
+        </div>
+
+        <div v-if="pendingSupervisorHandoff" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4" @click.self="!supervisorHandoffProcessing && (pendingSupervisorHandoff = null)">
+            <section role="dialog" aria-modal="true" aria-labelledby="supervisor-handoff-confirm-title" class="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900">
+                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"><ClipboardList class="h-7 w-7" /></div>
+                <h2 id="supervisor-handoff-confirm-title" class="mt-4 text-xl font-black text-slate-900 dark:text-white">{{ pendingSupervisorHandoff.remake_request_code ? 'Send replacement fabric to knitting supervisor?' : 'Send JO to knitting supervisor?' }}</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-zinc-300">{{ pendingSupervisorHandoff.remake_request_code ? `Send the inspector-approved replacement fabric for ${pendingSupervisorHandoff.jo_number} to the Knitting Supervisor for review?` : `Send ${pendingSupervisorHandoff.jo_number} for supervisor review? Inspector-approved fabric totals ${fmtNum(pendingSupervisorHandoff.approved_weight)} kg against the ${fmtNum(pendingSupervisorHandoff.quantity)} kg JO target.` }}</p>
+                <div class="mt-6 flex justify-center gap-3"><button type="button" :disabled="supervisorHandoffProcessing" @click="pendingSupervisorHandoff = null" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Cancel</button><button type="button" :disabled="supervisorHandoffProcessing" @click="confirmSupervisorHandoff" class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">{{ supervisorHandoffProcessing ? 'Sending…' : 'Confirm and send' }}</button></div>
+            </section>
+        </div>
 
     </AuthenticatedLayout>
 </template>

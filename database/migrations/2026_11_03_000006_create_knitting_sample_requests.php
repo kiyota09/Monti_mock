@@ -17,9 +17,8 @@ return new class extends Migration
 
     public function up(): void
     {
-        $list = implode(',', array_map(fn ($role) => "'{$role}'", $this->roles));
-        DB::statement("ALTER TABLE `users` MODIFY `manufacturing_role` ENUM({$list}) NULL");
-        DB::statement("ALTER TABLE `manufacturing_supervisor_roles` MODIFY `manufacturing_role` ENUM({$list}) NULL");
+        $this->setRoleEnum('users');
+        $this->setRoleEnum('manufacturing_supervisor_roles');
 
         Schema::create('knitting_sample_requests', function (Blueprint $table) {
             $table->id();
@@ -60,4 +59,20 @@ return new class extends Migration
     {
         Schema::dropIfExists('knitting_sample_requests');
     }
+
+    private function setRoleEnum(string $table): void
+    {
+        if (DB::getDriverName() === 'mysql') {
+            $list = implode(',', array_map(fn ($role) => "'{$role}'", $this->roles));
+            DB::statement("ALTER TABLE `{$table}` MODIFY `manufacturing_role` ENUM({$list}) NULL");
+
+            return;
+        }
+
+        $roles = $this->roles;
+        Schema::table($table, function (Blueprint $blueprint) use ($roles) {
+            $blueprint->enum('manufacturing_role', $roles)->nullable()->change();
+        });
+    }
+
 };

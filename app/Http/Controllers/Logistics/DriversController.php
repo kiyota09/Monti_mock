@@ -14,8 +14,16 @@ class DriversController extends Controller
 {
     public function index()
     {
-        $drivers = Driver::with('user')->withCount('deliveries')->get()->map(function (Driver $driver) {
+        $drivers = Driver::with('user')
+            ->withCount('deliveries')
+            ->withCount(['deliveries as rating_count' => fn ($query) => $query->whereNotNull('rating')])
+            ->withAvg('deliveries', 'rating')
+            ->get()
+            ->map(function (Driver $driver) {
             $photoPath = $driver->user?->profile_photo_path;
+            // The stored driver rating is only a cache. Customer delivery
+            // ratings are the source of truth; unrated drivers start at zero.
+            $driver->setAttribute('rating', round((float) ($driver->deliveries_avg_rating ?? 0), 1));
             $driver->setAttribute('photo_url', $photoPath
                 ? (str_starts_with($photoPath, 'http://') || str_starts_with($photoPath, 'https://')
                     ? $photoPath
@@ -24,7 +32,27 @@ class DriversController extends Controller
 
             return $driver;
         });
-        return inertia('Dashboard/Logistics/Drivers', ['drivers' => $drivers]);
+
+        $ratingReports = Delivery::with(['driver.user', 'ratedByClient', 'route'])
+            ->whereNotNull('rating')
+            ->latest('rated_at')
+            ->get()
+            ->map(fn (Delivery $delivery) => [
+                'id' => $delivery->id,
+                'delivery_number' => $delivery->delivery_number,
+                'driver_id' => $delivery->driver_id,
+                'driver_name' => $delivery->driver?->user?->name ?? 'Unknown driver',
+                'client_name' => $delivery->ratedByClient?->company_name ?? 'Client',
+                'route_name' => $delivery->route?->name,
+                'rating' => (int) $delivery->rating,
+                'comment' => $delivery->rating_comment,
+                'rated_at' => $delivery->rated_at?->format('Y-m-d H:i'),
+            ]);
+
+        return inertia('Dashboard/Logistics/Drivers', [
+            'drivers' => $drivers,
+            'ratingReports' => $ratingReports,
+        ]);
     }
 
     public function store(Request $request)
@@ -50,7 +78,7 @@ class DriversController extends Controller
 
         $driver = new Driver([
             'license_number' => $request->license_number,
-            'rating' => 5.0,
+            'rating' => 0,
             'is_available' => true,
         ]);
 
@@ -73,6 +101,8 @@ class DriversController extends Controller
             ->latest('created_at')
             ->get();
         $driver->load('user')->setRelation('deliveries', $deliveries);
+        $driver->setAttribute('rating_count', $driver->deliveries()->whereNotNull('rating')->count());
+        $driver->setAttribute('rating', round((float) ($driver->deliveries()->whereNotNull('rating')->avg('rating') ?? 0), 1));
 
         return response()->json([
             'driver' => $driver,

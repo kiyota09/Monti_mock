@@ -111,13 +111,13 @@
                                 </thead>
                                 <tbody class="divide-y divide-gray-50 dark:divide-zinc-800">
                                     <tr v-for="order in recentOrders" :key="order.id" class="text-sm hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
-                                        <td class="px-6 py-3 font-mono font-bold text-gray-900 dark:text-white">{{ order.po_number }}</td>
+                                        <td class="px-6 py-3"><span class="block font-mono font-bold text-gray-900 dark:text-white">{{ order.client_po_number || order.po_number }}</span><span v-if="order.client_po_number" class="block text-[10px] text-gray-500">Monti ref {{ order.po_number }}</span></td>
                                         <td class="px-6 py-3 text-gray-500 dark:text-gray-400">{{ formatDate(order.created_at) }}</td>
                                         <td class="px-6 py-3 text-right font-black text-gray-900 dark:text-white">₱{{ formatCurrency(order.total_amount) }}</td>
                                         <td class="px-6 py-3 text-center">
                                             <span :class="order.status === 'approved' ? 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30' : 'bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30'"
                                                 class="px-2.5 py-1 rounded-full ring-1 text-[9px] font-black uppercase inline-flex items-center gap-1">
-                                                <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> {{ order.status.replace('_', ' ') }}
+                                                <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" /> {{ order.status === 'crm_recipe_review' ? 'CRM recipe linking' : order.status.replace('_', ' ') }}
                                             </span>
                                         </td>
                                     </tr>

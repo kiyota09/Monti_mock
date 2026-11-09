@@ -118,7 +118,10 @@ class ReceivingController extends Controller
             if ($data['po_id']) {
                 $po = ScmPurchaseOrder::find($data['po_id']);
                 if ($po && $po->status === 'shipping') {
-                    $po->update(['status' => 'delivered']);
+                    $po->update([
+                        'status' => 'completed',
+                        'received' => true,
+                    ]);
                 }
             }
 

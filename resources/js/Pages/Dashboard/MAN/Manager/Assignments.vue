@@ -1,6 +1,6 @@
 <script setup>
 import { confirmModal } from '@/lib/feedback';
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { usePageAccess } from '@/composables/usePageAccess';
@@ -21,12 +21,13 @@ const props = defineProps({
     orders: { type: Array, default: () => [] },
     assignments: { type: Array, default: () => [] },
     knittingMachines: { type: Array, default: () => [] },
+    replacementRequests: { type: Array, default: () => [] },
     prefillOrderId: { type: [Number, String], default: null },
     prefillStage: { type: String, default: '' },
 });
 
 const { canEdit } = usePageAccess();
-const canEditProduction = computed(() => canEdit('MAN', 'production'));
+const canEditProduction = computed(() => canEdit('MAN', 'assignments'));
 
 const humanize = (slug) => slug.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 
@@ -39,11 +40,31 @@ const form = useForm({
     manufacturing_order_id: '',
     stage: '',
     assigned_to: '',
+    deadline: '',
     assigned_weight: '',
     machine_ids: [],
     fabric_ids: [],
     notes: '',
 });
+const replacementSelections = reactive({});
+const assigningReplacementId = ref(null);
+const replacementSelection = (request) => {
+    if (!replacementSelections[request.id]) replacementSelections[request.id] = { assigned_to: '', machine_id: '' };
+    return replacementSelections[request.id];
+};
+const machinesForReplacement = (request) => props.knittingMachines.filter((machine) =>
+    Number(machine.staff_id) === Number(replacementSelection(request).assigned_to),
+);
+const assignReplacement = (request) => {
+    const selection = replacementSelection(request);
+    if (!selection.assigned_to || !selection.machine_id || assigningReplacementId.value) return;
+    assigningReplacementId.value = request.id;
+    router.post(route('man.assignments.dyeing-replacements.assign', request.id), selection, {
+        preserveScroll: true,
+        onSuccess: () => { delete replacementSelections[request.id]; },
+        onFinish: () => { assigningReplacementId.value = null; },
+    });
+};
 
 // Only the selected JO's remaining stages may be assigned next.
 const selectedOrder = computed(() =>
@@ -212,7 +233,7 @@ const submit = () => {
     closePickers();
     form.post(route('man.assignments.store'), {
         preserveScroll: true,
-        onSuccess: () => form.reset('manufacturing_order_id', 'stage', 'assigned_to', 'assigned_weight', 'machine_ids', 'fabric_ids', 'notes'),
+        onSuccess: () => form.reset('manufacturing_order_id', 'stage', 'assigned_to', 'deadline', 'assigned_weight', 'machine_ids', 'fabric_ids', 'notes'),
     });
 };
 
@@ -284,6 +305,24 @@ const statusStyle = {
                     </div>
                 </div>
 
+                <section v-if="department === 'knitting' && replacementRequests.length" class="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm dark:border-amber-500/20 dark:bg-amber-500/5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div><h2 class="text-lg font-black text-amber-950 dark:text-amber-100">Dyeing replacement fabrics awaiting assignment</h2><p class="mt-1 text-xs text-amber-800 dark:text-amber-200">Assign each rejected fabric code as its own knitting task. The rest of its JO remains in Dyeing.</p></div>
+                        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-900 dark:bg-amber-500/15 dark:text-amber-100">{{ replacementRequests.length }} fabric(s)</span>
+                    </div>
+                    <div class="mt-4 grid gap-3 xl:grid-cols-2">
+                        <article v-for="replacement in replacementRequests" :key="replacement.id" class="rounded-2xl border border-amber-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                            <div class="flex flex-wrap items-start justify-between gap-2"><div><p class="font-mono text-sm font-black text-slate-900 dark:text-white">{{ replacement.jo_number }} · replace {{ replacement.fabric?.code }}</p><p class="mt-1 text-xs text-slate-500">{{ replacement.fabric?.yarn_type || 'Yarn not specified' }} · {{ num(replacement.requested_weight_kg) }} kg · {{ replacement.code }}</p></div><span class="rounded-full bg-rose-100 px-2.5 py-1 text-[9px] font-black uppercase text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">Replacement required</span></div>
+                            <p class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-700 dark:bg-zinc-800 dark:text-zinc-200"><b>Dyeing issue:</b> {{ replacement.reason }}</p>
+                            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                                <select v-model="replacementSelection(replacement).assigned_to" @change="replacementSelection(replacement).machine_id = ''" :disabled="!canEditProduction || assigningReplacementId === replacement.id" class="rounded-xl border border-slate-200 p-2.5 text-xs dark:border-zinc-700 dark:bg-zinc-800"><option value="">Choose knitting staff</option><option v-for="member in staff.filter(person => person.manufacturing_role === 'knitting_yarn')" :key="member.id" :value="member.id">{{ member.name }} · {{ loadLabel(member.active_load) }}</option></select>
+                                <select v-model="replacementSelection(replacement).machine_id" :disabled="!canEditProduction || !replacementSelection(replacement).assigned_to || assigningReplacementId === replacement.id" class="rounded-xl border border-slate-200 p-2.5 text-xs dark:border-zinc-700 dark:bg-zinc-800"><option value="">Choose assigned machine</option><option v-for="machine in machinesForReplacement(replacement)" :key="machine.id" :value="machine.id">{{ machine.machine_no }}</option></select>
+                            </div>
+                            <button type="button" @click="assignReplacement(replacement)" :disabled="!canEditProduction || !replacementSelection(replacement).assigned_to || !replacementSelection(replacement).machine_id || assigningReplacementId === replacement.id" class="mt-3 w-full rounded-xl bg-amber-700 px-3 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50">{{ assigningReplacementId === replacement.id ? 'Assigning replacement…' : 'Assign this fabric to Knitting Yarn' }}</button>
+                        </article>
+                    </div>
+                </section>
+
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <!-- Assign form -->
                     <div class="lg:col-span-1">
@@ -291,6 +330,7 @@ const statusStyle = {
                             <h2 class="flex items-center gap-2 text-sm font-black text-gray-800 dark:text-gray-100 uppercase tracking-wide">
                                 <UserCheck class="h-4 w-4 text-indigo-500" /> New Assignment
                             </h2>
+                            <a :href="route('man.assignments.calendar', { department })" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-200"><CalendarDays class="h-4 w-4" /> Open department calendar</a>
 
                             <div class="space-y-3">
                                 <div ref="orderPicker" class="relative">
@@ -611,6 +651,12 @@ const statusStyle = {
                                     </div>
                                 </div>
 
+                                <label class="block">
+                                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400">Task deadline</span>
+                                    <input v-model="form.deadline" type="date" :min="new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)" required class="mt-1 w-full rounded-2xl border-gray-200 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
+                                    <span v-if="form.errors.deadline" class="text-xs text-rose-500">{{ form.errors.deadline }}</span>
+                                </label>
+
                                 <div v-if="department === 'knitting'" class="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
                                     <p class="text-xs font-black uppercase tracking-wide text-indigo-800 dark:text-indigo-200">Knitting shift allocation</p>
                                     <label class="block"><span class="text-xs font-bold text-gray-600 dark:text-gray-300">Target weight for this staff member (kg)</span><input v-model.number="form.assigned_weight" type="number" min="0.01" step="0.01" class="mt-1 w-full rounded-xl border-gray-200 text-sm dark:border-zinc-700 dark:bg-zinc-800" placeholder="Enter target weight"/><span v-if="form.errors.assigned_weight" class="text-xs text-rose-500">{{ form.errors.assigned_weight }}</span></label>
@@ -631,7 +677,7 @@ const statusStyle = {
                                     v-if="canEditProduction"
                                     type="button"
                                     @click="submit"
-                                    :disabled="form.processing || !form.manufacturing_order_id || !form.stage || !form.assigned_to || (department === 'knitting' && (!form.assigned_weight || !form.machine_ids?.length)) || (department === 'dyeing' && !form.fabric_ids.length)"
+                                    :disabled="form.processing || !form.manufacturing_order_id || !form.stage || !form.assigned_to || !form.deadline || (department === 'knitting' && (!form.assigned_weight || !form.machine_ids?.length)) || (department === 'dyeing' && !form.fabric_ids.length)"
                                     class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-black px-4 py-3 rounded-2xl shadow-lg shadow-indigo-500/25 transition active:scale-95"
                                 >
                                     <UserCheck class="h-4 w-4" /> {{ department === 'knitting' ? 'Add Staff Allocation' : 'Assign Job Order' }}
@@ -803,6 +849,7 @@ const statusStyle = {
                                         <span class="font-bold">{{ a.assignee?.name ?? 'Unassigned' }}</span>
                                         <span class="text-gray-400">· {{ humanize(a.assigned_role) }}</span>
                                     </p>
+                                    <p v-if="a.deadline" class="mt-1 flex items-center gap-1.5 text-[11px] font-black text-amber-700 dark:text-amber-300"><CalendarDays class="h-3.5 w-3.5" /> Deadline {{ new Date(`${a.deadline}T00:00:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) }}</p>
                                     <p v-if="department === 'knitting' && a.assigned_weight" class="mt-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">{{ num(a.assigned_weight) }} kg assigned · Machines {{ a.machine_numbers?.join(', ') || '—' }}</p>
                                     <p v-if="department === 'dyeing' && a.fabric" class="mt-1 text-[11px] font-bold text-cyan-800 dark:text-cyan-200">Fabric {{ a.fabric.code }} · {{ num(a.fabric.weight) }} kg</p>
                                     <p v-if="a.notes" class="mt-1 text-xs text-gray-400 italic">{{ a.notes }}</p>

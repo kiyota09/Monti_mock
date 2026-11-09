@@ -35,8 +35,17 @@
                     </div>
                 </div>
 
+                <div class="flex gap-2 rounded-2xl bg-white p-2 shadow-sm dark:bg-zinc-900">
+                    <button v-for="tab in [{ key: 'drivers', label: 'Drivers' }, { key: 'reports', label: 'Reports' }]" :key="tab.key"
+                        @click="activeTab = tab.key"
+                        :class="activeTab === tab.key ? 'bg-indigo-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-zinc-800'"
+                        class="rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition">
+                        {{ tab.label }}<span v-if="tab.key === 'reports'" class="ml-2 rounded-full bg-black/10 px-2 py-0.5">{{ ratingReports.length }}</span>
+                    </button>
+                </div>
+
                 <!-- Search and availability filters -->
-                <div class="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm dark:bg-zinc-900 sm:flex-row sm:items-center">
+                <div v-if="activeTab === 'drivers'" class="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm dark:bg-zinc-900 sm:flex-row sm:items-center">
                     <div class="relative min-w-0 flex-1">
                         <Search class="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                         <input v-model="searchTerm" type="text" placeholder="Search by name, license, or email..."
@@ -52,7 +61,7 @@
                 </div>
 
                 <!-- Stats Summary -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div v-if="activeTab === 'drivers'" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="animate-fade-up group relative flex flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-800" style="animation-delay:80ms">
                         <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-indigo-400/20 to-fuchsia-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-indigo-500 to-fuchsia-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
@@ -65,7 +74,7 @@
                                 <h3 class="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{{ drivers.length }}</h3>
                             </div>
                         </div>
-                    </div>
+                        </div>
                     <div class="animate-fade-up group relative flex flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-800" style="animation-delay:160ms">
                         <div class="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gradient-to-br from-emerald-400/20 to-teal-400/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         <div class="absolute left-0 top-5 bottom-5 w-1 bg-gradient-to-b from-emerald-500 to-teal-500 rounded-r-full scale-y-0 group-hover:scale-y-100 origin-center transition-transform duration-300" />
@@ -94,7 +103,7 @@
                 </div>
 
                 <!-- Driver cards styled to match Fleet -->
-                <div class="animate-fade-up overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow duration-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900" style="animation-delay:120ms">
+                <div v-if="activeTab === 'drivers'" class="animate-fade-up overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow duration-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900" style="animation-delay:120ms">
                     <div class="flex items-center gap-2 border-b border-gray-100 bg-gray-50 p-5 dark:border-zinc-800 dark:bg-zinc-800/50">
                         <Users class="h-5 w-5 text-indigo-600" />
                         <h2 class="text-sm font-black uppercase tracking-widest">Driver Roster</h2>
@@ -156,6 +165,38 @@
                             <p class="mt-2 text-sm font-bold text-gray-400">No drivers found. Click "Add Driver" to register.</p>
                     </div>
                 </div>
+                <section v-if="activeTab === 'reports'" class="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 p-5 dark:border-zinc-800 dark:bg-zinc-800/50">
+                        <div>
+                            <h2 class="text-sm font-black uppercase tracking-widest text-gray-900 dark:text-white">Customer delivery ratings</h2>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Ratings and feedback submitted by clients after delivery.</p>
+                        </div>
+                        <select v-model="reportDriverFilter" class="rounded-xl border-gray-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white">
+                            <option value="all">All drivers</option>
+                            <option v-for="driver in drivers" :key="driver.id" :value="String(driver.id)">{{ driver.user?.name || 'Unnamed driver' }}</option>
+                        </select>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[50rem] text-left text-sm">
+                            <thead class="bg-white text-[10px] font-black uppercase tracking-wider text-gray-400 dark:bg-zinc-900">
+                                <tr><th class="px-5 py-3">Rated</th><th class="px-5 py-3">Delivery</th><th class="px-5 py-3">Driver</th><th class="px-5 py-3">Client</th><th class="px-5 py-3">Rating</th><th class="px-5 py-3">Reason / feedback</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-zinc-800">
+                                <tr v-for="report in filteredRatingReports" :key="report.id">
+                                    <td class="whitespace-nowrap px-5 py-4 text-xs text-gray-500">{{ report.rated_at || '—' }}</td>
+                                    <td class="px-5 py-4 font-mono text-xs font-bold text-gray-900 dark:text-white">{{ report.delivery_number }}</td>
+                                    <td class="px-5 py-4 font-semibold text-gray-800 dark:text-gray-200">{{ report.driver_name }}</td>
+                                    <td class="px-5 py-4 text-gray-600 dark:text-gray-300">{{ report.client_name }}</td>
+                                    <td class="whitespace-nowrap px-5 py-4"><span class="font-black text-amber-600">{{ report.rating }} / 5 ★</span></td>
+                                    <td class="max-w-md px-5 py-4 text-gray-600 dark:text-gray-300">{{ report.comment || 'No written feedback' }}</td>
+                                </tr>
+                                <tr v-if="filteredRatingReports.length === 0">
+                                    <td colspan="6" class="px-5 py-12 text-center text-sm text-gray-500">No customer ratings for this selection yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
         </div>
 
@@ -337,12 +378,18 @@ const props = defineProps({
     drivers: {
         type: Array,
         default: () => []
-    }
+    },
+    ratingReports: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 // Filters
+const activeTab = ref('drivers');
 const searchTerm = ref('');
 const availabilityFilter = ref('all');
+const reportDriverFilter = ref('all');
 
 // Modals
 const showCreateModal = ref(false);
@@ -380,10 +427,20 @@ const filteredDrivers = computed(() => {
 
 const availableCount = computed(() => props.drivers.filter(d => d.is_available).length);
 const avgRating = computed(() => {
-    if (!props.drivers.length) return 0;
-    const sum = props.drivers.reduce((acc, d) => acc + (d.rating || 0), 0);
-    return (sum / props.drivers.length).toFixed(1);
+    const totals = props.drivers.reduce((acc, driver) => {
+        const count = Math.max(0, Number(driver.rating_count) || 0);
+        const rating = Number(driver.rating);
+        if (count && Number.isFinite(rating)) {
+            acc.score += rating * count;
+            acc.count += count;
+        }
+        return acc;
+    }, { score: 0, count: 0 });
+    return totals.count ? (totals.score / totals.count).toFixed(1) : '0.0';
 });
+const filteredRatingReports = computed(() => props.ratingReports.filter((report) =>
+    reportDriverFilter.value === 'all' || String(report.driver_id) === reportDriverFilter.value
+));
 
 const driverCardTheme = (driver) => driver.is_available
     ? {

@@ -9,7 +9,7 @@ const canEditProduction = computed(() => canEdit('MAN', 'production'));
 const humanize = (value) => String(value ?? '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 import {
     Package, Shirt, Droplet, Factory,
-    ClipboardList,
+    ClipboardList, Info,
     Wind, Flame, Truck,
     AlertTriangle, Sparkles,
 } from 'lucide-vue-next';
@@ -23,19 +23,84 @@ const props = defineProps({
     packages:     Array, // Now includes status, product_name, product_sku, quantity, fabric_code, yarn_type, weight, operator
     finishingReadyOrders: { type: Array, default: () => [] },
     knittingHandoffs: { type: Array, default: () => [] },
+    knittingReplacementHandoffs: { type: Array, default: () => [] },
 });
 
 const declineReasons = ref({});
+const selectedHandoffFabrics = ref({});
+const pendingKnittingRejection = ref(null);
+const knittingRejectionProcessing = ref(false);
+const pendingKnittingReplacementReview = ref(null);
+const knittingReplacementReason = ref('');
+const knittingReplacementError = ref('');
+const knittingReplacementProcessing = ref(false);
+const knittingReplacementResult = ref(null);
 const releaseKnittingHandoff = (handoff) => router.post(route('man.production.knitting.release', handoff.id), {}, { preserveScroll: true });
-const declineKnittingHandoff = (handoff) => router.post(route('man.production.knitting.decline', handoff.id), {
+const isHandoffFabricSelected = (handoffId, fabricId) => (selectedHandoffFabrics.value[handoffId] || []).includes(fabricId);
+const toggleHandoffFabric = (handoffId, fabricId, checked) => {
+    const selected = new Set(selectedHandoffFabrics.value[handoffId] || []);
+    if (checked) selected.add(fabricId);
+    else selected.delete(fabricId);
+    selectedHandoffFabrics.value[handoffId] = [...selected];
+};
+const declineKnittingHandoff = (handoff) => {
+    if (!(selectedHandoffFabrics.value[handoff.id] || []).length || !declineReasons.value[handoff.id]?.trim()) return;
+    pendingKnittingRejection.value = handoff;
+};
+const askKnittingReplacementReview = (handoff, decision) => {
+    pendingKnittingReplacementReview.value = { ...handoff, decision };
+    knittingReplacementReason.value = '';
+    knittingReplacementError.value = '';
+};
+const submitKnittingReplacementReview = () => {
+    const handoff = pendingKnittingReplacementReview.value;
+    if (!handoff || knittingReplacementProcessing.value) return;
+    if (handoff.decision === 'remake' && !knittingReplacementReason.value.trim()) {
+        knittingReplacementError.value = 'Enter a reason before returning this fabric for another make.';
+        return;
+    }
+    knittingReplacementProcessing.value = true;
+    router.post(route('man.manager.production.knitting.replacements.review', handoff.id), {
+        decision: handoff.decision,
+        reason: knittingReplacementReason.value,
+    }, {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            const error = page.props.flash?.error;
+            knittingReplacementResult.value = error
+                ? { success: false, title: 'Replacement review failed', message: error }
+                : { success: true, title: 'Replacement review saved', message: page.props.flash?.success || page.props.flash?.message || 'The replacement review was saved.' };
+            pendingKnittingReplacementReview.value = null;
+        },
+        onError: (errors) => {
+            knittingReplacementResult.value = { success: false, title: 'Replacement review failed', message: Object.values(errors || {}).flat().find(Boolean) || 'The replacement review could not be saved.' };
+        },
+        onFinish: () => { knittingReplacementProcessing.value = false; },
+    });
+};
+const confirmKnittingRejection = () => {
+    const handoff = pendingKnittingRejection.value;
+    if (!handoff || knittingRejectionProcessing.value) return;
+    knittingRejectionProcessing.value = true;
+    router.post(route('man.production.knitting.decline', handoff.id), {
     reason: declineReasons.value[handoff.id] || '',
-}, { preserveScroll: true });
+    fabric_ids: selectedHandoffFabrics.value[handoff.id] || [],
+}, {
+    preserveScroll: true,
+    onSuccess: () => {
+        declineReasons.value[handoff.id] = '';
+        selectedHandoffFabrics.value[handoff.id] = [];
+        pendingKnittingRejection.value = null;
+    },
+    onFinish: () => { knittingRejectionProcessing.value = false; },
+});
+};
 
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Tabs (department-scoped for supervisors) ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 const DEPT_TABS = {
     knitting:  ['fabrics'],
     dyeing:    ['bleaching', 'pre_treatment', 'color', 'post_treatment'],
-    finishing: ['squeezer', 'iron', 'packed'],
+    finishing: ['packed'],
 };
 
 const allTabs = computed(() => [
@@ -91,17 +156,81 @@ const cancelConfirm = () => {
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Actions (department supervisor gates) ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 const dyeingStagesForActiveTab = computed(() => props.dyeingStages.filter((item) => item.current_stage === activeTab.value));
 
-const reviewDyeingStage = (item, decision) => {
-    router.post(`/dashboard/man/production/dyeing-stages/${item.record_id}/review`, { decision }, { preserveScroll: true });
+const reviewSubmitting = ref(false);
+const reviewResult = ref(null);
+const reprocessEvaluation = ref(null);
+const reprocessLevel = ref('redo');
+const reprocessReasons = ref([]);
+const reprocessDetails = ref('');
+const reprocessEvaluationError = ref('');
+const reprocessConfirmation = ref(null);
+const reprocessReasonOptions = [
+    { key: 'shade_mismatch', label: 'Shade or color mismatch' },
+    { key: 'uneven_process', label: 'Uneven processing' },
+    { key: 'stain_or_mark', label: 'Stain or visible mark' },
+    { key: 'fabric_damage', label: 'Fabric damage' },
+    { key: 'incorrect_process', label: 'Incorrect process result' },
+    { key: 'other', label: 'Other issue' },
+];
+
+const reviewDyeingStage = (item, decision, reason = '') => {
+    if (reviewSubmitting.value) return;
+    reviewSubmitting.value = true;
+    router.post(route('man.manager.production.dyeing.review', item.record_id), { decision, reason }, {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            const error = page.props.flash?.error;
+            reviewResult.value = error
+                ? { success: false, title: 'Dyeing review failed', message: error }
+                : { success: true, title: 'Dyeing review saved', message: page.props.flash?.success || page.props.flash?.message || 'The fabric review was saved.' };
+        },
+        onError: (errors) => {
+            reviewResult.value = { success: false, title: 'Dyeing review failed', message: Object.values(errors || {}).flat().find(Boolean) || 'The review could not be saved. Please try again.' };
+        },
+        onHttpException: () => {
+            reviewResult.value = { success: false, title: 'Dyeing review failed', message: 'The server returned an error while saving this review. Please try again.' };
+        },
+        onFinish: () => { reviewSubmitting.value = false; },
+    });
 };
 
+const requestDyeingPass = (item) => askConfirm(
+    'Pass this fabric?',
+    `Approve fabric ${item.fabric_code} and move it to the next stage?`,
+    () => reviewDyeingStage(item, 'pass'),
+    'Pass this fabric',
+    'success',
+);
+
 const requestDyeingReprocess = (item) => {
-    askConfirm(
-        'Return for reprocessing?',
-        `Return ${item.fabric_code} to ${humanize(item.current_stage)} for another attempt?`,
-        () => reviewDyeingStage(item, 'redo'),
-        'Return for reprocessing',
-        'danger',
+    reprocessLevel.value = 'redo';
+    reprocessReasons.value = [];
+    reprocessDetails.value = '';
+    reprocessEvaluationError.value = '';
+    reprocessEvaluation.value = item;
+};
+
+const continueDyeingReprocess = () => {
+    if (!reprocessEvaluation.value || !reprocessReasons.value.length) {
+        reprocessEvaluationError.value = 'Select at least one problem reason to continue.';
+        return;
+    }
+    const labels = reprocessReasons.value.map((key) => reprocessReasonOptions.find((reason) => reason.key === key)?.label).filter(Boolean);
+    const reason = [labels.join(', '), reprocessDetails.value.trim()].filter(Boolean).join(': ');
+    const item = reprocessEvaluation.value;
+    const level = reprocessLevel.value;
+    reprocessEvaluation.value = null;
+    reprocessConfirmation.value = { item, level, reason };
+};
+
+const confirmDyeingReprocess = () => {
+    const confirmation = reprocessConfirmation.value;
+    if (!confirmation || reviewSubmitting.value) return;
+    reprocessConfirmation.value = null;
+    reviewDyeingStage(
+        confirmation.item,
+        confirmation.level === 'replacement' ? 'replacement' : 'redo',
+        confirmation.reason,
     );
 };
 
@@ -195,16 +324,23 @@ const pushFinishingOrderToLogistics = (workOrder) => {
 
                 <!-- FABRICS TAB -->
                 <div v-if="activeTab === 'fabrics'">
-                    <section v-if="department === 'knitting'" class="mb-6 rounded-3xl border border-indigo-200 bg-indigo-50/70 p-5 shadow-sm dark:border-indigo-900 dark:bg-indigo-950/30">
+                    <section v-if="department === 'knitting'" class="knitting-supervisor-review mb-6 rounded-3xl border border-slate-700 bg-slate-900 p-5 text-white shadow-sm dark:border-indigo-900 dark:bg-slate-900 dark:text-white">
                         <div class="flex flex-wrap items-start justify-between gap-3">
-                            <div><h2 class="text-lg font-black text-indigo-950 dark:text-indigo-100">Knitting supervisor review</h2><p class="mt-1 text-xs text-indigo-800 dark:text-indigo-200">Completed Job Orders submitted by Knitting Yarn staff appear here for release to Dyeing or return for remake.</p></div>
-                            <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700 dark:bg-zinc-900 dark:text-indigo-200">{{ knittingHandoffs.length }} awaiting review</span>
+                            <div><h2 class="text-lg font-black !text-white">Knitting supervisor review</h2><p class="mt-1 text-sm font-semibold !text-slate-100">Completed Job Orders submitted by Knitting Yarn staff appear here for release to Dyeing or return for remake.</p></div>
+                            <span class="rounded-full bg-slate-700 px-3 py-1 text-xs font-black !text-white">{{ knittingHandoffs.length }} awaiting review</span>
                         </div>
-                        <p v-if="!knittingHandoffs.length" class="mt-4 rounded-xl bg-white/80 px-4 py-3 text-sm text-slate-500 dark:bg-zinc-900/70 dark:text-zinc-400">No completed Job Orders are waiting for review.</p>
-                        <article v-for="handoff in knittingHandoffs" :key="handoff.id" class="mt-4 rounded-2xl border border-indigo-100 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-                            <div class="flex flex-wrap items-start justify-between gap-3"><div><p class="font-mono text-base font-black text-slate-900 dark:text-white">{{ handoff.jo_number }}</p><p class="mt-1 text-xs text-slate-500">{{ handoff.client }} Â· Submitted {{ handoff.submitted_at }}</p><p class="mt-1 text-xs font-semibold text-slate-700 dark:text-zinc-300">{{ handoff.approved_weight }} / {{ handoff.total_quantity }} kg inspector approved</p><p class="mt-1 text-xs text-slate-500">Knitting Yarn staff: {{ handoff.staff.join(', ') || 'Assigned staff' }}</p></div><div class="flex flex-wrap gap-2"><button type="button" :disabled="!canEditProduction || Number(handoff.approved_weight) + 0.001 < Number(handoff.total_quantity)" @click="releaseKnittingHandoff(handoff)" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">Push to Dyeing</button></div></div>
-                            <div class="mt-3 flex flex-wrap gap-1.5"><span v-for="fabric in handoff.fabrics" :key="fabric.code" class="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-700 dark:bg-zinc-800 dark:text-zinc-200">{{ fabric.code }} Â· {{ fabric.weight }} kg Â· {{ fabric.operator || 'Operator unknown' }}</span></div>
-                            <div v-if="canEditProduction" class="mt-4 flex flex-col gap-2 sm:flex-row"><textarea v-model="declineReasons[handoff.id]" rows="2" maxlength="500" placeholder="Reason for return (required)" class="min-w-0 flex-1 rounded-xl border-slate-200 text-xs dark:border-zinc-700 dark:bg-zinc-800"/><button type="button" :disabled="!declineReasons[handoff.id]?.trim()" @click="declineKnittingHandoff(handoff)" class="rounded-xl bg-rose-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">Decline and request remake</button></div>
+                        <p v-if="!knittingHandoffs.length" class="mt-4 rounded-xl bg-slate-800 px-4 py-3 text-sm font-semibold !text-white">No completed Job Orders are waiting for review.</p>
+                        <article v-for="handoff in knittingHandoffs" :key="handoff.id" class="mt-4 rounded-2xl border border-slate-700 bg-slate-800 p-4 dark:border-zinc-700 dark:bg-slate-800">
+                            <div class="flex flex-wrap items-start justify-between gap-3"><div><p class="font-mono text-base font-black !text-white">{{ handoff.jo_number }}</p><p class="mt-1 text-sm font-semibold !text-slate-100">{{ handoff.client }} Â· Submitted {{ handoff.submitted_at }}</p><p class="mt-1 text-sm font-bold !text-white">{{ handoff.approved_weight }} / {{ handoff.total_quantity }} kg inspector approved</p><p class="mt-1 text-sm font-semibold !text-slate-100">Knitting Yarn staff: {{ handoff.staff.join(', ') || 'Assigned staff' }}</p></div><div class="flex flex-wrap gap-2"><button type="button" :disabled="!canEditProduction || Number(handoff.approved_weight) + 0.001 < Number(handoff.total_quantity)" @click="releaseKnittingHandoff(handoff)" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">Push to Dyeing</button></div></div>
+                            <p class="mt-4 text-xs font-semibold !text-slate-200">Check only the damaged fabric rolls to return. Unchecked rolls stay approved.</p>
+                            <div class="mt-2 flex flex-wrap gap-2"><label v-for="fabric in handoff.fabrics" :key="fabric.id" class="flex cursor-pointer items-center gap-2 rounded-lg bg-slate-700 px-2.5 py-2 text-xs font-bold !text-white"><input type="checkbox" :checked="isHandoffFabricSelected(handoff.id, fabric.id)" @change="toggleHandoffFabric(handoff.id, fabric.id, $event.target.checked)" class="rounded border-slate-400 text-rose-600 focus:ring-rose-500"/><span class="!text-white">{{ fabric.code }} · {{ fabric.weight }} kg · {{ fabric.operator || 'Operator unknown' }}</span></label></div>
+                            <div v-if="canEditProduction" class="mt-4 flex flex-col gap-2 sm:flex-row"><textarea v-model="declineReasons[handoff.id]" rows="2" maxlength="500" placeholder="Reason for return (required)" class="min-w-0 flex-1 rounded-xl border-slate-300 bg-white text-xs text-slate-900 placeholder:text-slate-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-400"/><button type="button" :disabled="!declineReasons[handoff.id]?.trim() || !(selectedHandoffFabrics[handoff.id]?.length)" @click="declineKnittingHandoff(handoff)" class="rounded-xl bg-rose-700 px-4 py-2 text-xs font-black text-white disabled:opacity-40">Decline selected fabric(s) and request remake</button></div>
+                        </article>
+                    </section>
+                    <section v-if="department === 'knitting' && knittingReplacementHandoffs.length" class="mb-6 rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/5">
+                        <div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-lg font-black text-amber-950 dark:text-amber-100">Dyeing replacement fabrics awaiting knitting supervisor review</h2><p class="mt-1 text-sm text-amber-800 dark:text-amber-200">Inspector-approved replacement rolls sent by Knitting Yarn staff.</p></div><span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-900 dark:bg-amber-500/15 dark:text-amber-100">{{ knittingReplacementHandoffs.length }} fabric(s)</span></div>
+                        <article v-for="handoff in knittingReplacementHandoffs" :key="handoff.id" class="mt-4 rounded-2xl border border-amber-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                            <div class="flex flex-wrap items-start justify-between gap-3"><div><p class="font-mono text-base font-black text-slate-900 dark:text-white">{{ handoff.jo_number }} · replacement {{ handoff.replacement_fabric?.code }}</p><p class="mt-1 text-sm text-slate-600 dark:text-zinc-300">Original fabric {{ handoff.original_fabric?.code }} · {{ handoff.replacement_fabric?.yarn_type }} · {{ handoff.replacement_fabric?.weight }} kg</p><p class="mt-1 text-xs text-slate-500">Knitting Yarn staff: {{ handoff.replacement_fabric?.operator || handoff.staff || 'Assigned staff' }} · {{ handoff.code }}</p><p class="mt-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-100"><b>Original Dyeing issue:</b> {{ handoff.reason }}</p></div><div class="flex gap-2"><button type="button" :disabled="!canEditProduction" @click="askKnittingReplacementReview(handoff, 'remake')" class="rounded-xl bg-rose-700 px-4 py-2 text-xs font-black text-white disabled:opacity-50">Return for remake</button><button type="button" :disabled="!canEditProduction" @click="askKnittingReplacementReview(handoff, 'pass')" class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-black text-white disabled:opacity-50">Pass to Dyeing</button></div></div>
                         </article>
                     </section>
                     <div v-if="!fabrics?.length"
@@ -281,7 +417,7 @@ const pushFinishingOrderToLogistics = (workOrder) => {
                                 </template>
                             </div>
                             <div v-if="canEditProduction && item.record_id" class="mt-5 flex gap-2 border-t border-slate-100 pt-4 dark:border-zinc-800">
-                                <button type="button" @click="reviewDyeingStage(item, 'pass')" class="flex-1 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-black text-white transition hover:bg-emerald-800">Pass to next stage</button>
+                                <button type="button" @click="requestDyeingPass(item)" class="flex-1 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-black text-white transition hover:bg-emerald-800">Pass this fabric</button>
                                 <button type="button" @click="requestDyeingReprocess(item)" class="flex-1 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-black text-rose-700 transition hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">Reprocess</button>
                             </div>
                         </article>
@@ -419,6 +555,52 @@ const pushFinishingOrderToLogistics = (workOrder) => {
             </div>
         </div>
 
+        <div v-if="reprocessEvaluation" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="reprocess-evaluation-title">
+            <section class="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                <p class="text-xs font-black uppercase tracking-widest text-rose-600">Dyeing Department · Fabric {{ reprocessEvaluation.fabric_code }}</p>
+                <h2 id="reprocess-evaluation-title" class="mt-1 text-xl font-black text-slate-900 dark:text-white">Evaluate the problem</h2>
+                <p class="mt-1 text-sm text-slate-500">Choose what should happen to this fabric and record why it needs reprocessing.</p>
+
+                <fieldset class="mt-5 space-y-2">
+                    <legend class="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Reprocess level</legend>
+                    <label class="flex cursor-pointer gap-3 rounded-xl border p-3" :class="reprocessLevel === 'replacement' ? 'border-rose-400 bg-rose-50 dark:border-rose-500/50 dark:bg-rose-500/10' : 'border-slate-200 dark:border-zinc-700'">
+                        <input v-model="reprocessLevel" type="radio" value="replacement" class="mt-1 text-rose-600">
+                        <span><b class="block text-sm text-slate-900 dark:text-white">Reject and issue a replacement fabric</b><span class="mt-0.5 block text-xs text-slate-500">Send only this fabric code to the Knitting Supervisor for staff assignment.</span></span>
+                    </label>
+                    <label class="flex cursor-pointer gap-3 rounded-xl border p-3" :class="reprocessLevel === 'redo' ? 'border-amber-400 bg-amber-50 dark:border-amber-500/50 dark:bg-amber-500/10' : 'border-slate-200 dark:border-zinc-700'">
+                        <input v-model="reprocessLevel" type="radio" value="redo" class="mt-1 text-amber-600">
+                        <span><b class="block text-sm text-slate-900 dark:text-white">Remake and process again</b><span class="mt-0.5 block text-xs text-slate-500">Return this fabric to the same stage and staff assignment for another attempt.</span></span>
+                    </label>
+                </fieldset>
+
+                <fieldset class="mt-5">
+                    <legend class="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Problem reasons *</legend>
+                    <div class="grid gap-2 sm:grid-cols-2">
+                        <label v-for="reason in reprocessReasonOptions" :key="reason.key" class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 dark:border-zinc-700 dark:text-zinc-200"><input v-model="reprocessReasons" type="checkbox" :value="reason.key" class="rounded text-indigo-600">{{ reason.label }}</label>
+                    </div>
+                    <textarea v-model="reprocessDetails" rows="3" class="mt-3 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800" placeholder="Additional details (optional)"></textarea>
+                    <p v-if="reprocessEvaluationError" class="mt-2 text-xs font-bold text-rose-600">{{ reprocessEvaluationError }}</p>
+                </fieldset>
+
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" @click="reprocessEvaluation = null" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-zinc-700">Cancel</button>
+                    <button type="button" @click="continueDyeingReprocess" class="rounded-xl bg-rose-700 px-4 py-2 text-sm font-black text-white">Continue to confirmation</button>
+                </div>
+            </section>
+        </div>
+
+        <div v-if="reprocessConfirmation" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="dyeing-reprocess-confirm-title">
+            <section class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                <h2 id="dyeing-reprocess-confirm-title" class="text-xl font-black text-slate-900 dark:text-white">{{ reprocessConfirmation.level === 'replacement' ? 'Confirm replacement request' : 'Confirm staff reprocess' }}</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-zinc-300">{{ reprocessConfirmation.level === 'replacement' ? `Reject fabric ${reprocessConfirmation.item.fabric_code} and send only this fabric to the Knitting Supervisor for a replacement?` : `Return fabric ${reprocessConfirmation.item.fabric_code} to the same ${humanize(reprocessConfirmation.item.current_stage)} staff member for another attempt?` }}</p>
+                <p class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600 dark:bg-zinc-800 dark:text-zinc-300"><b>Recorded reason:</b> {{ reprocessConfirmation.reason }}</p>
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" :disabled="reviewSubmitting" @click="reprocessConfirmation = null" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-zinc-700">Go back</button>
+                    <button type="button" :disabled="reviewSubmitting" @click="confirmDyeingReprocess" class="rounded-xl bg-rose-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{{ reviewSubmitting ? 'Saving…' : (reprocessConfirmation.level === 'replacement' ? 'Send to Knitting' : 'Return for remake') }}</button>
+                </div>
+            </section>
+        </div>
+
         <!-- CONFIRM MODAL -->
         <Transition name="modal">
             <div
@@ -447,6 +629,7 @@ const pushFinishingOrderToLogistics = (workOrder) => {
                         <button
                             @click="runConfirm"
                             type="button"
+                            :disabled="reviewSubmitting"
                             class="flex-1 py-2.5 rounded-2xl text-white text-xs font-black uppercase tracking-wide shadow-lg transition active:scale-95"
                             :class="confirmTone === 'success'
                                 ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/25'
@@ -456,11 +639,55 @@ const pushFinishingOrderToLogistics = (workOrder) => {
                         </button>
                     </div>
                 </div>
+
             </div>
         </Transition>
 
+        <div v-if="reviewResult" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="dyeing-review-result-title">
+            <section class="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900">
+                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-2xl font-black" :class="reviewResult.success ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'">{{ reviewResult.success ? '✓' : '!' }}</div>
+                <h2 id="dyeing-review-result-title" class="mt-4 text-xl font-black text-slate-900 dark:text-white">{{ reviewResult.title }}</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-zinc-300">{{ reviewResult.message }}</p>
+                <button type="button" @click="reviewResult = null" class="mt-5 rounded-xl bg-indigo-700 px-5 py-2.5 text-sm font-black text-white">Close</button>
+            </section>
+        </div>
+
+        <div v-if="pendingKnittingRejection" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4" @click.self="!knittingRejectionProcessing && (pendingKnittingRejection = null)">
+            <section role="dialog" aria-modal="true" aria-labelledby="knitting-rejection-info-title" class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"><Info class="h-7 w-7" /></div>
+                <h2 id="knitting-rejection-info-title" class="mt-4 text-center text-xl font-black text-slate-900 dark:text-white">Information before fabric rejection</h2>
+                <p class="mt-3 text-center text-sm leading-relaxed text-slate-700 dark:text-zinc-300">Rejecting even one selected fabric returns the entire JO <strong>{{ pendingKnittingRejection.jo_number }}</strong> to the Knitting Yarn staff work page for reprocessing. Only the selected fabric(s) will be marked for remake; the other fabrics remain approved. The assigned machine will require a new knitting mechanic setup before the remake.</p>
+                <div class="mt-6 flex justify-center gap-3"><button type="button" :disabled="knittingRejectionProcessing" @click="pendingKnittingRejection = null" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Go back</button><button type="button" :disabled="knittingRejectionProcessing" @click="confirmKnittingRejection" class="rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{{ knittingRejectionProcessing ? 'Rejecting…' : 'Continue with rejection' }}</button></div>
+            </section>
+        </div>
+
+        <div v-if="pendingKnittingReplacementReview" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4" @click.self="!knittingReplacementProcessing && (pendingKnittingReplacementReview = null)">
+            <section role="alertdialog" aria-modal="true" aria-labelledby="knitting-replacement-review-title" class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                <h2 id="knitting-replacement-review-title" class="text-xl font-black text-slate-900 dark:text-white">{{ pendingKnittingReplacementReview.decision === 'pass' ? 'Pass replacement to Dyeing?' : 'Return replacement for another make?' }}</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-zinc-300">{{ pendingKnittingReplacementReview.decision === 'pass' ? `Approve ${pendingKnittingReplacementReview.replacement_fabric?.code} and send this specific replacement through the original JO's Dyeing route?` : `Reject ${pendingKnittingReplacementReview.replacement_fabric?.code} and send this specific fabric back to its Knitting Yarn staff member?` }}</p>
+                <textarea v-if="pendingKnittingReplacementReview.decision === 'remake'" v-model="knittingReplacementReason" rows="3" maxlength="500" class="mt-4 w-full rounded-xl border border-slate-200 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800" placeholder="Reason for return (required)"></textarea>
+                <p v-if="knittingReplacementError" class="mt-2 text-sm font-bold text-rose-600">{{ knittingReplacementError }}</p>
+                <div class="mt-5 flex justify-end gap-2"><button type="button" :disabled="knittingReplacementProcessing" @click="pendingKnittingReplacementReview = null" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-zinc-700">Cancel</button><button type="button" :disabled="knittingReplacementProcessing" @click="submitKnittingReplacementReview" class="rounded-xl px-4 py-2 text-sm font-black text-white disabled:opacity-50" :class="pendingKnittingReplacementReview.decision === 'pass' ? 'bg-emerald-700' : 'bg-rose-700'">{{ knittingReplacementProcessing ? 'Saving…' : 'Confirm' }}</button></div>
+            </section>
+        </div>
+        <div v-if="knittingReplacementResult" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4"><section class="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900"><div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-2xl font-black" :class="knittingReplacementResult.success ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'">{{ knittingReplacementResult.success ? '✓' : '!' }}</div><h2 class="mt-4 text-xl font-black text-slate-900 dark:text-white">{{ knittingReplacementResult.title }}</h2><p class="mt-2 text-sm text-slate-600 dark:text-zinc-300">{{ knittingReplacementResult.message }}</p><button type="button" @click="knittingReplacementResult = null" class="mt-5 rounded-xl bg-indigo-700 px-5 py-2.5 text-sm font-black text-white">Close</button></section></div>
+
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.knitting-supervisor-review h2,
+.knitting-supervisor-review p,
+.knitting-supervisor-review span:not(.h-1\.5) {
+    color: #ffffff !important;
+}
+
+:global(.dark) .knitting-supervisor-review h2,
+:global(.dark) .knitting-supervisor-review p,
+:global(.dark) .knitting-supervisor-review span:not(.h-1\.5) {
+    color: #ffffff !important;
+}
+</style>
 
 <style scoped>
 @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }

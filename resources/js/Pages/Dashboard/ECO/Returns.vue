@@ -52,14 +52,25 @@
                                 <tr v-for="r in returns" :key="r.id" class="border-b border-gray-50 dark:border-zinc-800/60 hover:bg-indigo-50/40 transition-colors">
                                     <td class="px-4 py-3 font-black">{{ r.return_number }}<p class="text-[11px] font-medium text-gray-400">{{ r.created_at }} · {{ r.created_by }}</p></td>
                                     <td class="px-4 py-3">{{ r.jo_number }}<p class="text-[11px] text-gray-400">{{ r.client_name }}</p></td>
-                                    <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase">{{ formatLabel(r.type) }}</span></td>
+                                    <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase">{{ formatLabel(r.request_type || r.type) }}</span><p v-for="pkg in r.packages" :key="pkg.number" class="mt-1 text-[10px] text-slate-400">{{ pkg.number }} · {{ pkg.product }}</p></td>
                                     <td class="px-4 py-3 text-right font-black">{{ r.quantity }} kg</td>
-                                    <td class="px-4 py-3 text-xs text-gray-500 max-w-56 truncate" :title="r.reason">{{ r.reason }}</td>
+                                    <td class="px-4 py-3 text-xs text-gray-500 max-w-56"><p class="truncate" :title="r.reason">{{ r.reason }}</p><a v-if="r.image_url" :href="r.image_url" target="_blank" class="text-indigo-600 underline">View evidence</a><p v-if="r.replacement_jo_number" class="mt-1 font-bold text-emerald-700">Replacement {{ r.replacement_jo_number }}</p><p v-if="r.discount_amount > 0" class="mt-1 font-bold text-emerald-700">Adjustment ₱{{ money(r.discount_amount) }}</p></td>
                                     <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-[10px] font-black uppercase border" :class="returnBadge(r.status)">{{ formatLabel(r.status) }}</span>
                                         <p v-if="r.resolved_at" class="text-[11px] text-gray-400 mt-0.5">{{ r.resolved_at }} · {{ r.resolved_by }}</p>
                                     </td>
                                     <td class="px-4 py-3">
-                                        <form v-if="canEditReturns" @submit.prevent="resolveReturn(r)" class="flex justify-end gap-1">
+                                        <form v-if="canEditReturns && r.request_type && r.status === 'pending'" @submit.prevent="resolveReturn(r)" class="flex flex-col items-end gap-1">
+                                            <select v-model="decisionState[r.id]" class="rounded-xl border px-2 py-1.5 text-xs">
+                                                <option value="replacement">Approve replacement</option>
+                                                <option value="price_adjustment">Approve price adjustment</option>
+                                                <option value="cancelled">Approve cancellation</option>
+                                                <option value="rejected">Reject request</option>
+                                            </select>
+                                            <input v-if="decisionState[r.id] === 'price_adjustment'" v-model.number="discountAmount[r.id]" type="number" min="0.01" step="0.01" required placeholder="Discount amount" class="w-36 rounded-xl border px-2 py-1.5 text-xs" />
+                                            <input v-if="decisionState[r.id] === 'rejected'" v-model="resolveNotes[r.id]" required placeholder="Reason" class="w-36 rounded-xl border px-2 py-1.5 text-xs" />
+                                            <button class="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-black text-white">Review request</button>
+                                        </form>
+                                        <form v-else-if="canEditReturns && !r.request_type" @submit.prevent="resolveReturn(r)" class="flex justify-end gap-1">
                                             <select v-if="r.transitions.length" v-model="resolveState[r.id]" class="rounded-xl border px-2 py-1.5 text-xs">
                                                 <option v-for="s in r.transitions" :key="s" :value="s">{{ formatLabel(s) }}</option>
                                             </select>
@@ -67,6 +78,7 @@
                                             <button v-if="r.transitions.length" class="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-black text-white hover:bg-emerald-500">Save</button>
                                             <span v-else class="text-xs text-slate-400">Complete</span>
                                         </form>
+                                        <span v-else-if="r.request_type" class="text-xs text-slate-400">Reviewed</span>
                                     </td>
                                 </tr>
                                 <tr v-if="!returns.length"><td colspan="7" class="px-4 py-10 text-center text-gray-400">No returns filed.</td></tr>
@@ -143,14 +155,21 @@ const applyFilters = () => router.get(route('eco.returns'), {
 }, { preserveState: true, preserveScroll: true, replace: true });
 const resolveState = reactive({});
 const resolveNotes = reactive({});
-for (const r of props.returns) resolveState[r.id] = r.transitions?.[0] || r.status;
+const decisionState = reactive({});
+const discountAmount = reactive({});
+for (const r of props.returns) {
+    resolveState[r.id] = r.transitions?.[0] || r.status;
+    decisionState[r.id] = r.request_type || 'replacement';
+}
 
 const resolveReturn = (r) => {
     router.post(route('eco.returns.resolve', { id: r.id }), {
-        status: resolveState[r.id],
+        ...(r.request_type ? { decision: decisionState[r.id], discount_amount: discountAmount[r.id] } : { status: resolveState[r.id] }),
         resolution_notes: resolveNotes[r.id] || '',
     }, { preserveScroll: true });
 };
+
+const money = (value) => Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const formatLabel = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const returnBadge = (s) => ({

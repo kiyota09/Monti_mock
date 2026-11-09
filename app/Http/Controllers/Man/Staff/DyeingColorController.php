@@ -11,6 +11,7 @@ use App\Models\Man\MachineReport;
 use App\Models\Man\ManufacturingOrder;
 use App\Models\Man\ManufacturingInventoryItem;
 use App\Services\Man\BoilerSteamService;
+use App\Services\Man\DyeingMachineQueueService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -177,9 +178,19 @@ class DyeingColorController extends ManufacturingStaffController
                 'unit'               => $item->unit,
             ]);
 
+        $assignedOrders = collect($this->assignedProductionOrders('dyeing'))
+            ->filter(fn (array $order) => $order['sales_order_id'] || $order['manufacturing_order_id'] || $order['fabric_code'])
+            ->unique(fn (array $order) => $order['sales_order_id']
+                ? 'sales-order:'.$order['sales_order_id']
+                : ($order['manufacturing_order_id']
+                    ? 'manufacturing-order:'.$order['manufacturing_order_id']
+                    : 'fabric:'.$order['fabric_code']))
+            ->values()
+            ->all();
+
         return Inertia::render('Dashboard/MAN/Employee/DyeingColor/DyeingColor', [
             'fabrics'  => $fabrics,
-            'assignedOrders' => $this->assignedProductionOrders('dyeing'),
+            'assignedOrders' => $assignedOrders,
             'machines' => $machines,
             'steamReady' => $steamReady,
             'dyes'     => $dyes,       // NEW — inventory-sourced dye chemicals
@@ -203,9 +214,11 @@ class DyeingColorController extends ManufacturingStaffController
             $fabrics=Fabric::with(['dyeingBatchFabric.batch', 'manufacturingOrder', 'salesOrder'])->whereIn('id',$validated['fabric_ids'])->lockForUpdate()->get();
             abort_unless($fabrics->count()===count($validated['fabric_ids']) && $fabrics->every(fn($f)=>$f->status==='dyeing'),422,'One or more fabrics are no longer waiting for dyeing.');
             $items=$fabrics->map(fn($f)=>$f->dyeingBatchFabric); $first=$items->first();
-            abort_unless($first && $items->every(fn($i)=>$i && $i->dyeing_batch_id===$first->dyeing_batch_id && $i->current_stage==='color' && $i->status==='active'),422,'Select active fabrics from the same JO batch.');
+            abort_unless($first && $items->every(fn($i)=>$i && $i->batch?->machine_id===$first->batch?->machine_id && $i->current_stage==='color' && $i->status==='active'),422,'Select active fabrics assigned to the same machine at this stage.');
             abort_unless((int)$first->batch->machine_id===(int)$machine->id,422,'Use the machine assigned to this JO batch.');
-            abort_if($fabrics->sum(fn($f)=>(float)$f->weight)>(float)$first->batch->load_capacity_kg+0.001,422,'Selected fabrics exceed the machine load capacity.');
+            $queue = app(DyeingMachineQueueService::class);
+            $assignments = $queue->assertCanRecord((int) $this->staff()->id, (int) $machine->id, 'color', $fabrics->pluck('id')->all());
+            foreach($fabrics->groupBy(fn($fabric)=>$fabric->dyeingBatchFabric->dyeing_batch_id) as $batchFabrics) abort_if($batchFabrics->sum(fn($f)=>(float)$f->weight)>(float)$batchFabrics->first()->dyeingBatchFabric->batch->load_capacity_kg+0.001,422,'Selected fabrics exceed a batch machine load capacity.');
             foreach($fabrics as $f) abort_unless($this->isAssignedFabric((int) $f->id, $f->manufacturing_order_id, $f->sales_order_id),403,'This fabric code is not assigned to you by the Dyeing Supervisor.');
 
             $firstFabric = $fabrics->first();
@@ -265,6 +278,7 @@ class DyeingColorController extends ManufacturingStaffController
                 $batchItem->update(['status'=>'awaiting_review']);
             }
             foreach($stockRows as $row){$stock=$row['item'];$stock->remaining_quantity=max(0,(float)$stock->remaining_quantity-(float)$row['usage']['quantity_used']);$stock->status=$stock->remaining_quantity<=0?'depleted':'partial';$stock->save();}
+            $queue->completeSubmitted($assignments);
             DB::commit();
             return back()->with('message','Grouped dye job recorded. Awaiting supervisor inspection.');
         } catch (\Throwable $e) {

@@ -30,7 +30,7 @@
                     <div class="relative mt-6 flex flex-col sm:flex-row gap-3">
                         <div class="relative flex-1">
                             <Search class="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                            <input v-model="searchTerm" type="text" placeholder="Search PO / JO number..."
+                                <input v-model="searchTerm" type="text" placeholder="Search client PO / order number..."
                                 class="w-full rounded-2xl border-0 bg-white/95 py-3 pl-11 pr-4 text-sm font-medium text-gray-900 shadow-lg placeholder:text-gray-400 focus:ring-2 focus:ring-white/70 outline-none transition" />
                         </div>
                         <div class="flex gap-2 overflow-x-auto">
@@ -89,7 +89,7 @@
                                 <div class="min-w-0 flex-1">
                                     <div class="flex gap-2 items-center flex-wrap">
                                         <span class="rounded-md bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-slate-500">{{ o.type }}</span>
-                                        <span class="font-mono text-sm font-black text-gray-900 dark:text-white">{{ o.number }}</span>
+                                        <span><span class="block font-mono text-sm font-black text-gray-900 dark:text-white">{{ o.number }}</span><span v-if="o.monti_number" class="block text-[10px] text-gray-500">Monti ref {{ o.monti_number }}</span></span>
                                         <span :class="statusBadge(o.status)" class="text-[10px] font-black uppercase px-2.5 py-1 rounded-full ring-1 inline-flex items-center gap-1">
                                             <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />{{ formatStatus(o.status) }}
                                         </span>
@@ -228,13 +228,13 @@ const filtered = computed(() => {
         if (typeFilter.value !== 'all' && o.type !== typeFilter.value) return false;
         if (groupFilter.value !== 'all' && o.group !== groupFilter.value) return false;
         if (!q) return true;
-        return String(o.number || '').toLowerCase().includes(q)
+        return `${o.number || ''} ${o.monti_number || ''}`.toLowerCase().includes(q)
             || String(o.product_name || '').toLowerCase().includes(q);
     });
 });
 
 const formatCurrency = (v) => Number(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 });
-const formatStatus = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const formatStatus = (s) => s === 'crm_recipe_review' ? 'CRM Recipe Linking' : String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 const statusAccentBar = (status) => {
     const s = String(status || '');

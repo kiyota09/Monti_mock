@@ -97,11 +97,11 @@
                                         <div
                                             class="h-full rounded-full transition-all duration-1000"
                                             :class="progressBarColor(item.status)"
-                                            :style="{ width: item.progress + '%' }"
+                                            :style="{ width: Math.min(item.progress, 100) + '%' }"
                                         ></div>
                                     </div>
                                     <p class="text-[10px] text-gray-400 mt-1 font-bold uppercase tracking-wider">
-                                        {{ item.completed_quantity }} / {{ item.total_quantity }} Units
+                                        {{ item.recorded_quantity }} / {{ item.total_quantity }} kg fabric recorded
                                     </p>
                                 </div>
 
@@ -155,13 +155,13 @@
                                                     <div
                                                         class="h-full rounded-full transition-all duration-1000"
                                                         :class="progressBarColor(item.status)"
-                                                        :style="{ width: item.progress + '%' }"
+                                                        :style="{ width: Math.min(item.progress, 100) + '%' }"
                                                     ></div>
                                                 </div>
                                                 <span class="text-sm font-black text-indigo-600 dark:text-indigo-300 tabular-nums w-10 text-right flex-shrink-0">{{ item.progress }}%</span>
                                             </div>
                                             <p class="text-[10px] text-gray-400 mt-1.5 font-bold uppercase tracking-wider">
-                                                {{ item.completed_quantity }} / {{ item.total_quantity }} Units
+                                                {{ item.recorded_quantity }} / {{ item.total_quantity }} kg fabric recorded
                                             </p>
                                         </td>
 

@@ -5,10 +5,14 @@ namespace App\Http\Controllers\Man\Manager;
 use App\Http\Controllers\Controller;
 use App\Models\Core\User;
 use App\Models\Man\Fabric;
+use App\Models\Man\DyeingBatch;
 use App\Models\Man\DyeingBatchFabric;
+use App\Models\Man\DyeingRemakeRequest;
+use App\Models\Man\DyeingMachineStaffOrder;
 use App\Models\Man\FinishingWorkItem;
 use App\Models\Man\FinishingWorkOrder;
 use App\Models\Man\KnittingMachineStaffAssignment;
+use App\Models\Man\KnittingInspection;
 use App\Models\Man\ManTaskAssignment;
 use App\Models\Man\Machine;
 use App\Models\Man\ManufacturingOrder;
@@ -16,7 +20,9 @@ use App\Models\Man\Package;
 use App\Models\Inv\Material;
 use App\Support\ManufacturingRoles;
 use App\Services\Man\BoilerSteamService;
+use App\Services\Man\DyeingAssignmentBoardService;
 use App\Services\Man\DyeingInitialBatchService;
+use App\Services\Man\DyeingReplacementReleaseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -59,12 +65,70 @@ class ManAssignmentController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'manufacturing_role', 'profile_photo_path']);
 
-        $loads = ManTaskAssignment::query()
+        $activeAssignments = ManTaskAssignment::query()
+            ->where('department', $department)
             ->whereIn('assigned_to', $staff->pluck('id'))
             ->active()
-            ->selectRaw('assigned_to, COUNT(*) as total')
-            ->groupBy('assigned_to')
-            ->pluck('total', 'assigned_to');
+            ->get(['id', 'assigned_to', 'manufacturing_order_id', 'sales_order_id', 'fabric_id']);
+        $orderSalesOrders = ManufacturingOrder::whereIn('id', $activeAssignments->pluck('manufacturing_order_id')->filter()->unique())
+            ->pluck('sales_order_id', 'id');
+        $finishingWorkCompleteOrderIds = $department === 'finishing'
+            ? FinishingWorkOrder::whereIn('manufacturing_order_id', $activeAssignments->pluck('manufacturing_order_id')->filter()->unique())
+                ->whereIn('status', ['ready_logistics', 'sent_to_logistics', 'completed'])
+                ->pluck('manufacturing_order_id')->map(fn ($id) => (int) $id)->all()
+            : [];
+        $assignmentFabrics = Fabric::whereIn('id', $activeAssignments->pluck('fabric_id')->filter()->unique())
+            ->get(['id', 'manufacturing_order_id', 'sales_order_id'])->keyBy('id');
+        $activeAssignments = $activeAssignments->filter(function (ManTaskAssignment $assignment) use ($department, $orderSalesOrders, $assignmentFabrics, $finishingWorkCompleteOrderIds) {
+            $fabric = $assignmentFabrics->get($assignment->fabric_id);
+            $manufacturingOrderId = $assignment->manufacturing_order_id ?: $fabric?->manufacturing_order_id;
+            $salesOrderId = $assignment->sales_order_id
+                ?: $orderSalesOrders->get($assignment->manufacturing_order_id)
+                ?: $fabric?->sales_order_id;
+            if (! $manufacturingOrderId && ! $salesOrderId) return false;
+            if ($department === 'finishing' && $manufacturingOrderId
+                && in_array((int) $manufacturingOrderId, $finishingWorkCompleteOrderIds, true)) {
+                return false;
+            }
+            if ($department !== 'dyeing') return true;
+
+            $currentStage = [
+                'dyeing_bleaching' => 'bleaching',
+                'dyeing_pre_treatment' => 'pre_treatment',
+                'dyeing_color' => 'color',
+                'dyeing_treatment' => 'post_treatment',
+            ][$assignment->stage] ?? null;
+            if (! $currentStage) return false;
+
+            $fabricScope = function ($query) use ($manufacturingOrderId, $salesOrderId, $assignment) {
+                if ($assignment->fabric_id) return $query->whereKey($assignment->fabric_id);
+                return $query->where(function ($ids) use ($manufacturingOrderId, $salesOrderId) {
+                    if ($manufacturingOrderId) $ids->where('manufacturing_order_id', $manufacturingOrderId);
+                    if ($salesOrderId) $ids->{$manufacturingOrderId ? 'orWhere' : 'where'}('sales_order_id', $salesOrderId);
+                });
+            };
+
+            $hasActiveBatchWork = DyeingBatchFabric::where('current_stage', $currentStage)
+                ->whereIn('status', ['active', 'awaiting_review'])
+                ->whereHas('fabric', $fabricScope)->exists();
+            if ($hasActiveBatchWork) return true;
+
+            $unbatchedStatus = ['bleaching' => 'bleaching', 'pre_treatment' => 'dyeing'][$currentStage] ?? null;
+            return $unbatchedStatus && Fabric::where('status', $unbatchedStatus)
+                ->whereDoesntHave('dyeingBatchFabric')->where($fabricScope)->exists();
+        });
+        $loads = $activeAssignments->groupBy('assigned_to')->map(function ($assignments) use ($orderSalesOrders, $assignmentFabrics) {
+            return $assignments->map(function (ManTaskAssignment $assignment) use ($orderSalesOrders, $assignmentFabrics) {
+                $fabric = $assignmentFabrics->get($assignment->fabric_id);
+                $salesOrderId = $assignment->sales_order_id
+                    ?: $orderSalesOrders->get($assignment->manufacturing_order_id)
+                    ?: $fabric?->sales_order_id;
+                if ($salesOrderId) return 'so:'.$salesOrderId;
+
+                $manufacturingOrderId = $assignment->manufacturing_order_id ?: $fabric?->manufacturing_order_id;
+                return $manufacturingOrderId ? 'mo:'.$manufacturingOrderId : 'task:'.$assignment->id;
+            })->unique()->count();
+        });
 
         return $staff
             ->map(fn (User $member) => [
@@ -260,6 +324,15 @@ class ManAssignmentController extends Controller
             $department = 'knitting';
         }
 
+        if ($department === 'dyeing') {
+            return Inertia::render('Dashboard/MAN/Manager/DyeingAssignments', [
+                'department' => $department,
+                'departmentLabel' => ManufacturingRoles::departmentLabel($department),
+                'canSwitchDepartment' => ! (Auth::user()->is_manufacturing_supervisor && Auth::user()->supervisor_department),
+                'board' => app(DyeingAssignmentBoardService::class)->build(),
+            ]);
+        }
+
         $stages = ManufacturingRoles::stagesForDepartment($department);
         $stageKeys = array_keys($stages);
 
@@ -271,7 +344,7 @@ class ManAssignmentController extends Controller
         $knittingMachines = collect();
         $allocatedMachineIds = [];
         if ($department === 'knitting') {
-            $machineDirectory = Machine::where('type', 'knitting')->pluck('machine_no', 'id');
+            $machineDirectory = Machine::where('type', Machine::TYPE_CIRCULAR_KNITTING)->pluck('machine_no', 'id');
             $assignments->each(fn ($assignment) => $assignment->setAttribute(
                 'machine_numbers',
                 collect($assignment->machine_ids ?? [])->map(fn ($id) => $machineDirectory->get($id))->filter()->values()->all()
@@ -279,7 +352,7 @@ class ManAssignmentController extends Controller
             $allocatedMachineIds = ManTaskAssignment::where('department', 'knitting')
                 ->active()->get(['machine_ids'])->flatMap(fn ($assignment) => $assignment->machine_ids ?? [])
                 ->map(fn ($id) => (int) $id)->unique()->all();
-            $knittingMachines = Machine::where('type', 'knitting')->where('status', 'available')
+            $knittingMachines = Machine::where('type', Machine::TYPE_CIRCULAR_KNITTING)->where('status', 'available')
                 ->with('knittingStaffAssignment:id,machine_id,staff_id')->orderBy('machine_no')->get(['id', 'machine_no'])
                 ->filter(fn ($machine) => ! in_array($machine->id, $allocatedMachineIds, true))
                 ->map(fn ($machine) => [
@@ -457,8 +530,190 @@ class ManAssignmentController extends Controller
             'orders' => $orders,
             'assignments' => $assignments,
             'knittingMachines' => $knittingMachines,
+            'replacementRequests' => $department === 'knitting'
+                ? DyeingRemakeRequest::with(['salesOrder:id,jo_number,expected_ship_date', 'fabrics.originalFabric'])
+                    ->where('status', 'awaiting_assignment')->latest()->get()
+                    ->map(fn (DyeingRemakeRequest $remake) => [
+                        'id' => $remake->id,
+                        'code' => $remake->code,
+                        'jo_number' => $remake->salesOrder?->jo_number,
+                        'sales_order_id' => $remake->sales_order_id,
+                        'requested_weight_kg' => (float) $remake->requested_weight_kg,
+                        'deadline' => $remake->salesOrder?->expected_ship_date?->toDateString(),
+                        'reason' => $remake->reason,
+                        'fabric' => $remake->fabrics->first()?->originalFabric ? [
+                            'id' => $remake->fabrics->first()->originalFabric->id,
+                            'code' => $remake->fabrics->first()->originalFabric->code,
+                            'yarn_type' => $remake->fabrics->first()->originalFabric->yarn_type,
+                            'weight' => (float) $remake->fabrics->first()->originalFabric->weight,
+                        ] : null,
+                    ])->values()
+                : [],
             'prefillOrderId' => $request->query('order_id'),
             'prefillStage' => $request->query('stage'),
+        ]);
+    }
+
+    public function assignDyeingReplacement(Request $request, DyeingRemakeRequest $remake)
+    {
+        abort_unless($this->resolveDepartment($request) === 'knitting', 403);
+        $validated = $request->validate([
+            'assigned_to' => 'required|integer|exists:users,id',
+            'machine_id' => 'required|integer|exists:machines,id',
+        ]);
+
+        DB::transaction(function () use ($validated, $remake) {
+            $remake = DyeingRemakeRequest::with(['fabrics.originalFabric', 'salesOrder'])
+                ->lockForUpdate()->findOrFail($remake->id);
+            abort_unless($remake->status === 'awaiting_assignment', 422, 'This replacement request was already assigned.');
+            $pair = $remake->fabrics->first();
+            $fabric = $pair?->originalFabric;
+            abort_unless($pair && $fabric && $remake->fabrics->count() === 1, 422, 'This request must contain exactly one replacement fabric.');
+
+            $staff = User::query()->whereKey($validated['assigned_to'])->where('role', 'MAN')
+                ->where('manufacturing_role', 'knitting_yarn')->where('is_active', 1)->first();
+            abort_unless($staff, 422, 'Select an active Knitting Yarn staff member.');
+
+            $machine = Machine::query()->whereKey($validated['machine_id'])
+                ->where('type', Machine::TYPE_CIRCULAR_KNITTING)->where('status', 'available')->first();
+            abort_unless($machine, 422, 'Select an available knitting machine.');
+            abort_unless(KnittingMachineStaffAssignment::where('staff_id', $staff->id)->where('machine_id', $machine->id)->exists(),
+                422, 'That knitting machine is not assigned to the selected staff member.');
+            $machineIsBusy = ManTaskAssignment::where('department', 'knitting')->active()
+                ->get(['machine_ids'])->contains(fn (ManTaskAssignment $assignment) => in_array(
+                    (int) $machine->id,
+                    array_map('intval', $assignment->machine_ids ?? []),
+                    true,
+                ));
+            abort_if($machineIsBusy, 422, 'That knitting machine is already assigned to active work.');
+
+            $order = ManufacturingOrder::findOrFail($remake->manufacturing_order_id);
+            $stages = array_keys(ManufacturingRoles::stagesForDepartment('knitting'));
+            ManTaskAssignment::create([
+                'manufacturing_order_id' => $order->id,
+                'sales_order_id' => $remake->sales_order_id,
+                'department' => 'knitting',
+                'stage' => 'knitting',
+                'assigned_role' => ManufacturingRoles::rolesForDepartment('knitting')[0],
+                'assigned_to' => $staff->id,
+                'assigned_by' => Auth::id(),
+                'status' => 'pending',
+                'sequence' => array_search('knitting', $stages, true) ?: 0,
+                'deadline' => $remake->salesOrder?->expected_ship_date && $remake->salesOrder->expected_ship_date->isFuture()
+                    ? $remake->salesOrder->expected_ship_date->toDateString()
+                    : today()->toDateString(),
+                'assigned_weight' => (float) $fabric->weight,
+                'machine_ids' => [(int) $machine->id],
+                'dyeing_remake_request_id' => $remake->id,
+                'notes' => 'Dyeing replacement '.$remake->code.' for fabric '.$fabric->code.'. '.$remake->reason,
+            ]);
+
+            $remake->update([
+                'assigned_to' => $staff->id,
+                'assigned_by' => Auth::id(),
+                'machine_ids' => [(int) $machine->id],
+                'status' => 'knitting',
+            ]);
+            $remake->salesOrder?->update([
+                'knitting_done_at' => null,
+                'knitting_done_by' => null,
+                'knitting_handoff_requested_at' => null,
+                'knitting_handoff_requested_by' => null,
+            ]);
+        });
+
+        return back()->with('message', 'The selected replacement fabric was assigned to Knitting Yarn.');
+    }
+
+    public function reviewDyeingReplacement(Request $request, DyeingRemakeRequest $remake)
+    {
+        abort_unless($this->resolveDepartment($request) === 'knitting', 403);
+        $data = $request->validate([
+            'decision' => 'required|in:pass,remake',
+            'reason' => 'required_if:decision,remake|nullable|string|max:500',
+        ]);
+
+        if ($data['decision'] === 'pass') {
+            app(DyeingReplacementReleaseService::class)->release(
+                $remake->id,
+                (int) Auth::id(),
+                ['awaiting_supervisor_review'],
+            );
+
+            return back()->with('success', 'The knitting supervisor approved the replacement and returned it to Dyeing.');
+        }
+
+        DB::transaction(function () use ($remake, $data) {
+            $remake = DyeingRemakeRequest::with('fabrics.replacementFabric')
+                ->lockForUpdate()->findOrFail($remake->id);
+            abort_unless($remake->status === 'awaiting_supervisor_review', 422, 'This replacement is no longer waiting for supervisor review.');
+            abort_unless($remake->fabrics->count() === 1, 422, 'This supervisor review must contain exactly one replacement fabric.');
+
+            $pair = $remake->fabrics->first();
+            $replacement = $pair?->replacementFabric;
+            abort_unless($replacement && $replacement->status === 'knitting_approved', 422, 'The replacement must be inspector-approved before supervisor review.');
+
+            $reason = trim((string) $data['reason']);
+            $replacement->update(['status' => 'rejected', 'rejection_reason' => $reason]);
+            $pair->update(['replacement_fabric_id' => null]);
+            $remake->update([
+                'status' => 'knitting',
+                'reason' => trim($remake->reason.' | Knitting Supervisor returned fabric: '.$reason),
+            ]);
+            ManTaskAssignment::where('dyeing_remake_request_id', $remake->id)->update([
+                'status' => 'pending',
+                'completed_at' => null,
+            ]);
+        });
+
+        return back()->with('success', 'The replacement was returned to Knitting Yarn for another make.');
+    }
+
+    public function calendar(Request $request)
+    {
+        $department = $this->resolveDepartment($request) ?? $request->query('department') ?? 'knitting';
+        if (! in_array($department, ManufacturingRoles::PRODUCTION_DEPARTMENTS, true)) {
+            $department = 'knitting';
+        }
+
+        $assignments = ManTaskAssignment::with([
+            'assignee:id,name',
+            'manufacturingOrder.salesOrder:id,jo_number,quantity,expected_ship_date',
+            'salesOrder:id,jo_number,quantity,expected_ship_date',
+            'fabric:id,code,weight',
+        ])->where('department', $department)
+            ->whereIn('status', ['pending', 'in_progress'])
+            ->where(function ($query) {
+                $query->whereNotNull('manufacturing_order_id')
+                    ->orWhereNotNull('sales_order_id')
+                    ->orWhereNotNull('fabric_id');
+            })
+            ->latest('deadline')
+            ->get()
+            ->map(function (ManTaskAssignment $assignment) {
+                $order = $assignment->manufacturingOrder;
+                $salesOrder = $assignment->salesOrder ?: $order?->salesOrder;
+                if (! $order && ! $salesOrder && ! $assignment->fabric) {
+                    return null;
+                }
+                $weight = (float) ($assignment->assigned_weight ?: $assignment->fabric?->weight ?: $order?->total_quantity ?: $salesOrder?->quantity ?: 0);
+
+                return [
+                    'id' => $assignment->id,
+                    'jo_number' => $salesOrder?->jo_number ?? ($order ? 'MO-'.$order->id : ($assignment->fabric?->code ? 'Fabric '.$assignment->fabric->code : 'Unlinked JO')),
+                    'stage' => $assignment->stage,
+                    'staff' => $assignment->assignee?->name ?? 'Unassigned',
+                    'status' => $assignment->status,
+                    'deadline' => $assignment->deadline?->toDateString(),
+                    'weight_kg' => $weight,
+                    'fabric_code' => $assignment->fabric?->code,
+                ];
+            })->filter()->values();
+
+        return Inertia::render('Dashboard/MAN/Manager/AssignmentCalendar', [
+            'department' => $department,
+            'departmentLabel' => ManufacturingRoles::departmentLabel($department),
+            'assignments' => $assignments,
         ]);
     }
 
@@ -476,11 +731,15 @@ class ManAssignmentController extends Controller
             'stage' => 'required|string',
             'assigned_to' => 'required|exists:users,id',
             'notes' => 'nullable|string|max:500',
+            'deadline' => 'required|date|after_or_equal:today',
             'assigned_weight' => $department === 'knitting' ? 'required|numeric|min:0.01' : 'nullable|numeric|min:0.01',
-            'machine_ids' => $department === 'knitting' ? 'required|array|min:1|max:10' : 'nullable|array',
+            'machine_ids' => $department === 'knitting'
+                ? 'required|array|min:1|max:10'
+                : ($department === 'dyeing' ? 'required|array|size:1' : 'nullable|array'),
             'machine_ids.*' => 'required|integer|distinct|exists:machines,id',
-            'fabric_ids' => $department === 'dyeing' ? 'required|array|min:1' : 'nullable|array',
-            'fabric_ids.*' => $department === 'dyeing' ? 'required|integer|distinct|exists:fabrics,id' : 'nullable|integer',
+            'process' => $department === 'dyeing' ? 'required|in:Hot,Cold' : 'nullable',
+            'fabric_ids' => 'nullable|array',
+            'fabric_ids.*' => $department === 'dyeing' ? 'integer|distinct|exists:fabrics,id' : 'nullable|integer',
         ]);
 
         $stages = ManufacturingRoles::stagesForDepartment($department);
@@ -491,7 +750,6 @@ class ManAssignmentController extends Controller
         $assignedRole = $stages[$validated['stage']];
 
         $steamMachineType = match (true) {
-            $department === 'dyeing' && $validated['stage'] === 'dyeing_color' => 'dyeing',
             $department === 'finishing' && $validated['stage'] === 'finishing_tubetex' => 'tubetex',
             default => null,
         };
@@ -508,6 +766,38 @@ class ManAssignmentController extends Controller
             return back()->with('error', 'The selected staff member cannot perform that stage.');
         }
 
+        $order = ManufacturingOrder::find($validated['manufacturing_order_id']);
+
+        if ($department === 'knitting' && (! $order || ! $order->sales_order_id)) {
+            return back()->withErrors(['manufacturing_order_id' => 'Knitting work plans require a Job Order linked to a Sales Order.']);
+        }
+
+        $dyeingMachine = null;
+        if ($department === 'dyeing') {
+            if (! $order) {
+                return back()->withErrors(['manufacturing_order_id' => 'Select a valid Job Order.']);
+            }
+
+            $validated['fabric_ids'] = array_values(array_unique(array_map('intval', $validated['fabric_ids'] ?? [])));
+            if (empty($validated['fabric_ids'])) {
+                $validated['fabric_ids'] = app(DyeingAssignmentBoardService::class)->readyFabricIds($order, $validated['stage']);
+            }
+            if (empty($validated['fabric_ids'])) {
+                return back()->withErrors(['fabric_ids' => 'No fabric codes are ready for this stage yet.']);
+            }
+
+            $machineIds = array_map('intval', $validated['machine_ids']);
+            $dyeingMachine = Machine::whereIn('id', $machineIds)->where('type', 'dyeing')->where('status', 'available')->first();
+            if (! $dyeingMachine || count($machineIds) !== 1) {
+                return back()->withErrors(['machine_ids' => 'Choose one available Dyeing machine.']);
+            }
+            if ($dyeingMachine->power === 'Steam' && ! app(BoilerSteamService::class)->isAvailable()) {
+                return back()->withErrors(['machine_ids' => 'Boiler steam is not available yet. The Boiler Operator must record an operating boiler and mark steam available first.']);
+            }
+
+            $validated['process'] = $validated['stage'] === 'dyeing_treatment' ? 'Hot' : ($validated['process'] ?? 'Hot');
+        }
+
         if ($department !== 'knitting') {
             $alreadyQuery = ManTaskAssignment::where('manufacturing_order_id', $validated['manufacturing_order_id'])
                 ->where('department', $department)->where('stage', $validated['stage'])->active();
@@ -520,12 +810,6 @@ class ManAssignmentController extends Controller
             } elseif ($alreadyQuery->exists()) {
                 return back()->with('error', 'This stage is already assigned for that Job Order.');
             }
-        }
-
-        $order = ManufacturingOrder::find($validated['manufacturing_order_id']);
-
-        if ($department === 'knitting' && (! $order || ! $order->sales_order_id)) {
-            return back()->withErrors(['manufacturing_order_id' => 'Knitting work plans require a Job Order linked to a Sales Order.']);
         }
 
         // Enforce the physical sequence before assigning downstream work: the
@@ -559,10 +843,10 @@ class ManAssignmentController extends Controller
             }
         }
 
-        $machineIds = [];
+        $machineIds = $department === 'dyeing' ? [(int) $dyeingMachine->id] : [];
         if ($department === 'knitting') {
             $machineIds = array_map('intval', $validated['machine_ids']);
-            $validMachineCount = Machine::where('type', 'knitting')->where('status', 'available')->whereIn('id', $machineIds)->count();
+            $validMachineCount = Machine::where('type', Machine::TYPE_CIRCULAR_KNITTING)->where('status', 'available')->whereIn('id', $machineIds)->count();
             if ($validMachineCount !== count($machineIds)) {
                 return back()->withErrors(['machine_ids' => 'Choose available knitting machines only.']);
             }
@@ -598,6 +882,17 @@ class ManAssignmentController extends Controller
 
         $sequence = array_search($validated['stage'], array_keys($stages), true);
 
+        $queuePosition = null;
+        if ($department === 'dyeing' && $dyeingMachine) {
+            $maxQueuePosition = ManTaskAssignment::where('department', 'dyeing')
+                ->where('stage', $validated['stage'])
+                ->active()
+                ->get(['machine_ids', 'queue_position'])
+                ->filter(fn (ManTaskAssignment $assignment) => in_array((int) $dyeingMachine->id, array_map('intval', $assignment->machine_ids ?? []), true))
+                ->max('queue_position');
+            $queuePosition = $maxQueuePosition === null ? 0 : ((int) $maxQueuePosition + 1);
+        }
+
         $assignmentData = [
             'manufacturing_order_id' => $validated['manufacturing_order_id'],
             'sales_order_id' => $order?->sales_order_id,
@@ -608,22 +903,40 @@ class ManAssignmentController extends Controller
             'assigned_by' => $user->id,
             'status' => 'pending',
             'sequence' => $sequence === false ? 0 : $sequence,
+            'queue_position' => $queuePosition,
+            'process' => $department === 'dyeing' ? $validated['process'] : null,
             'notes' => $validated['notes'] ?? null,
+            'deadline' => $validated['deadline'],
             'assigned_weight' => $department === 'knitting' ? $validated['assigned_weight'] : null,
-            'machine_ids' => $department === 'knitting' ? $machineIds : null,
+            'machine_ids' => in_array($department, ['knitting', 'dyeing'], true) ? $machineIds : null,
         ];
         if ($department === 'dyeing') {
-            DB::transaction(function () use ($assignmentData, $validated, $order, $assignee, $user) {
+            DB::transaction(function () use ($assignmentData, $validated, $order, $assignee, $user, $dyeingMachine) {
                 foreach ($validated['fabric_ids'] as $fabricId) {
                     ManTaskAssignment::create($assignmentData + ['fabric_id' => (int) $fabricId]);
                 }
+
+                $processes = $order->dyeing_stage_processes ?? [];
+                $processes[$validated['stage']] = $validated['process'];
+                $order->update(['dyeing_stage_processes' => $processes]);
+
                 app(DyeingInitialBatchService::class)->prepare(
                     $order,
                     $validated['stage'],
                     (int) $assignee->id,
                     (int) $user->id,
                     array_map('intval', $validated['fabric_ids']),
+                    (int) $dyeingMachine->id,
+                    $validated['process'],
                 );
+
+                $batchIds = DyeingBatchFabric::whereIn('fabric_id', $validated['fabric_ids'])
+                    ->pluck('dyeing_batch_id')->unique()->values()->all();
+                DyeingBatch::whereIn('id', $batchIds)->update([
+                    'machine_id' => $dyeingMachine->id,
+                    'load_capacity_kg' => max((float) ($dyeingMachine->load_capacity_kg ?? 0), (float) $order->total_quantity, 0.01),
+                ]);
+                Fabric::whereIn('id', $validated['fabric_ids'])->update(['machine_id' => $dyeingMachine->id]);
             });
         } elseif ($department === 'finishing') {
             DB::transaction(function () use ($assignmentData, $order, $assignee, $validated) {
@@ -689,16 +1002,102 @@ class ManAssignmentController extends Controller
     public function updateDyeingRoute(Request $request, ManufacturingOrder $order)
     {
         abort_unless($this->resolveDepartment($request) === 'dyeing', 403);
-        $validated = $request->validate(['requires_bleaching' => 'required|boolean']);
+        $validated = $request->validate([
+            'requires_bleaching' => 'required|boolean',
+            'color_group' => 'nullable|in:white,light,dark',
+        ]);
         abort_if(DyeingBatchFabric::whereHas('fabric', fn ($query) => $query->where('manufacturing_order_id', $order->id))->exists(),
             422, 'The Dyeing route cannot be changed after a batch has been created for this JO.');
         abort_if($order->dyeing_bleaching_required !== null, 422, 'A Dyeing route has already been selected for this JO.');
 
-        $order->update(['dyeing_bleaching_required' => (bool) $validated['requires_bleaching']]);
+        $order->update([
+            'dyeing_bleaching_required' => (bool) $validated['requires_bleaching'],
+            'dyeing_color_group' => $validated['color_group']
+                ?? $order->dyeing_color_group
+                ?? app(DyeingAssignmentBoardService::class)->detectColorGroup($order),
+        ]);
 
         return back()->with('message', $validated['requires_bleaching']
             ? 'Bleaching has been added to this JO route.'
             : 'This JO will go directly to Pre Treatment.');
+    }
+
+    public function updateDyeingColorGroup(Request $request, ManufacturingOrder $order)
+    {
+        abort_unless($this->resolveDepartment($request) === 'dyeing', 403);
+        $validated = $request->validate(['color_group' => 'required|in:white,light,dark']);
+
+        $order->update(['dyeing_color_group' => $validated['color_group']]);
+
+        return back()->with('message', 'Dyeing color group updated.');
+    }
+
+    public function updateDyeingProcess(Request $request, ManufacturingOrder $order)
+    {
+        abort_unless($this->resolveDepartment($request) === 'dyeing', 403);
+        $validated = $request->validate([
+            'stage' => 'required|in:dyeing_bleaching,dyeing_pre_treatment,dyeing_color,dyeing_treatment',
+            'process' => 'required|in:Hot,Cold',
+        ]);
+
+        $process = $validated['stage'] === 'dyeing_treatment' ? 'Hot' : $validated['process'];
+        $processes = $order->dyeing_stage_processes ?? [];
+        $processes[$validated['stage']] = $process;
+        $order->update(['dyeing_stage_processes' => $processes]);
+
+        ManTaskAssignment::where('manufacturing_order_id', $order->id)
+            ->where('department', 'dyeing')
+            ->where('stage', $validated['stage'])
+            ->active()
+            ->update(['process' => $process]);
+
+        return back()->with('message', "Process set to {$process}.");
+    }
+
+    public function reorderDyeingQueue(Request $request)
+    {
+        abort_unless($this->resolveDepartment($request) === 'dyeing', 403);
+        $validated = $request->validate([
+            'stage' => 'required|in:dyeing_bleaching,dyeing_pre_treatment,dyeing_color,dyeing_treatment',
+            'machine_id' => 'required|integer|exists:machines,id',
+            'order_ids' => 'present|array',
+            'order_ids.*' => 'required|integer|distinct',
+        ]);
+
+        foreach ($validated['order_ids'] as $position => $orderId) {
+            ManTaskAssignment::where('manufacturing_order_id', $orderId)
+                ->where('department', 'dyeing')
+                ->where('stage', $validated['stage'])
+                ->active()
+                ->whereJsonContains('machine_ids', (int) $validated['machine_id'])
+                ->update(['queue_position' => $position]);
+        }
+
+        return back()->with('message', 'Queue order saved.');
+    }
+
+    public function reorderDyeingStaff(Request $request)
+    {
+        abort_unless($this->resolveDepartment($request) === 'dyeing', 403);
+        $validated = $request->validate([
+            'stage' => 'required|in:dyeing_bleaching,dyeing_pre_treatment,dyeing_color,dyeing_treatment',
+            'machine_id' => 'required|integer|exists:machines,id',
+            'staff_ids' => 'present|array',
+            'staff_ids.*' => 'required|integer|distinct|exists:users,id',
+        ]);
+
+        foreach ($validated['staff_ids'] as $position => $staffId) {
+            DyeingMachineStaffOrder::updateOrCreate(
+                [
+                    'machine_id' => $validated['machine_id'],
+                    'stage' => $validated['stage'],
+                    'staff_id' => $staffId,
+                ],
+                ['position' => $position],
+            );
+        }
+
+        return back()->with('message', 'Staff order saved.');
     }
 
     public function releaseKnitting(Request $request, ManufacturingOrder $order)
@@ -738,18 +1137,30 @@ class ManAssignmentController extends Controller
     public function declineKnittingHandoff(Request $request, ManufacturingOrder $order)
     {
         abort_unless($this->resolveDepartment($request) === 'knitting', 403);
-        $validated = $request->validate(['reason' => 'required|string|max:500']);
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+            'fabric_ids' => 'required|array|min:1',
+            'fabric_ids.*' => 'required|integer|distinct',
+        ]);
         $salesOrder = $order->salesOrder;
         abort_unless($salesOrder?->knitting_handoff_requested_at, 422, 'This Job Order has not been submitted for supervisor review.');
 
-        $fabrics = $this->fabricsForOrder($order)->where('status', 'knitting_approved')->get();
-        abort_if($fabrics->isEmpty(), 422, 'There are no inspector-approved knitting fabrics to return for remake.');
+        $fabrics = $this->fabricsForOrder($order)
+            ->whereIn('id', $validated['fabric_ids'])
+            ->where('status', 'knitting_approved')->get();
+        abort_if($fabrics->count() !== count($validated['fabric_ids']), 422, 'Select only fabrics from this handoff that are still approved.');
 
-        DB::transaction(function () use ($fabrics, $salesOrder, $validated) {
+        DB::transaction(function () use ($fabrics, $salesOrder, $validated, $request) {
             foreach ($fabrics as $fabric) {
                 $fabric->update([
                     'status' => 'rejected',
                     'rejection_action' => null,
+                    'rejection_reason' => $validated['reason'],
+                ]);
+                KnittingInspection::create([
+                    'fabric_id' => $fabric->id,
+                    'inspector_id' => $request->user()->id,
+                    'result' => 'rejected',
                     'rejection_reason' => $validated['reason'],
                 ]);
             }
@@ -762,7 +1173,8 @@ class ManAssignmentController extends Controller
             ]);
         });
 
-        return back()->with('message', "JO {$salesOrder->jo_number} declined. The assigned Knitting Yarn staff can remake the returned fabric.");
+        $rejectedCodes = $fabrics->pluck('code')->implode(', ');
+        return back()->with('message', "Selected fabric(s) {$rejectedCodes} from JO {$salesOrder->jo_number} declined. Knitting Yarn staff must request a new mechanic setup before remaking them.");
     }
 
     public function update(Request $request, ManTaskAssignment $assignment)
@@ -778,6 +1190,7 @@ class ManAssignmentController extends Controller
             'assigned_to' => 'nullable|exists:users,id',
             'status' => 'nullable|in:pending,in_progress,completed,rejected',
             'notes' => 'nullable|string|max:500',
+            'deadline' => 'sometimes|nullable|date|after_or_equal:today',
         ]);
 
         if ($assignment->department === 'knitting' && $assignment->assigned_weight !== null
@@ -807,6 +1220,10 @@ class ManAssignmentController extends Controller
 
         if (array_key_exists('notes', $validated)) {
             $assignment->notes = $validated['notes'];
+        }
+
+        if (array_key_exists('deadline', $validated)) {
+            $assignment->deadline = $validated['deadline'];
         }
 
         $assignment->save();

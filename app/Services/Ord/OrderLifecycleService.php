@@ -66,13 +66,14 @@ class OrderLifecycleService
      * credit review and the client / executive approval gates.
      */
     public const PO_TRANSITIONS = [
+        'crm_recipe_review' => ['approved', 'on_hold', 'cancelled'],
         'credit_review' => ['tier_assignment', 'pending_client_approval', 'on_hold', 'cancelled'],
         'tier_assignment' => ['pending_client_approval', 'on_hold', 'cancelled'],
         'pending_client_approval' => ['approved', 'on_hold', 'cancelled'],
         'approved' => ['released_to_production', 'on_hold', 'cancelled'],
         'production' => ['released_to_production', 'completed'],
         'released_to_production' => ['completed'],
-        'on_hold' => ['credit_review', 'pending_client_approval', 'cancelled'],
+        'on_hold' => ['crm_recipe_review', 'credit_review', 'pending_client_approval', 'cancelled'],
         'rejected' => [],
         'completed' => [],
         'cancelled' => [],
@@ -111,7 +112,7 @@ class OrderLifecycleService
     public static function poGroup(?string $status): string
     {
         return match ((string) $status) {
-            'credit_review', 'tier_assignment', 'pending_client_approval' => 'intake',
+            'crm_recipe_review', 'credit_review', 'tier_assignment', 'pending_client_approval' => 'intake',
             'approved' => 'confirmed',
             'production', 'released_to_production' => 'production',
             'completed' => 'done',
@@ -243,9 +244,11 @@ class OrderLifecycleService
         return DB::transaction(function () {
             $year = now()->year;
             $prefix = "PO-{$year}-";
-            $max = PurchaseOrder::where('po_number', 'like', $prefix.'%')
+            $purchaseOrderMax = PurchaseOrder::where('po_number', 'like', $prefix.'%')
                 ->lockForUpdate()
                 ->max('po_number');
+            $salesOrderMax = SalesOrder::where('purchase_order_id', 'like', $prefix.'%')->max('purchase_order_id');
+            $max = max($purchaseOrderMax ?? '', $salesOrderMax ?? '');
             $seq = $max ? ((int) substr($max, -4)) + 1 : 1;
 
             return $prefix.str_pad($seq, 4, '0', STR_PAD_LEFT);

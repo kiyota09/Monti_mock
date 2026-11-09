@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -11,9 +13,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("ALTER TABLE payroll_sets MODIFY COLUMN employee_type ENUM('staff','manager','trainee') NOT NULL DEFAULT 'staff'");
-        DB::statement("ALTER TABLE payroll_sets MODIFY COLUMN position ENUM('staff','manager','special_officer','secretary','trainee') NOT NULL DEFAULT 'staff'");
-        DB::statement("ALTER TABLE payrolls MODIFY COLUMN role ENUM('Staff','Manager','Trainee') NOT NULL DEFAULT 'Staff'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE payroll_sets MODIFY COLUMN employee_type ENUM('staff','manager','trainee') NOT NULL DEFAULT 'staff'");
+            DB::statement("ALTER TABLE payroll_sets MODIFY COLUMN position ENUM('staff','manager','special_officer','secretary','trainee') NOT NULL DEFAULT 'staff'");
+            DB::statement("ALTER TABLE payrolls MODIFY COLUMN role ENUM('Staff','Manager','Trainee') NOT NULL DEFAULT 'Staff'");
+        } else {
+            Schema::table('payroll_sets', function (Blueprint $table) {
+                $table->enum('employee_type', ['staff', 'manager', 'trainee'])->default('staff')->change();
+            });
+        }
 
         if (! DB::table('payroll_sets')->where('position', 'trainee')->exists()) {
             DB::table('payroll_sets')->insert([
@@ -35,8 +43,10 @@ return new class extends Migration
     public function down(): void
     {
         DB::table('payroll_sets')->where('position', 'trainee')->delete();
-        DB::statement("ALTER TABLE payrolls MODIFY COLUMN role ENUM('Staff','Manager') NOT NULL DEFAULT 'Staff'");
-        DB::statement("ALTER TABLE payroll_sets MODIFY COLUMN position ENUM('staff','manager','special_officer','secretary') NOT NULL DEFAULT 'staff'");
-        DB::statement("ALTER TABLE payroll_sets MODIFY COLUMN employee_type ENUM('staff','manager') NOT NULL DEFAULT 'staff'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE payrolls MODIFY COLUMN role ENUM('Staff','Manager') NOT NULL DEFAULT 'Staff'");
+            DB::statement("ALTER TABLE payroll_sets MODIFY COLUMN position ENUM('staff','manager','special_officer','secretary') NOT NULL DEFAULT 'staff'");
+            DB::statement("ALTER TABLE payroll_sets MODIFY COLUMN employee_type ENUM('staff','manager') NOT NULL DEFAULT 'staff'");
+        }
     }
 };

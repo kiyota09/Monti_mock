@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Man\Staff;
 
 use App\Models\Man\KnittingSampleRequest;
+use App\Models\Man\KnittingMachineStaffAssignment;
 use App\Models\Man\Machine;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class KnittingSampleController extends ManufacturingStaffController
@@ -31,9 +33,13 @@ class KnittingSampleController extends ManufacturingStaffController
     public function index()
     {
         return Inertia::render('Dashboard/MAN/Employee/KnittingSample/Index', [
-            'requests' => KnittingSampleRequest::with('fabricSampleRequest:id,code,fabric_name')
+            'requests' => KnittingSampleRequest::with(['fabricSampleRequest.inquiry.client', 'fabricSampleRequest.product'])
                 ->whereIn('status', ['requested', 'in_progress'])->oldest()->get(),
-            'machines' => Machine::where('type', 'knitting')->where('status', 'available')->get(['id', 'machine_no']),
+            'discarded' => KnittingSampleRequest::with(['fabricSampleRequest.inquiry.client', 'fabricSampleRequest.product'])
+                ->where('status', KnittingSampleRequest::STATUS_DISCARDED)->latest()->get(),
+            'machines' => Machine::where('type', Machine::TYPE_FLATBED_KNITTING)->where('status', 'available')
+                ->whereIn('id', KnittingMachineStaffAssignment::where('staff_id', $this->staff()->id)->select('machine_id'))
+                ->get(['id', 'machine_no']),
             'recent' => KnittingSampleRequest::with([
                 'fabricSampleRequest:id,code,fabric_name,color_description,urgency,request_method',
                 'machine:id,machine_no',
@@ -100,12 +106,80 @@ class KnittingSampleController extends ManufacturingStaffController
             'produced_weight' => 'required|numeric|min:0.001|max:1',
             'remarks' => 'nullable|string|max:2000',
         ]);
-        $machine = Machine::whereKey($data['machine_id'])->where('type', 'knitting')->where('status', 'available')->firstOrFail();
+        $machine = Machine::whereKey($data['machine_id'])->where('type', Machine::TYPE_FLATBED_KNITTING)->where('status', 'available')
+            ->whereIn('id', KnittingMachineStaffAssignment::where('staff_id', $this->staff()->id)->select('machine_id'))
+            ->firstOrFail();
         $sample->update([
             'status' => 'completed', 'operator_id' => $this->staff()->id,
             'machine_id' => $machine->id, 'produced_weight' => $data['produced_weight'],
             'remarks' => $data['remarks'] ?? null, 'processed_at' => now(),
         ]);
         return back()->with('message', "Sample fabric {$sample->code} recorded as completed.");
+    }
+
+    public function bulkComplete(Request $request)
+    {
+        $data = $request->validate([
+            'machine_id' => ['required', 'integer', 'exists:machines,id'],
+            'items' => ['required', 'array', 'min:2', 'max:50'],
+            'items.*.id' => ['required', 'integer', 'distinct', 'exists:knitting_sample_requests,id'],
+            'items.*.produced_weight' => ['required', 'numeric', 'min:0.001', 'max:1'],
+            'items.*.remarks' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $machine = Machine::query()->whereKey($data['machine_id'])
+            ->where('type', Machine::TYPE_FLATBED_KNITTING)
+            ->where('status', 'available')
+            ->whereIn('id', KnittingMachineStaffAssignment::where('staff_id', $this->staff()->id)->select('machine_id'))
+            ->firstOrFail();
+
+        DB::transaction(function () use ($data, $machine) {
+            $ids = collect($data['items'])->pluck('id')->map(fn ($id) => (int) $id)->sort()->values();
+            $requests = KnittingSampleRequest::query()->whereIn('id', $ids)
+                ->with(['fabricSampleRequest.product'])
+                ->orderBy('id')->lockForUpdate()->get();
+            abort_unless($requests->count() === $ids->count(), 422, 'One or more knit requests are no longer available.');
+            abort_unless($requests->every(fn ($sample) => in_array($sample->status, ['requested', 'in_progress'], true)), 422, 'Every selected knit request must still be active.');
+
+            $requestSignatures = $requests->map(function (KnittingSampleRequest $sample) {
+                $parent = $sample->fabricSampleRequest;
+                $rawDesign = trim((string) $sample->fabric_design);
+                $parentDesign = trim((string) $parent?->fabric_name);
+                $design = $rawDesign !== '' && mb_strtolower($rawDesign) !== mb_strtolower($parentDesign)
+                    ? $rawDesign
+                    : (string) ($parent?->product?->name ?: $rawDesign ?: $parentDesign);
+
+                return implode(':', [
+                    (int) ($parent?->product_id ?? 0),
+                    mb_strtolower(preg_replace('/\s+/u', ' ', trim($design))),
+                    (int) $sample->yarn_material_id,
+                    $sample->gsm === null || $sample->gsm === '' ? '' : number_format((float) $sample->gsm, 3, '.', ''),
+                ]);
+            })->unique();
+            abort_unless($requestSignatures->count() === 1, 422, 'Bulk recording requires the same product/design, yarn type, and GSM.');
+
+            $formRows = collect($data['items'])->keyBy(fn ($row) => (int) $row['id']);
+            foreach ($requests as $sample) {
+                $row = $formRows->get((int) $sample->id);
+                $sample->update([
+                    'status' => 'completed',
+                    'operator_id' => $this->staff()->id,
+                    'machine_id' => $machine->id,
+                    'produced_weight' => $row['produced_weight'],
+                    'remarks' => $row['remarks'] ?? null,
+                    'processed_at' => now(),
+                ]);
+            }
+        });
+
+        return back()->with('message', count($data['items']).' matching knit fabric requests recorded as completed.');
+    }
+
+    public function discard(KnittingSampleRequest $sample)
+    {
+        abort_unless(in_array($sample->status, ['requested', 'in_progress'], true), 422, 'Only an active knit fabric request can be discarded.');
+        $sample->update(['status' => KnittingSampleRequest::STATUS_DISCARDED]);
+
+        return back()->with('message', "Knit fabric request {$sample->code} was cancelled.");
     }
 }

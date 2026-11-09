@@ -17,6 +17,8 @@ class ManufacturingOrder extends Model
         'status',
         'notes',
         'dyeing_bleaching_required',
+        'dyeing_color_group',
+        'dyeing_stage_processes',
         'dyeing_production_recipe',
     ];
 
@@ -25,6 +27,7 @@ class ManufacturingOrder extends Model
         'remaining_quantity' => 'decimal:2',
         'status' => 'string',
         'dyeing_bleaching_required' => 'boolean',
+        'dyeing_stage_processes' => 'array',
         'dyeing_production_recipe' => 'array',
     ];
 

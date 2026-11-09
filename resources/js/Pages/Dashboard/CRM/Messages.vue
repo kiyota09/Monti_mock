@@ -456,17 +456,17 @@ onUnmounted(() => {
                         </span>
 
                         <div class="relative flex items-center gap-2">
-                            <button v-if="callsEnabled" type="button" @click.stop="toggleTeam"
+                            <button v-if="false" type="button" @click.stop="toggleTeam"
                                 class="flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2 text-sm font-bold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
                                 <Users class="h-4 w-4" /> Call team
                             </button>
-                            <button type="button" @click.stop="openCallSettings" title="Call settings"
+                            <button v-if="false" type="button" @click.stop="openCallSettings" title="Call settings"
                                 aria-label="Call settings"
                                 class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
                                 <Settings2 class="h-4 w-4" />
                             </button>
 
-                            <div v-if="showTeam && callsEnabled" @click.stop
+                            <div v-if="false && showTeam && callsEnabled" @click.stop
                                 class="absolute right-0 top-full z-40 mt-2 w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white text-gray-900 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 dark:text-white">
                                 <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5 dark:border-zinc-800">
                                     <p class="text-xs font-black uppercase tracking-wider text-gray-500">Call a teammate</p>
@@ -564,15 +564,15 @@ onUnmounted(() => {
                                         {{ activeClient.contact_person || activeClient.email || 'Business Partner' }}
                                     </p>
                                 </div>
-                                <button v-if="callsEnabled" @click="startCall('audio')" title="Voice call"
+                                <button v-if="false && callsEnabled" @click="startCall('audio')" title="Voice call"
                                     class="flex h-9 w-9 items-center justify-center rounded-full text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/50">
                                     <Phone class="h-4 w-4" />
                                 </button>
-                                <button v-if="callsEnabled" @click="startCall('video')" title="Video call"
+                                <button v-if="false && callsEnabled" @click="startCall('video')" title="Video call"
                                     class="flex h-9 w-9 items-center justify-center rounded-full text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/50">
                                     <Video class="h-4 w-4" />
                                 </button>
-                                <button @click="showCallLog = !showCallLog" title="Call log"
+                                <button v-if="false" @click="showCallLog = !showCallLog" title="Call log"
                                     :class="showCallLog ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-slate-100 dark:hover:bg-zinc-800'"
                                     class="relative flex h-9 w-9 items-center justify-center rounded-full transition">
                                     <History class="h-4 w-4" />
@@ -581,7 +581,7 @@ onUnmounted(() => {
                             </header>
 
                             <!-- Call log panel -->
-                            <div v-if="showCallLog" class="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-4 dark:bg-zinc-950/40">
+                            <div v-if="false && showCallLog" class="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-4 dark:bg-zinc-950/40">
                                 <p class="mb-3 text-xs font-black uppercase tracking-wide text-gray-400">Call history · {{ activeClient.company_name }}</p>
                                 <div v-if="callHistory.length === 0" class="pt-10 text-center text-sm text-gray-400">No calls yet.</div>
                                 <div class="space-y-2">
@@ -603,7 +603,7 @@ onUnmounted(() => {
                             <div v-else ref="messagesContainer" class="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/60 p-4 dark:bg-zinc-950/40">
                                 <template v-for="m in threadMessages" :key="m.id">
                                     <!-- Call record -->
-                                    <div v-if="m.type === 'call'" class="flex justify-center">
+                                    <div v-if="false && m.type === 'call'" class="flex justify-center">
                                         <div class="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs shadow-sm ring-1 ring-black/5 dark:bg-zinc-800 dark:text-gray-200">
                                             <component :is="m.call?.type === 'video' ? Video : Phone" class="h-3.5 w-3.5 text-indigo-500" />
                                             <component :is="m.sender_type === SELF ? PhoneOutgoing : PhoneIncoming" class="h-3.5 w-3.5 text-gray-400" />
@@ -701,7 +701,7 @@ onUnmounted(() => {
                             </div>
 
                             <!-- Composer -->
-                            <footer v-if="!showCallLog" class="flex-none border-t border-gray-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                            <footer class="flex-none border-t border-gray-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
                                 <p v-if="sendError" class="mb-2 text-xs font-semibold text-rose-500">{{ sendError }}</p>
                                 <div v-if="replyTo" class="mb-2 flex items-center gap-2 rounded-xl border-l-4 border-indigo-500 bg-slate-50 px-3 py-2 dark:bg-zinc-800">
                                     <CornerUpLeft class="h-4 w-4 flex-none text-indigo-500" />
@@ -737,7 +737,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Call settings -->
-        <div v-if="showCallSettings" @click.self="showCallSettings = false"
+        <div v-if="false && showCallSettings" @click.self="showCallSettings = false"
             class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
             <div class="w-full max-w-sm rounded-3xl border border-gray-100 bg-white p-6 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
                 <div class="flex items-start justify-between gap-3">

@@ -6,16 +6,12 @@ import { route } from 'ziggy-js';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import {
     MessagesSquare, Send, Loader2, Paperclip, X, Smile, CornerUpLeft, MoreVertical,
-    Phone, Video, History, FileText, Download, Trash2, PhoneCall, PhoneIncoming,
-    PhoneOutgoing, PhoneMissed, Ban,
+    FileText, Download, Trash2,
 } from 'lucide-vue-next';
-import { usePartnerCallCenter } from '@/composables/crm/usePartnerCallCenter';
 import { csrfFetch } from '@/lib/http';
 
 const props = defineProps({
     messages: { type: Array, default: () => [] },
-    callLogs: { type: Array, default: () => [] },
-    callsEnabled: { type: Boolean, default: true },
 });
 
 const SELF = 'client';
@@ -34,16 +30,10 @@ const replyTo = ref(null);
 const reactionPickerId = ref(null);
 const openMenuId = ref(null);
 const imageViewer = ref(null);
-const showCallLog = ref(false);
 const fileInput = ref(null);
 let pollTimer = null;
 
-// Calls are handled by the global PartnerCallOverlay; this page only kicks off
-// an outgoing call.
-const partnerCall = usePartnerCallCenter();
-
 const lastMessageId = computed(() => threadMessages.value.reduce((m, x) => Math.max(m, typeof x.id === 'number' ? x.id : 0), 0));
-const callHistory = computed(() => threadMessages.value.filter((m) => m.type === 'call').slice().sort((a, b) => (b.id ?? 0) - (a.id ?? 0)));
 
 const scrollToBottom = () => {
     nextTick(() => {
@@ -77,7 +67,6 @@ const findMessage = (id) => threadMessages.value.find((m) => String(m.id) === St
 const previewOf = (m) => {
     if (!m) return '';
     if (m.is_unsent) return 'This message was deleted';
-    if (m.type === 'call') return m.call?.type === 'video' ? 'Video call' : 'Voice call';
     if (m.attachment) return m.attachment.is_image ? 'Photo' : (m.attachment.name || 'Attachment');
     return m.body || '';
 };
@@ -234,24 +223,6 @@ const unsend = async (m, scope) => {
     }
 };
 
-const startCall = async (type) => {
-    if (!props.callsEnabled) return;
-    sendError.value = '';
-    const message = await partnerCall.startOutgoing({ type });
-    if (message) mergeMessages([message]);
-};
-
-const callStatusMeta = (m) => {
-    const status = m.call?.status;
-    if (status === 'missed') return { label: 'Missed', tone: 'text-rose-500' };
-    if (status === 'declined') return { label: 'Declined', tone: 'text-amber-500' };
-    if (status === 'failed') return { label: 'Failed', tone: 'text-rose-500' };
-    if (status === 'ringing') return { label: 'Ringing', tone: 'text-indigo-500' };
-    if (status === 'answered' || status === 'ongoing') return { label: 'Ongoing', tone: 'text-emerald-500' };
-    return { label: formatDuration(m.call?.duration), tone: 'text-gray-500' };
-};
-
-const callDirection = (m) => (m.sender_type === SELF ? 'Outgoing' : 'Incoming');
 
 const formatTime = (ts) => {
     if (!ts) return '';
@@ -263,16 +234,6 @@ const formatTime = (ts) => {
 };
 
 const formatDateTime = (ts) => (ts ? new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
-
-const formatDuration = (total) => {
-    const s = Math.max(0, Math.floor(total || 0));
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    const mm = String(m).padStart(2, '0');
-    const ss = String(sec).padStart(2, '0');
-    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
-};
 
 const formatSize = (bytes) => {
     if (!bytes) return '';
@@ -331,53 +292,12 @@ onUnmounted(() => {
                             <p class="truncate text-sm font-bold text-gray-900 dark:text-white">Monti Textiles</p>
                             <p class="truncate text-xs text-gray-500 dark:text-gray-400">CRM Support Team</p>
                         </div>
-                        <button v-if="callsEnabled" @click="startCall('audio')" title="Voice call"
-                            class="flex h-9 w-9 items-center justify-center rounded-full text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/50">
-                            <Phone class="h-4 w-4" />
-                        </button>
-                        <button v-if="callsEnabled" @click="startCall('video')" title="Video call"
-                            class="flex h-9 w-9 items-center justify-center rounded-full text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/50">
-                            <Video class="h-4 w-4" />
-                        </button>
-                        <button @click="showCallLog = !showCallLog" title="Call log"
-                            :class="showCallLog ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-slate-100 dark:hover:bg-zinc-800'"
-                            class="relative flex h-9 w-9 items-center justify-center rounded-full transition">
-                            <History class="h-4 w-4" />
-                            <span v-if="callHistory.length" class="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white">{{ callHistory.length }}</span>
-                        </button>
                     </header>
 
-                    <!-- Call log -->
-                    <div v-if="showCallLog" class="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-4 dark:bg-zinc-950/40">
-                        <p class="mb-3 text-xs font-black uppercase tracking-wide text-gray-400">Call history</p>
-                        <div v-if="callHistory.length === 0" class="pt-10 text-center text-sm text-gray-400">No calls yet.</div>
-                        <div class="space-y-2">
-                            <div v-for="m in callHistory" :key="'log-' + m.id"
-                                class="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                                <component :is="m.call?.type === 'video' ? Video : Phone" class="h-4 w-4 flex-none text-indigo-500" />
-                                <div class="min-w-0 flex-1">
-                                    <p class="text-sm font-bold text-gray-800 dark:text-white">{{ callDirection(m) }} {{ m.call?.type === 'video' ? 'video call' : 'voice call' }}</p>
-                                    <p class="text-xs text-gray-500">{{ formatDateTime(m.created_at) }}</p>
-                                </div>
-                                <span :class="callStatusMeta(m).tone" class="text-xs font-bold">{{ callStatusMeta(m).label }}</span>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Messages -->
-                    <div v-else ref="messagesContainer" class="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/60 p-4 dark:bg-zinc-950/40">
+                    <div ref="messagesContainer" class="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/60 p-4 dark:bg-zinc-950/40">
                         <template v-for="m in threadMessages" :key="m.id">
-                            <div v-if="m.type === 'call'" class="flex justify-center">
-                                <div class="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs shadow-sm ring-1 ring-black/5 dark:bg-zinc-800 dark:text-gray-200">
-                                    <component :is="m.call?.type === 'video' ? Video : Phone" class="h-3.5 w-3.5 text-indigo-500" />
-                                    <component :is="m.sender_type === SELF ? PhoneOutgoing : PhoneIncoming" class="h-3.5 w-3.5 text-gray-400" />
-                                    <span class="font-semibold">{{ callDirection(m) }} {{ m.call?.type === 'video' ? 'video' : 'voice' }} call</span>
-                                    <span :class="callStatusMeta(m).tone" class="font-bold">{{ callStatusMeta(m).label }}</span>
-                                    <span class="text-gray-400">· {{ formatTime(m.created_at) }}</span>
-                                </div>
-                            </div>
-
-                            <div v-else :class="m.sender_type === SELF ? 'justify-end' : 'justify-start'" class="group flex">
+                            <div v-if="m.type !== 'call'" :class="m.sender_type === SELF ? 'justify-end' : 'justify-start'" class="group flex">
                                 <div class="relative max-w-[78%]">
                                     <div :class="m.sender_type === SELF ? 'right-0' : 'left-0'"
                                         class="absolute -top-3 z-10 hidden items-center gap-0.5 rounded-full border border-gray-100 bg-white p-0.5 shadow-md group-hover:flex dark:border-zinc-700 dark:bg-zinc-800">
@@ -455,7 +375,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Composer -->
-                    <footer v-if="!showCallLog" class="flex-none border-t border-gray-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                    <footer class="flex-none border-t border-gray-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
                         <p v-if="sendError" class="mb-2 text-xs font-semibold text-rose-500">{{ sendError }}</p>
                         <div v-if="replyTo" class="mb-2 flex items-center gap-2 rounded-xl border-l-4 border-indigo-500 bg-slate-50 px-3 py-2 dark:bg-zinc-800">
                             <CornerUpLeft class="h-4 w-4 flex-none text-indigo-500" />

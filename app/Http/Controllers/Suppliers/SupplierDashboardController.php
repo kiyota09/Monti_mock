@@ -229,7 +229,14 @@ class SupplierDashboardController extends Controller
             ->where('status', '!=', 'draft')
             ->with(['items', 'invoices.payments'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            // Older warehouse receipts were stored as `delivered`; present
+            // those the same as the new terminal `completed` state.
+            ->each(function ($po) {
+                if ($po->received || $po->status === 'delivered') {
+                    $po->status = 'completed';
+                }
+            });
 
         return Inertia::render('Supplier/supplierOrders', [
             'auth' => [

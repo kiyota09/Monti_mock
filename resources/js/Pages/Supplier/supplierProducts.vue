@@ -23,6 +23,7 @@ const CATEGORIES = [
     'Pre-Treatment',
     'Bio-Processing Enzymes',
     'Care Agents',
+    'Needles',
 ];
 const LEGACY_CATEGORIES = ['Supplies', 'Packaging'];
 const searchQuery = ref('');

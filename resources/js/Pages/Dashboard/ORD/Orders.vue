@@ -112,7 +112,7 @@
 
                 <div class="animate-fade-up overflow-hidden rounded-3xl border border-gray-100 bg-white/80 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80" style="animation-delay: 140ms">
                     <div class="overflow-x-auto">
-                        <table class="w-full min-w-[64rem] text-sm">
+                        <table class="w-full min-w-[112rem] text-sm">
                             <thead>
                                 <tr class="border-b border-gray-100 text-left text-[10px] font-black uppercase tracking-widest text-gray-400 dark:border-zinc-800">
                                     <th class="px-4 py-3">Document</th>
@@ -120,8 +120,11 @@
                                     <th class="px-4 py-3">Detail</th>
                                     <th class="px-4 py-3">Status</th>
                                     <th class="px-4 py-3">Payment</th>
+                                    <th class="px-4 py-3">Payment terms</th>
                                     <th class="px-4 py-3 text-right">Total</th>
-                                    <th class="px-4 py-3">Expected</th>
+                                    <th class="px-4 py-3">Expected delivery</th>
+                                    <th class="px-4 py-3">Delivery date</th>
+                                    <th class="px-4 py-3">Start payment</th>
                                     <th class="px-4 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -148,11 +151,14 @@
                                     <td class="px-4 py-3">
                                         <span class="inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black uppercase" :class="paymentBadge(o.payment_status)">{{ formatStatus(o.payment_status) }}</span>
                                     </td>
+                                    <td class="max-w-48 px-4 py-3 text-xs font-semibold text-gray-700 dark:text-zinc-200">{{ o.payment_terms || '—' }}</td>
                                     <td class="px-4 py-3 text-right font-black text-gray-900 dark:text-white">{{ formatMoney(o.total) }}</td>
                                     <td class="px-4 py-3 text-xs" :class="isOverdue(o) ? 'font-black text-rose-600 dark:text-rose-400' : 'text-gray-500 dark:text-zinc-400'">
-                                        {{ o.expected_ship_date || '—' }}
+                                        {{ formatOrderDate(o.expected_ship_date) }}
                                         <p v-if="isOverdue(o)" class="text-[10px] font-black uppercase">Overdue</p>
                                     </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-xs font-semibold text-gray-700 dark:text-zinc-200">{{ formatOrderDate(o.delivery_date) }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-xs font-bold text-indigo-700 dark:text-indigo-300">{{ formatOrderDates(o.payment_start_dates) }}</td>
                                     <td class="px-4 py-3">
                                         <div class="flex justify-end gap-1">
                                             <Link :href="route('ord.orders.show', { type: o.type.toLowerCase(), id: o.id })" class="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-black text-white hover:bg-indigo-500">Open</Link>
@@ -161,7 +167,7 @@
                                     </td>
                                 </tr>
                                 <tr v-if="orders.data.length === 0">
-                                    <td colspan="8">
+                                    <td colspan="11">
                                         <OrdEmptyState title="No orders in this view" message="Try clearing filters or changing the pipeline tab." />
                                     </td>
                                 </tr>
@@ -322,6 +328,16 @@ const toggleDirection = () => {
     applyFilters();
 };
 const goToPage = (page) => router.get(route('ord.orders'), { ...local.value, page }, { preserveState: true, preserveScroll: true });
+const formatOrderDate = (value) => {
+    if (!value) return '—';
+    const day = String(value).slice(0, 10);
+    const date = new Date(`${day}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+};
+const formatOrderDates = (values) => {
+    const dates = (Array.isArray(values) ? values : [values]).filter(Boolean).map(formatOrderDate).filter((date) => date !== '—');
+    return dates.length ? [...new Set(dates)].join(' / ') : '—';
+};
 
 const pendingAction = ref(null);
 const transitioning = ref(false);

@@ -15,6 +15,7 @@ class SalesOrder extends Model
 {
     protected $fillable = [
         'purchase_order_id',
+        'purchase_order_item_id',
         'client_id',
         'jo_number',
         'control_number',
@@ -46,6 +47,7 @@ class SalesOrder extends Model
         // Payment posting (ORD receipt uploads + FIN collection back-sync).
         'payment_status',
         'receipt_file',
+        'replacement_return_id',
     ];
 
     protected $casts = [
@@ -71,6 +73,11 @@ class SalesOrder extends Model
         return $this->belongsTo(PurchaseOrder::class, 'purchase_order_id', 'po_number');
     }
 
+    public function purchaseOrderItem()
+    {
+        return $this->belongsTo(PurchaseOrderItem::class, 'purchase_order_item_id');
+    }
+
     /**
      * Get the client that owns the sales order.
      */
@@ -91,6 +98,11 @@ class SalesOrder extends Model
         // Older/rejected runs may leave multiple manufacturing orders for a
         // job order. Client and ORD tracking should show the latest run.
         return $this->hasOne(ManufacturingOrder::class, 'sales_order_id')->latestOfMany();
+    }
+
+    public function manufacturingOrders()
+    {
+        return $this->hasMany(ManufacturingOrder::class, 'sales_order_id');
     }
   public function bomRecord()
     {

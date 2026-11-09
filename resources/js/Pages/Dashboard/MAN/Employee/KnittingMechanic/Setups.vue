@@ -21,6 +21,8 @@ const showForm = ref(false);
 const setupGsm = ref({});
 const setupDesign = ref({});
 const setupYarn = ref({});
+const pendingDoneSetup = ref(null);
+const resultModal = ref({ open: false, success: false, message: '' });
 const form = useForm({
     machine_id: '', task_type: 'setup', sales_order_id: '', fabric_id: '',
     stitch_length: '', yarn_tension: '', takeup_pressure: '', gsm_target: '', yarn_type: '',
@@ -38,12 +40,32 @@ const submit = () => {
 const advance = (setup) => {
     const next = setup.status === 'pending' ? 'in_progress' : 'done';
     if (next === 'done' && setup.requested_by && (!String(setupGsm.value[setup.id] || setup.settings?.gsm_target || '').trim() || !String(setupYarn.value[setup.id] || setup.settings?.yarn_type || setup.jo_details?.yarn_type || '').trim())) return;
+    if (next === 'done') {
+        pendingDoneSetup.value = setup;
+        return;
+    }
+    updateSetupStatus(setup, next);
+};
+
+const updateSetupStatus = (setup, next) => {
     router.patch(route('man.staff.knitting-mechanic.update-status', setup.id), {
         status: next,
         gsm_target: setupGsm.value[setup.id] || setup.settings?.gsm_target || '',
         pattern_ref: setupDesign.value[setup.id] || setup.settings?.pattern_ref || '',
         yarn_type: setupYarn.value[setup.id] || setup.settings?.yarn_type || setup.jo_details?.yarn_type || '',
-    }, { preserveScroll: true });
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            pendingDoneSetup.value = null;
+            if (next === 'done') {
+                resultModal.value = { open: true, success: true, message: `${setup.code} is complete and has been added to My History.` };
+            }
+        },
+        onError: (errors) => {
+            pendingDoneSetup.value = null;
+            resultModal.value = { open: true, success: false, message: Object.values(errors || {}).flat().join(' ') || `Could not update ${setup.code}. Please try again.` };
+        },
+    });
 };
 
 const taskLabel = (t) => ({ setup: 'Setup', changeover: 'Changeover', calibration: 'Calibration', preventive: 'Preventive', repair: 'Repair' }[t] ?? t);
@@ -155,6 +177,20 @@ const badge = (s) => s === 'done'
                             <tr v-if="!myOpenSetups?.length"><td colspan="4" class="px-6 py-12 text-center text-sm text-gray-400">No open sheets. Record one above to get started.</td></tr>
                         </tbody>
                     </table></div>
+                </div>
+                <div v-if="pendingDoneSetup" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="confirm-done-title">
+                    <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                        <h2 id="confirm-done-title" class="text-xl font-black text-slate-900 dark:text-white">Complete this setup?</h2>
+                        <p class="mt-2 text-sm text-slate-600 dark:text-zinc-300">Mark {{ pendingDoneSetup.code }} as done? It will leave Open Setup Sheets and be recorded in My History.</p>
+                        <div class="mt-6 flex justify-end gap-3"><button @click="pendingDoneSetup = null" class="rounded-xl border px-4 py-2 text-sm font-bold">Cancel</button><button @click="updateSetupStatus(pendingDoneSetup, 'done')" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">Confirm done</button></div>
+                    </div>
+                </div>
+                <div v-if="resultModal.open" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4" role="alertdialog" aria-modal="true">
+                    <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                        <h2 class="text-xl font-black" :class="resultModal.success ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'">{{ resultModal.success ? 'Update successful' : 'Update failed' }}</h2>
+                        <p class="mt-2 text-sm text-slate-600 dark:text-zinc-300">{{ resultModal.message }}</p>
+                        <div class="mt-6 flex justify-end"><button @click="resultModal.open = false" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">Close</button></div>
+                    </div>
                 </div>
             </div>
         </div>

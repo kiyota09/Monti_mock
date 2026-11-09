@@ -7,6 +7,7 @@ use App\Models\Man\Fabric;
 use App\Models\Man\FinishingPackageGroup;
 use App\Models\Man\FinishingWorkItem;
 use App\Models\Man\FinishingWorkOrder;
+use App\Models\Man\ManTaskAssignment;
 use App\Models\Man\ManufacturingOrder;
 use App\Models\Core\User;
 use App\Models\War\WarehousePackage;
@@ -121,6 +122,13 @@ class FinishingWorkflowController extends Controller
                 }
             }
             $workOrder->update(['status'=>'sent_to_logistics']);
+            if ($workOrder->manufacturing_order_id) {
+                ManTaskAssignment::where('manufacturing_order_id', $workOrder->manufacturing_order_id)
+                    ->where('department', 'finishing')->active()->update([
+                        'status' => 'completed',
+                        'completed_at' => now(),
+                    ]);
+            }
         });
         return back()->with('success','The quality-approved JO has been passed to Logistics.');
     }

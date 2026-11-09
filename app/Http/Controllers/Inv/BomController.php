@@ -51,10 +51,13 @@ class BomController extends Controller
                             continue;
                         }
 
-                        $quantity = (float) ($row[$quantityKey] ?? $row['amount'] ?? 0);
-                        $perKg = $group === 'dyestuffs' || $group === 'dye_stuffs'
-                            ? $quantity / 100
-                            : (in_array($group, ['yarns'], true) ? $quantity : $quantity * $liquor / 1000);
+                        $usesGrams = array_key_exists('grams', $row) || (($row['unit'] ?? null) === 'g' && array_key_exists('amount', $row));
+                        $quantity = (float) ($usesGrams ? ($row['grams'] ?? $row['amount'] ?? 0) : ($row[$quantityKey] ?? $row['quantity'] ?? 0));
+                        $perKg = $usesGrams
+                            ? $quantity / 1000
+                            : ($group === 'dyestuffs' || $group === 'dye_stuffs'
+                                ? $quantity / 100
+                                : (in_array($group, ['yarns'], true) ? $quantity : $quantity * $liquor / 1000));
                         $materialQuantities[$materialId] = ($materialQuantities[$materialId] ?? 0) + $perKg;
                     }
                 }

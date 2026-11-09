@@ -31,6 +31,8 @@ class PurchaseOrder extends Model
         'inquiry_id',
         'eco_quotation_id',
         'po_number',
+        'client_po_number',
+        'crm_passed_to_eco_at',
         'subtotal',
         'discount_amount',
         'tax_rate',
@@ -64,6 +66,7 @@ class PurchaseOrder extends Model
         'delivery_date' => 'date',
         'expected_ship_date' => 'date',
         'confirmed_at' => 'datetime',
+        'crm_passed_to_eco_at' => 'datetime',
     ];
 
     /**
@@ -134,5 +137,11 @@ class PurchaseOrder extends Model
     public function salesOrders()
     {
         return $this->hasMany(SalesOrder::class, 'purchase_order_id', 'po_number');
+    }
+
+    public function hasBeenPassedToEco(): bool
+    {
+        return $this->crm_passed_to_eco_at !== null
+            && $this->salesOrders()->where('created_at', '>=', $this->created_at)->exists();
     }
 }

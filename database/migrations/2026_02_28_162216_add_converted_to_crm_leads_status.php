@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -9,8 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Add 'Converted' to the status ENUM
-        DB::statement("ALTER TABLE crm_leads MODIFY COLUMN status ENUM('Inquiry', 'Negotiation', 'Approval Sent', 'Closed-Won', 'Lost', 'Converted') NOT NULL DEFAULT 'Inquiry'");
+        // SQLite stores this as a string and does not support MySQL ENUM DDL.
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE crm_leads MODIFY COLUMN status ENUM('Inquiry', 'Negotiation', 'Approval Sent', 'Closed-Won', 'Lost', 'Converted') NOT NULL DEFAULT 'Inquiry'");
+        }
     }
 
     /**
@@ -18,7 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Remove 'Converted' from the ENUM (revert to original)
-        DB::statement("ALTER TABLE crm_leads MODIFY COLUMN status ENUM('Inquiry', 'Negotiation', 'Approval Sent', 'Closed-Won', 'Lost') NOT NULL DEFAULT 'Inquiry'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE crm_leads MODIFY COLUMN status ENUM('Inquiry', 'Negotiation', 'Approval Sent', 'Closed-Won', 'Lost') NOT NULL DEFAULT 'Inquiry'");
+        }
     }
 };

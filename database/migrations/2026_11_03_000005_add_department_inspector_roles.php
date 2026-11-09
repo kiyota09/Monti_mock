@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -15,9 +17,8 @@ return new class extends Migration
 
     public function up(): void
     {
-        $list = implode(',', array_map(fn ($role) => "'{$role}'", $this->roles));
-        DB::statement("ALTER TABLE `users` MODIFY `manufacturing_role` ENUM({$list}) NULL");
-        DB::statement("ALTER TABLE `manufacturing_supervisor_roles` MODIFY `manufacturing_role` ENUM({$list}) NULL");
+        $this->setRoleEnum('users');
+        $this->setRoleEnum('manufacturing_supervisor_roles');
 
         foreach ([
             ['department' => 'knitting', 'role' => 'knitting_inspector'],
@@ -43,4 +44,20 @@ return new class extends Migration
     {
         // Inspector accounts and grants are retained to avoid breaking access records.
     }
+
+    private function setRoleEnum(string $table): void
+    {
+        if (DB::getDriverName() === 'mysql') {
+            $list = implode(',', array_map(fn ($role) => "'{$role}'", $this->roles));
+            DB::statement("ALTER TABLE `{$table}` MODIFY `manufacturing_role` ENUM({$list}) NULL");
+
+            return;
+        }
+
+        $roles = $this->roles;
+        Schema::table($table, function (Blueprint $blueprint) use ($roles) {
+            $blueprint->enum('manufacturing_role', $roles)->nullable()->change();
+        });
+    }
+
 };

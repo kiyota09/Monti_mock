@@ -726,12 +726,6 @@ onBeforeUnmount(() => {
                             <span class="h-1.5 w-1.5 rounded-full bg-[var(--mm-online)] shadow-[0_0_8px_var(--mm-online)]" /> Active Now
                         </p>
                     </div>
-                    <button title="Audio call" class="rounded-xl p-2 text-[var(--mm-muted)] transition hover:bg-[var(--mm-surface)] hover:text-[var(--mm-text)]">
-                        <Phone class="h-4 w-4" />
-                    </button>
-                    <button title="Video call" class="rounded-xl p-2 text-[var(--mm-muted)] transition hover:bg-[var(--mm-surface)] hover:text-[var(--mm-text)]">
-                        <Video class="h-4 w-4" />
-                    </button>
                     <button v-if="activeThread.kind === 'group' && msgView !== 'settings'" @click="openSettings" title="Group settings"
                         class="rounded-xl p-2 text-[var(--mm-muted)] transition hover:bg-[var(--mm-surface)] hover:text-[var(--mm-text)]">
                         <Settings class="h-4 w-4" />

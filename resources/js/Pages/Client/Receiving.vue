@@ -188,19 +188,70 @@
                             </div>
                             <div class="p-6 space-y-3">
                                 <div class="divide-y divide-gray-100 dark:divide-zinc-800 rounded-2xl border border-gray-100 dark:border-zinc-800 overflow-hidden">
-                                    <div v-for="(pkg, idx) in selectedDelivery?.packages" :key="idx" class="py-3 px-4 flex justify-between items-center hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition">
+                                    <div v-for="pkg in selectedDelivery?.packages" :key="pkg.id" class="py-3 px-4 flex justify-between items-center hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition">
                                         <div class="min-w-0">
+                                            <input v-if="pkg.status === 'delivered'" v-model="returnForm.package_ids" type="checkbox" :value="pkg.id" class="mr-2 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                                             <p class="font-bold text-sm text-gray-800 dark:text-gray-100">{{ pkg.product_name || '—' }}</p>
                                             <p class="text-xs text-gray-500 font-mono">{{ pkg.package_number }}</p>
                                         </div>
                                         <p class="font-black text-sm text-indigo-700 dark:text-indigo-300 shrink-0">{{ pkg.quantity }} pcs</p>
                                     </div>
                                 </div>
-                                <button @click="closePackagesModal" class="w-full py-3 bg-gray-100 dark:bg-zinc-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-200 active:scale-95 transition">Close</button>
+                                <div class="flex gap-2">
+                                    <button @click="closePackagesModal" class="flex-1 py-3 bg-gray-100 dark:bg-zinc-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-200 active:scale-95 transition">Close</button>
+                                    <button v-if="selectedDelivery?.packages?.some(pkg => pkg.status === 'delivered')" @click="openReturnForm" :disabled="!returnForm.package_ids.length" class="flex-1 py-3 bg-gradient-to-r from-rose-600 to-orange-600 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50">Return selected ({{ returnForm.package_ids.length }})</button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </Transition>
+            </Teleport>
+
+            <!-- Partner return request form -->
+            <Teleport to="body">
+                <div v-if="showReturnForm" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showReturnForm = false">
+                    <form @submit.prevent="showReturnForm = false; showReturnConfirmation = true" class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                        <h3 class="text-lg font-black text-gray-900 dark:text-white">Request a package return</h3>
+                        <p class="mt-1 text-xs text-gray-500">{{ returnForm.package_ids.length }} selected package(s) · {{ selectedDelivery?.delivery_number }}</p>
+                        <label class="mt-4 block text-sm font-bold">Request
+                            <select v-model="returnForm.request_type" required class="mt-1 w-full rounded-xl border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800">
+                                <option value="replacement">Replacement</option>
+                                <option value="price_adjustment">Price adjustment</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </label>
+                        <label class="mt-3 block text-sm font-bold">Reason
+                            <textarea v-model="returnForm.reason" required rows="4" maxlength="2000" class="mt-1 w-full rounded-xl border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" placeholder="Explain why you are requesting this return"></textarea>
+                        </label>
+                        <label class="mt-3 block text-sm font-bold">Photo evidence (optional)
+                            <input type="file" accept="image/jpeg,image/png,image/webp" @change="returnForm.image = $event.target.files?.[0] || null" class="mt-1 block w-full text-sm text-gray-500 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-xs file:font-bold file:text-indigo-700" />
+                        </label>
+                        <div class="mt-5 flex justify-end gap-2">
+                            <button type="button" @click="showReturnForm = false" class="rounded-xl border px-4 py-2 text-sm font-bold">Back</button>
+                            <button type="submit" :disabled="!returnForm.reason || returnForm.processing" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">Continue</button>
+                        </div>
+                    </form>
+                </div>
+                <div v-if="showReturnConfirmation" class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+                        <h3 class="text-lg font-black">Confirm return request</h3>
+                        <p class="mt-2 text-sm text-gray-500">Submit a {{ returnForm.request_type.replace('_', ' ') }} request for {{ returnForm.package_ids.length }} package(s)? ECO staff will review the request.</p>
+                        <div class="mt-5 flex justify-end gap-2">
+                            <button @click="showReturnConfirmation = false; showReturnForm = true" class="rounded-xl border px-4 py-2 text-sm font-bold">Go back</button>
+                            <button @click="submitReturnRequest" :disabled="returnForm.processing" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">Confirm submit</button>
+                        </div>
+                    </div>
+                </div>
+                <div v-if="returnResult" class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div class="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900">
+                        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full" :class="returnResult.success ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'">
+                            <Package v-if="returnResult.success" class="h-7 w-7" /><X v-else class="h-7 w-7" />
+                        </div>
+                        <h3 class="mt-3 text-lg font-black">{{ returnResult.success ? 'Request submitted' : 'Submission failed' }}</h3>
+                        <p class="mt-1 text-sm text-gray-500">{{ returnResult.message }}</p>
+                        <button @click="returnResult = null" class="mt-5 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-black text-white">Close</button>
+                    </div>
+                </div>
             </Teleport>
 
             <!-- Rating Modal -->
@@ -277,6 +328,10 @@ const processing = ref({});
 const toast = ref({ show: false, type: 'success', message: '' });
 const showPackagesModal = ref(false);
 const selectedDelivery = ref(null);
+const showReturnForm = ref(false);
+const showReturnConfirmation = ref(false);
+const returnResult = ref(null);
+const returnForm = useForm({ package_ids: [], request_type: 'replacement', reason: '', image: null });
 
 const showRatingModal = ref(false);
 const ratingTarget = ref(null);
@@ -355,6 +410,8 @@ const refreshData = () => {
 };
 
 const openPackagesModal = (delivery) => {
+    returnForm.reset();
+    returnForm.clearErrors();
     selectedDelivery.value = delivery;
     showPackagesModal.value = true;
 };
@@ -362,6 +419,32 @@ const openPackagesModal = (delivery) => {
 const closePackagesModal = () => {
     showPackagesModal.value = false;
     selectedDelivery.value = null;
+};
+
+const openReturnForm = () => {
+    showPackagesModal.value = false;
+    showReturnForm.value = true;
+};
+
+const submitReturnRequest = () => {
+    if (!selectedDelivery.value) return;
+    returnForm.post(route('client.receiving.returns.store', selectedDelivery.value.id), {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            showReturnConfirmation.value = false;
+            showReturnForm.value = false;
+            closePackagesModal();
+            returnResult.value = { success: true, message: 'ECO staff will review your request.' };
+            returnForm.reset();
+            refreshData();
+        },
+        onError: () => {
+            showReturnConfirmation.value = false;
+            showReturnForm.value = false;
+            returnResult.value = { success: false, message: Object.values(returnForm.errors)[0] || 'Please try again.' };
+        },
+    });
 };
 
 const markAsReceived = async (delivery) => {

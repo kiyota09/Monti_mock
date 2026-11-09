@@ -380,7 +380,7 @@
                                     <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white flex-shrink-0"><FileText class="h-5 w-5" /></span>
                                     <span class="min-w-0">
                                         <span class="block text-sm font-semibold text-slate-900 dark:text-white">Issue quotation</span>
-                                        <span class="block text-xs text-slate-500 dark:text-zinc-400">Send prices per kg to the client</span>
+                                        <span class="block text-xs text-slate-500 dark:text-zinc-400">Price only product/color/yarn lines without an active quotation</span>
                                     </span>
                                 </button>
                                 <button v-if="canEditInquiry" @click="openMeetingModal" type="button"
@@ -404,7 +404,7 @@
                                         <a v-else-if="sample.sample_image_path" :href="`/storage/${sample.sample_image_path}`" target="_blank" class="mt-2 inline-flex text-xs font-semibold text-indigo-700 underline dark:text-indigo-300">Open sample PDF</a>
                                         <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
                                             <span class="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">{{ sample.status === 'requested' ? 'Queued for Dyeing Lab' : sample.status === 'in_progress' ? 'Lab preparing sample' : sample.status === 'awaiting_crm_review' ? 'Ready to send' : sample.status === 'forwarded' ? (sample.client_received_at ? 'Client received swatch' : sample.client_noted_at ? 'Client noted delivery' : 'Sent to client') : sample.status === 'discarded' ? 'Discarded by Dyeing Lab' : 'Client requested an adjustment' }}</span>
-                                            <button v-if="canEditInquiry && sample.status === 'awaiting_crm_review'" type="button" @click="openDeliverSample(sample)" class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700">Received Sample Fabrics</button>
+                                            <button v-if="canEditInquiry && sample.status === 'awaiting_crm_review'" type="button" @click="openDeliverSample(sample)" class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700">Send Swatches</button>
                                         </div>
                                     </article>
                                 </div>
@@ -448,20 +448,50 @@
                             </div>
                         </div>
 
-                        <section v-if="clientPoReviewState.length" aria-label="Client purchase orders" class="space-y-2">
-                            <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white px-1">Client purchase orders <span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs dark:bg-zinc-800">{{ clientPoReviewState.length }}</span></h2>
-                            <article v-for="po in clientPoReviewState" :key="po.id" class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                                <div class="flex items-start justify-between gap-2"><div><p class="font-mono text-xs font-bold text-slate-800 dark:text-zinc-100">{{ po.po_number }}</p><p class="mt-1 text-[11px] capitalize text-slate-500">{{ String(po.status).replaceAll('_', ' ') }} · PHP {{ Number(po.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</p></div><span v-if="po.pushed" class="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">In ECO Push Center</span></div>
+                        <div class="sticky top-0 z-20 -mx-1 rounded-xl border border-slate-200 bg-slate-50/95 p-1 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95" role="tablist" aria-label="Inquiry records">
+                            <div class="grid grid-cols-3 gap-1">
+                                <button v-for="tab in inquiryRecordTabs" :key="tab.key" type="button" role="tab" :aria-selected="inquiryRecordTab === tab.key" @click="inquiryRecordTab = tab.key"
+                                    class="min-w-0 rounded-lg px-1.5 py-2 text-[11px] font-bold transition sm:px-2 sm:text-xs"
+                                    :class="inquiryRecordTab === tab.key ? 'bg-white text-indigo-700 shadow-sm dark:bg-zinc-800 dark:text-indigo-300' : 'text-slate-500 hover:bg-white/70 hover:text-slate-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-white'">
+                                    <span class="block truncate">{{ tab.label }}</span><span class="mt-0.5 block text-[10px] font-semibold opacity-70">{{ tab.count }}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <section v-if="inquiryRecordTab === 'client-po'" aria-label="Client purchase orders" class="space-y-2">
+                            <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white px-1">Client PO <span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs dark:bg-zinc-800">{{ allClientPurchaseOrders.length }}</span></h2>
+                            <p v-if="!allClientPurchaseOrders.length" class="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-zinc-700 dark:text-zinc-400">No client purchase orders are linked to this inquiry.</p>
+                            <article v-for="po in allClientPurchaseOrders" :key="po.id" class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                <div class="flex items-start justify-between gap-2"><div><p class="font-mono text-xs font-bold text-slate-800 dark:text-zinc-100">{{ po.client_po_number || po.po_number }}</p><p v-if="po.client_po_number" class="mt-0.5 text-[10px] text-slate-500">Monti ref {{ po.po_number }}</p><p class="mt-1 text-[11px] capitalize text-slate-500">{{ po.status === 'crm_recipe_review' ? 'Awaiting CRM recipe linking' : String(po.status).replaceAll('_', ' ') }} · PHP {{ Number(po.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</p></div><span v-if="po.pushed" class="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">In ECO Push Center</span></div>
+                                <a v-if="po.attachment_path" :href="`/storage/${po.attachment_path}`" target="_blank" rel="noopener" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 underline dark:text-indigo-300">View client PO image</a>
                                 <div class="mt-2 space-y-1 text-xs text-slate-600 dark:text-zinc-300"><p v-for="(item, index) in po.items" :key="index">{{ item.product_name }} · {{ item.color }} · {{ item.fabric_type }} · {{ item.quantity }} kg</p></div>
                                 <div class="mt-3 space-y-3">
                                     <div v-for="item in po.items" :key="item.id" class="rounded-lg border border-slate-100 p-2.5 dark:border-zinc-800">
                                         <p class="text-xs font-semibold text-slate-700 dark:text-zinc-200">{{ item.product_name }} · {{ item.color }} · {{ item.fabric_type }} · {{ item.quantity }} kg</p>
-                                        <label class="mt-2 block text-[11px] font-semibold text-slate-500 dark:text-zinc-400">Approved recipe for this PO line
-                                            <select v-model.number="item.recipe_id" :disabled="po.pushed || !canEditInquiry" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
-                                                <option :value="null">Choose matching approved recipe</option>
-                                                <option v-for="recipe in item.recipe_options" :key="recipe.id" :value="recipe.id">{{ recipe.label }}</option>
-                                            </select>
-                                        </label>
+                                        <label class="mt-2 block text-[11px] font-semibold text-slate-500 dark:text-zinc-400">Approved recipe for this PO line</label>
+                                        <div class="relative mt-1" data-recipe-picker>
+                                            <button type="button" @click.stop="toggleRecipePicker(po.id, item.id)" :disabled="po.pushed || !canEditInquiry"
+                                                class="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 px-3 py-2 text-left text-xs font-semibold text-slate-800 shadow-sm outline-none transition hover:border-indigo-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:from-zinc-800 dark:to-zinc-900 dark:text-zinc-100 dark:hover:border-indigo-700">
+                                                <FlaskConical class="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                                                <span class="min-w-0 flex-1 truncate">{{ recipeOptionLabel(item) }}</span>
+                                                <ChevronDown class="h-4 w-4 shrink-0 text-slate-400 transition" :class="{ 'rotate-180': isRecipePickerOpen(po.id, item.id) }" />
+                                            </button>
+                                            <ul v-if="isRecipePickerOpen(po.id, item.id)" class="mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                                                <li>
+                                                    <button type="button" @click.stop="chooseRecipe(item, null)" class="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-slate-500 transition hover:bg-slate-50 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                                                        <span class="truncate">Choose matching approved recipe</span>
+                                                        <Check v-if="!item.recipe_id" class="h-3.5 w-3.5 shrink-0 text-indigo-600" />
+                                                    </button>
+                                                </li>
+                                                <li v-for="recipe in item.recipe_options" :key="recipe.id">
+                                                    <button type="button" @click.stop="chooseRecipe(item, recipe.id)" class="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition"
+                                                        :class="Number(item.recipe_id) === Number(recipe.id) ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200' : 'text-slate-700 hover:bg-slate-50 dark:text-zinc-200 dark:hover:bg-zinc-800'">
+                                                        <span class="truncate">{{ recipe.label }}</span>
+                                                        <Check v-if="Number(item.recipe_id) === Number(recipe.id)" class="h-3.5 w-3.5 shrink-0" />
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                        </div>
                                         <p v-if="!item.recipe_options.length" class="mt-1 text-[10px] text-amber-700 dark:text-amber-300">No approved recipe matches this product, color, and yarn yet.</p>
                                     </div>
                                 </div>
@@ -470,12 +500,15 @@
                             </article>
                         </section>
 
+
+
                         <!-- Recipes -->
-                        <section v-if="recipes.length > 0" aria-label="Recipes">
+                        <section v-if="inquiryRecordTab === 'recipes'" aria-label="Recipes">
                             <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white px-1 mb-2">
                                 Recipes
                                 <span class="text-xs font-medium text-slate-500 dark:text-zinc-400 bg-slate-200/70 dark:bg-zinc-800 rounded-full px-2 py-0.5">{{ recipes.length }}</span>
                             </h2>
+                            <p v-if="!recipes.length" class="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-zinc-700 dark:text-zinc-400">No recipes are linked to this client yet.</p>
                             <TransitionGroup name="card" tag="div" class="space-y-2">
                                 <div v-for="recipe in recipes" :key="recipe.id"
                                     class="bg-white dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-zinc-800 px-4 py-3 shadow-sm">
@@ -487,11 +520,13 @@
                         </section>
 
                         <!-- Quotations -->
-                        <section v-if="quotations.length > 0" aria-label="Quotations">
+                        <section v-if="inquiryRecordTab === 'quotations'" aria-label="Quotations">
                             <h2 class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white px-1 mb-2">
                                 Quotations
                                 <span class="text-xs font-medium text-slate-500 dark:text-zinc-400 bg-slate-200/70 dark:bg-zinc-800 rounded-full px-2 py-0.5">{{ quotations.length }}</span>
                             </h2>
+
+                            <p v-if="!quotations.length" class="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-zinc-700 dark:text-zinc-400">No quotations have been issued for this inquiry.</p>
 
                             <div class="flex rounded-xl bg-slate-200/60 dark:bg-zinc-900 p-1 mb-3" role="tablist">
                                 <button @click="quoteTab = 'active'" type="button" role="tab" :aria-selected="quoteTab === 'active'"
@@ -606,8 +641,8 @@
                             <div class="flex items-center gap-3">
                                 <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white"><FileText class="h-5 w-5" /></span>
                                 <div>
-                                    <h3 id="quotation-title" class="text-base font-semibold text-slate-900 dark:text-white">Issue quotation</h3>
-                                    <p class="text-sm text-slate-500 dark:text-zinc-400">{{ inquiry.client?.company_name }}</p>
+                                     <h3 id="quotation-title" class="text-base font-semibold text-slate-900 dark:text-white">Issue quotation</h3>
+                                     <p class="text-sm text-slate-500 dark:text-zinc-400">{{ inquiry.client?.company_name }} · Only unquoted or rejected product/color/yarn lines are available.</p>
                                 </div>
                             </div>
                             <button @click="showQuotationModal = false" type="button" aria-label="Close" class="modal-close"><X class="h-4 w-4" /></button>
@@ -615,6 +650,26 @@
 
                         <form @submit.prevent="submitQuotation" class="flex flex-col flex-1 min-h-0">
                             <div class="p-5 sm:p-6 overflow-y-auto flex-1 space-y-5">
+
+                                <section v-if="hasClientProductSelections" class="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+                                    <p class="text-xs font-bold text-indigo-900 dark:text-indigo-100">Products in this quotation</p>
+                                    <p class="mt-0.5 text-[11px] text-indigo-700 dark:text-indigo-300">Choose products, then check the exact color/yarn lines to include. Sent or accepted lines cannot be quoted again.</p>
+                                    <div class="mt-3 space-y-2">
+                                        <label class="flex cursor-pointer items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-xs font-bold text-slate-700 dark:bg-zinc-900/70 dark:text-zinc-200">
+                                            <input type="checkbox" :checked="allQuotationProductsSelected" @change="toggleAllQuotationProducts($event.target.checked)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                                            Select all eligible products
+                                        </label>
+                                        <div class="max-h-40 space-y-1 overflow-y-auto pr-1">
+                                            <label v-for="product in quotationScopeProducts" :key="product.id" class="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-white/80 dark:text-zinc-200 dark:hover:bg-zinc-900/70">
+                                                <input type="checkbox" :checked="quotationSelectedProductIds.includes(Number(product.id))" @change="toggleQuotationProduct(product.id, $event.target.checked)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                                                <span class="min-w-0 flex-1 truncate font-semibold">{{ product.name }}</span>
+                                                <span class="shrink-0 text-[10px] text-slate-500 dark:text-zinc-400">{{ product.count }} color/yarn line(s)</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <p v-if="quotationScopeProducts.length && !quotationSelectedProductIds.length" class="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">Select at least one product to include in this quotation.</p>
+                                    <p v-if="!quotationScopePairs.length" class="mt-3 rounded-lg bg-white/80 p-2.5 text-xs font-semibold text-amber-800 dark:bg-zinc-900 dark:text-amber-200">All selected product, color, and yarn combinations already have a sent or accepted quotation. A new quotation is available if the client rejects the existing one.</p>
+                                </section>
 
                                 <!-- VAT type -->
                                 <div>
@@ -637,8 +692,12 @@
                                 <!-- Products -->
                                 <div class="space-y-3">
                                     <div v-for="(item, idx) in form.items" :key="idx"
-                                        class="border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
+                                        class="border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden" :class="item.isIncluded === false ? 'opacity-60' : ''">
                                         <div class="flex items-center gap-2 bg-slate-50 dark:bg-zinc-800/60 px-3 py-2.5 border-b border-slate-200 dark:border-zinc-800">
+                                            <template v-if="hasClientProductSelections">
+                                                <input v-model="item.isIncluded" type="checkbox" :aria-label="`Include ${item.pantone_name} with ${item.fabric_type_name}`" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                                                <span class="shrink-0 text-[10px] font-semibold text-slate-500 dark:text-zinc-400">Include color</span>
+                                            </template>
                                             <Package class="h-4 w-4 text-indigo-500 flex-shrink-0" />
                                             <input v-model="item.fabric" aria-label="Fabric or product name" :readonly="hasClientProductSelections"
                                                 class="flex-1 bg-transparent border-none p-0 text-sm font-semibold text-slate-900 dark:text-white focus:ring-0 focus:outline-none min-w-0 placeholder:text-slate-400 placeholder:font-normal"
@@ -679,7 +738,7 @@
                                                     <span class="text-right text-[10px] text-slate-500">Price page<br /><strong class="text-slate-800 dark:text-zinc-100">{{ item.default_unit_price === null ? 'Not set' : `₱${Number(item.default_unit_price).toFixed(2)}/kg` }}</strong></span>
                                                 </div>
                                                 <label class="mt-3 block text-xs font-bold text-slate-700 dark:text-zinc-200">Client-specific price per kg
-                                                    <span class="relative mt-1 block"><span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₱</span><input v-model.number="item.unit_price" type="number" min="0" step="0.01" inputmode="decimal" required class="field-input !pl-8" /></span>
+                                                    <span class="relative mt-1 block"><span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₱</span><input v-model.number="item.unit_price" type="number" min="0" step="0.01" inputmode="decimal" :required="item.isIncluded !== false" class="field-input !pl-8" /></span>
                                                 </label>
                                             </div>
 
@@ -725,10 +784,10 @@
 
                             <div class="flex gap-3 px-5 sm:px-6 py-4 border-t border-slate-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex-shrink-0">
                                 <button type="button" @click="showQuotationModal = false" class="btn-secondary">Cancel</button>
-                                <button type="submit" :disabled="submitting || !form.payment_terms" class="btn-primary flex-1">
+                                <button type="submit" :disabled="submitting || !form.payment_terms || (hasClientProductSelections && !form.items.some(item => item.isIncluded !== false))" class="btn-primary flex-1">
                                     <Loader2 v-if="submitting" class="h-4 w-4 animate-spin" />
                                     <Send v-else class="h-4 w-4" />
-                                    Send quotation
+                                     Send quotation
                                 </button>
                             </div>
                         </form>
@@ -1283,6 +1342,15 @@
                 </footer>
             </section>
         </div>
+        <Teleport to="body">
+            <div v-if="recipeLinkedModal" class="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="recipe-linked-title" @click.self="recipeLinkedModal = false">
+                <section class="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+                    <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"><Check class="h-6 w-6" /></span>
+                    <h2 id="recipe-linked-title" class="mt-4 text-lg font-semibold text-slate-900 dark:text-white">Recipe Successfully linked</h2>
+                    <button type="button" @click="recipeLinkedModal = false" class="mt-5 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">OK</button>
+                </section>
+            </div>
+        </Teleport>
         <TemplateWidget page-key="inquiries" />
     </AuthenticatedLayout>
 </template>
@@ -1299,7 +1367,7 @@ import { useSidebarToggle } from '@/Layouts/composables/useSidebarToggle';
 import { holdSuccessFeedback } from '@/lib/feedback';
 import {
     ArrowLeft, Send, Loader2, FileText, X, Package, Trash2,
-    Plus, Paperclip, ClipboardList, XCircle, Calendar, ChevronDown, ChevronLeft, ChevronRight, FlaskConical
+    Plus, Paperclip, ClipboardList, XCircle, Calendar, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Check
 } from 'lucide-vue-next';
 
 const { canEdit } = usePageAccess();
@@ -1500,6 +1568,14 @@ const recipeCombinations = computed(() => {
     return [...combinations.values()];
 });
 const recipeCombinationKeys = computed(() => recipeCombinations.value.map((pair) => pair.key));
+const hasQuoteLineForColorway = (pair) => (props.quotations ?? [])
+    .filter((quotation) => ['sent', 'accepted', 'approved'].includes(quotation.status))
+    .some((quotation) => (quotation.items ?? []).some((item) =>
+        Number(item.product_id) === pair.product_id
+        && Number(item.fabric_type_id) === pair.yarn_id
+        && String(item.color || '').trim().toLocaleLowerCase() === pair.pantoneName.trim().toLocaleLowerCase()
+    ));
+const eligibleQuotationPairs = computed(() => recipeCombinations.value.filter((pair) => !hasQuoteLineForColorway(pair)));
 const requestedRecipeKeys = computed(() => {
     const keys = new Set();
     (props.inquiry.sample_requests ?? []).forEach((sample) => {
@@ -1563,9 +1639,37 @@ const createSelectedRecipes = () => {
 };
 const pushingPurchaseOrderId = ref(null);
 const savingRecipePoId = ref(null);
+const recipeLinkedModal = ref(false);
 const copyClientPurchaseOrders = (orders) => (orders ?? []).map((po) => ({ ...po, items: (po.items ?? []).map((item) => ({ ...item })) }));
 const clientPoReviewState = ref(copyClientPurchaseOrders(props.clientPurchaseOrders));
 watch(() => props.clientPurchaseOrders, (orders) => { clientPoReviewState.value = copyClientPurchaseOrders(orders); }, { deep: true });
+const inquiryRecordTab = ref('client-po');
+const allClientPurchaseOrders = computed(() => clientPoReviewState.value);
+const inquiryRecordTabs = computed(() => [
+    { key: 'client-po', label: 'Client PO', count: allClientPurchaseOrders.value.length },
+    { key: 'recipes', label: 'Recipes', count: props.recipes?.length || 0 },
+    { key: 'quotations', label: 'Quotations', count: props.quotations?.length || 0 },
+]);
+
+// Compact recipe picker for each client PO line.
+const openRecipePicker = ref(null);
+const recipePickerKey = (poId, itemId) => `${poId}:${itemId}`;
+const isRecipePickerOpen = (poId, itemId) => openRecipePicker.value === recipePickerKey(poId, itemId);
+const toggleRecipePicker = (poId, itemId) => {
+    const key = recipePickerKey(poId, itemId);
+    openRecipePicker.value = openRecipePicker.value === key ? null : key;
+};
+const chooseRecipe = (item, recipeId) => {
+    item.recipe_id = recipeId === null ? null : Number(recipeId);
+    openRecipePicker.value = null;
+};
+const recipeOptionLabel = (item) => {
+    const selected = (item.recipe_options || []).find((recipe) => Number(recipe.id) === Number(item.recipe_id));
+    return selected?.label || 'Choose matching approved recipe';
+};
+const closeRecipePickerOnOutsideClick = (event) => {
+    if (openRecipePicker.value && !event.target.closest('[data-recipe-picker]')) openRecipePicker.value = null;
+};
 const poRecipesPersisted = (purchaseOrder) => purchaseOrder.items.length > 0 && purchaseOrder.items.every((item) =>
     item.recipe_id && Number(item.recipe_id) === Number(item.saved_recipe_id)
 );
@@ -1576,6 +1680,7 @@ const saveClientPoRecipes = (purchaseOrder) => {
         items: purchaseOrder.items.map((item) => ({ purchase_order_item_id: item.id, recipe_id: Number(item.recipe_id) })),
     }, {
         preserveScroll: true,
+        onSuccess: () => { recipeLinkedModal.value = true; },
         onFinish: () => { savingRecipePoId.value = null; },
     });
 };
@@ -1640,6 +1745,16 @@ const form = ref({
 const submitting = ref(false);
 const showQuotationModal = ref(false);
 const showQuotationSuccess = ref(false);
+const quotationSelectedProductIds = ref([]);
+const quotationScopePairs = computed(() => eligibleQuotationPairs.value);
+const quotationScopeProducts = computed(() => {
+    const products = new Map();
+    quotationScopePairs.value.forEach((pair) => {
+        if (!products.has(pair.product_id)) products.set(pair.product_id, { id: pair.product_id, name: pair.productName, count: 0 });
+        products.get(pair.product_id).count += 1;
+    });
+    return [...products.values()];
+});
 const showMeetingSuccess = ref(false);
 const selectedFabricTypeCount = computed(() => form.value.items.reduce((total, item) => total + item.fabric_type_ids.length, 0));
 const minimumOrderFor = (item) => {
@@ -1647,24 +1762,41 @@ const minimumOrderFor = (item) => {
     return minimumForProduct(parsedProduct || props.inquiry.product);
 };
 
-const selectedProductQuoteItems = () => {
+const selectedProductQuoteItems = (selectedProductIds = null) => {
     const selections = productSelections.value;
     const selectionSets = selections.products?.length
         ? selections.products
         : [{ ...selections, product_id: selections.product_id || props.inquiry.product_id }];
+    const eligibleKeys = new Set(quotationScopePairs.value.map((pair) => pair.key));
 
     return selectionSets.flatMap((selection) => {
         const productId = Number(selection.product_id || props.inquiry.product_id);
+        if (selectedProductIds !== null && !selectedProductIds.includes(productId)) return [];
         const product = (props.allProducts || []).find((item) => Number(item.id) === productId)
             || (props.parsedProducts || []).find((item) => Number(item.id) === productId)
             || props.inquiry.product;
-        return (selection.pantones || []).flatMap((pantone) => (selection.yarns || []).map((yarn) => {
+        const pantoneById = (id) => props.pantoneReferences.find((item) => Number(item.id) === Number(id));
+        const pairsByKey = new Map([
+            ...(selection.pantones || []).flatMap((pantone) => (selection.yarns || []).map((yarn) => ({ pantone, yarn }))),
+            ...(selection.colorways || []).flatMap((colorway) => {
+                const pantone = colorway.pantone || pantoneById(colorway.pantone_id);
+                return (colorway.yarn_ids || []).map((yarnId) => ({
+                    pantone,
+                    yarn: (selection.yarns || []).find((item) => Number(item.id) === Number(yarnId)),
+                }));
+            }),
+        ].filter((pair) => pair.pantone && pair.yarn).map((pair) => [`${Number(pair.pantone.id ?? pair.pantone.pantone_id)}:${Number(pair.yarn.id)}`, pair]));
+
+        return [...pairsByKey.entries()]
+            .filter(([key]) => eligibleKeys.has(`${productId}:${key}`))
+            .map(([, { pantone, yarn }]) => {
             const priceKey = `${productId}:${yarn.id}:${pantone.color_category}`;
             const legacyPriceKey = `${yarn.id}:${pantone.color_category}`;
             const presetPrice = Object.prototype.hasOwnProperty.call(props.selectionPricing, priceKey)
                 ? props.selectionPricing[priceKey]
                 : (Object.prototype.hasOwnProperty.call(props.selectionPricing, legacyPriceKey) ? props.selectionPricing[legacyPriceKey] : null);
             return {
+                quotation_line_key: `${productId}:${Number(pantone.id)}:${Number(yarn.id)}`,
                 product_id: productId,
                 fabric: selection.name || product?.name || '',
                 design: '',
@@ -1681,19 +1813,44 @@ const selectedProductQuoteItems = () => {
                 fabric_type_ids: [],
                 fabric_prices: {},
                 isDefault: true,
+                isIncluded: true,
             };
-        }));
+        });
     });
 };
 
 const openQuotationModal = () => {
-    form.value.items = hasClientProductSelections.value
-        ? selectedProductQuoteItems()
-        : defaultProductItems();
+    quotationSelectedProductIds.value = quotationScopeProducts.value.map((product) => Number(product.id));
+    form.value.items = hasClientProductSelections.value ? selectedProductQuoteItems(quotationSelectedProductIds.value) : defaultProductItems();
     form.value.payment_terms = '';
     form.value.notes = '';
     form.value.vat_type = 'exclusive';
     showQuotationModal.value = true;
+};
+
+const refreshQuotationItems = () => {
+    if (!hasClientProductSelections.value) return;
+    const previousItems = new Map(form.value.items.map((item) => [item.quotation_line_key, item]));
+    form.value.items = selectedProductQuoteItems(quotationSelectedProductIds.value).map((item) => {
+        const previous = previousItems.get(item.quotation_line_key);
+        return previous ? { ...item, ...previous } : item;
+    });
+};
+
+const allQuotationProductsSelected = computed(() => quotationScopeProducts.value.length > 0
+    && quotationScopeProducts.value.every((product) => quotationSelectedProductIds.value.includes(Number(product.id))));
+
+const toggleQuotationProduct = (productId, checked) => {
+    const id = Number(productId);
+    quotationSelectedProductIds.value = checked
+        ? [...new Set([...quotationSelectedProductIds.value, id])]
+        : quotationSelectedProductIds.value.filter((selectedId) => selectedId !== id);
+    refreshQuotationItems();
+};
+
+const toggleAllQuotationProducts = (checked) => {
+    quotationSelectedProductIds.value = checked ? quotationScopeProducts.value.map((product) => Number(product.id)) : [];
+    refreshQuotationItems();
 };
 
 const addItem = () => {
@@ -1709,7 +1866,7 @@ const removeItem = (idx) => {
 const submitQuotation = () => {
     submitting.value = true;
     const items = hasClientProductSelections.value
-        ? form.value.items.map((item) => ({
+        ? form.value.items.filter((item) => item.isIncluded !== false).map((item) => ({
             product_id: item.product_id,
             fabric: item.fabric,
             design: item.design,
@@ -2233,6 +2390,7 @@ const closeTopModal = (e) => {
 onMounted(() => {
     scrollToBottom();
     window.addEventListener('keydown', closeTopModal);
+    document.addEventListener('click', closeRecipePickerOnOutsideClick);
     lockPageScroll();
     window.scrollTo(0, 0);
     nextTick(measurePage);
@@ -2241,6 +2399,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', closeTopModal);
+    document.removeEventListener('click', closeRecipePickerOnOutsideClick);
     window.removeEventListener('resize', measurePage);
     window.visualViewport?.removeEventListener('resize', measurePage);
     unlockPageScroll();

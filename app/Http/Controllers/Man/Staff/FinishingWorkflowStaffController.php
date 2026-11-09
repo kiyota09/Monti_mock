@@ -134,6 +134,9 @@ class FinishingWorkflowStaffController extends ManufacturingStaffController
                 return [
                     'id' => $order->id,
                     'jo_number' => $order->salesOrder?->jo_number,
+                    'deadline' => ManTaskAssignment::where('department', 'finishing')
+                        ->where('manufacturing_order_id', $order->manufacturing_order_id)
+                        ->where('assigned_to', $this->staff()->id)->active()->min('deadline'),
                     'method' => $stage === 'extraction' ? $order->extraction_method : $order->drying_method,
                     'recipe' => ($recipe || $formula) ? [
                         'product' => $recipe?->product?->name,
@@ -246,7 +249,9 @@ class FinishingWorkflowStaffController extends ManufacturingStaffController
     {
         $orders=FinishingWorkOrder::with(['salesOrder','items.fabric','items.packageGroupItem.group'])
             ->where('status','packing')->get()->map(fn($order)=>[
-                'id'=>$order->id,'jo_number'=>$order->salesOrder?->jo_number,'items'=>$order->items->where('status','packing')->map(fn($item)=>[
+                'id'=>$order->id,'jo_number'=>$order->salesOrder?->jo_number,
+                'deadline'=>ManTaskAssignment::where('department','finishing')->where('manufacturing_order_id',$order->manufacturing_order_id)->where('assigned_to',$this->staff()->id)->active()->min('deadline'),
+                'items'=>$order->items->where('status','packing')->map(fn($item)=>[
                     'id'=>$item->id,'code'=>$item->fabric->code,'weight'=>(float)$item->fabric->weight,'yarn_type'=>$item->fabric->yarn_type,
                 ])->values(),
             ])->filter(fn($order)=>$order['items']->isNotEmpty())->values();

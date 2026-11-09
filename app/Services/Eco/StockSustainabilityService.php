@@ -52,20 +52,33 @@ class StockSustainabilityService
      */
     public function recipeRates(SalesOrder $order): array
     {
-        $order->loadMissing('recipe');
+        $order->loadMissing('recipe.fabricSampleRequest.formulations', 'activeManufacturingOrder');
         $recipe = $order->recipe;
 
-        if (! $recipe) {
-            return [];
+        $formula = $recipe?->dyeing_formula;
+        $sampleRequest = $recipe?->fabricSampleRequest;
+        if ($sampleRequest && $recipe) {
+            if ((int) $sampleRequest->client_id !== (int) $order->client_id
+                || (int) $sampleRequest->recipe_id !== (int) $recipe->id
+                || $sampleRequest->status !== \App\Models\Crm\FabricSampleRequest::STATUS_APPROVED) {
+                return [];
+            }
+
+            $approvedFormulation = $sampleRequest->formulations->firstWhere('status', 'client_approved');
+            $formula = $approvedFormulation?->formula ?: $sampleRequest->formula ?: $formula;
         }
 
-        $materials = $recipe->materials;
+        // The production recipe saved for the active manufacturing batch is
+        // the formula the floor will actually use, so it takes precedence.
+        $formula = $order->activeManufacturingOrder?->dyeing_production_recipe ?: $formula;
+
+        $formulaRates = $this->ratesFromDyeingFormula(is_array($formula) ? $formula : []);
+
+        $materials = $recipe?->materials;
         if (is_string($materials)) {
             $materials = json_decode($materials, true);
         }
-        if (! is_array($materials) || empty($materials)) {
-            return [];
-        }
+        if (! is_array($materials)) $materials = [];
 
         $byName = [];
         $names = [];
@@ -91,6 +104,87 @@ class StockSustainabilityService
             $rates[$matId] = ($rates[$matId] ?? 0) + (float) $qtyPerUnit;
         }
 
+        if (! $formulaRates) return $rates;
+
+        // Keep BOM-only materials (for example a yarn requirement added by
+        // production sign-off), and avoid double-counting shared entries.
+        foreach ($rates as $materialId => $rate) {
+            $formulaRates[$materialId] = isset($formulaRates[$materialId])
+                ? max($formulaRates[$materialId], $rate)
+                : $rate;
+        }
+
+        return $formulaRates;
+    }
+
+    /** Convert the accepted dye-house dose rates into kilograms per kilogram of fabric. */
+    private function ratesFromDyeingFormula(array $formula): array
+    {
+        if (! $formula) return [];
+
+        $ratioValue = $formula['liquor_ratio'] ?? 10;
+        $liquorRatio = is_numeric($ratioValue) ? (float) $ratioValue : 0.0;
+        if ($liquorRatio <= 0 && preg_match_all('/\d+(?:\.\d+)?/', (string) $ratioValue, $matches) && $matches[0]) {
+            $liquorRatio = (float) end($matches[0]);
+        }
+        if ($liquorRatio <= 0) $liquorRatio = 10.0;
+        $sampleWeightGrams = max(0.0001, (float) ($formula['sample_weight_g'] ?? 100));
+
+        $groups = [
+            [['dyestuffs', 'dye_stuffs'], 'grams'],
+            [['basic_chemicals', 'basic_chemical'], 'grams'],
+            [['auxiliary_agents', 'auxiliaries', 'auxiliary'], 'grams'],
+            [['post_treatment', 'post_treatment_agents'], 'grams'],
+            [['dyestuffs', 'dye_stuffs'], 'pct'],
+            [['basic_chemicals', 'basic_chemical'], 'gpl'],
+            [['auxiliary_agents', 'auxiliaries', 'auxiliary'], 'gpl'],
+            [['post_treatment', 'post_treatment_agents'], 'gpl'],
+            [['yarns'], 'qty'],
+        ];
+        $rows = collect($groups)->flatMap(function ($definition) use ($formula) {
+            [$aliases] = $definition;
+            foreach ($aliases as $alias) {
+                if (isset($formula[$alias]) && is_array($formula[$alias])) return collect($formula[$alias]);
+            }
+            return collect();
+        });
+
+        $names = $rows->pluck('name')->merge($rows->pluck('material_name'))->filter()->unique()->values();
+        $materialIdsByName = $names->isEmpty()
+            ? []
+            : Material::query()->whereIn('name', $names)->pluck('id', 'name')->toArray();
+        $rates = [];
+
+        foreach ($groups as [$aliases, $dose]) {
+            $groupRows = collect();
+            foreach ($aliases as $alias) {
+                if (isset($formula[$alias]) && is_array($formula[$alias])) {
+                    $groupRows = collect($formula[$alias]);
+                    break;
+                }
+            }
+            foreach ($groupRows as $row) {
+                $materialId = (int) ($row['material_id'] ?? 0);
+                if ($materialId <= 0) {
+                    $name = (string) ($row['name'] ?? $row['material_name'] ?? '');
+                    $materialId = (int) ($materialIdsByName[$name] ?? 0);
+                }
+                if ($materialId <= 0) continue;
+
+                $amount = (float) ($row[$dose] ?? ($dose === 'grams' && ($row['unit'] ?? null) === 'g' ? ($row['amount'] ?? 0) : ($row['quantity'] ?? 0)));
+                if ($amount <= 0) continue;
+                $rate = match ($dose) {
+                    'pct' => $amount / 100,
+                    // Lab dose in grams divided by fabric sample grams is
+                    // the chemical kg/kg-fabric rate (same mass ratio).
+                    'grams' => $amount / $sampleWeightGrams,
+                    'qty' => $amount,
+                    default => $amount * $liquorRatio / 1000,
+                };
+                $rates[$materialId] = ($rates[$materialId] ?? 0) + $rate;
+            }
+        }
+
         return $rates;
     }
 
@@ -106,7 +200,9 @@ class StockSustainabilityService
      */
     public function materialsForOrder(SalesOrder $order): array
     {
-        $qty = (float) ($order->quantity ?? 0);
+        $order->loadMissing('activeManufacturingOrder');
+        $batchQuantity = (float) ($order->activeManufacturingOrder?->total_quantity ?? 0);
+        $qty = $batchQuantity > 0 ? $batchQuantity : (float) ($order->quantity ?? 0);
         $needed = [];
         foreach ($this->recipeRates($order) as $matId => $rate) {
             $need = $rate * $qty;
@@ -354,7 +450,7 @@ class StockSustainabilityService
                 'current_stock' => $row['available'],
                 'required_qty' => $row['shortage'],
                 'urgency' => 'High',
-                'notes' => "DSS auto-suggestion: {$jo} needs {$row['required']}{$row['unit']}, ATP {$row['atp']}{$row['unit']} — short {$row['shortage']}{$row['unit']}.",
+                'notes' => "Stock check suggestion: {$jo} needs {$row['required']}{$row['unit']}, available stock after accepted orders is {$row['atp']}{$row['unit']} — short {$row['shortage']}{$row['unit']}.",
                 'requested_by' => $requestedBy ?? 'ECO-DSS',
                 'requested_at' => now(),
                 'status' => 'pending',

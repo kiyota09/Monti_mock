@@ -8,6 +8,7 @@ use App\Models\Ord\OrderQueue;
 use App\Models\Ord\PurchaseOrder;
 use App\Models\Crm\Client;
 use App\Models\Ord\SalesOrder;
+use App\Services\Fin\FinanceService;
 use App\Services\Eco\StockSustainabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,8 +21,10 @@ class EcoPushController extends Controller
     /**
      * Display the Push Center Dashboard.
      */
-    public function index()
+    public function index(FinanceService $finance)
     {
+        // Use the same live invoice/payment ledger as the ECO Credit page.
+        $receivablesByClient = $finance->invoiceRows()->groupBy('client_id');
         // ── 1. Pending pushes ────────────────────────────────────────────────
         $salesOrders = SalesOrder::where('sales_orders.status', 'pending')
 
@@ -29,12 +32,22 @@ class EcoPushController extends Controller
             ->leftJoin('clients as direct_client', 'sales_orders.client_id', '=', 'direct_client.id')
             ->leftJoin('purchase_orders', 'sales_orders.purchase_order_id', '=', 'purchase_orders.po_number')
             ->leftJoin('clients as po_client', 'purchase_orders.client_id', '=', 'po_client.id')
+            ->where(function ($query) {
+                $query->whereNull('sales_orders.purchase_order_id')
+                    ->orWhereNotNull('sales_orders.replacement_return_id')
+                    ->orWhere(function ($passedPo) {
+                        $passedPo->whereNotNull('purchase_orders.crm_passed_to_eco_at')
+                            ->whereColumn('sales_orders.created_at', '>=', 'purchase_orders.created_at')
+                            ->whereNotIn('purchase_orders.status', ['crm_recipe_review', 'credit_review', 'tier_assignment', 'pending_client_approval']);
+                    });
+            })
 
             // Join bom_records to get recipe details
             ->leftJoin('bom_records', 'sales_orders.recipe_id', '=', 'bom_records.id')
 
             ->select(
                 'sales_orders.*',
+                'purchase_orders.client_po_number as client_po_number',
                 'bom_records.id as recipe_id',
                 'direct_client.company_name   as direct_company_name',
                 'po_client.company_name       as po_company_name',
@@ -44,7 +57,7 @@ class EcoPushController extends Controller
             )
             ->latest('sales_orders.created_at')
             ->get()
-            ->map(function ($order) {
+            ->map(function ($order) use ($receivablesByClient) {
                 $data = $order->toArray();
                 $companyName = $order->direct_company_name ?? $order->po_company_name ?? 'N/A';
                 $data['client'] = ['company_name' => $companyName];
@@ -52,7 +65,7 @@ class EcoPushController extends Controller
                 $clientId = $order->client_id
                     ?? PurchaseOrder::where('po_number', $order->purchase_order_id)->value('client_id');
                 $data['client']['id'] = $clientId;
-                $data['credit'] = $this->creditFor($clientId, $order->total_amount);
+                $data['credit'] = $this->creditFor($clientId, $order->total_amount, $receivablesByClient);
 
                 $recipeId = $order->recipe_id ?? null;
                 if ($recipeId) $recipeId = (int) $recipeId;
@@ -73,9 +86,19 @@ class EcoPushController extends Controller
             ->leftJoin('clients as direct_client', 'sales_orders.client_id', '=', 'direct_client.id')
             ->leftJoin('purchase_orders', 'sales_orders.purchase_order_id', '=', 'purchase_orders.po_number')
             ->leftJoin('clients as po_client', 'purchase_orders.client_id', '=', 'po_client.id')
+            ->where(function ($query) {
+                $query->whereNull('sales_orders.purchase_order_id')
+                    ->orWhereNotNull('sales_orders.replacement_return_id')
+                    ->orWhere(function ($passedPo) {
+                        $passedPo->whereNotNull('purchase_orders.crm_passed_to_eco_at')
+                            ->whereColumn('sales_orders.created_at', '>=', 'purchase_orders.created_at')
+                            ->whereNotIn('purchase_orders.status', ['crm_recipe_review', 'credit_review', 'tier_assignment', 'pending_client_approval']);
+                    });
+            })
             ->leftJoin('bom_records', 'sales_orders.recipe_id', '=', 'bom_records.id')
             ->select(
                 'sales_orders.*',
+                'purchase_orders.client_po_number as client_po_number',
                 'bom_records.id as recipe_id',
                 'direct_client.company_name   as direct_company_name',
                 'po_client.company_name       as po_company_name',
@@ -85,14 +108,14 @@ class EcoPushController extends Controller
             )
             ->latest('sales_orders.updated_at')
             ->get()
-            ->map(function ($order) {
+            ->map(function ($order) use ($receivablesByClient) {
                 $data = $order->toArray();
                 $companyName = $order->direct_company_name ?? $order->po_company_name ?? 'N/A';
                 $data['client'] = ['company_name' => $companyName];
                 $clientId = $order->client_id
                     ?? PurchaseOrder::where('po_number', $order->purchase_order_id)->value('client_id');
                 $data['client']['id'] = $clientId;
-                $data['credit'] = $this->creditFor($clientId, $order->total_amount);
+                $data['credit'] = $this->creditFor($clientId, $order->total_amount, $receivablesByClient);
 
                 $recipeId = $order->recipe_id ?? null;
                 if ($recipeId) $recipeId = (int) $recipeId;
@@ -119,17 +142,19 @@ class EcoPushController extends Controller
      * alignment. Advisory only — Monti may still accept at their judgement
      * even when the client is flagged At Risk / has pending balances.
      */
-    protected function creditFor($clientId, $orderAmount = 0): array
+    protected function creditFor($clientId, $orderAmount = 0, $receivablesByClient = null): array
     {
         if (!$clientId) {
             return ['is_good_payer' => true, 'outstanding_balance' => 0, 'pending_count' => 0, 'over_limit' => false];
         }
         $client = Client::with('creditAccount')->find($clientId);
-        $outstanding = (float) ($client?->creditAccount?->outstanding_balance ?? 0);
-        $isGood = $client?->creditAccount ? (bool) $client->creditAccount->is_good_payer : true;
-        $pending = PurchaseOrder::where('client_id', $clientId)
-            ->whereIn('status', ['credit_review', 'pending_client_approval'])
-            ->count();
+        $receivables = $receivablesByClient?->get($clientId, collect()) ?? collect();
+        $outstanding = round((float) $receivables->sum(fn ($invoice) => max(0, (float) $invoice['amount'] - (float) $invoice['paid'])), 2);
+        $overdueBalance = (float) $receivables
+            ->filter(fn ($invoice) => $invoice['status'] === 'overdue')
+            ->sum(fn ($invoice) => max(0, (float) $invoice['amount'] - (float) $invoice['paid']));
+        $isGood = (bool) ($client?->creditAccount?->is_good_payer ?? true) && $overdueBalance <= 0;
+        $pending = $receivables->whereIn('status', ['unpaid', 'partial', 'overdue'])->count();
         $overLimit = $client && $client->credit_limit
             ? ($outstanding + (float) $orderAmount) > (float) $client->credit_limit
             : false;
@@ -188,7 +213,7 @@ class EcoPushController extends Controller
         $notified = Notification::notifyPage(
             'PRO', 'requests', 'procurement',
             "Procurement requested: {$result['material_name']} for {$jo}",
-            "Short {$result['shortage']}{$result['unit']} (needs {$result['required']}{$result['unit']}, ATP {$result['atp']}{$result['unit']}). Request {$result['req_number']} filed from the ECO Push Center.",
+            "Short {$result['shortage']}{$result['unit']} (needs {$result['required']}{$result['unit']}; available stock after accepted orders is {$result['atp']}{$result['unit']}). Request {$result['req_number']} filed from the ECO Push Center.",
             'pro.manager.material-requests', [], auth()->id()
         );
 
@@ -216,7 +241,7 @@ class EcoPushController extends Controller
 
             $lines = collect($result['materials'])
                 ->filter(fn ($m) => ($m['shortage'] ?? 0) > 0)
-                ->map(fn ($m) => "{$m['material_name']}: needs {$m['required']}{$m['unit']}, ATP {$m['atp']}{$m['unit']} (short {$m['shortage']}{$m['unit']})")
+                ->map(fn ($m) => "{$m['material_name']}: needs {$m['required']}{$m['unit']}, available stock after accepted orders is {$m['atp']}{$m['unit']} (short {$m['shortage']}{$m['unit']})")
                 ->implode('; ');
 
             $reqs = collect($suggested)->map(fn ($s) => $s['req_number'])->implode(', ');

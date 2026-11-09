@@ -9,7 +9,7 @@ class DyeingRemakeRequest extends Model
 {
     protected $fillable = [
         'code', 'dyeing_batch_id', 'manufacturing_order_id', 'sales_order_id', 'assigned_to',
-        'assigned_by', 'machine_ids', 'requested_weight_kg', 'status',
+        'assigned_by', 'machine_ids', 'requested_weight_kg', 'status', 'reason',
     ];
 
     protected $casts = ['machine_ids' => 'array', 'requested_weight_kg' => 'decimal:2'];

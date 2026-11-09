@@ -2,8 +2,6 @@
 import Sidebar from './Sidebar.vue'
 import MobileSidebar from './MobileSidebar.vue'
 import TopBar from './Navbar/TopBar.vue'
-import CallCenterOverlay from '@/Components/crm/messaging/CallCenterOverlay.vue'
-import PartnerCallOverlay from '@/Components/crm/messaging/PartnerCallOverlay.vue'
 import ForcePasswordChangeModal from '@/Components/Auth/ForcePasswordChangeModal.vue'
 import { usePage } from '@inertiajs/vue3'
 import { computed, onMounted, onUnmounted, ref, watch, onErrorCaptured } from 'vue'
@@ -20,6 +18,7 @@ const user = computed(() => page.props.auth.user)
 // document. CRM pages already follow this pattern, so they only need the
 // shared padding removed (their own pages provide it).
 const isCrmPage = computed(() => (page.url || '').startsWith('/dashboard/crm'))
+const isSupplierPage = computed(() => (page.url || '').startsWith('/supplier'))
 // IT and Applicant portal pages render several sibling sections in the slot.
 // Forcing every direct child to viewport height stretched each section, so let
 // their sections follow content instead.
@@ -221,16 +220,14 @@ const reloadPage = () => {
                             'no-stretch-sections': isNoStretchPage,
                         },
                     ]">
-                        <slot />
+                        <div v-if="isSupplierPage" class="supplier-page-shell" :class="{ 'supplier-page-shell--messages': (page.url || '').startsWith('/supplier/messages') }">
+                            <slot />
+                        </div>
+                        <slot v-else />
                     </div>
                 </div>
             </main>
         </div>
-
-        <!-- Global incoming-call listener (visible on every dashboard page) -->
-        <CallCenterOverlay v-if="!hasError" />
-        <!-- Global partner-call listener (staff or portal, any page) -->
-        <PartnerCallOverlay v-if="!hasError" />
 
         <!-- Forced password change for system-issued passwords (any page) -->
         <ForcePasswordChangeModal />
@@ -238,6 +235,19 @@ const reloadPage = () => {
 </template>
 
 <style>
+.supplier-page-shell {
+    width: 100%;
+    max-width: 88rem;
+    margin-inline: auto;
+}
+
+.supplier-page-shell--messages {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+}
+
 /* Workspace sizing: every module page fills the viewport below the top nav.
    Page wrappers often clamp themselves with min-h-screen / max-w-* / mx-auto,
    so neutralise those at the outer two levels only. Only centered wrappers

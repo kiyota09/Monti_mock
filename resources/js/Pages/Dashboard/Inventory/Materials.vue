@@ -27,6 +27,7 @@ const materialCategories = [
     'Pre-Treatment',
     'Bio-Processing Enzymes',
     'Care Agents',
+    'Needles',
 ];
 const legacyMaterialCategories = ['Supplies', 'Packaging'];
 const yarnTiers = ['Ultra Premium', 'Premium', 'Standard', 'Economy', 'Recycled'];
@@ -68,6 +69,10 @@ const editForm = useForm({
 
 // Helpers
 const formatCurrency = (val) => '₱' + Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+
+const syncNeedleUnit = (form) => {
+    if (form.category === 'Needles') form.unit = 'Pcs';
+};
 
 const categoryTabs = computed(() => {
     const tabs = [
@@ -334,14 +339,14 @@ const openedColor = (status) => {
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="space-y-1">
                                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Category</label>
-                                    <select v-model="addForm.category" class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none">
+                                    <select v-model="addForm.category" @change="syncNeedleUnit(addForm)" class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none">
                                         <option v-for="cat in materialCategories" :key="cat" :value="cat">{{ cat }}</option>
                                     </select>
                                 </div>
                                 <div class="space-y-1">
                                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Unit</label>
-                                    <select v-model="addForm.unit" class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none">
-                                        <option v-for="u in ['Rolls', 'Kg', 'Pcs']" :value="u">{{ u }}</option>
+                                    <select v-model="addForm.unit" :disabled="addForm.category === 'Needles'" class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none disabled:opacity-60">
+                                        <option v-for="u in (addForm.category === 'Needles' ? ['Pcs'] : ['Rolls', 'Kg', 'Pcs'])" :value="u">{{ u }}</option>
                                     </select>
                                 </div>
                             </div>
@@ -535,7 +540,7 @@ const openedColor = (status) => {
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="space-y-1">
                                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Category</label>
-                                    <select v-model="editForm.category"
+                                    <select v-model="editForm.category" @change="syncNeedleUnit(editForm)"
                                         class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none">
                                         <option v-if="legacyMaterialCategories.includes(editForm.category)" :value="editForm.category">{{ editForm.category }} (existing)</option>
                                         <option v-for="cat in materialCategories" :key="cat" :value="cat">{{ cat }}</option>
@@ -544,9 +549,9 @@ const openedColor = (status) => {
                                 </div>
                                 <div class="space-y-1">
                                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Unit</label>
-                                    <select v-model="editForm.unit"
-                                        class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none">
-                                        <option v-for="u in ['Rolls', 'Kg', 'Pcs']" :value="u">{{ u }}</option>
+                                    <select v-model="editForm.unit" :disabled="editForm.category === 'Needles'"
+                                        class="w-full px-4 py-3 bg-slate-100 dark:bg-zinc-800 border-0 rounded-2xl font-bold text-sm text-gray-900 dark:text-white outline-none disabled:opacity-60">
+                                        <option v-for="u in (editForm.category === 'Needles' ? ['Pcs'] : ['Rolls', 'Kg', 'Pcs'])" :value="u">{{ u }}</option>
                                     </select>
                                     <p v-if="editForm.errors.unit" class="text-rose-500 text-[10px] font-black uppercase tracking-tight">{{ editForm.errors.unit }}</p>
                                 </div>

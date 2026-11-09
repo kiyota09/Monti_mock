@@ -155,7 +155,8 @@ class ClientTrackingController extends Controller
         return [
             'id' => $po->id,
             'type' => 'PO',
-            'number' => $po->po_number,
+            'number' => $po->client_po_number ?: $po->po_number,
+            'monti_number' => $po->client_po_number ? $po->po_number : null,
             'total' => (float) $po->total_amount,
             'status' => $po->status,
             'group' => OrderLifecycleService::poGroup($po->status),
@@ -284,8 +285,9 @@ class ClientTrackingController extends Controller
 
     private function poSteps(?string $status): array
     {
-        $order = ['credit_review' => 1, 'tier_assignment' => 2, 'pending_client_approval' => 3, 'approved' => 4, 'released_to_production' => 5, 'production' => 5, 'completed' => 6];
+        $order = ['crm_recipe_review' => 1, 'credit_review' => 2, 'tier_assignment' => 2, 'pending_client_approval' => 3, 'approved' => 4, 'released_to_production' => 5, 'production' => 5, 'completed' => 6];
         $labels = [
+            ['key' => 'crm_recipe_review', 'label' => 'CRM recipe linking'],
             ['key' => 'credit_review', 'label' => 'Credit review'],
             ['key' => 'pending_client_approval', 'label' => 'Your approval'],
             ['key' => 'approved', 'label' => 'Approved'],
@@ -298,7 +300,7 @@ class ClientTrackingController extends Controller
         return collect($labels)->map(function ($s, $i) use ($current, $terminal) {
             $idx = $i + 1;
             // Map label index onto the 1..6 order scale.
-            $scale = [1, 3, 4, 5, 6][$i];
+            $scale = [1, 2, 3, 4, 5, 6][$i];
 
             return [
                 ...$s,

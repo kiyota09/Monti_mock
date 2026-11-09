@@ -4,8 +4,6 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Concerns\PresentsClientChat;
 use App\Http\Controllers\Controller;
-use App\Models\Core\AppSetting;
-use App\Models\Crm\ClientCallSignal;
 use App\Models\Crm\ClientMessage;
 use App\Models\Crm\ClientMessageReaction;
 use Illuminate\Http\Request;
@@ -15,7 +13,7 @@ use Inertia\Inertia;
 /**
  * The partner portal's direct line to Monti Textiles. One flat thread per
  * client company — no inquiry required. Mirrors the CRM inbox: text, files,
- * reply quotes, reactions and call/video logs.
+ * reply quotes, reactions and attachments.
  */
 class ClientMessageController extends Controller
 {
@@ -73,8 +71,6 @@ class ClientMessageController extends Controller
 
         return Inertia::render('Client/Messages', [
             'messages' => $this->thread($clientId),
-            'callLogs' => $this->callLogs($clientId),
-            'callsEnabled' => AppSetting::getBool('calls_enabled', true),
         ]);
     }
 
@@ -83,15 +79,11 @@ class ClientMessageController extends Controller
         $clientId = $this->clientId();
         $afterId = (int) $request->query('after', 0);
 
-        $this->expireStale($clientId);
 
         $messages = $this->visible()
             ->with($this->relations())
             ->where('client_id', $clientId)
-            ->where(function ($query) use ($afterId) {
-                $query->where('id', '>', $afterId)
-                    ->orWhere(fn ($q) => $q->where('type', 'call')->where('created_at', '>=', now()->subHours(12)));
-            })
+            ->where('id', '>', $afterId)
             ->orderBy('id')
             ->limit(300)
             ->get()
@@ -105,18 +97,8 @@ class ClientMessageController extends Controller
 
         // Monti Textiles is ringing us — surface it so the portal can show the
         // answer/decline prompt.
-        $incoming = $this->visible()
-            ->with($this->relations())
-            ->where('client_id', $clientId)
-            ->where('type', 'call')
-            ->where('sender_type', 'crm')
-            ->where('call_status', 'ringing')
-            ->orderByDesc('id')
-            ->first();
-
         return response()->json([
             'messages' => $messages,
-            'incoming' => $incoming ? $this->presentMessage($incoming, 'client', $this->viewerKey()) : null,
         ]);
     }
 
@@ -124,31 +106,6 @@ class ClientMessageController extends Controller
      * Global incoming-call feed for the partner: shows the answer prompt from
      * any page in the portal, not just the Messages thread.
      */
-    public function incomingCalls()
-    {
-        $clientId = $this->clientId();
-        $this->expireStale($clientId);
-
-        $calls = $this->visible()
-            ->where('client_id', $clientId)
-            ->where('type', 'call')
-            ->where('sender_type', 'crm')
-            ->where('call_status', 'ringing')
-            ->orderByDesc('id')
-            ->limit(10)
-            ->get()
-            ->map(fn (ClientMessage $m) => [
-                'id' => $m->id,
-                'type' => $m->call_type,
-                'created_at' => $m->created_at,
-                'client_id' => $m->client_id,
-                'client_name' => null,
-                'client_hash_key' => null,
-            ]);
-
-        return response()->json(['calls' => $calls]);
-    }
-
     public function store(Request $request)
     {
         $clientId = $this->clientId();
@@ -277,134 +234,6 @@ class ClientMessageController extends Controller
         ]);
     }
 
-    public function startCall(Request $request)
-    {
-        if (! AppSetting::getBool('calls_enabled', true)) {
-            return response()->json(['message' => 'Calling is currently disabled.'], 403);
-        }
-
-        $clientId = $this->clientId();
-        $data = $request->validate(['type' => 'required|in:audio,video']);
-
-        $message = ClientMessage::create([
-            'client_id' => $clientId,
-            'sender_type' => 'client',
-            'sender_contact_id' => $this->representativeId(),
-            'type' => 'call',
-            'call_type' => $data['type'],
-            'call_status' => 'ringing',
-            'call_duration' => 0,
-            'body' => $data['type'] === 'video' ? 'Video call' : 'Voice call',
-            'is_read' => false,
-        ]);
-
-        $message->load($this->relations());
-
-        return response()->json(['message' => $this->presentMessage($message, 'client', $this->viewerKey())], 201);
-    }
-
-    public function answerCall(Request $request, ClientMessage $message)
-    {
-        $this->authorizeThread($message);
-
-        if (! $message->isCall()) {
-            return response()->json(['message' => 'Not a call record.'], 422);
-        }
-
-        if ($message->call_status === 'ringing') {
-            $message->update(['call_status' => 'answered']);
-        }
-
-        $message->load($this->relations());
-
-        return response()->json(['message' => $this->presentMessage($message, 'client', $this->viewerKey())]);
-    }
-
-    public function signalCall(Request $request, ClientMessage $message)
-    {
-        $this->authorizeThread($message);
-
-        $data = $request->validate([
-            'kind' => 'required|in:offer,answer,candidate',
-            'payload' => 'required|array',
-        ]);
-
-        ClientCallSignal::create([
-            'client_message_id' => $message->id,
-            'sender_side' => 'client',
-            'kind' => $data['kind'],
-            'payload' => $data['payload'],
-        ]);
-
-        return response()->json(['ok' => true], 201);
-    }
-
-    public function callSignals(Request $request, ClientMessage $message)
-    {
-        $this->authorizeThread($message);
-        $this->expireSingle($message);
-
-        $after = (int) $request->query('after', 0);
-
-        $signals = ClientCallSignal::query()
-            ->where('client_message_id', $message->id)
-            ->where('sender_side', '!=', 'client')
-            ->where('id', '>', $after)
-            ->orderBy('id')
-            ->get(['id', 'kind', 'payload']);
-
-        $message->load($this->relations());
-
-        return response()->json([
-            'signals' => $signals,
-            'last_id' => (int) ($signals->last()->id ?? $after),
-            'message' => $this->presentMessage($message, 'client', $this->viewerKey()),
-        ]);
-    }
-
-    protected function expireStale(int $clientId): void
-    {
-        $this->visible()
-            ->where('client_id', $clientId)
-            ->where('type', 'call')
-            ->where('call_status', 'ringing')
-            ->where('created_at', '<', now()->subSeconds(self::RING_TIMEOUT))
-            ->update(['call_status' => 'missed', 'call_ended_at' => now()]);
-    }
-
-    protected function expireSingle(ClientMessage $message): void
-    {
-        if ($message->isCall()
-            && $message->call_status === 'ringing'
-            && $message->created_at
-            && $message->created_at->lt(now()->subSeconds(self::RING_TIMEOUT))) {
-            $message->update(['call_status' => 'missed', 'call_ended_at' => now()]);
-        }
-    }
-
-    public function endCall(Request $request, ClientMessage $message)
-    {
-        $this->authorizeThread($message);
-
-        if (! $message->isCall()) {
-            return response()->json(['message' => 'Not a call record.'], 422);
-        }
-
-        $data = $request->validate([
-            'status' => 'nullable|in:completed,missed,declined,failed',
-            'duration' => 'nullable|integer|min:0',
-        ]);
-
-        $message->update([
-            'call_status' => $data['status'] ?? 'completed',
-            'call_duration' => $data['duration'] ?? 0,
-            'call_ended_at' => now(),
-        ]);
-        $message->load($this->relations());
-
-        return response()->json(['message' => $this->presentMessage($message, 'client', $this->viewerKey())]);
-    }
-
     protected function thread(int $clientId): array
     {
         return $this->visible()
@@ -412,19 +241,6 @@ class ClientMessageController extends Controller
             ->where('client_id', $clientId)
             ->orderBy('id')
             ->limit(500)
-            ->get()
-            ->map(fn (ClientMessage $m) => $this->presentMessage($m, 'client', $this->viewerKey()))
-            ->all();
-    }
-
-    protected function callLogs(int $clientId): array
-    {
-        return $this->visible()
-            ->with($this->relations())
-            ->where('client_id', $clientId)
-            ->where('type', 'call')
-            ->orderByDesc('id')
-            ->limit(50)
             ->get()
             ->map(fn (ClientMessage $m) => $this->presentMessage($m, 'client', $this->viewerKey()))
             ->all();

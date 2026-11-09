@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\Crm\ActivityController;
 use App\Http\Controllers\Crm\ApprovalController;
-use App\Http\Controllers\Crm\CallController;
 use App\Http\Controllers\Crm\CampaignController;
 use App\Http\Controllers\Crm\CaseController;
 use App\Http\Controllers\Crm\ContactController;
@@ -333,12 +332,6 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::get('/messages', [MessageController::class, 'index'])
         ->middleware('page.permission:messaging,view')
         ->name('messages');
-    Route::patch('/messages/call-settings', [MessageController::class, 'updateCallSettings'])
-        ->middleware('page.permission:messaging,edit')
-        ->name('messages.call-settings');
-    Route::get('/messages/incoming-calls', [MessageController::class, 'incomingCalls'])
-        ->middleware('page.permission:messaging,view')
-        ->name('messages.incoming-calls');
     Route::get('/messages/{client}/feed', [MessageController::class, 'feed'])
         ->middleware('page.permission:messaging,view')
         ->name('messages.feed');
@@ -354,21 +347,6 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::post('/messages/{client}/{message}/react', [MessageController::class, 'toggleReaction'])
         ->middleware('page.permission:messaging,edit')
         ->name('messages.react');
-    Route::post('/messages/{client}/calls/start', [MessageController::class, 'startCall'])
-        ->middleware('page.permission:messaging,edit')
-        ->name('messages.calls.start');
-    Route::post('/messages/{client}/calls/{message}/end', [MessageController::class, 'endCall'])
-        ->middleware('page.permission:messaging,edit')
-        ->name('messages.calls.end');
-    Route::post('/messages/{client}/calls/{message}/answer', [MessageController::class, 'answerCall'])
-        ->middleware('page.permission:messaging,edit')
-        ->name('messages.calls.answer');
-    Route::post('/messages/{client}/calls/{message}/signal', [MessageController::class, 'signalCall'])
-        ->middleware('page.permission:messaging,edit')
-        ->name('messages.calls.signal');
-    Route::get('/messages/{client}/calls/{message}/signals', [MessageController::class, 'callSignals'])
-        ->middleware('page.permission:messaging,view')
-        ->name('messages.calls.signals');
 
     // Client email inbox — received client email, replies and registration
     // form invitations.
@@ -398,37 +376,6 @@ Route::prefix('dashboard/crm')->name('crm.')->middleware(['auth', 'verified', 'm
     Route::delete('/templates/{template}', [CrmMessageTemplateController::class, 'destroy'])
         ->name('templates.destroy');
 
-    // Internal CRM user-to-user calls (voice / video).
-    Route::get('/calls/contacts', [CallController::class, 'contacts'])
-        ->middleware('page.permission:messaging,view')
-        ->name('calls.contacts');
-    Route::get('/calls/incoming', [CallController::class, 'incoming'])
-        ->middleware('page.permission:messaging,view')
-        ->name('calls.incoming');
-    Route::get('/calls/history', [CallController::class, 'history'])
-        ->middleware('page.permission:messaging,view')
-        ->name('calls.history');
-    Route::post('/calls', [CallController::class, 'store'])
-        ->middleware('page.permission:messaging,edit')
-        ->name('calls.store');
-    Route::get('/calls/{call}', [CallController::class, 'show'])
-        ->middleware('page.permission:messaging,view')
-        ->name('calls.show');
-    Route::post('/calls/{call}/answer', [CallController::class, 'answer'])
-        ->middleware('page.permission:messaging,view')
-        ->name('calls.answer');
-    Route::post('/calls/{call}/decline', [CallController::class, 'decline'])
-        ->middleware('page.permission:messaging,view')
-        ->name('calls.decline');
-    Route::post('/calls/{call}/end', [CallController::class, 'end'])
-        ->middleware('page.permission:messaging,view')
-        ->name('calls.end');
-    Route::post('/calls/{call}/signal', [CallController::class, 'signal'])
-        ->middleware('page.permission:messaging,view')
-        ->name('calls.signal');
-    Route::get('/calls/{call}/signals', [CallController::class, 'signals'])
-        ->middleware('page.permission:messaging,view')
-        ->name('calls.signals');
 
     // Partner logos (company logos uploaded at registration / lead creation)
     Route::post('/logo-partner/upload', [CrmLogoPartnerController::class, 'upload'])

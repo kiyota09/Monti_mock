@@ -4,19 +4,20 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
 use App\Models\Ord\PurchaseOrder;
+use App\Services\Fin\FinanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class ClientInvoiceController extends Controller
 {
-    public function index()
+    public function index(FinanceService $finance)
     {
-        $orders = PurchaseOrder::where('client_id', Auth::guard('client')->id())
-            ->whereIn('status', ['approved', 'pending_client_approval'])
-            ->latest()
-            ->get();
-        return Inertia::render('Client/Invoice', ['orders' => $orders]);
+        $clientId = (int) Auth::guard('client')->id();
+
+        return Inertia::render('Client/Invoice', [
+            'invoices' => $finance->invoiceRows($clientId),
+        ]);
     }
 
     /**
