@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
         code: string;
         department: string;
         department_module?: string | null;
+        employment_type?: string | null;
         position_skill: string;
         needed: number;
         filled: number;
