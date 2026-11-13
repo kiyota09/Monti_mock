@@ -3,7 +3,7 @@ import Sidebar from './Sidebar.vue'
 import MobileSidebar from './MobileSidebar.vue'
 import TopBar from './Navbar/TopBar.vue'
 import ForcePasswordChangeModal from '@/Components/Auth/ForcePasswordChangeModal.vue'
-import { usePage } from '@inertiajs/vue3'
+import { router, usePage } from '@inertiajs/vue3'
 import { computed, onMounted, onUnmounted, ref, watch, onErrorCaptured } from 'vue'
 import axios from 'axios'
 import { dialog } from '@/lib/feedback';
@@ -12,6 +12,22 @@ import { useSidebarToggle } from './composables/useSidebarToggle'
 const page = usePage()
 const { sidebarCollapsed } = useSidebarToggle()
 const user = computed(() => page.props.auth.user)
+const hrMutationLoading = ref(false)
+const activeHrMutationVisits = new Set()
+
+const isHrmComponent = (component) => typeof component === 'string' && component.startsWith('Dashboard/HRM')
+const removeHrmVisitStart = router.on('start', (event) => {
+    const visit = event.detail?.visit
+    const isHrmPage = isHrmComponent(page.component) || (page.url || '').startsWith('/dashboard/hrm')
+    if (!visit || String(visit.method || 'get').toLowerCase() === 'get' || !isHrmPage) return
+    activeHrMutationVisits.add(visit)
+    hrMutationLoading.value = true
+})
+const removeHrmVisitFinish = router.on('finish', (event) => {
+    const visit = event.detail?.visit
+    if (!visit || !activeHrMutationVisits.delete(visit)) return
+    hrMutationLoading.value = activeHrMutationVisits.size > 0
+})
 
 // Every module gets a full-viewport workspace: the content area fills the
 // screen below the top nav and scrolls internally instead of scrolling the
@@ -153,6 +169,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    removeHrmVisitStart()
+    removeHrmVisitFinish()
+    activeHrMutationVisits.clear()
     if (locationWatchId !== null && navigator.geolocation) {
         navigator.geolocation.clearWatch(locationWatchId);
     }
@@ -169,6 +188,15 @@ const reloadPage = () => {
 
 <template>
     <div class="flex h-[100dvh] overflow-hidden bg-gray-50 dark:bg-zinc-950">
+        <div v-if="hrMutationLoading" class="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/55 backdrop-blur-sm" role="status" aria-live="polite" aria-label="Saving changes">
+            <div class="flex min-w-64 flex-col items-center gap-4 rounded-2xl border border-white/20 bg-white px-8 py-7 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+                <span class="size-11 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600 dark:border-zinc-700 dark:border-t-blue-400"></span>
+                <div class="text-center">
+                    <p class="font-semibold text-slate-900 dark:text-white">Processing your request</p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-zinc-400">Please wait while your changes are saved.</p>
+                </div>
+            </div>
+        </div>
         <!-- Error Overlay -->
         <div v-if="hasError" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-800">

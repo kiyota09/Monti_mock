@@ -757,6 +757,20 @@
           </div>
         </div>
 
+        <div
+          v-if="saving && modalType === 'create'"
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+          aria-label="Creating job posting"
+        >
+          <div class="w-full max-w-md rounded-2xl border border-slate-200/70 bg-white p-8 text-center shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600 dark:border-blue-950 dark:border-t-blue-400" aria-hidden="true"></div>
+            <h2 class="mt-5 text-lg font-bold text-slate-900 dark:text-zinc-100">Creating job posting</h2>
+            <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-zinc-300">Please wait while we save the posting and update the recruitment list.</p>
+          </div>
+        </div>
+
       </div>
     </div>
   </AuthenticatedLayout>

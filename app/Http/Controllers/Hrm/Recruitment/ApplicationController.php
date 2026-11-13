@@ -41,7 +41,12 @@ class ApplicationController extends Controller
             }
         }
 
-        $paginated = $q->latest()->paginate(15)->withQueryString();
+        $paginated = $q
+            ->withMax('jobApplications as latest_application_created_at', 'created_at')
+            ->orderByDesc('latest_application_created_at')
+            ->orderByDesc('id')
+            ->paginate(15)
+            ->withQueryString();
         // One card per job applied: an applicant with 2+ portal job applications
         // produces 2+ rows (each with its own job, status and date) so HR sees
         // every application. Hired rows live in History — they are excluded
@@ -49,6 +54,7 @@ class ApplicationController extends Controller
         $applications = collect($paginated->items())->filter(fn ($a) => $a !== null)
             ->flatMap(fn ($a) => $this->mapApplicationRow($a))
             ->reject(fn ($row) => ($row['status'] ?? null) === 'Hired')
+            ->sortByDesc(fn ($row) => $row['created_at'] ?? $row['application_date'] ?? '')
             ->values()->all();
 
         return Inertia::render('Dashboard/HRM_NEW/Applications', [
@@ -119,7 +125,7 @@ class ApplicationController extends Controller
         return $jas->map(function ($ja) use ($base) {
             $row = $base;
             $row['job_application_id'] = $ja->id;
-            $row['status'] = $ja->status;
+            $row['status'] = $ja->status ?: 'Submitted';
             $row['cover_letter'] = $ja->cover_letter ?? ($base['cover_letter'] ?? null);
             $row['application_date'] = optional($ja->created_at)?->toDateString();
             $row['created_at'] = optional($ja->created_at)?->toISOString();

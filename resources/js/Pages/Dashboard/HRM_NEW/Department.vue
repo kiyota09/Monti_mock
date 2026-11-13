@@ -302,6 +302,15 @@
           </div>
         </div>
 
+        <!-- CREATE DEPARTMENT LOADING SCREEN -->
+        <div v-if="saving && activeModal === 'create'" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="status" aria-live="polite">
+          <div class="w-full max-w-md rounded-2xl border border-slate-200/70 bg-white p-8 text-center shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div class="mx-auto mb-5 h-12 w-12 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600 dark:border-blue-950 dark:border-t-blue-400" aria-hidden="true"></div>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Creating department</h3>
+            <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-zinc-400">Please wait while we save the department and update the organization structure.</p>
+          </div>
+        </div>
+
         <!-- CREATE/EDIT MODAL -->
         <div v-if="activeModal" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" :aria-label="modalDetails.title">
           <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 dark:border-zinc-700 w-full max-w-2xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
@@ -825,7 +834,8 @@ const generateCode = () => {
     form.code = 'DEP-' + String(newNumber).padStart(3, '0');
 };
 
-const closeModal = () => {
+const closeModal = (force = false) => {
+    if (saving.value && !force) return;
     activeModal.value = null;
     validationErrors.name = '';
     validationMessage.value = '';
@@ -838,7 +848,7 @@ const submitForm = async () => {
             await router.put(route('hrm.workforce.departments.update', { department: form.id }), form, {
                 onSuccess: () => {
                     toast.success('Department updated.');
-                    closeModal();
+                    closeModal(true);
                     loadDepartments();
                 },
                 onError: (errors) => toast.error(String(Object.values(errors || {})[0] || 'Failed to update department.')),
@@ -849,7 +859,7 @@ const submitForm = async () => {
             await router.post(route('hrm.workforce.departments.store'), submitData, {
                 onSuccess: () => {
                     toast.success('Department created.');
-                    closeModal();
+                    closeModal(true);
                     loadDepartments();
                 },
                 onError: (errors) => toast.error(String(Object.values(errors || {})[0] || 'Failed to create department.')),

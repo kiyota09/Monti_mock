@@ -19,6 +19,7 @@ use App\Models\Hrm\HrmTrainingEnrollment;
 use App\Models\Hrm\SalaryHistory;
 use App\Models\Core\User;
 use App\Services\Hrm\ApplicantApplicationHoldService;
+use App\Support\ManufacturingRoles;
 use App\Support\OnboardingSnapshot;
 use App\Support\TerminatedAccess;
 use App\Traits\HasPagePermissions;
@@ -725,8 +726,15 @@ class StatusController extends Controller
             : null;
 
         $departmentName = $data['department'] ?: ($onboarding->department ?? 'HRM');
+        $manufacturingRole = self::manufacturingRoleForHire(
+            $departmentName,
+            $data['position'] ?? $posting?->title ?? $onboarding->position
+        );
         // Explicit role from the form wins; mapping below is only a fallback.
         $role = $data['role'] ?? strtoupper($departmentName);
+        if ($manufacturingRole) {
+            $role = 'MAN';
+        }
         $validRoles = ['HRM', 'SCM', 'FIN', 'MAN', 'INV', 'ORD', 'WAR', 'CRM', 'ECO', 'PRO', 'PROJ', 'IT', 'LOG'];
         $deptModel = HrmDepartment::where('name', $departmentName)->first();
         if (! in_array($role, $validRoles, true)) {
@@ -826,6 +834,7 @@ class StatusController extends Controller
             'password' => Hash::make($tempPassword),
             'must_change_password' => true,
             'role' => $role, 'position' => $systemPosition, 'is_active' => true,
+            'manufacturing_role' => $manufacturingRole,
             'employment_status' => $data['employee_status'] ?? 'Pending Training',
             'employee_id' => 'EMP-' . str_pad((string) (User::max('id') + 1), 4, '0', STR_PAD_LEFT),
             'department' => $departmentName,
@@ -872,6 +881,7 @@ class StatusController extends Controller
         // reporting manager's "My Assigned Trainees").
         $user->forceFill([
             'role' => $role,
+            'manufacturing_role' => $manufacturingRole,
             'is_active' => true,
             'employment_status' => $data['employee_status'] ?? ($user->employment_status === 'Terminated' ? null : $user->employment_status),
             'position' => $systemPosition,
@@ -1287,5 +1297,34 @@ class StatusController extends Controller
         }
 
         return 'HRM';
+    }
+
+    /** Resolve a manufacturing staff role from the hired department and job title. */
+    protected static function manufacturingRoleForHire(?string $department, ?string $position): ?string
+    {
+        $departmentText = strtolower(trim((string) $department));
+        $positionText = strtolower(trim((string) $position));
+        $combined = $departmentText . ' ' . $positionText;
+
+        foreach (ManufacturingRoles::DEPARTMENTS as $departmentSlug => $roles) {
+            if (! str_contains($combined, $departmentSlug)) {
+                continue;
+            }
+
+            foreach ($roles as $role) {
+                $roleKeyword = str_replace('_', ' ', preg_replace('/^' . preg_quote($departmentSlug, '/') . '_/', '', $role));
+                if (str_contains($positionText, $roleKeyword)) {
+                    return $role;
+                }
+            }
+
+            if ($departmentSlug === 'knitting' && str_contains($positionText, 'staff')) {
+                return 'knitting_yarn';
+            }
+
+            return null;
+        }
+
+        return null;
     }
 }

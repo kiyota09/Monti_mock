@@ -546,7 +546,7 @@
 
         <!-- ============ MODALS ============ -->
         <div v-if="activeModal" class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeModal">
-            <div :class="['bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 w-full overflow-hidden shadow-2xl', activeModal === 'create-employee' ? 'max-w-3xl max-h-[92vh] flex flex-col' : activeModal === 'status-reject' ? 'max-w-md' : 'max-w-2xl']">
+            <div :class="['bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/60 w-full overflow-hidden shadow-2xl', activeModal === 'create-employee' ? 'max-w-3xl max-h-[92vh] flex flex-col' : ['status-reject', 'hire-loading'].includes(activeModal) ? 'max-w-md' : 'max-w-2xl']">
                 <template v-if="activeModal === 'complete-confirm'">
                     <div class="p-5 border-b border-slate-100 dark:border-zinc-800 flex items-start gap-3">
                         <div class="rounded-xl bg-emerald-50 p-2 text-emerald-700"><CheckCircle2 class="w-5 h-5" /></div>
@@ -961,6 +961,13 @@
                         <button @click="confirmHireSubmit" :disabled="saving" class="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg">
                             {{ saving ? 'Creating...' : 'Confirm Create' }}
                         </button>
+                    </div>
+                </template>
+                <template v-else-if="activeModal === 'hire-loading'">
+                    <div class="px-8 py-12 text-center" role="status" aria-live="polite">
+                        <div class="mx-auto mb-5 h-12 w-12 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-600" aria-hidden="true"></div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-zinc-100">Creating employee account</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-zinc-300">Please wait while we save the employee record and prepare their account. This may take a few moments.</p>
                     </div>
                 </template>
             </div>
@@ -1577,6 +1584,7 @@ const backToHireForm = () => {
 const confirmHireSubmit = () => {
     const f = hireForm.value;
     saving.value = true;
+    activeModal.value = 'hire-loading';
     // Combine the day + hour dropdowns into DB-ready strings; drop helper keys.
     const { work_schedule_start, work_schedule_end, work_hours_start, work_hours_end, ...rest } = f;
     void work_schedule_start; void work_schedule_end; void work_hours_start; void work_hours_end;
@@ -1595,6 +1603,7 @@ const confirmHireSubmit = () => {
         },
         onError: (e) => {
             hireErrors.value = e || {};
+            activeModal.value = 'hire-review';
             toast.error(String(Object.values(e || {})[0] || 'Failed to create employee record.'));
         },
         onFinish: () => { saving.value = false; },
@@ -1618,6 +1627,7 @@ const openModal = (type) => {
 };
 
 const closeModal = () => {
+    if (saving.value) return;
     if (activeModal.value === 'create-employee') {
         dialog.fire({
             title: 'Discard employee data?',

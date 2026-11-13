@@ -1514,7 +1514,7 @@ const applicationList = computed<Application[]>(() => {
 const pageLoading = ref(true);
 const activeModal = ref<'create' | 'edit' | null>(null);
 const searchQuery = ref(props.filters?.search || "");
-const filterStatus = ref(props.filters?.status || "");
+const filterStatus = ref(props.filters?.status || "Submitted");
 const filterPosition = ref("");
 const viewActiveTab = ref('personal');
 const showViewModal = ref(false);

@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { request } from '@/lib/http';
 import {
     CheckCircle, User, Search,
     Eye, ClipboardList, FileText, Star, UserCheck, UserMinus,
@@ -236,8 +237,8 @@ const openDetails = async (trainee) => {
     resetReassignForm();
     isDetailsOpen.value = true;
     try {
-        const res = await fetch(route('hrm.trainee.show', trainee.id), { headers: { Accept: 'application/json' } });
-        const json = await res.json();
+        const json = await request(route('hrm.trainee.show', trainee.id), 'GET');
+        if (!json.trainee) throw new Error('The server returned no trainee details.');
         trainingDetail.value = json.trainee || null;
         reassignManagers.value = json.managers || [];
     } catch (e) {
@@ -479,8 +480,8 @@ const reloadDetail = async () => {
     if (!selectedTrainee.value) return;
     detailLoading.value = true;
     try {
-        const res = await fetch(route('hrm.trainee.show', selectedTrainee.value.id), { headers: { Accept: 'application/json' } });
-        const json = await res.json();
+        const json = await request(route('hrm.trainee.show', selectedTrainee.value.id), 'GET');
+        if (!json.trainee) throw new Error('The server returned no trainee details.');
         trainingDetail.value = json.trainee || null;
         reassignManagers.value = json.managers || [];
     } catch (e) {

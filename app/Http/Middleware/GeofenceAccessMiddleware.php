@@ -51,6 +51,7 @@ class GeofenceAccessMiddleware
         // 2. CHECK GPS: THE PRIMARY VALIDATION (valid inside ANY active site)
         $currentLat = $request->header('X-User-Lat');
         $currentLng = $request->header('X-User-Lng');
+        $hasGpsHeaders = $currentLat !== null || $currentLng !== null;
 
         if ($currentLat && $currentLng) {
             foreach ($safeZones as $safeZone) {
@@ -60,7 +61,39 @@ class GeofenceAccessMiddleware
                 );
 
                 if ($distance <= $safeZone->range_radius) {
+                    // Remember only a location that passed the safe-zone
+                    // check. A full browser refresh cannot attach custom GPS
+                    // headers, so it may reuse this recent verified fix.
+                    $request->session()->put('geofence.last_verified_location', [
+                        'lat' => (float) $currentLat,
+                        'lng' => (float) $currentLng,
+                        'verified_at' => time(),
+                    ]);
                     return $next($request); // GPS Validated
+                }
+            }
+        }
+
+        // Browser reloads are ordinary document requests and cannot include
+        // the X-User-Lat / X-User-Lng headers used by Inertia/Axios. Recheck
+        // the last verified fix against today's active safe zones for up to
+        // 10 minutes, without extending its age on repeated reloads.
+        if (! $hasGpsHeaders && $request->hasSession()) {
+            $lastVerified = $request->session()->get('geofence.last_verified_location');
+            $verifiedAt = (int) ($lastVerified['verified_at'] ?? 0);
+            if (is_array($lastVerified)
+                && $verifiedAt > 0
+                && time() - $verifiedAt <= 600
+                && isset($lastVerified['lat'], $lastVerified['lng'])) {
+                foreach ($safeZones as $safeZone) {
+                    $distance = self::calculateDistance(
+                        $safeZone->latitude, $safeZone->longitude,
+                        (float) $lastVerified['lat'], (float) $lastVerified['lng']
+                    );
+
+                    if ($distance <= $safeZone->range_radius) {
+                        return $next($request);
+                    }
                 }
             }
         }

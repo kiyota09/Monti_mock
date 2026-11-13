@@ -30,6 +30,13 @@ export const csrfHeaders = () => {
     return meta ? { 'X-CSRF-TOKEN': meta } : {};
 };
 
+const geofenceHeaders = () => {
+    if (typeof sessionStorage === 'undefined') return {};
+    const lat = sessionStorage.getItem('erp-user-lat');
+    const lng = sessionStorage.getItem('erp-user-lng');
+    return lat && lng ? { 'X-User-Lat': lat, 'X-User-Lng': lng } : {};
+};
+
 // Ziggy can emit an absolute URL based on APP_URL, which may not exactly match
 // the host users opened (for example www/non-www or a reverse-proxy hostname).
 // Keep authenticated portal API calls on the page's origin so its session and
@@ -58,6 +65,7 @@ export const csrfFetch = async (url, init = {}) => {
     const send = () => {
         const headers = new Headers(init.headers ?? {});
         Object.entries(csrfHeaders()).forEach(([name, value]) => headers.set(name, value));
+        Object.entries(geofenceHeaders()).forEach(([name, value]) => headers.set(name, value));
 
         return fetch(sameOriginUrl(url), {
             ...init,
@@ -83,6 +91,7 @@ export const request = async (url, method = 'POST', body, retryOn419 = true) => 
         headers: {
             Accept: 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
+            ...geofenceHeaders(),
             ...(isGet ? {} : { 'Content-Type': 'application/json', ...csrfHeaders() }),
         },
         credentials: 'same-origin',

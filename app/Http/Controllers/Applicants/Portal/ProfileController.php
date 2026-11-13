@@ -44,7 +44,7 @@ class ProfileController extends Controller
             'gender' => 'nullable|string|max:20',
             'civil_status' => 'nullable|string|max:20',
             'email' => 'sometimes|email|max:255|unique:applicants,email,' . $applicant->id,
-            'phone' => ['required', 'string', 'regex:/^[0-9]+$/', 'max:15'],
+            'phone' => ['required', 'string', 'regex:/^[0-9]+$/', 'max:11'],
             'street' => 'nullable|string|max:500',
             'barangay' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:255',

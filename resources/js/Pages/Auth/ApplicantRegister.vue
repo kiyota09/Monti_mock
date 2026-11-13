@@ -270,5 +270,19 @@ const startLockoutCountdown = () => {
                 </PrimaryButton>
             </div>
         </form>
+
+        <div
+            v-if="form.processing || isSubmitting"
+            class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"
+            role="status"
+            aria-live="polite"
+            aria-label="Creating applicant account"
+        >
+            <div class="w-full max-w-sm rounded-2xl border border-slate-200/70 bg-white p-8 text-center shadow-2xl">
+                <div class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-sky-100 border-t-sky-600" aria-hidden="true"></div>
+                <h2 class="mt-5 text-lg font-bold text-slate-900">Creating your account</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-500">Please wait while we register you and send your email verification code.</p>
+            </div>
+        </div>
     </AuthLayout>
 </template>
