@@ -389,7 +389,7 @@ class InterviewController extends Controller
             'type' => 'nullable|in:Initial,Final,Initial Interview,Final Interview',
             'method' => 'nullable|in:Online,Onsite',
             'location' => 'nullable|string|max:255',
-            'meeting_link' => 'nullable|string',
+            'meeting_link' => ['nullable', 'required_if:method,Online', 'url', 'regex:/^https:\/\/meet\.google\.com\/.+/i', 'max:2048'],
             'date' => 'nullable|date|after_or_equal:today',
             'start_time' => 'nullable|string',
             'end_time' => 'nullable|string',
@@ -478,7 +478,7 @@ class InterviewController extends Controller
             'end_time' => 'nullable|string',
             'method' => 'nullable|in:Online,Onsite',
             'location' => 'nullable|string',
-            'meeting_link' => 'nullable|string',
+            'meeting_link' => ['nullable', 'required_if:method,Online', 'url', 'regex:/^https:\/\/meet\.google\.com\/.+/i', 'max:2048'],
             'notes' => 'nullable|string',
         ]);
         $data['applicant_id'] ??= $data['application_id'] ?? null;
@@ -560,7 +560,7 @@ class InterviewController extends Controller
             'interviewer_id' => 'nullable|exists:users,id',
             'method' => 'nullable|in:Online,Onsite',
             'location' => 'nullable|string',
-            'meeting_link' => 'nullable|string',
+            'meeting_link' => ['nullable', 'required_if:method,Online', 'url', 'regex:/^https:\/\/meet\.google\.com\/.+/i', 'max:2048'],
         ]);
 
         $scheduledAt = \Illuminate\Support\Carbon::parse($data['date'].' '.$data['start_time']);

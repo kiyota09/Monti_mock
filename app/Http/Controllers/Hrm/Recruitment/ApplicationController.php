@@ -41,30 +41,24 @@ class ApplicationController extends Controller
             }
         }
 
-        $paginated = $q
+        $applicants = $q
             ->withMax('jobApplications as latest_application_created_at', 'created_at')
             ->orderByDesc('latest_application_created_at')
             ->orderByDesc('id')
-            ->paginate(15)
-            ->withQueryString();
-        // One card per job applied: an applicant with 2+ portal job applications
-        // produces 2+ rows (each with its own job, status and date) so HR sees
-        // every application. Hired rows live in History — they are excluded
-        // here so the main table only shows in-pipeline applications.
-        $applications = collect($paginated->items())->filter(fn ($a) => $a !== null)
+            ->get();
+        // Show every non-hired application, including each separate job
+        // application for one applicant. Hired rows remain in History.
+        // Submitted items stay at the top of the list.
+        $applications = $applicants->filter(fn ($a) => $a !== null)
             ->flatMap(fn ($a) => $this->mapApplicationRow($a))
             ->reject(fn ($row) => ($row['status'] ?? null) === 'Hired')
             ->sortByDesc(fn ($row) => $row['created_at'] ?? $row['application_date'] ?? '')
+            ->sortBy(fn ($row) => strtolower((string) ($row['status'] ?? 'submitted')) === 'submitted' ? 0 : 1)
             ->values()->all();
 
         return Inertia::render('Dashboard/HRM_NEW/Applications', [
             'applications' => $applications,
-            'pagination' => [
-                'current_page' => $paginated->currentPage(),
-                'last_page' => $paginated->lastPage(),
-                'per_page' => $paginated->perPage(),
-                'total' => $paginated->total(),
-            ],
+
             'metrics' => [
                 'total' => Applicant::whereHas('jobApplications')->count(),
                 'pending' => Applicant::whereHas('jobApplications')->whereIn('status', ['pending', 'Submitted'])->count(),

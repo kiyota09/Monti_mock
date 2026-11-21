@@ -34,6 +34,12 @@ Route::prefix('dashboard/fin')->name('fin.')->middleware(['auth', 'verified', 'g
     Route::get('/manager/payroll', [FinDashboardController::class, 'payroll'])
         ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:payroll,view'])
         ->name('manager.payroll');
+    Route::get('/manager/payroll/agency-uploads/{upload}', [FinDashboardController::class, 'downloadAgencyInvoiceUpload'])
+        ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:payroll,view'])
+        ->name('manager.payroll.agency-upload.download');
+    Route::get('/manager/payroll/agency-statements/{statement}/attachments/{index}', [FinDashboardController::class, 'downloadAgencyStatementAttachment'])
+        ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:payroll,view'])
+        ->name('manager.payroll.agency-statement.download');
     Route::get('/manager/reports', [FinDashboardController::class, 'reports'])
         ->middleware(['module.access:FIN', 'position:manager,staff', 'page.permission:reports,view'])
         ->name('manager.reports');

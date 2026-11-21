@@ -120,17 +120,23 @@ class AttendanceController extends Controller
                 $status = 'Holiday';
                 $remarks = trim($holMap[$dateKey]['name'] . ($remarks !== '' ? ' · ' . $remarks : ''));
             }
+            $sessions = is_array($log->sessions) ? array_values($log->sessions) : [];
+            $firstSession = $sessions[0] ?? [];
+            $secondSession = $sessions[1] ?? [];
 
             return [
                 'id' => $log->id,
+                'record_id' => $log->id,
                 'user_id' => $log->user_id,
                 'employee' => $log->user?->name ?? ('User #' . $log->user_id),
                 'employee_id' => $log->user?->employee_id ?: ('EMP-' . str_pad((string) $log->user_id, 4, '0', STR_PAD_LEFT)),
                 'department' => $log->user?->hrmDepartment?->name ?? $log->user?->department ?? $log->user?->role,
                 'shift' => $shiftLabel ?: '—',
                 'date' => $log->date,
-                'time_in' => $log->clock_in ?: '—',
-                'time_out' => $log->clock_out ?: '—',
+                'time_in' => $firstSession ? ($firstSession['clock_in'] ?? '—') : ($log->clock_in ?: '—'),
+                'time_out' => $firstSession ? ($firstSession['clock_out'] ?? '—') : ($log->clock_out ?: '—'),
+                'time_in_2' => $secondSession['clock_in'] ?? '—',
+                'time_out_2' => $secondSession['clock_out'] ?? '—',
                 'hours' => $this->hours($log->clock_in, $log->clock_out, $log->sessions),
                 'ot' => $this->ot($log->clock_in, $log->clock_out, $log->sessions),
                 'sessions' => is_array($log->sessions) ? $log->sessions : [],
@@ -140,6 +146,84 @@ class AttendanceController extends Controller
                 'remarks' => $remarks,
             ];
         })->values()->all();
+
+        // Daily attendance is an employee roster, not only a list of clock
+        // events. Include employees who have not created a clock record yet.
+        if (! $isHistory) {
+            $employeesQuery = User::with('hrmDepartment:id,name,code,category')
+                ->whereNull('worker_id')
+                ->whereNotIn('id', function ($sub) {
+                    $sub->select('users.id')->from('users')
+                        ->join('workers', 'workers.email', '=', 'users.personal_email')
+                        ->whereNotNull('users.personal_email');
+                });
+
+            if ($search = trim((string) $request->get('search', ''))) {
+                $employeesQuery->where(fn ($query) => $query
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('employee_id', 'like', "%{$search}%"));
+            }
+            if ($dept = $request->get('department')) {
+                $employeesQuery->where(fn ($query) => $query
+                    ->where('department', $dept)
+                    ->orWhere('role', $dept)
+                    ->orWhereHas('hrmDepartment', fn ($departmentQuery) => $departmentQuery
+                        ->where('code', $dept)->orWhere('name', $dept)->orWhere('category', $dept)));
+            }
+
+            $pageUsers = $employeesQuery->orderBy('name')->get();
+            $logsByEmployee = AttendanceLog::whereDate('date', $date)
+                ->whereIn('user_id', $pageUsers->pluck('id'))
+                ->get()->keyBy('user_id');
+
+            $records = $pageUsers->map(function ($employee) use ($logsByEmployee, $shiftMap, $assignedShifts, $hrmShifts, $holMap, $date) {
+                $log = $logsByEmployee->get($employee->id);
+                $shift = $shiftMap->get($employee->id);
+                $shiftLabel = $shift
+                    ? trim(($shift->shift_type ?? '') . ($shift->schedule_range ? ' (' . $shift->schedule_range . ')' : ''))
+                    : '—';
+                $config = $this->resolveShiftConfig((int) $employee->id, $shift, $assignedShifts, $hrmShifts);
+                $lateMinutes = $log ? $this->lateMinutes($log, $shift, $config) : 0;
+                $status = $log ? $this->effectiveStatus($log->status, $lateMinutes) : 'No Record';
+                $remarks = $log?->remarks ?? '';
+                if ($status === 'Absent' && isset($holMap[$date])) {
+                    $status = 'Holiday';
+                    $remarks = trim($holMap[$date]['name'] . ($remarks !== '' ? ' · ' . $remarks : ''));
+                }
+                $sessions = is_array($log?->sessions) ? array_values($log->sessions) : [];
+                $firstSession = $sessions[0] ?? [];
+                $secondSession = $sessions[1] ?? [];
+
+                return [
+                    'id' => $log?->id ?? ('employee-' . $employee->id),
+                    'record_id' => $log?->id,
+                    'user_id' => $employee->id,
+                    'employee' => $employee->name,
+                    'employee_id' => $employee->employee_id ?: ('EMP-' . str_pad((string) $employee->id, 4, '0', STR_PAD_LEFT)),
+                    'department' => $employee->hrmDepartment?->name ?? $employee->department ?? $employee->role,
+                    'shift' => $shiftLabel,
+                    'date' => $date,
+                    'time_in' => $firstSession ? ($firstSession['clock_in'] ?? '—') : ($log?->clock_in ?: '—'),
+                    'time_out' => $firstSession ? ($firstSession['clock_out'] ?? '—') : ($log?->clock_out ?: '—'),
+                    'time_in_2' => $secondSession['clock_in'] ?? '—',
+                    'time_out_2' => $secondSession['clock_out'] ?? '—',
+                    'hours' => $log ? $this->hours($log->clock_in, $log->clock_out, $log->sessions) : '—',
+                    'ot' => $log ? $this->ot($log->clock_in, $log->clock_out, $log->sessions) : 0,
+                    'sessions' => is_array($log?->sessions) ? $log->sessions : [],
+                    'late_minutes' => $lateMinutes ?: null,
+                    'status' => $status,
+                    'status_raw' => $log?->status,
+                    'remarks' => $remarks,
+                ];
+            })->values()->all();
+
+            $pagination = [
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => $pageUsers->count(),
+                'total' => $pageUsers->count(),
+            ];
+        }
 
         $scopeQ = $isHistory
             ? AttendanceLog::whereBetween('date', [$from, $to])
@@ -413,7 +497,7 @@ class AttendanceController extends Controller
             if ($clockIn->gt($shiftStart)) {
                 $minutes = (int) abs($clockIn->diffInMinutes($shiftStart));
                 $grace = max(0, (int) (is_object($config) ? ($config->grace_minutes ?? 15) : 15));
-                return $minutes > $grace ? $minutes : 0;
+                return max(0, $minutes - $grace);
             }
             return 0;
         } catch (\Throwable) {

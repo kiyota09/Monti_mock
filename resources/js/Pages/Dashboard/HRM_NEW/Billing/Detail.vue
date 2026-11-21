@@ -3,7 +3,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Pencil, FileDown, FileSpreadsheet } from 'lucide-vue-next';
+import { ArrowLeft, Pencil, FileDown, FileSpreadsheet } from 'lucide-vue-next';
 import { formatHours } from '@/lib/utils';
 
 const props = defineProps<{
@@ -99,16 +99,22 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
             </div>
             <div class="flex flex-wrap items-center gap-2 shrink-0">
                 <Link
+                    :href="route('hrm.billing.index')"
+                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 !text-slate-900 dark:!text-white rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                >
+                    <ArrowLeft class="w-3.5 h-3.5" /> Back
+                </Link>
+                <Link
                     v-if="statement.status === 'Draft' && canEdit"
                     :href="route('hrm.billing.edit', statement.id)"
                     class="inline-flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition"
                 >
                     <Pencil class="w-3.5 h-3.5" /> Edit
                 </Link>
-                <a :href="route('hrm.billing.export-pdf', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                <a :href="route('hrm.billing.export-pdf', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 !text-slate-900 dark:!text-white rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition">
                     <FileDown class="w-3.5 h-3.5" /> PDF
                 </a>
-                <a :href="route('hrm.billing.export-excel', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                <a :href="route('hrm.billing.export-excel', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 !text-slate-900 dark:!text-white rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition">
                     <FileSpreadsheet class="w-3.5 h-3.5" /> Excel
                 </a>
                 <button v-if="statement.status === 'Issued' && canEdit" @click="showPay = true" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition">Mark as paid</button>
@@ -174,7 +180,7 @@ const labelCls = 'block mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                             <tr v-for="(l, i) in statement.lines" :key="i" class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                                <td class="py-2 px-3 text-sm font-bold text-slate-900 dark:text-white">{{ l.worker_name }} <span class="font-mono text-[10px] text-slate-400">({{ l.worker_code }})</span></td>
+                                <td class="py-2 px-3 text-sm font-bold text-slate-900 dark:text-white">{{ l.worker_name }}</td>
                                 <td class="py-2 px-3 text-xs font-mono text-slate-600 dark:text-slate-300">{{ l.request_code }}</td>
                                 <td class="py-2 px-3 text-center text-xs text-slate-600 dark:text-slate-300">{{ l.days }}</td>
                                 <td class="py-2 px-3 text-center text-xs text-slate-600 dark:text-slate-300">{{ formatHours(l.hours) }}<span v-if="l.overtime_hours">+{{ formatHours(l.overtime_hours) }} OT</span></td>

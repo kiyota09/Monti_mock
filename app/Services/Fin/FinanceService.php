@@ -10,9 +10,11 @@ use App\Models\Fin\FinExpense;
 use App\Models\Fin\FinInvoice;
 use App\Models\Fin\FinInvoicePayment;
 use App\Models\Hrm\Payroll;
+use App\Models\Hrm\BillingStatement;
 use App\Models\Ord\SalesOrder;
 use App\Models\Scm\ProcurementPayment;
 use App\Models\Scm\PurchaseInvoice;
+use App\Support\BillingCalc;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -361,15 +363,15 @@ class FinanceService
 
     /**
      * Payroll runs grouped by department (HRM payrolls + user department
-     * lookup; unassigned staff fall under Operations). Only live runs
-     * (pending/approved); rejected runs are excluded.
+     * lookup; unassigned staff fall under Operations). Draft payrolls stay
+     * with HR; submitted, approved, and paid runs are visible to Finance.
      */
     public function payrollRows()
     {
         $deptOf = User::whereNotNull('employee_id')
             ->pluck('department', 'employee_id');
 
-        $runs = Payroll::whereIn('status', ['pending', 'approved'])->get();
+        $runs = Payroll::whereRaw('LOWER(status) IN (?, ?, ?, ?)', ['pending', 'submitted', 'approved', 'paid'])->get();
 
         $groups = [];
         foreach ($runs as $run) {
@@ -379,19 +381,25 @@ class FinanceService
             $deductions = (float) $run->sss_deduction + (float) $run->philhealth_deduction
                 + (float) $run->pagibig_deduction + (float) $run->tax_withheld
                 + (float) $run->sss_loan + (float) $run->pf_loan
-                + (float) $run->late_total_deduction;
+                + (float) $run->late_total_deduction + (float) ($run->advance_deduction ?? 0);
             if (! isset($groups[$dept])) {
-                $groups[$dept] = ['department' => $dept, 'headcount' => 0, 'gross' => 0, 'deductions' => 0, 'net' => 0, 'paid' => 0, 'pending' => 0];
+                $groups[$dept] = [
+                    'department' => $dept,
+                    'headcount' => 0,
+                    'gross' => 0,
+                    'deductions' => 0,
+                    'net' => 0,
+                    'submitted' => 0,
+                    'approved' => 0,
+                    'paid' => 0,
+                ];
             }
             $groups[$dept]['headcount']++;
             $groups[$dept]['gross'] += (float) $run->gross_pay;
             $groups[$dept]['deductions'] += $deductions;
             $groups[$dept]['net'] += (float) $run->net_pay;
-            if ($run->status === 'approved') {
-                $groups[$dept]['paid']++;
-            } else {
-                $groups[$dept]['pending']++;
-            }
+            $runStatus = strtolower((string) $run->status);
+            $groups[$dept][$runStatus === 'pending' ? 'submitted' : $runStatus]++;
         }
 
         return collect($groups)
@@ -399,9 +407,12 @@ class FinanceService
                 $g['gross'] = round($g['gross'], 2);
                 $g['deductions'] = round($g['deductions'], 2);
                 $g['net'] = round($g['net'], 2);
-                // Department is fully paid only when nothing is pending.
-                $g['status'] = $g['pending'] > 0 ? 'pending' : 'paid';
-                unset($g['paid'], $g['pending']);
+                $g['status'] = $g['submitted'] > 0
+                    ? 'pending'
+                    : ($g['approved'] > 0 ? 'processing' : 'paid');
+                $g['status_detail'] = "{$g['submitted']} awaiting approval · {$g['approved']} awaiting payment · {$g['paid']} paid";
+                $g['approved_count'] = $g['approved'];
+                unset($g['submitted'], $g['approved'], $g['paid']);
 
                 return $g;
             })
@@ -411,7 +422,7 @@ class FinanceService
 
     public function payrollEmployees()
     {
-        $runs = Payroll::whereIn('status', ['pending', 'approved'])
+        $runs = Payroll::whereRaw('LOWER(status) IN (?, ?, ?, ?)', ['pending', 'submitted', 'approved', 'paid'])
             ->with('user')
             ->get();
 
@@ -419,12 +430,15 @@ class FinanceService
             $deductions = (float) $run->sss_deduction + (float) $run->philhealth_deduction
                 + (float) $run->pagibig_deduction + (float) $run->tax_withheld
                 + (float) $run->sss_loan + (float) $run->pf_loan
-                + (float) $run->late_total_deduction;
+                + (float) $run->late_total_deduction + (float) ($run->advance_deduction ?? 0);
 
             return [
                 'id' => $run->employee_id,
+                'payroll_id' => $run->id,
                 'employee_id' => $run->user->employee_id ?? '—',
                 'name' => $run->user->name ?? 'Unknown',
+                'period' => $run->period,
+                'status' => strtolower((string) $run->status) === 'pending' ? 'submitted' : strtolower((string) $run->status),
                 'department' => trim((string) ($run->user->department ?? '')) !== ''
                     ? trim((string) $run->user->department)
                     : 'Operations',
@@ -434,6 +448,85 @@ class FinanceService
                 'net_pay' => round((float) $run->net_pay, 2),
             ];
         })->values();
+    }
+
+    /** Agency-submitted invoice documents and issued billing statements for Finance review. */
+    public function agencyInvoiceRows(): array
+    {
+        $uploads = DB::table('agency_billing_uploads as upload')
+            ->join('agencies as agency', 'agency.id', '=', 'upload.agency_id')
+            ->orderByDesc('upload.id')
+            ->limit(20)
+            ->get([
+                'upload.id', 'upload.original_name', 'upload.period_start', 'upload.period_end',
+                'upload.created_at', 'agency.name as agency_name', 'agency.code as agency_code',
+            ])
+            ->map(fn ($upload) => [
+                'id' => 'upload-'.$upload->id,
+                'agency' => $upload->agency_name,
+                'agency_code' => $upload->agency_code,
+                'invoice' => $upload->original_name,
+                'period' => $upload->period_start.' – '.$upload->period_end,
+                'status' => 'Uploaded',
+                'amount' => null,
+                'attachments' => [[
+                    'name' => $upload->original_name,
+                    'url' => route('fin.manager.payroll.agency-upload.download', $upload->id),
+                ]],
+                'sort_at' => $upload->created_at,
+            ]);
+
+        $statements = BillingStatement::with('agency:id,code,name')
+            ->whereIn('status', [BillingStatement::STATUS_ISSUED, BillingStatement::STATUS_PAID])
+            ->latest('id')
+            ->limit(20)
+            ->get()
+            ->map(function (BillingStatement $statement) {
+                $agencyName = $statement->agency?->name ?? 'Agency';
+                $period = $statement->period_start->format('Y-m-d').' – '.$statement->period_end->format('Y-m-d');
+                $calc = BillingCalc::forStatement($statement);
+                $sheetRows = [
+                    ['Statement', $statement->code],
+                    ['Agency', $agencyName],
+                    ['Period', $period],
+                    ['Status', $statement->status],
+                    [],
+                    ['Worker', 'Request', 'Department', 'Days', 'Hours', 'OT hours', 'Rate', 'Labor'],
+                ];
+                foreach ($calc['lines'] as $line) {
+                    $sheetRows[] = [
+                        $line['worker_name'], $line['request_code'], $line['department'], $line['days'],
+                        $line['hours'], $line['overtime_hours'], $line['rate'], $line['labor'],
+                    ];
+                }
+                $sheetRows[] = [];
+                $sheetRows[] = ['Records', $calc['count']];
+                $sheetRows[] = ['Labor cost', $statement->labor_cost];
+                $sheetRows[] = ['Service fee', $statement->service_fee];
+                $sheetRows[] = ['Total', $statement->total];
+
+                return [
+                    'id' => 'statement-'.$statement->id,
+                    'agency' => $agencyName,
+                    'agency_code' => $statement->agency?->code,
+                    'invoice' => $statement->code,
+                    'period' => $period,
+                    'status' => $statement->status,
+                    'amount' => (float) $statement->total,
+                    'sheet_rows' => $sheetRows,
+                    'attachments' => collect($statement->attachments ?? [])->map(fn ($file, $index) => [
+                        'name' => $file['name'] ?? 'Invoice attachment '.($index + 1),
+                        'url' => route('fin.manager.payroll.agency-statement.download', [$statement->id, $index]),
+                    ])->values()->all(),
+                    'sort_at' => optional($statement->created_at)->toDateTimeString(),
+                ];
+            });
+
+        return $uploads->concat($statements)
+            ->sortByDesc('sort_at')
+            ->take(20)
+            ->values()
+            ->all();
     }
 
     public function stats(): array

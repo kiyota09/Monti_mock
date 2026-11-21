@@ -8,6 +8,8 @@ use App\Models\Hrm\EmployeeShift;
 use App\Models\Hrm\Holiday;
 use App\Models\Hrm\LeaveRequest;
 use App\Models\Hrm\Payroll;
+use App\Mail\PayrollPayslipMail;
+use App\Services\Payroll\GovernmentContributionCalculator;
 use App\Models\Hrm\PayrollSet;
 use App\Models\Hrm\PayrollRate;
 use App\Models\Hrm\AdvanceAuditLog;
@@ -17,12 +19,12 @@ use App\Models\Core\User;
 use App\Support\NotifiesExecutive;
 use App\Support\PayrollCalc;
 use App\Models\Ceo\ExecutiveActionLog;
-use App\Models\Hrm\GovernmentContributionRate;
 use App\Traits\HasPagePermissions;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
@@ -87,6 +89,12 @@ class PayrollController extends Controller
                 ]);
             }
         }
+
+        // The period selector is generated-payroll history: hide calendar
+        // periods that have no payroll records and show the newest run first.
+        $periods = array_values(array_filter($periods, fn ($p) => (int) ($p['row_count'] ?? 0) > 0));
+        usort($periods, fn ($a, $b) => strcmp((string) ($b['start'] ?? $b['label']), (string) ($a['start'] ?? $a['label'])));
+        $period = collect($periods)->firstWhere('label', $requested)['label'] ?? ($periods[0]['label'] ?? null);
 
         $activeMeta = collect($periods)->firstWhere('label', $period);
 
@@ -469,9 +477,11 @@ class PayrollController extends Controller
                 $effectiveSet->base_salary = $monthly;
 
                 $summary = $this->computeAttendanceSummary($employee, $carbonPeriod, $effectiveSet);
+                $statutoryContributions = GovernmentContributionCalculator::forPayrollPeriod($monthly, $frequency);
 
                 // Daily-rate formula: Gross = (days × rate) + night + OT + Sun/SP + holiday − late.
-                // Statutory + loans start blank (0) for HR to fill in.
+                // Statutory employee shares are calculated from monthly basic
+                // salary; loan deductions remain zero until HR records them.
                 $calc = PayrollCalc::calc([
                     'days' => $summary['days_worked'],
                     'daily' => $summary['daily_rate'],
@@ -481,9 +491,9 @@ class PayrollController extends Controller
                     'sun_hours' => $summary['sunday_restday_hours'],
                     'holiday_amt' => $summary['holiday_amt'],
                     'late_minutes' => $summary['late_minutes'],
-                    'sss' => (float) ($employee->sss_contribution ?? 0),
-                    'philhealth' => (float) ($employee->philhealth_contribution ?? 0),
-                    'pagibig' => (float) ($employee->pagibig_contribution ?? 0),
+                    'sss' => $statutoryContributions['sss'],
+                    'philhealth' => $statutoryContributions['philhealth'],
+                    'pagibig' => $statutoryContributions['pagibig'],
                     'sss_loan' => 0, 'pf_loan' => 0,
                 ], $frequency);
 
@@ -517,9 +527,9 @@ class PayrollController extends Controller
                     'late_minutes'           => $summary['late_minutes'],
                     'late_rate_min'          => $calc['late_rate_min'],
                     'late_total_deduction'   => $calc['late_total'],
-                    'sss_deduction'          => (float) ($employee->sss_contribution ?? 0),
-                    'philhealth_deduction'   => (float) ($employee->philhealth_contribution ?? 0),
-                    'pagibig_deduction'      => (float) ($employee->pagibig_contribution ?? 0),
+                    'sss_deduction'          => $statutoryContributions['sss'],
+                    'philhealth_deduction'   => $statutoryContributions['philhealth'],
+                    'pagibig_deduction'      => $statutoryContributions['pagibig'],
                     'tax_withheld'           => 0,
                     'sss_loan'               => 0,
                     'pf_loan'                => 0,
@@ -574,18 +584,27 @@ class PayrollController extends Controller
             $this->reconcileDraftDays($payroll, $attendance, $freq);
         }
 
+        $monthlyBasicSalary = (float) ($payroll->monthly_salary ?? $payroll->base_salary ?? 0);
+        $isDraft = $this->normalizeStatus($payroll->status) === 'Draft';
+        $statutoryContributions = $isDraft
+            ? GovernmentContributionCalculator::forPayrollPeriod($monthlyBasicSalary, $freq)
+            : [
+                'sss' => (float) ($payroll->sss_deduction ?? 0),
+                'philhealth' => (float) ($payroll->philhealth_deduction ?? 0),
+                'pagibig' => (float) ($payroll->pagibig_deduction ?? 0),
+            ];
         $calc = PayrollCalc::calc([
             'days' => (float) ($payroll->days_worked ?? 0),
             'daily' => (float) ($payroll->daily_rate ?? 0),
-            'monthly' => (float) ($payroll->monthly_salary ?? $payroll->base_salary),
+            'monthly' => $monthlyBasicSalary,
             'night_hours' => (float) $payroll->night_hours,
             'ot_hours' => (float) $payroll->overtime_hours,
             'sun_hours' => (float) ($payroll->sunday_restday_hours ?? 0),
             'holiday_amt' => (float) ($payroll->holiday_amt ?? 0),
             'late_minutes' => (float) $payroll->late_minutes,
-            'sss' => (float) ($payroll->sss_deduction ?? 0),
-            'philhealth' => (float) ($payroll->philhealth_deduction ?? 0),
-            'pagibig' => (float) ($payroll->pagibig_deduction ?? 0),
+            'sss' => $statutoryContributions['sss'],
+            'philhealth' => $statutoryContributions['philhealth'],
+            'pagibig' => $statutoryContributions['pagibig'],
             'sss_loan' => (float) ($payroll->sss_loan ?? 0),
             'pf_loan' => (float) ($payroll->pf_loan ?? 0),
             'advance_deduction' => (float) ($payroll->advance_deduction ?? 0),
@@ -599,16 +618,15 @@ class PayrollController extends Controller
                 ->first()?->hrmOrgPosition?->name;
         }
 
-        // Pull the employee's configured contribution amounts into Draft
-        // payroll rows that were generated before these amounts were linked.
-        $employeeContributions = User::where('employee_id', $payroll->employee_id)
-            ->first(['sss_contribution', 'pagibig_contribution', 'philhealth_contribution']);
-        $payrollData = $payroll->toArray();
-        if ($this->normalizeStatus($payroll->status) === 'Draft' && $employeeContributions) {
-            $payrollData['sss_deduction'] = (float) $payroll->sss_deduction ?: (float) $employeeContributions->sss_contribution;
-            $payrollData['philhealth_deduction'] = (float) $payroll->philhealth_deduction ?: (float) $employeeContributions->philhealth_contribution;
-            $payrollData['pagibig_deduction'] = (float) $payroll->pagibig_deduction ?: (float) $employeeContributions->pagibig_contribution;
+        if ($isDraft) {
+            $payroll->update([
+                'sss_deduction' => $statutoryContributions['sss'],
+                'philhealth_deduction' => $statutoryContributions['philhealth'],
+                'pagibig_deduction' => $statutoryContributions['pagibig'],
+                'net_pay' => $calc['net'],
+            ]);
         }
+        $payrollData = $payroll->fresh()->toArray();
 
         return Inertia::render('Dashboard/HRM_NEW/PayrollDetail', [
             'payroll' => array_merge($payrollData, [
@@ -795,9 +813,6 @@ class PayrollController extends Controller
             'holiday_amt' => 'nullable|numeric|min:0',
             'holiday_days' => 'nullable|numeric|min:0',
             'late_minutes' => 'nullable|numeric|min:0',
-            'sss_deduction' => 'nullable|numeric|min:0',
-            'philhealth_deduction' => 'nullable|numeric|min:0',
-            'pagibig_deduction' => 'nullable|numeric|min:0',
             'sss_loan' => 'nullable|numeric|min:0',
             'pf_loan' => 'nullable|numeric|min:0',
             // Legacy combined field still accepted.
@@ -805,19 +820,21 @@ class PayrollController extends Controller
             'other_deductions' => 'nullable|numeric|min:0',
         ]);
         $freq = \App\Support\PayPeriods::frequencyForLabel((string) ($payroll->period ?? ''));
+        $monthlyBasicSalary = (float) ($v['monthly_salary'] ?? $payroll->monthly_salary ?? $payroll->base_salary ?? 0);
+        $statutoryContributions = GovernmentContributionCalculator::forPayrollPeriod($monthlyBasicSalary, $freq);
         $calc = PayrollCalc::calc([
             'days' => (float) ($v['days_worked'] ?? $payroll->days_worked ?? 0),
             'daily' => (float) ($v['daily_rate'] ?? 0),
-            'monthly' => (float) ($v['monthly_salary'] ?? $payroll->monthly_salary ?? $payroll->base_salary ?? 0),
+            'monthly' => $monthlyBasicSalary,
             'night_hours' => (float) ($v['night_hours'] ?? 0),
             'ot_hours' => (float) ($v['overtime_hours'] ?? 0),
             'sun_hours' => (float) ($v['sunday_restday_hours'] ?? 0),
             'holiday_amt' => (float) ($v['holiday_amt'] ?? 0),
             'holiday_days' => (float) ($v['holiday_days'] ?? 0),
             'late_minutes' => (float) ($v['late_minutes'] ?? 0),
-            'sss' => (float) ($v['sss_deduction'] ?? 0),
-            'philhealth' => (float) ($v['philhealth_deduction'] ?? 0),
-            'pagibig' => (float) ($v['pagibig_deduction'] ?? 0),
+            'sss' => $statutoryContributions['sss'],
+            'philhealth' => $statutoryContributions['philhealth'],
+            'pagibig' => $statutoryContributions['pagibig'],
             'sss_loan' => (float) ($v['sss_loan'] ?? $v['other_deductions'] ?? 0),
             'pf_loan' => (float) ($v['pf_loan'] ?? 0),
             'advance_deduction' => (float) ($payroll->advance_deduction ?? 0),
@@ -1031,7 +1048,35 @@ class PayrollController extends Controller
             return back()->withErrors(['error' => 'None of the selected rows remain approved.']);
         }
         $this->auditPayroll('Marked as paid '.$ref.' — '.$this->auditNames($rows), null, 'paid');
-        return back()->with('message', 'Marked as paid ('.$paidRows->count().', ref '.$ref.').');
+        $employeesById = User::whereIn('employee_id', $paidRows->pluck('employee_id')->filter()->unique())
+            ->get(['employee_id', 'personal_email'])
+            ->keyBy('employee_id');
+        $emailsSent = 0;
+        $emailsSkipped = 0;
+        $emailsFailed = 0;
+        foreach ($paidRows as $payroll) {
+            $recipient = trim((string) ($employeesById[$payroll->employee_id]->personal_email ?? ''));
+            if ($recipient === '') {
+                $emailsSkipped++;
+                continue;
+            }
+
+            try {
+                Mail::to($recipient)->send(new PayrollPayslipMail($payroll));
+                $emailsSent++;
+            } catch (\Throwable $exception) {
+                report($exception);
+                $emailsFailed++;
+            }
+        }
+
+        $this->auditPayroll('Marked as paid '.$ref.' — '.$this->auditNames($rows), null, 'paid');
+        $message = 'Marked as paid ('.$paidRows->count().', ref '.$ref.'). Payslips emailed: '.$emailsSent.'.';
+        if ($emailsSkipped + $emailsFailed > 0) {
+            $message .= ' '.$emailsSkipped.' employee(s) had no personal email address; '.$emailsFailed.' email(s) failed.';
+        }
+
+        return back()->with('message', $message);
     }
 
     /**
@@ -1052,23 +1097,17 @@ class PayrollController extends Controller
      */
     private function computeSSS($monthlyGross)
     {
-        $msc = $this->getMSC($monthlyGross);
-        $rate = GovernmentContributionRate::ofType('sss')
-            ->where('min_compensation', '<=', $msc)
-            ->where('max_compensation', '>=', $msc)
-            ->first();
-        return $rate ? $msc * ($rate->percentage / 100) : 0;
+        return GovernmentContributionCalculator::monthlyEmployeeShares((float) $monthlyGross)['sss'];
     }
 
     private function computePhilHealth($monthlyGross)
     {
-        $base = max(10000, min(100000, $monthlyGross));
-        return $base * 0.025; // 2.5% employee share
+        return GovernmentContributionCalculator::monthlyEmployeeShares((float) $monthlyGross)['philhealth'];
     }
 
     private function computePagIBIG($monthlyGross)
     {
-        return min($monthlyGross * 0.02, 200);
+        return GovernmentContributionCalculator::monthlyEmployeeShares((float) $monthlyGross)['pagibig'];
     }
 
     private function computeWithholdingTax($monthlyGross, $baseSalary)
@@ -1083,9 +1122,4 @@ class PayrollController extends Controller
         return (2202500 + ($annual - 8000000) * 0.35) / 12;
     }
 
-    private function getMSC($monthly)
-    {
-        $msc = round($monthly / 500) * 500;
-        return max(4000, min(30000, $msc));
-    }
 }

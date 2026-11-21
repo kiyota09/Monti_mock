@@ -65,6 +65,7 @@ const form = useForm({
     emergency_relationship: props.worker?.emergency_relationship || '',
     emergency_phone: props.worker?.emergency_phone || '',
     consent_given: props.worker?.consent_given || false,
+    correction_reason: '',
 });
 const educationOptions = [
     'Elementary level',
@@ -666,7 +667,7 @@ const errCls = 'mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-ro
                             <svg v-if="stepDone(i)" class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
                             <span v-else>{{ i + 1 }}</span>
                         </span>
-                        <span class="w-full truncate text-center text-[10px] font-medium sm:text-xs" :class="i <= step ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'">{{ s.title }}</span>
+                        <span class="w-full truncate text-center text-[10px] font-medium text-white sm:text-xs">{{ s.title }}</span>
                     </button>
                 </div>
             </div>
@@ -1018,6 +1019,11 @@ const errCls = 'mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-ro
                         <h2 class="text-sm font-bold text-slate-900 dark:text-white">Submission and Consent <span class="text-rose-500">*</span></h2>
                         <p class="text-[11px] text-slate-400 mt-0.5">Initial status: Pending HR Approval.</p>
                     </div>
+                </div>
+                <div v-if="isEdit && props.worker?.status === 'For Correction'" class="mb-5">
+                    <label :class="labelCls">Correction reason <span class="font-normal text-slate-400">(optional)</span></label>
+                    <textarea v-model="form.correction_reason" rows="3" maxlength="1000" placeholder="Add a note for HR about the corrections you made..." :class="inputCls"></textarea>
+                    <p class="mt-1 text-right text-[10px] text-slate-400">{{ form.correction_reason.length }}/1000</p>
                 </div>
                 <label class="flex items-start gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition cursor-pointer">
                     <input v-model="form.consent_given" type="checkbox" :true-value="true" :false-value="false" class="mt-0.5 w-4 h-4 rounded accent-indigo-600" />

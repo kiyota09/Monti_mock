@@ -440,6 +440,7 @@
                 </div>
             </div>
         </div>
+        <button type="button" @click="scrollToTop" class="fixed bottom-5 right-5 z-[100] px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold shadow-lg hover:bg-slate-50 transition-colors">Back to Top</button>
     </AuthenticatedLayout>
 </template>
 
@@ -786,6 +787,8 @@ const toggleComponent = (c) => {
         onFinish: () => { saving.value = false; },
     });
 };
+
+const scrollToTop = () => document.querySelector('.app-viewport')?.scrollTo({ top: 0, behavior: 'smooth' });
 
 onMounted(() => {
     setTimeout(() => { pageLoading.value = false; }, 200);

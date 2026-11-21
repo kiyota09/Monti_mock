@@ -51,19 +51,29 @@ const filteredRows = computed(() => {
     });
 });
 
-const fmtTime = (t: string | null) => {
-    if (!t || t === '') return '—';
-    // Accepts "HH:MM" or "h:i A" (employee clock format) → "HH:MM".
-    const m12 = String(t).match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+function timeMinutes(t: string | null): number | null {
+    if (!t) return null;
+    const value = String(t).trim();
+    const m12 = value.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
     if (m12) {
         let h = Number(m12[1]);
-        const mm = m12[2];
         const ap = m12[3].toUpperCase();
         if (ap === 'PM' && h < 12) h += 12;
         if (ap === 'AM' && h === 12) h = 0;
-        return `${String(h).padStart(2, '0')}:${mm}`;
+        return h * 60 + Number(m12[2]);
     }
-    return String(t).slice(0, 5);
+    const m24 = value.match(/^(\d{1,2}):(\d{2})$/);
+    return m24 ? Number(m24[1]) * 60 + Number(m24[2]) : null;
+}
+
+const fmtTime = (t: string | null) => {
+    if (!t || t === '') return '—';
+    const minutes = timeMinutes(t);
+    if (minutes === null) return String(t);
+    const h24 = Math.floor(minutes / 60) % 24;
+    const ap = h24 >= 12 ? 'PM' : 'AM';
+    const h12 = h24 % 12 || 12;
+    return `${String(h12).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')} ${ap}`;
 };
 
 // Late time vs shift start (Morning 8AM / Afternoon 2PM / Graveyard-Night 10PM).
@@ -74,10 +84,8 @@ function shiftStartMinutes(shift: string | null): number {
     return 8 * 60;
 }
 function lateOf(timeIn: string | null, shift: string | null): string {
-    if (!timeIn) return '—';
-    const m = String(timeIn).match(/(\d{1,2}):(\d{2})/);
-    if (!m) return '—';
-    const mins = Number(m[1]) * 60 + Number(m[2]);
+    const mins = timeMinutes(timeIn);
+    if (mins === null) return '—';
     const diff = mins - shiftStartMinutes(shift);
     if (diff <= 0) return '—';
     const h = Math.floor(diff / 60);

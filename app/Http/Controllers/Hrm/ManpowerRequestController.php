@@ -233,6 +233,10 @@ class ManpowerRequestController extends Controller
     {
         $request->validate(['reason' => 'required|string|max:2000']);
 
+        if (ManpowerProposal::where('request_id', $manpowerRequest->id)->exists()) {
+            return back()->with('error', 'This request cannot be cancelled because the agency has already submitted a proposal.');
+        }
+
         if ($manpowerRequest->status !== ManpowerRequest::STATUS_OPEN) {
             return back()->with('error', 'Only Open requests can be cancelled.');
         }
@@ -829,6 +833,7 @@ class ManpowerRequestController extends Controller
             'employment_type' => $request->employmentType?->name,
             'status' => $request->effective_status,
             'stored_status' => $request->status,
+            'has_proposals' => ManpowerProposal::where('request_id', $request->id)->exists(),
         ];
     }
 

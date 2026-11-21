@@ -155,6 +155,7 @@ const submitConfirm = () => {
 };
 // In-page confirmation modal (no native alert/confirm/prompt here).
 const confirmBox = ref(null);
+const showPayslipPreview = ref(false);
 const syncFromAttendance = () => {
     confirmBox.value = {
         title: 'Sync from attendance',
@@ -163,7 +164,97 @@ const syncFromAttendance = () => {
         run: () => router.post(route('hrm.payroll.sync', props.payroll.id)),
     };
 };
-const printSlip = () => { try { window.print(); } catch { confirmBox.value = { title: 'Print payslip', message: 'Printing is blocked here. Download the page to print.', confirmLabel: 'Understood', run: null }; } };
+const printSlip = () => { showPayslipPreview.value = true; };
+const printPayslipDocument = () => { try { window.print(); } catch { confirmBox.value = { title: 'Print payslip', message: 'The print dialog is unavailable in this browser.', confirmLabel: 'Understood', run: null }; } };
+const downloadPayslipPdf = () => {
+    const currentPayroll = props.payroll || {};
+    const currentAttendance = props.attendance;
+    const current = live.value;
+    const attendanceDayCount = presentDays.value;
+    const attendanceDates = presentDates.value;
+    const ascii = (value) => String(value ?? '')
+        .replace(/₱/g, 'PHP ')
+        .replace(/[—–·]/g, '-')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\x20-\x7E]/g, '?')
+        .replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    const commands = [];
+    const draw = (x, y, value, size = 9, bold = false) => {
+        commands.push(`BT /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${ascii(value)}) Tj ET`);
+    };
+    const rule = (y) => commands.push(`0.75 w 48 ${y} m 564 ${y} l S`);
+
+    draw(48, 754, `Payslip - ${currentPayroll.employee_name} · ${currentPayroll.period}`, 14, true);
+    if (currentAttendance?.cutoff) draw(48, 736, `Cutoff: ${currentAttendance.cutoff}`, 9);
+    draw(48, 710, 'Attendance summary', 10, true);
+    const attendanceRows = [
+        ['Days present', `${attendanceDayCount} day${attendanceDayCount === 1 ? '' : 's'}`],
+        ['Scheduled shifts', scheduledDays.value],
+        ['Absent', absentDaysView.value],
+        ['On leave', leaveDaysView.value],
+    ];
+    let y = 692;
+    attendanceRows.forEach(([label, value]) => {
+        draw(48, y, label);
+        draw(510, y, value);
+        y -= 14;
+    });
+    draw(48, y - 2, attendanceDates.length
+        ? `Present dates: ${attendanceDates.map(shortDay).join(', ')}`
+        : `No present-date list from attendance - count comes from ${currentAttendance ? 'attendance sync' : 'payroll record'} (${attendanceDayCount} day${attendanceDayCount === 1 ? '' : 's'}).`, 8);
+    y -= 24;
+    draw(48, y, 'Field', 9, true);
+    draw(510, y, 'Value', 9, true);
+    rule(y - 4);
+    y -= 18;
+
+    const rows = [
+        ['Days worked (payroll)', num2(current.days)], ['Daily rate', peso(current.daily)], ['Basic total', peso(current.basic)],
+        ['Night hours', blankIfZero(current.nightH)], ['Night rate', peso(current.nightRate)], ['Night amount', peso(current.nightAmt)],
+        ['O.T. hours', blankIfZero(current.otH)], ['O.T. rate', peso(current.otRate)], ['O.T. amount', peso(current.otAmt)],
+        ['Sun / special holiday hours', blankIfZero(current.sunH)], ['Sun / special holiday rate', peso(current.sunRate)], ['Sun / special holiday amount', peso(current.sunAmt)],
+        ['Holiday', current.holAmt ? peso(current.holAmt) : '—'], ['Late (min)', current.lateM ? num2(current.lateM) : '—'],
+        ['Late rate/min', peso(current.lateRate)], ['Late total', current.lateTotal ? peso(current.lateTotal) : '—'],
+        ['Gross', peso(current.gross)], ['SSS', blankPeso(current.sss)], ['PhilHealth', blankPeso(current.phil)], ['Pag-IBIG', blankPeso(current.pag)],
+        ['SSS loan', peso(current.sssLoan)], ['PF loan', peso(current.pfLoan)],
+        ...(current.advanceDeduction > 0 ? [['Advance repayment', peso(current.advanceDeduction)]] : []),
+        ['Net', peso(current.net)],
+    ];
+    rows.forEach(([label, value]) => {
+        draw(48, y, label, 9, label === 'Gross' || label === 'Net');
+        draw(510, y, value, 9, label === 'Gross' || label === 'Net');
+        y -= 13;
+        if (label === 'Gross') rule(y + 6);
+    });
+
+    const stream = commands.join('\n');
+    const objects = [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>',
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+        `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    ];
+    let pdf = '%PDF-1.4\n';
+    const offsets = [0];
+    objects.forEach((object, index) => {
+        offsets.push(pdf.length);
+        pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    });
+    const xrefOffset = pdf.length;
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n`; });
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }));
+    link.download = `Payslip-${String(currentPayroll.employee_name || 'Employee').replace(/[^a-z0-9]+/gi, '-')}-${String(currentPayroll.period || 'period').replace(/[^a-z0-9]+/gi, '-')}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+};
 </script>
 
 <template>
@@ -182,8 +273,8 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                     <p class="text-sm text-slate-500 mt-1.5">{{ payroll?.job_title || payroll?.role }} · {{ payroll?.department }} · {{ payroll?.period }} · {{ payroll?.status }}</p>
                 </header>
 
-                <div class="bg-white rounded-2xl border border-slate-200/60 shadow-lg backdrop-blur-sm overflow-hidden relative">
-                    <div class="p-5 border-b border-slate-100">
+                <div class="bg-white rounded-2xl border border-slate-200/60 shadow-lg backdrop-blur-sm relative">
+                    <div class="p-5 border-b border-slate-100 bg-gradient-to-r from-blue-50 via-white to-slate-50">
                         <h3 class="font-bold text-slate-900">Employee payslip</h3>
                         <p class="text-xs text-slate-500 mt-0.5">{{ payroll?.employee_name }} · {{ payroll?.period }} · {{ payroll?.status }}</p>
                         <p v-if="attendance" class="text-xs text-slate-500 mt-1">From attendance {{ attendance.cutoff }}: {{ attendance.scheduled }} shifts · {{ attendance.present }} present · {{ attendance.absent }} absent · {{ attendance.leave }} on leave.</p>
@@ -191,7 +282,12 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                             Locked. Only HR can edit, and only while the row is Draft. A manager can return it to draft.
                         </div>
                     </div>
-                    <div class="p-5">
+                    <div class="p-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start bg-slate-50/50">
+                        <section class="employee-details-sticky self-start rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                        <div class="mb-4 border-b border-slate-100 pb-3">
+                            <h4 class="text-sm font-bold text-slate-900">Employee details</h4>
+                            <p class="mt-0.5 text-xs text-slate-500">Review attendance and compensation inputs.</p>
+                        </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 form-grid">
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Full name</label><input v-model="form.employee_name" :disabled="!editable" aria-label="Full name" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Job title</label><input v-model="form.job_title" :disabled="!editable" aria-label="Job title" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
@@ -208,7 +304,9 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                             <div><label class="text-xs font-bold text-slate-700 block mb-1.5">Pag-IBIG contribution amount</label><div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">₱</span><input v-model.number="form.pagibig_deduction" type="number" min="0" step="0.01" readonly :disabled="!editable" aria-label="Pag-IBIG contribution amount" placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></div>
                         </div>
 
-                        <div id="payslip" class="mt-5 rounded-2xl border border-slate-200 p-4 text-sm">
+                        </section>
+                        <section class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+                        <div id="payslip" class="rounded-xl border border-blue-100 bg-gradient-to-b from-white to-blue-50/40 p-4 text-sm">
                             <div class="font-bold mb-1">Payslip — {{ payroll?.employee_name }} · {{ payroll?.period }}</div>
                             <div v-if="attendance?.cutoff" class="text-xs text-slate-500 mb-2">Cutoff: {{ attendance.cutoff }}</div>
                         <div v-if="payroll?.status === 'Paid'" class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 mb-2">Paid{{ payroll?.paid_at ? ' on ' + payroll.paid_at : '' }}{{ payroll?.payment_reference ? ' · Ref ' + payroll.payment_reference : '' }}{{ payroll?.payment_method ? ' · ' + payroll.payment_method : '' }}</div>
@@ -339,11 +437,11 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                             <div style="font-size:10px; margin-top:12px; text-align:center;">Generated {{ printDate }} · Amounts in PHP · Gross = (days × rate) + night + O.T. + Sun/special + holiday − late · Net = Gross − deductions including released advance repayments</div>
                         </div>
                         <div v-if="live.capped" class="text-xs text-amber-600 font-semibold mt-1.5">Deductions exceed gross — net floored at zero.</div>
-                        <div v-if="Number(form.days_worked || 0) === 0" class="text-xs text-amber-600 font-semibold mt-1">No days worked — basic pay is zero. Enter days worked manually if needed.</div>
                         <div v-if="Number(form.overtime_hours) > otWarnAt" class="text-xs text-amber-600 font-semibold mt-1">Overtime is above {{ otWarnAt }} hours. Confirm it was approved.</div>
+                        </section>
                     </div>
                     <div class="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 flex-wrap">
-                        <button v-if="editable" type="button" @click="remove" class="px-4 py-2 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold transition">Remove</button>
+
                         <button type="button" @click="printSlip" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">Print payslip</button>
                         <button type="button" @click="closeWithConfirm" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">Close</button>
                         <button v-if="editable" type="button" @click="save" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition">Save changes</button>
@@ -352,6 +450,62 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
                             <button type="button" @click="rejectOne" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">Return to draft</button>
                         </template>
                     </div>
+                </div>
+            </div>
+        </div>
+        <div v-if="showPayslipPreview" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4">
+            <div class="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                    <h2 class="text-base font-bold text-slate-900">Payslip preview</h2>
+                    <button type="button" @click="showPayslipPreview = false" class="rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100">Close</button>
+                </div>
+                <div id="payslip-preview-content" class="min-h-0 overflow-y-auto p-4 text-[11px] leading-4 text-slate-900">
+                    <h1 class="mb-1 text-sm font-bold">Payslip — {{ payroll?.employee_name }} · {{ payroll?.period }}</h1>
+                    <p v-if="attendance?.cutoff" class="mb-2 text-[11px] text-slate-600">Cutoff: {{ attendance.cutoff }}</p>
+                    <div class="mb-2 rounded-lg border border-slate-200 px-3 py-2">
+                        <div class="flex justify-between py-0.5 font-semibold"><span>Days present</span><span>{{ presentDays }} day{{ presentDays === 1 ? '' : 's' }}</span></div>
+                        <div class="flex justify-between py-0.5"><span>Scheduled shifts</span><span>{{ scheduledDays }}</span></div>
+                        <div class="flex justify-between py-0.5"><span>Absent</span><span>{{ absentDaysView }}</span></div>
+                        <div class="flex justify-between py-0.5"><span>On leave</span><span>{{ leaveDaysView }}</span></div>
+                        <div v-if="presentDates.length" class="mt-1 border-t border-slate-200 pt-1 text-[11px]">
+                            <span class="font-semibold">Present dates:</span> {{ presentDates.map(shortDay).join(', ') }}
+                        </div>
+                        <p v-else class="mt-1 border-t border-slate-200 pt-1 text-[11px] text-slate-600">No present-date list from attendance — count comes from {{ attendance ? 'attendance sync' : 'payroll record' }} ({{ presentDays }} day{{ presentDays === 1 ? '' : 's' }}).</p>
+                    </div>
+                    <table class="w-full border-collapse text-[11px] leading-4">
+                        <thead><tr class="border-b-2 border-slate-300 text-left"><th class="py-1">Field</th><th class="py-1 text-right">Value</th></tr></thead>
+                        <tbody>
+                            <tr><td class="border-b border-slate-100 py-0.5">Days worked (payroll)</td><td class="border-b border-slate-100 py-0.5 text-right">{{ num2(live.days) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Daily rate</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.daily) }}</td></tr>
+                            <tr class="font-semibold"><td class="border-b border-slate-100 py-0.5">Basic total</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.basic) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Night hours</td><td class="border-b border-slate-100 py-0.5 text-right">{{ blankIfZero(live.nightH) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Night rate</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.nightRate) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Night amount</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.nightAmt) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">O.T. hours</td><td class="border-b border-slate-100 py-0.5 text-right">{{ blankIfZero(live.otH) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">O.T. rate</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.otRate) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">O.T. amount</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.otAmt) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Sun / special holiday hours</td><td class="border-b border-slate-100 py-0.5 text-right">{{ blankIfZero(live.sunH) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Sun / special holiday rate</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.sunRate) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Sun / special holiday amount</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.sunAmt) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Holiday</td><td class="border-b border-slate-100 py-0.5 text-right">{{ live.holAmt ? peso(live.holAmt) : '—' }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Late (min)</td><td class="border-b border-slate-100 py-0.5 text-right">{{ live.lateM ? num2(live.lateM) : '—' }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Late rate/min</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.lateRate) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Late total</td><td class="border-b border-slate-100 py-0.5 text-right">{{ live.lateTotal ? peso(live.lateTotal) : '—' }}</td></tr>
+                            <tr class="font-semibold"><td class="border-b border-slate-100 py-0.5">Gross</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.gross) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">SSS</td><td class="border-b border-slate-100 py-0.5 text-right">{{ blankPeso(live.sss) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">PhilHealth</td><td class="border-b border-slate-100 py-0.5 text-right">{{ blankPeso(live.phil) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">Pag-IBIG</td><td class="border-b border-slate-100 py-0.5 text-right">{{ blankPeso(live.pag) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">SSS loan</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.sssLoan) }}</td></tr>
+                            <tr><td class="border-b border-slate-100 py-0.5">PF loan</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.pfLoan) }}</td></tr>
+                            <tr v-if="live.advanceDeduction > 0"><td class="border-b border-slate-100 py-0.5">Advance repayment</td><td class="border-b border-slate-100 py-0.5 text-right">{{ peso(live.advanceDeduction) }}</td></tr>
+                            <tr class="text-sm font-bold"><td class="py-1">Net</td><td class="py-1 text-right">{{ peso(live.net) }}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                    <button type="button" @click="showPayslipPreview = false" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100">Close</button>
+                    <button type="button" @click="printPayslipDocument" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100">Print</button>
+                    <button type="button" @click="downloadPayslipPdf" class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700">PDF</button>
                 </div>
             </div>
         </div>
@@ -380,16 +534,42 @@ const printSlip = () => { try { window.print(); } catch { confirmBox.value = { t
 </template>
 
 <style scoped>
+.employee-details-sticky { position: sticky; top: 1rem; max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.employee-details-sticky .form-grid { gap: .625rem; }
+.employee-details-sticky label { margin-bottom: .25rem; font-size: .6875rem; }
+.employee-details-sticky input { padding-top: .375rem; padding-bottom: .375rem; font-size: .75rem; }
+@media (max-width: 1023px) { .employee-details-sticky { position: static; max-height: none; overflow: visible; } }
 .payroll-caps, .payroll-caps *, .payroll-caps input::placeholder { text-transform: capitalize; }
 .bg-grid-slate-100 { background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px); background-size: 24px 24px; }
 .bg-clip-text { -webkit-background-clip: text; background-clip: text; }
 input:disabled { opacity: .6; }
 :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-#payslip-print { display: none; }
+#payslip-print { display: none !important; }
 @media print {
-    body * { visibility: hidden; }
-    #payslip-print { display: block; position: absolute; top: 0; left: 0; width: 100%; color: #000; }
-    #payslip-print, #payslip-print * { visibility: visible; text-transform: none; }
-    #payslip-print table { page-break-inside: auto; }
+    :global(body *) { visibility: hidden !important; }
+    :global(body) { background: #fff !important; }
+    :global(#payslip-preview-content), :global(#payslip-preview-content *) { visibility: visible !important; text-transform: none; color: #000 !important; }
+        :global(#payslip-preview-content) {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        max-height: none;
+        margin: 0;
+        padding: 8mm;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+        box-shadow: none;
+        overflow: visible;
+        font-size: 10px;
+        line-height: 1.25;
+    }
+    :global(#payslip-preview-content h1) { font-size: 12px !important; }
+    :global(#payslip-preview-content p) { font-size: 9px !important; }
+    :global(#payslip-preview-content table) { font-size: 9px !important; line-height: 1.15 !important; }
+    :global(#payslip-preview-content th), :global(#payslip-preview-content td) { padding-top: 1px !important; padding-bottom: 1px !important; }
+    :global(#payslip-preview-content button) { display: none !important; }
 }
 </style>

@@ -4,7 +4,7 @@ import { ref, watch, computed } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { toast } from '@/lib/feedback';
-import { Search, Plus, Eye, Pencil } from 'lucide-vue-next';
+import { Search, Plus, Eye, Pencil, Ban } from 'lucide-vue-next';
 
 const props = defineProps<{
     requests: Array<{
@@ -21,6 +21,7 @@ const props = defineProps<{
         shift: string | null;
         status: string;
         stored_status: string;
+        has_proposals: boolean;
     }>;
     pagination: { current_page: number; last_page: number; per_page: number; total: number };
     stats: { total: number; draft: number; open: number };
@@ -40,6 +41,9 @@ const agencyId = ref(props.filters?.agency_id || 'All');
 const status = ref(props.filters?.status || 'All');
 const from = ref(props.filters?.from || '');
 const to = ref(props.filters?.to || '');
+const cancelTarget = ref<number | null>(null);
+const cancelReason = ref('');
+const cancelError = ref('');
 
 function applyFilters(pageNum = 1) {
     const params: any = { page: pageNum };
@@ -66,9 +70,35 @@ const pageNumbers = computed(() => {
     for (let i = start; i <= end; i++) out.push(i);
     return out;
 });
+const visibleRequests = computed(() => status.value === 'Cancelled'
+    ? props.requests.filter((request) => request.status === 'Cancelled')
+    : props.requests.filter((request) => request.status !== 'Cancelled'));
 
 function openRequest(id: number) {
     router.visit(route('hrm.manpower-requests.show', id));
+}
+
+function cancelRequest(id: number) {
+    cancelTarget.value = id;
+    cancelReason.value = '';
+    cancelError.value = '';
+}
+
+function confirmCancelRequest() {
+    if (!cancelTarget.value) return;
+    if (!cancelReason.value.trim()) {
+        cancelError.value = 'A reason is required to cancel this request.';
+        return;
+    }
+
+    router.post(route('hrm.manpower-requests.cancel', cancelTarget.value), { reason: cancelReason.value.trim() }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            cancelTarget.value = null;
+            cancelReason.value = '';
+            cancelError.value = '';
+        },
+    });
 }
 
 function statusBadge(s: string): string {
@@ -161,7 +191,7 @@ function statusBadge(s: string): string {
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                         <tr
-                            v-for="r in requests"
+                            v-for="r in visibleRequests"
                             :key="r.id"
                             @click="openRequest(r.id)"
                             class="transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60"
@@ -194,12 +224,23 @@ function statusBadge(s: string): string {
                                     >
                                         <Pencil class="w-4 h-4" />
                                     </Link>
+                                    <button
+                                        v-if="r.status === 'Open'"
+                                        type="button"
+                                        :disabled="r.has_proposals"
+                                        :class="['p-1.5 rounded-lg', r.has_proposals ? 'cursor-not-allowed text-slate-300 dark:text-slate-600' : 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20']"
+                                        :title="r.has_proposals ? 'Cannot cancel: the agency has submitted a proposal' : 'Cancel request'"
+                                        :aria-label="r.has_proposals ? 'Cannot cancel: agency proposal exists' : 'Cancel request'"
+                                        @click="cancelRequest(r.id)"
+                                    >
+                                        <Ban class="w-4 h-4" />
+                                    </button>
                                 </div>
                             </td>
                         </tr>
                     </tbody>
                 </table>
-                <div v-if="requests.length === 0" class="py-12 text-center">
+                <div v-if="visibleRequests.length === 0" class="py-12 text-center">
                     <p class="text-sm font-bold text-slate-900 dark:text-white">No manpower requests yet.</p>
                     <Link
                         :href="route('hrm.manpower-requests.create')"
@@ -244,6 +285,26 @@ function statusBadge(s: string): string {
                     </button>
                 </div>
             </div>
+        </div>
+
+        <div v-if="cancelTarget !== null" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" @click.self="cancelTarget = null">
+            <section role="dialog" aria-modal="true" aria-labelledby="cancel-request-title" class="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-800">
+                <h2 id="cancel-request-title" class="text-lg font-bold text-slate-900 dark:text-white">Confirm request cancellation</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">This will cancel the open manpower request. Enter a reason to continue.</p>
+                <textarea
+                    v-model="cancelReason"
+                    rows="3"
+                    maxlength="2000"
+                    autofocus
+                    placeholder="Reason for cancellation"
+                    class="mt-4 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-rose-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                />
+                <p v-if="cancelError" class="mt-1 text-xs text-rose-600">{{ cancelError }}</p>
+                <div class="mt-4 flex justify-end gap-2">
+                    <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700" @click="cancelTarget = null">Keep request</button>
+                    <button type="button" class="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700" @click="confirmCancelRequest">Confirm cancellation</button>
+                </div>
+            </section>
         </div>
     </AuthenticatedLayout>
 </template>

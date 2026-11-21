@@ -374,7 +374,8 @@ Route::prefix('dashboard/hrm')->name('hrm.')->middleware(['auth', 'verified', 'g
         ->middleware('page.permission:payroll,edit')
         ->name('payroll.return');
     Route::post('/payroll/mark-paid', [PayrollController::class, 'markPaid'])
-        ->middleware('page.permission:payroll,edit')
+        // Finance authorization is enforced by PayrollController::markPaid;
+        // this HRM payroll permission gate incorrectly rejects Finance users.
         ->name('payroll.paid');
     Route::patch('/payroll/{payroll}', [PayrollController::class, 'update'])
         ->middleware('page.permission:payroll,edit')

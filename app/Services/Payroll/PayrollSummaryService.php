@@ -340,7 +340,8 @@ class PayrollSummaryService
             // Late deduction: hourly ÷ divisor (Payroll Settings).
             $hourlyRate = $dailyRate > 0 ? $dailyRate / $hrsDay : 0;
             if ($clockIn->gt($shiftStart)) {
-                $lateMins = (int) abs($clockIn->diffInMinutes($shiftStart));
+                $elapsedLateMins = (int) abs($clockIn->diffInMinutes($shiftStart));
+                $lateMins = max(0, $elapsedLateMins - self::shiftGraceMinutes((int) $employee->id, $shift));
                 $lateMinutesTotal += $lateMins;
                 $lateDeductionTotal += $lateMins * ($hourlyRate / $lateDiv);
             }
@@ -521,6 +522,45 @@ class PayrollSummaryService
         $d = self::shiftDefaults();
 
         return $d[$shift][1] ?? $d['Morning'][1];
+    }
+
+    private static function shiftGraceMinutes(int $userId, $shift): int
+    {
+        static $cache = [];
+        $type = strtolower(trim((string) ($shift->shift_type ?? '')));
+        $key = $userId.'|'.$type;
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $assignedGrace = DB::table('hrm_shift_user as su')
+                ->join('hrm_shifts as hs', 'hs.id', '=', 'su.shift_id')
+                ->where('su.user_id', $userId)
+                ->where('hs.is_active', true)
+                ->orderBy('hs.id')
+                ->value('hs.grace_minutes');
+            if (is_numeric($assignedGrace)) {
+                return $cache[$key] = max(0, (int) $assignedGrace);
+            }
+
+            if ($type !== '') {
+                $configured = HrmShift::where('is_active', true)->orderBy('id')->get(['name', 'grace_minutes'])
+                    ->first(function ($candidate) use ($type) {
+                        $name = strtolower((string) $candidate->name);
+                        return in_array($type, ['graveyard', 'night'], true)
+                            ? str_contains($name, 'graveyard') || str_contains($name, 'night')
+                            : str_contains($name, $type);
+                    });
+                if ($configured) {
+                    return $cache[$key] = max(0, (int) ($configured->grace_minutes ?? 15));
+                }
+            }
+        } catch (\Throwable) {
+            // Use the same 15-minute fallback as Workforce Attendance.
+        }
+
+        return $cache[$key] = 15;
     }
 
     public static function calculateNightMinutes($clockIn, $clockOut): int

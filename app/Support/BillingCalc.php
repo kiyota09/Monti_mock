@@ -299,7 +299,7 @@ class BillingCalc
 
     public static function forStatement(BillingStatement $statement): array
     {
-        $statement->loadMissing(['agency', 'attendances.worker:id,code,name', 'attendances.request:id,code,department']);
+        $statement->loadMissing(['agency', 'attendances.worker:id,code,name,daily_rate', 'attendances.request:id,code,department']);
 
         return static::totals($statement->attendances, $statement->agency);
     }

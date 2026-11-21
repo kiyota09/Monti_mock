@@ -92,13 +92,8 @@
             </button>
             <div v-if="employeeList.length === 0" class="py-8 text-center text-xs text-slate-400">No employees found in the database.</div>
           </div>
-          <div class="mt-3 flex items-center justify-between text-xs text-slate-500">
-            <span>Showing {{ pageInfo.from }}–{{ pageInfo.to }} of {{ pageInfo.total }} employees</span>
-            <div class="flex items-center gap-2">
-              <button @click="goDirectoryPage(pageInfo.current - 1)" :disabled="pageInfo.current <= 1" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
-              <span class="font-bold text-slate-700">Page {{ pageInfo.current }} of {{ pageInfo.last }}</span>
-              <button @click="goDirectoryPage(pageInfo.current + 1)" :disabled="pageInfo.current >= pageInfo.last" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
-            </div>
+          <div class="mt-3 text-xs text-slate-500">
+            <span>Showing {{ employeeList.length }} employees</span>
           </div>
         </div>
 
@@ -165,8 +160,10 @@
               </nav>
             </div>
 
+
+
             <!-- Operational Controls - Floating -->
-            <div class="bg-white rounded-2xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-sm p-5">
+            <div v-if="showOperationalControls" class="bg-white rounded-2xl border border-slate-200/60 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-sm p-5">
               <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Operational Controls</h3>
               <div class="grid grid-cols-2 gap-2">
                 <button @click="triggerAction('promote')" class="p-3 bg-gradient-to-r from-slate-50 to-slate-100/50 hover:from-blue-50 hover:to-blue-100 border border-slate-200 hover:border-blue-200 rounded-xl text-left text-xs font-semibold text-slate-700 hover:text-blue-700 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 flex items-center gap-1.5">
@@ -229,12 +226,9 @@
                 </div>
                 <div>
                   <label class="block text-xs font-semibold text-slate-500 mb-1.5">Suffix</label>
-                  <input type="text" v-model="employee.suffix" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
+                  <input type="text" v-model="employee.suffix" placeholder="None" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                 </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Nickname</label>
-                  <input type="text" v-model="employee.nickname" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                </div>
+
                 <div>
                   <label class="block text-xs font-semibold text-slate-500 mb-1.5">Preferred Name</label>
                   <input type="text" v-model="employee.preferredName" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
@@ -405,18 +399,18 @@
                   <input type="text" v-model="employee.basicSalary" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Pag-IBIG Contribution</label>
-                  <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-slate-400">₱</span><input type="number" min="0" step="0.01" v-model.number="employee.pagibigContribution" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" /></div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">Pag-IBIG Contribution (Monthly employee share)</label>
+                  <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-slate-400">₱</span><input type="number" :value="employee.pagibigContribution" readonly class="w-full pl-7 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs shadow-sm" /></div>
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">SSS Contribution</label>
-                  <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-slate-400">₱</span><input type="number" min="0" step="0.01" v-model.number="employee.sssContribution" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" /></div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">SSS Contribution (Monthly employee share)</label>
+                  <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-slate-400">₱</span><input type="number" :value="employee.sssContribution" readonly class="w-full pl-7 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs shadow-sm" /></div>
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">PhilHealth Contribution</label>
-                  <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-slate-400">₱</span><input type="number" min="0" step="0.01" v-model.number="employee.philhealthContribution" class="w-full pl-7 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" /></div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">PhilHealth Contribution (Monthly employee share)</label>
+                  <div class="relative"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-slate-400">₱</span><input type="number" :value="employee.philhealthContribution" readonly class="w-full pl-7 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs shadow-sm" /></div>
                 </div>
-                <p class="text-[10px] text-slate-400 md:col-span-2">Enter each employee contribution amount per payroll period.</p>
+                <p class="text-[10px] text-slate-400 md:col-span-2">Calculated from monthly basic salary using current statutory employee shares. Payroll prorates each amount by the selected pay frequency; attendance determines earnings and does not change these monthly contribution bases.</p>
               </div>
 
               <div class="border-t border-slate-100 pt-6">
@@ -732,6 +726,15 @@
 
             <!-- SECTION H: Audit & Chronological Records -->
             <div v-show="activeTab === 'history'" class="space-y-6">
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <div>
+                <p class="text-xs font-bold text-slate-700">Show operational controls</p>
+                <p class="text-[10px] text-slate-400">{{ showOperationalControls ? 'Controls are visible' : 'Controls are hidden' }}</p>
+              </div>
+              <button type="button" role="switch" :aria-checked="showOperationalControls" aria-label="Show operational controls" @click="showOperationalControls = !showOperationalControls" :class="['relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors', showOperationalControls ? 'bg-blue-600' : 'bg-slate-300']">
+                <span :class="['inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform', showOperationalControls ? 'translate-x-5' : 'translate-x-0.5']"></span>
+              </button>
+            </div>
               <div>
                 <h3 class="text-xl font-bold text-slate-900">System Logs & Chronology</h3>
                 <p class="text-sm text-slate-500 mt-0.5">Audit footprints across positions, departments, and payroll shifts.</p>
@@ -785,6 +788,9 @@
         </div>
       </div>
     </div>
+    <Teleport to="body">
+      <button v-if="!profileOnly" @click="scrollToTop" class="fixed bottom-5 right-5 z-[100] px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold shadow-lg hover:bg-slate-50 transition-colors">Back to Top</button>
+    </Teleport>
   </AuthenticatedLayout>
 </template>
 
@@ -802,6 +808,7 @@ import { toast } from '@/lib/feedback';
 
 // Dynamic Record Tab State
 const activeTab = ref("personal");
+const showOperationalControls = ref(false);
 
 const tabs = [
   { id: "personal", icon: User, label: "Personal & Contact Info" },
@@ -815,7 +822,6 @@ const props = defineProps({
   employees: { type: [Array, Object], default: () => [] },
   profileOnly: { type: Boolean, default: false },
   focusId: { default: null },
-  pagination: { type: Object, default: () => ({}) },
   stats: { type: Object, default: () => ({}) },
   filters: { type: Object, default: () => ({}) },
   departments: { type: [Array, Object], default: () => [] },
@@ -918,22 +924,9 @@ const applyDirectoryFilter = () => {
   }, { preserveState: true, preserveScroll: true, replace: true });
 };
 
-// Pagination: the header total counts every user row, but the browser list
-// only holds one page (20). Without these controls pages 2+ are unreachable.
-const pageInfo = computed(() => {
-  const p = props.pagination || {};
-  const total = Number(p.total || 0), per = Number(p.per_page || 20);
-  const current = Number(p.current_page || 1), last = Math.max(1, Number(p.last_page || 1));
-  const from = total === 0 ? 0 : (current - 1) * per + 1;
-  const to = Math.min(total, current * per);
-  return { total, per, current, last, from, to };
-});
-const goDirectoryPage = (pageNum) => {
-  const target = Math.max(1, Math.min(Number(props.pagination?.last_page || 1), Number(pageNum) || 1));
-  router.get(route('hrm.workforce.employees.index'), {
-    search: directorySearch.value.trim(), department: directoryDepartment.value, position: directoryPosition.value, status: directoryStatus.value, page: target,
-  }, { preserveState: true, preserveScroll: true, replace: true });
-};
+
+const scrollToTop = () => document.querySelector('.app-viewport')?.scrollTo({ top: 0, behavior: 'smooth' });
+
 
 // Handlers for Lifecycle and System Actions (all live, no mocks)
 const createNewEmployee = () => {
@@ -964,9 +957,6 @@ const toPayload = () => {
   cost_center: employee.value.costCenter, work_location: employee.value.workLocation,
   department_head: employee.value.departmentHead, immediate_supervisor: employee.value.immediateSupervisor,
   basic_salary: basic,
-  sss_contribution: employee.value.sssContribution,
-  pagibig_contribution: employee.value.pagibigContribution,
-  philhealth_contribution: employee.value.philhealthContribution,
   work_schedule: employee.value.workSchedule,
   timezone: employee.value.timeZone,
   join_date: employee.value.dateHired || null, probation_end_date: employee.value.probationEndDate || null,

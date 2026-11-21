@@ -94,7 +94,7 @@ class User extends Authenticatable
         'work_mode', 'salary_type', 'pay_frequency',
         'department_head', 'immediate_supervisor', 'payroll_group', 'salary_grade',
         'basic_salary', 'bank_account', 'tax_id', 'sss_id', 'pagibig_id', 'philhealth_id',
-        'sss_contribution', 'pagibig_contribution', 'philhealth_contribution', 'work_schedule', 'shift',
+        'work_schedule', 'shift',
         'timezone', 'biometrics_id', 'probation_end_date', 'probation_duration_months',
         'probation_evaluation_interval_months', 'regularization_date',
         'resignation_date', 'last_working_day', 'education', 'certifications',

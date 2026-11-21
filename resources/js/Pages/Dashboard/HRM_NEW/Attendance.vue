@@ -45,8 +45,7 @@
                                 Attendance
                             </h1>
                             <p class="text-sm text-slate-500 mt-1.5">
-                                Live clock records from the employee portal —
-                                same data as Workforce scheduling.
+                                Live clock records from the employee portal.
                             </p>
                         </div>
 
@@ -87,16 +86,27 @@
                                 <input v-model="toDate" type="date" aria-label="History to"
                                     class="px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm" />
                                 <button type="button" @click="applyFilter"
-                                    class="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-sm">Apply</button>
+                                    class="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition shadow-sm">Apply</button>
                                 <button type="button" @click="clearHistory"
-                                    class="px-3 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition">Clear</button>
+                                    class="px-2.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-bold transition">Clear</button>
+                                <button
+                                    type="button"
+                                    @click="exportCsv"
+                                    title="Export attendance"
+                                    aria-label="Export attendance"
+                                    class="flex h-9 w-9 items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                                >
+                                    <Upload class="w-4 h-4" aria-hidden="true" />
+                                </button>
                             </div>
-                            <button
+                            <button v-if="mode === 'daily'"
                                 @click="exportCsv"
-                                class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                                type="button"
+                                title="Export attendance"
+                                aria-label="Export attendance"
+                                class="flex h-9 w-9 items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
                             >
-                                <Upload class="w-4 h-4" />
-                                Export
+                                <Upload class="w-4 h-4" aria-hidden="true" />
                             </button>
                         </div>
                     </div>
@@ -167,33 +177,35 @@
                     </div>
 
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
+                        <table class="w-full min-w-[1400px] border-collapse text-left text-[11px]">
                             <thead>
                                 <tr
-                                    class="bg-gradient-to-r from-slate-50 to-transparent border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                                    class="sticky top-0 z-20 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-600"
                                 >
-                                    <th class="py-2 px-3">Date</th>
-                                    <th class="py-2 px-3">Employee</th>
-                                    <th class="py-2 px-3">Department</th>
-                                    <th class="py-2 px-3">Shift</th>
-                                    <th class="py-2 px-3">Time In</th>
-                                    <th class="py-2 px-3">Time Out</th>
-                                    <th class="py-2 px-3">Hours</th>
-                                    <th class="py-2 px-3 text-center">Late min</th>
-                                    <th class="py-2 px-3 text-center">Status</th>
-                                    <th class="py-2 px-3">Remarks</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Date</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Employee</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Department</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Shift</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Time In</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Time Out</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Time In 2</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Time Out 2</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Hours</th>
+                                    <th class="border border-slate-300 px-2 py-2 text-center whitespace-nowrap">Late min</th>
+                                    <th class="border border-slate-300 px-2 py-2 text-center whitespace-nowrap">Status</th>
+                                    <th class="border border-slate-300 px-2 py-2 whitespace-nowrap">Remarks</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-100">
+                            <tbody>
                                 <tr
                                     v-for="a in recordList"
                                     :key="a.id"
-                                    class="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-transparent transition-all duration-200 text-xs"
+                                    class="odd:bg-white even:bg-slate-50 hover:bg-blue-50 transition-colors"
                                 >
-                                    <td class="py-2 px-3 text-slate-500 whitespace-nowrap">
+                                    <td class="border border-slate-300 px-2 py-1.5 text-slate-600 whitespace-nowrap">
                                         {{ a.date }}
                                     </td>
-                                    <td class="py-2 px-3">
+                                    <td class="border border-slate-300 px-2 py-1.5 whitespace-nowrap">
                                         <div class="flex items-center gap-2">
                                             <div
                                                 class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-[9px] font-bold text-blue-600 shadow-inner"
@@ -206,25 +218,31 @@
                                             >
                                         </div>
                                     </td>
-                                    <td class="py-2 px-3 text-slate-600">
+                                    <td class="border border-slate-300 px-2 py-1.5 text-slate-600 whitespace-nowrap">
                                         {{ a.department || '—' }}
                                     </td>
-                                    <td class="py-2 px-3 text-slate-600">
+                                    <td class="border border-slate-300 px-2 py-1.5 text-slate-600 whitespace-nowrap">
                                         {{ a.shift || '—' }}
                                     </td>
-                                    <td class="py-2 px-3 font-medium">
-                                        {{ a.time_in }}
+                                    <td class="border border-slate-300 px-2 py-1.5 font-medium whitespace-nowrap">
+                                                {{ a.time_in || '—' }}
                                     </td>
-                                    <td class="py-2 px-3 font-medium">
-                                        {{ a.time_out }}
+                                    <td class="border border-slate-300 px-2 py-1.5 font-medium whitespace-nowrap">
+                                                {{ a.time_out || '—' }}
                                     </td>
-                                    <td class="py-2 px-3 font-semibold">
-                                        {{ a.hours }}
+                                    <td class="border border-slate-300 px-2 py-1.5 font-medium whitespace-nowrap">
+                                        {{ a.time_in_2 || '—' }}
                                     </td>
-                                    <td class="py-2 px-3 text-center font-semibold" :class="a.late_minutes ? 'text-rose-600' : 'text-slate-300'">
+                                    <td class="border border-slate-300 px-2 py-1.5 font-medium whitespace-nowrap">
+                                        {{ a.time_out_2 || '—' }}
+                                    </td>
+                                    <td class="border border-slate-300 px-2 py-1.5 font-semibold whitespace-nowrap">
+                                                {{ a.hours ?? '—' }}
+                                    </td>
+                                    <td class="border border-slate-300 px-2 py-1.5 text-center font-semibold whitespace-nowrap" :class="a.late_minutes ? 'text-rose-600' : 'text-slate-300'">
                                         {{ a.late_minutes || '—' }}
                                     </td>
-                                    <td class="py-2 px-3 text-center">
+                                    <td class="border border-slate-300 px-2 py-1.5 text-center whitespace-nowrap">
                                         <span
                                             :class="[
                                                 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-sm border',
@@ -237,10 +255,10 @@
                                             {{ a.status }}
                                         </span>
                                     </td>
-                                    <td class="py-2 px-3 text-slate-500 max-w-48">
+                                    <td class="border border-slate-300 px-2 py-1.5 text-slate-500 max-w-48">
                                         <div class="flex items-center gap-2">
                                             <span class="block truncate flex-1" :title="a.remarks || ''">{{ a.remarks || '—' }}</span>
-                                            <button v-if="canEdit" @click="openRemark(a)" title="Edit remark"
+                                            <button v-if="canEdit && a.record_id" @click="openRemark(a)" title="Edit remark"
                                                 class="shrink-0 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                                                 <Pencil class="w-3.5 h-3.5" />
                                             </button>
@@ -248,12 +266,12 @@
                                     </td>
                                 </tr>
                                 <tr v-if="recordList.length === 0">
-                                    <td colspan="11" class="py-10 text-center text-sm text-slate-400">{{ mode === 'history' ? 'No attendance records for this range.' : 'No attendance records for this date.' }}</td>
+                                    <td colspan="12" class="border border-slate-300 py-10 text-center text-sm text-slate-400">{{ mode === 'history' ? 'No attendance records for this range.' : 'No attendance records for this date.' }}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <div v-if="pagination && pagination.last_page > 1" class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <div v-if="false" class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                         <span>Page {{ pagination.current_page }} of {{ pagination.last_page }} · {{ pagination.total }} records</span>
                         <div class="flex gap-2">
                             <button type="button" @click="goPage(pagination.current_page - 1)" :disabled="pagination.current_page <= 1"
@@ -262,7 +280,7 @@
                                 class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold hover:bg-slate-50 disabled:opacity-40 transition">Next</button>
                         </div>
                     </div>
-                    <div v-else-if="pagination && pagination.total > 0" class="px-5 py-3 border-t border-slate-100 text-xs text-slate-400">
+                    <div v-if="pagination && pagination.total > 0" class="px-5 py-3 border-t border-slate-100 text-xs text-slate-400">
                         {{ pagination.total }} record{{ pagination.total === 1 ? '' : 's' }}{{ mode === 'history' && history ? ` · ${history.from} to ${history.to}` : '' }}
                     </div>
                 </div>
@@ -300,6 +318,7 @@
                 </div>
             </div>
         </div>
+        <button @click="scrollToTop" class="fixed bottom-5 right-5 z-[100] px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold shadow-lg hover:bg-slate-50 transition-colors">Back to Top</button>
     </AuthenticatedLayout>
 </template>
 
@@ -364,14 +383,13 @@ const statusStyle = (s) => ({
 let searchTimer = null;
 watch(search, () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilter, 400); });
 
-const applyFilter = (page = null) => {
+const applyFilter = () => {
     const params = { search: search.value.trim(), department: department.value };
     if (mode.value === 'history') {
         params.from = fromDate.value; params.to = toDate.value;
     } else {
         params.date = selectedDate.value;
     }
-    if (page) params.page = page;
     router.get(route('hrm.workforce.attendance.index'), params, { preserveState: true, preserveScroll: true, replace: true });
 };
 const switchMode = (m) => {
@@ -386,10 +404,7 @@ const clearHistory = () => {
         date: selectedDate.value, search: search.value.trim(), department: department.value,
     }, { preserveState: true, preserveScroll: true, replace: true });
 };
-const goPage = (page) => {
-    if (!page || page === props.pagination?.current_page) return;
-    applyFilter(page);
-};
+const scrollToTop = () => document.querySelector('.app-viewport')?.scrollTo({ top: 0, behavior: 'smooth' });
 
 const exportCsv = () => {
     const params = mode.value === 'history'

@@ -217,12 +217,12 @@ class StatusController extends Controller
         // This is what auto-fills Reporting Manager in the conversion modal.
         $chainPosition = null;
         if ($jaPosting?->position_id) {
-            $chainPosition = \App\Models\Hrm\HrmPosition::with('reportsTo')->find($jaPosting->position_id);
+            $chainPosition = \App\Models\Hrm\HrmPosition::with(['reportsTo', 'department'])->find($jaPosting->position_id);
         }
         if (! $chainPosition) {
             $chainTitle = $onboarding->position ?: $person?->position_applied ?: $jaPosting?->title;
             if ($chainTitle) {
-                $chainPosition = \App\Models\Hrm\HrmPosition::with('reportsTo')->where('name', $chainTitle)->first();
+                $chainPosition = \App\Models\Hrm\HrmPosition::with(['reportsTo', 'department'])->where('name', $chainTitle)->first();
             }
         }
         $chainNames = [];
@@ -342,7 +342,7 @@ class StatusController extends Controller
                 'position' => ($jaPosting && ($jaPosting->id ?? null) && $jaPosting->title)
                     ? $jaPosting->title
                     : ($onboarding->position ?: $person?->position_applied ?: $jaPosting?->title),
-                'department' => $onboarding->department ?: $jaPosting?->department,
+                'department' => $chainPosition?->department?->name ?: $jaPosting?->department ?: $onboarding->department,
                 'employment_type' => $onboarding->employment_type ?: $jaPosting?->employmentType?->name ?: 'Regular',
                 'start_date' => $recommendedStart,
                 'start_date_hint' => $recommendedHint,
@@ -373,86 +373,33 @@ class StatusController extends Controller
             ])->values()->all(),
         ];
 
-        // Reporting-manager picker: supervisors/managers of the department
-        // the applicant applied for (onboarding department, else the job
-        // posting's). Falls back to all seat-holders when the department is
-        // unknown or has no managers, so HR is never stuck.
-        $appliedDepartment = $onboarding->department ?: $jaPosting?->department;
-        $seatHolders = User::with(['hrmDepartment:id,name', 'hrmOrgPosition:id,management_level'])->where('is_active', true)
-            ->where(fn ($q) => $q->where('position', 'manager')
-                ->orWhere('is_manufacturing_supervisor', true)
-                ->orWhereHas('hrmOrgPosition', fn ($w) => $w->whereIn('management_level', ['Managerial', 'Supervisory', 'Executive'])))
-            ->orderBy('name')->take(200)
-            ->get(['id', 'name', 'position', 'department', 'role', 'hrm_department_id', 'hrm_position_id', 'is_manufacturing_supervisor', 'supervisor_department']);
+        // Only show reporting managers and supervisors assigned to the
+        // department attached to the applicant's applied position.
+        $appliedDepartment = $chainPosition?->department?->name ?: $jaPosting?->department ?: $onboarding->department;
         $norm = fn ($v) => preg_replace('/\s+/', ' ', trim(str_replace('&', 'and', strtolower((string) $v))));
         $target = $norm($appliedDepartment);
-        $managerChoices = $seatHolders;
-        if ($target !== '') {
-            $scoped = $seatHolders->filter(fn ($u) => $norm($u->hrmDepartment?->name) === $target
-                || $norm($u->department) === $target
-                || $norm($u->supervisor_department) === $target)->values();
-            $managerChoices = $scoped;
-            if ($managerChoices->isEmpty()) {
-                // Legacy users such as Luis Montano may have no department
-                // columns populated; keep only unassigned manager/supervisor
-                // seats instead of falling back to another department.
-                $managerChoices = $seatHolders->filter(fn ($u) =>
-                    $u->department === null
-                    && $u->supervisor_department === null
-                    && in_array($u->position, ['manager', 'supervisor'], true)
-                    && (str_contains($target, 'order') ? strtoupper((string) $u->role) === 'ORD' : true)
-                )->values();
+        $appliedDepartmentId = $chainPosition?->department_id;
+        if (! $appliedDepartmentId && $target !== '') {
+            $appliedDepartmentId = HrmDepartment::all(['id', 'name'])
+                ->first(fn ($department) => $norm($department->name) === $target)?->id;
+        }
+        $seatHolders = User::with(['hrmDepartment:id,name', 'hrmOrgPosition:id,management_level,department_id'])->where('is_active', true)
+            ->where(fn ($q) => $q->where('position', 'manager')
+                ->orWhere('position', 'supervisor')
+                ->orWhere('is_manufacturing_supervisor', true)
+                ->orWhereNotNull('supervisor_department')
+                ->orWhereHas('hrmOrgPosition', fn ($w) => $w->whereIn('management_level', ['Managerial', 'Supervisory'])))
+            ->orderBy('name')
+            ->get(['id', 'name', 'position', 'department', 'role', 'hrm_department_id', 'hrm_position_id', 'is_manufacturing_supervisor', 'supervisor_department']);
+        $managerChoices = $target === '' ? collect() : $seatHolders->filter(function ($u) use ($target, $appliedDepartmentId, $norm) {
+            $userDepartmentId = $u->hrm_department_id ?: $u->hrmOrgPosition?->department_id;
+            if ($appliedDepartmentId && $userDepartmentId) {
+                return (int) $userDepartmentId === (int) $appliedDepartmentId;
             }
-            // Never offer HRM users for a non-HR department. Order Management
-            // uses the ORD organizational role (including legacy users whose
-            // department columns are empty).
-            $managerChoices = $managerChoices
-                ->reject(fn ($u) => strtoupper((string) $u->role) === 'HRM')
-                ->values();
-        }
-
-        // Manufacturing hires must use a supervisor assigned to the exact
-        // manufacturing role, rather than any supervisor in the department.
-        $positionText = strtolower((string) ($jaPosting?->title ?: $onboarding->position ?: $person?->position_applied));
-        $manufacturingRole = null;
-        if (str_contains($positionText, 'knitting')) {
-            $manufacturingRole = str_contains($positionText, 'yarn') ? 'knitting_yarn'
-                : (str_contains($positionText, 'mechanic') ? 'knitting_mechanic'
-                    : (str_contains($positionText, 'inspector') ? 'knitting_inspector'
-                        : (str_contains($positionText, 'sample') ? 'knitting_sample' : null)));
-        }
-        if ($manufacturingRole) {
-            $assignedSupervisorIds = DB::table('manufacturing_supervisor_roles')
-                ->where('manufacturing_role', $manufacturingRole)
-                ->pluck('user_id');
-            $assignedSupervisorIds = $assignedSupervisorIds->merge(
-                DB::table('man_supervisor_staff_page_permissions')
-                    ->where('manufacturing_role', $manufacturingRole)
-                    ->whereIn('permission_level', ['view', 'edit'])
-                    ->pluck('supervisor_user_id')
-            )->unique()->values();
-            $managerChoices = $managerChoices
-                ->filter(fn ($u) => $assignedSupervisorIds->contains($u->id))
-                ->values();
-        } elseif ($chainParent) {
-            // For ordinary departments, use the position chain (for example,
-            // Order Management Staff -> Order Processing Manager) so unrelated
-            // department managers are not offered.
-            $chainScoped = $seatHolders
-                ->filter(fn ($u) => ((int) $u->hrm_position_id === (int) $chainParent->id
-                    || ($chainManager && (int) $u->id === (int) $chainManager->id)
-                    || ($u->hrm_position_id === null && in_array($u->position, ['manager', 'supervisor'], true)))
-                    && ($target === ''
-                        || $norm($u->hrmDepartment?->name) === $target
-                        || $norm($u->department) === $target
-                        || $norm($u->supervisor_department) === $target
-                        // Legacy manager records may not have department
-                        // metadata; allow those, but never cross-list a
-                        // manager explicitly belonging to another department.
-                        || ($u->department === null && $u->supervisor_department === null)))
-                ->values();
-            $managerChoices = $chainScoped;
-        }
+            return $norm($u->hrmDepartment?->name) === $target
+                || $norm($u->department) === $target
+                || $norm($u->supervisor_department) === $target;
+        })->values();
         // Show the resolved department name + seat (Manager/Supervisor) in
         // the picker label.
         $managerChoices->each(function ($u) {
@@ -464,6 +411,17 @@ class StatusController extends Controller
             $u->unsetRelation('hrmDepartment');
             $u->unsetRelation('hrmOrgPosition');
         });
+
+        // Do not preselect a stale assigned manager unless they remain in the
+        // department-scoped picker.
+        $selectedManager = $chainManager
+            ? $managerChoices->firstWhere('id', $chainManager->id)
+            : null;
+        $selectedManager ??= $managerChoices->firstWhere('name', $onboarding->assigned_manager);
+        $conversion['reporting']['manager_id'] = $selectedManager?->id;
+        $conversion['reporting']['manager_name'] = $selectedManager?->name;
+        $conversion['defaults']['reporting_manager'] = $selectedManager?->name;
+        $conversion['defaults']['reporting_manager_id'] = $selectedManager?->id;
 
         $employeeUser = self::employeeForOnboarding($onboarding, $person);
 
@@ -725,7 +683,10 @@ class StatusController extends Controller
             ? \Carbon\Carbon::parse($deploymentStart)->addMonthsNoOverflow($probationDurationMonths)->toDateString()
             : null;
 
-        $departmentName = $data['department'] ?: ($onboarding->department ?? 'HRM');
+        $departmentName = $posting?->position?->department?->name
+            ?: $posting?->department
+            ?: $onboarding->department
+            ?: $data['department'];
         $manufacturingRole = self::manufacturingRoleForHire(
             $departmentName,
             $data['position'] ?? $posting?->title ?? $onboarding->position
@@ -736,7 +697,7 @@ class StatusController extends Controller
             $role = 'MAN';
         }
         $validRoles = ['HRM', 'SCM', 'FIN', 'MAN', 'INV', 'ORD', 'WAR', 'CRM', 'ECO', 'PRO', 'PROJ', 'IT', 'LOG'];
-        $deptModel = HrmDepartment::where('name', $departmentName)->first();
+        $deptModel = $posting?->position?->department ?: HrmDepartment::where('name', $departmentName)->first();
         if (! in_array($role, $validRoles, true)) {
             $role = ($deptModel && in_array(strtoupper((string) $deptModel->category), $validRoles, true))
                 ? strtoupper((string) $deptModel->category) : 'HRM';
@@ -788,13 +749,35 @@ class StatusController extends Controller
         // Prefer the position-chain manager: resolve the name from the linked
         // user id so a renamed manager account can't desync the record.
         $managerName = $data['reporting_manager'] ?? null;
-        if (! $managerName && ! empty($data['reporting_manager_id'])) {
-            $managerName = User::where('id', $data['reporting_manager_id'])->value('name');
-        }
-        // ERP-grade FK: link the employee row directly to the manager row.
         $managerId = ! empty($data['reporting_manager_id']) ? (int) $data['reporting_manager_id'] : null;
-        if (! $managerId && $managerName) {
-            $managerId = User::where('name', $managerName)->where('is_active', true)->value('id');
+        $manager = $managerId
+            ? User::with(['hrmDepartment:id,name', 'hrmOrgPosition:id,management_level,department_id'])->find($managerId)
+            : ($managerName
+                ? User::with(['hrmDepartment:id,name', 'hrmOrgPosition:id,management_level,department_id'])
+                    ->where('name', $managerName)->where('is_active', true)->first()
+                : null);
+        if ($manager) {
+            $managerDepartmentId = $manager->hrm_department_id ?: $manager->hrmOrgPosition?->department_id;
+            $normalizeDepartment = fn ($value) => preg_replace('/\s+/', ' ', trim(str_replace('&', 'and', strtolower((string) $value))));
+            $departmentMatches = $deptModel && $managerDepartmentId
+                ? (int) $managerDepartmentId === (int) $deptModel->id
+                : $normalizeDepartment($manager->hrmDepartment?->name ?: $manager->department ?: $manager->supervisor_department)
+                    === $normalizeDepartment($departmentName);
+            $level = $manager->hrmOrgPosition?->management_level;
+            $isManagerOrSupervisor = in_array(strtolower((string) $manager->position), ['manager', 'supervisor'], true)
+                || (bool) $manager->is_manufacturing_supervisor
+                || in_array($level, ['Managerial', 'Supervisory'], true);
+            if (! $manager->is_active || ! $departmentMatches || ! $isManagerOrSupervisor) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'reporting_manager_id' => 'Choose an active manager or supervisor from the applicant position department.',
+                ]);
+            }
+            $managerId = (int) $manager->id;
+            $managerName = $manager->name;
+        } elseif ($managerId || $managerName) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'reporting_manager_id' => 'Choose an active manager or supervisor from the applicant position department.',
+            ]);
         }
         $employmentTypeId = $data['employment_type_id'] ?? null;
         if (! $employmentTypeId && ! empty($data['employment_type'])) {
@@ -849,6 +832,9 @@ class StatusController extends Controller
             'probation_evaluation_interval_months' => $probationEvaluationIntervalMonths,
             'probation_end_date' => $probationEndDate,
             'personal_email' => $onboarding->email !== $finalEmail ? $onboarding->email : $person?->email,
+            'gender' => $person?->sex,
+            'date_of_birth' => $person?->date_of_birth,
+            'civil_status' => $person?->civil_status,
             'mobile_number' => $person?->phone_number ?? $person?->contact_number,
             'emergency_contact_name' => $data['emergency_contact_name'] ?? $person?->emergency_name,
             'emergency_contact_number' => $data['emergency_contact_number'] ?? $person?->emergency_phone,
@@ -864,8 +850,8 @@ class StatusController extends Controller
             'basic_salary' => $data['basic_salary'] ?? null,
             'pay_frequency' => $data['pay_frequency'] ?? null,
             'payroll_group' => $data['payroll_group'] ?? null,
-            'immediate_supervisor' => $managerName ?? $onboarding->assigned_manager,
-            'department_head' => $managerName ?? $onboarding->assigned_manager,
+            'immediate_supervisor' => $managerName,
+            'department_head' => $managerName,
             'manager_id' => $managerId,
         ]);
 
@@ -896,6 +882,9 @@ class StatusController extends Controller
             'probation_duration_months' => $probationDurationMonths,
             'probation_evaluation_interval_months' => $probationEvaluationIntervalMonths,
             'probation_end_date' => $probationEndDate,
+            'gender' => $user->gender ?: $person?->sex,
+            'date_of_birth' => $user->date_of_birth ?: $person?->date_of_birth,
+            'civil_status' => $user->civil_status ?: $person?->civil_status,
             'work_location' => $data['work_location'] ?? $user->work_location,
             'work_mode' => $data['work_mode'] ?? $onboarding->work_mode ?? $user->work_mode,
             'work_schedule' => $schedule ?: $user->work_schedule,
@@ -904,9 +893,9 @@ class StatusController extends Controller
             'basic_salary' => $data['basic_salary'] ?? $user->basic_salary,
             'pay_frequency' => $data['pay_frequency'] ?? $user->pay_frequency,
             'payroll_group' => $data['payroll_group'] ?? $user->payroll_group,
-            'immediate_supervisor' => $managerName ?? $user->immediate_supervisor,
-            'department_head' => $managerName ?? $user->department_head,
-            'manager_id' => ($managerId && $managerId !== (int) $user->id) ? $managerId : $user->manager_id,
+            'immediate_supervisor' => $managerName,
+            'department_head' => $managerName,
+            'manager_id' => ($managerId && $managerId !== (int) $user->id) ? $managerId : null,
         ])->save();
 
         // Seed the salary ledger: first hire records "Initial salary", and
@@ -932,7 +921,7 @@ class StatusController extends Controller
             'department' => $departmentName,
             'employment_type' => $data['employment_type'] ?? $onboarding->employment_type,
             'start_date' => $data['start_date'],
-            'assigned_manager' => $managerName ?? $onboarding->assigned_manager,
+            'assigned_manager' => $managerName,
             'work_location' => $data['work_location'] ?? $onboarding->work_location,
             'work_schedule' => $schedule ?: $onboarding->work_schedule,
             'salary_range' => isset($data['basic_salary']) ? '₱' . number_format((float) $data['basic_salary'], 2) : $onboarding->salary_range,

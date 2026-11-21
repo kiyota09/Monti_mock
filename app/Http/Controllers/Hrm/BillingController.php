@@ -473,11 +473,18 @@ class BillingController extends Controller
         // Mark every in-period attendance record for the agency as billed
         // (any approval state — the preview now includes all of them) so it
         // can never be billed twice.
-        Attendance::whereNull('billed_statement_id')
+        $attendance = Attendance::with('worker:id,daily_rate')
+            ->whereNull('billed_statement_id')
             ->whereHas('worker', fn ($q) => $q->where('agency_id', $statement->agency_id))
             ->whereDate('date', '>=', $from)
             ->whereDate('date', '<=', $to)
-            ->update(['billed_statement_id' => $statement->id]);
+            ->get();
+
+        foreach ($attendance as $record) {
+            $record->billed_statement_id = $statement->id;
+            $record->rate_snapshot ??= $record->worker?->daily_rate;
+            $record->save();
+        }
     }
 
     protected static function nextCode(): string

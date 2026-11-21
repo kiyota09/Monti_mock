@@ -201,7 +201,11 @@ class WorkerPortalController extends Controller
                 $request->merge([$key => null]);
             }
         }
-        $data = $request->validate($this->rules($request, $worker->id, true));
+        $rules = $this->rules($request, $worker->id, true);
+        $rules['correction_reason'] = 'nullable|string|max:1000';
+        $data = $request->validate($rules);
+        $correctionReason = trim((string) ($data['correction_reason'] ?? ''));
+        unset($data['correction_reason']);
         if (empty($data['code'])) {
             $data['code'] = $worker->code;
         }
@@ -261,10 +265,13 @@ class WorkerPortalController extends Controller
 
         $this->storeSupportingDocuments($request, $worker);
         if ($resubmitted) {
-            $this->log($this->agencyId($request), $worker->id, null, 'worker_resubmitted', "Worker {$worker->code} corrected and resubmitted by {$request->user('agency')->name} — pending HR approval.", null, $request);
+            $this->log($this->agencyId($request), $worker->id, null, 'worker_resubmitted', "Worker {$worker->code} corrected and resubmitted by {$request->user('agency')->name} — pending HR approval.", $correctionReason ?: null, $request);
             $notificationBody = $pendingProposal?->request
                 ? "{$request->user('agency')->name} submitted the requested updates for {$worker->code} on {$pendingProposal->request->code}. Reopen the request to review the latest worker assignment preview."
                 : "{$request->user('agency')->name} submitted the requested updates for {$worker->code}. The worker is pending HR review.";
+            if ($correctionReason !== '') {
+                $notificationBody .= "\nAgency note: " . $correctionReason;
+            }
             $notificationRoute = $pendingProposal?->request ? 'hrm.manpower-requests.index' : 'hrm.workers.index';
             NotifiesHr::push("Worker corrections submitted: {$worker->name} ({$worker->code})", $notificationBody, $notificationRoute);
         } else {

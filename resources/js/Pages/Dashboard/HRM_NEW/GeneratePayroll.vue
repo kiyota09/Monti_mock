@@ -2,7 +2,7 @@
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch, nextTick } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { CheckCircle2, Search, X } from 'lucide-vue-next';
+import { ArrowLeft, CheckCircle2, Search, X } from 'lucide-vue-next';
 
 const props = defineProps({
     employees: { type: Array, default: () => [] },
@@ -111,7 +111,12 @@ const confirmSubmit = () => {
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                         <span class="text-slate-800 font-semibold">Generate Payroll</span>
                     </nav>
-                    <h1 class="text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Generate Payroll</h1>
+                    <div class="flex items-center justify-between gap-4">
+                        <h1 class="text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Generate Payroll</h1>
+                        <Link :href="route('hrm.payroll')" class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors">
+                            <ArrowLeft class="w-3.5 h-3.5" /> Back to Payroll
+                        </Link>
+                    </div>
                     <p class="text-sm text-slate-500 mt-1.5">Set the cutoff dates and select employees to run payroll. Payroll starts as Draft.</p>
                 </header>
 

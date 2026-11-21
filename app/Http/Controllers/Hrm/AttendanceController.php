@@ -115,8 +115,11 @@ class AttendanceController extends Controller
                     $startDates = array_filter([$asDate($w->availability), $accountStart]);
                     $deploymentStartByWorker[$w->id] = $startDates ? max($startDates) : null;
                 } else {
-                    $startDates = array_filter([$asDate($w->availability), $asDate($w->created_at)]);
-                    $deploymentStartByWorker[$w->id] = $startDates ? max($startDates) : null;
+                    // For backfilled agency assignments, an explicit worker
+                    // availability date is authoritative. Falling back to
+                    // created_at would hide valid historical attendance when
+                    // the worker profile was entered after deployment began.
+                    $deploymentStartByWorker[$w->id] = $asDate($w->availability) ?: $asDate($w->created_at);
                 }
             }
             $logsByUser = $userIdsMatched

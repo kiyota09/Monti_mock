@@ -83,7 +83,6 @@ function money(v: any): string {
                 <table class="w-full text-left border-collapse min-w-[680px]">
                     <thead>
                         <tr class="bg-slate-800 text-[10px] font-bold uppercase tracking-wider text-white/90">
-                            <th class="py-3 px-4">Code</th>
                             <th class="py-3 px-4">Period</th>
                             <th class="py-3 px-4 text-right">Labor</th>
                             <th class="py-3 px-4 text-right">Fee</th>
@@ -93,8 +92,16 @@ function money(v: any): string {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
-                        <tr v-for="s in statements" :key="s.id" class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                            <td class="py-3 px-4 text-xs font-mono font-bold">{{ s.code }}</td>
+                        <tr
+                            v-for="s in statements"
+                            :key="s.id"
+                            role="link"
+                            tabindex="0"
+                            :aria-label="`View billing statement ${s.code}`"
+                            @click="router.visit(route('agency.billing.show', s.id))"
+                            @keydown.enter="router.visit(route('agency.billing.show', s.id))"
+                            class="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                        >
                             <td class="py-3 px-4 text-xs whitespace-nowrap">{{ s.period }}</td>
                             <td class="py-3 px-4 text-right text-xs font-bold">{{ money(s.labor_cost) }}</td>
                             <td class="py-3 px-4 text-right text-xs font-bold">{{ money(s.service_fee) }}</td>
@@ -104,13 +111,13 @@ function money(v: any): string {
                             </td>
                             <td class="py-3 px-4">
                                 <div class="flex items-center justify-end gap-1">
-                                    <Link :href="route('agency.billing.show', s.id)" class="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg" title="View">
+                                    <Link :href="route('agency.billing.show', s.id)" @click.stop class="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg" title="View">
                                         <Eye class="w-4 h-4" />
                                     </Link>
-                                    <a :href="route('agency.billing.export-pdf', s.id)" class="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg" title="PDF">
+                                    <a :href="route('agency.billing.export-pdf', s.id)" @click.stop title="PDF" class="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg">
                                         <FileDown class="w-4 h-4" />
                                     </a>
-                                    <a :href="route('agency.billing.export-excel', s.id)" class="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg" title="Excel">
+                                    <a :href="route('agency.billing.export-excel', s.id)" @click.stop title="Excel" class="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg">
                                         <FileSpreadsheet class="w-4 h-4" />
                                     </a>
                                 </div>

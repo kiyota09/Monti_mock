@@ -16,6 +16,7 @@ use App\Models\Hrm\HrmPosition;
 use App\Models\Hrm\HrmTrainingEnrollment;
 use App\Models\Hrm\Payroll;
 use App\Models\Hrm\SalaryHistory;
+use App\Services\Payroll\GovernmentContributionCalculator;
 use App\Traits\HasPagePermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -59,20 +60,15 @@ class EmployeeDirectoryController extends Controller
             $q->where('is_active', true);
         }
 
-        $paginated = $q->orderBy('name')->paginate(20)->withQueryString();
-        $employees = collect($paginated->items())->filter(fn ($u) => $u !== null)
+        $employees = $q->orderBy('name')->get()
+            ->filter(fn ($u) => $u !== null)
             ->map(fn ($u) => $this->record($u))->values()->all();
 
         $deptCounts = User::whereNull('worker_id')->selectRaw('role, count(*) as c')->groupBy('role')->pluck('c', 'role');
 
         return Inertia::render('Dashboard/HRM_NEW/Employee', [
             'employees' => $employees,
-            'pagination' => [
-                'current_page' => $paginated->currentPage(),
-                'last_page' => $paginated->lastPage(),
-                'per_page' => $paginated->perPage(),
-                'total' => $paginated->total(),
-            ],
+
             'stats' => [
                 'total' => User::whereNull('worker_id')->count(),
                 'active' => User::whereNull('worker_id')->where('is_active', true)->count(),
@@ -100,12 +96,7 @@ class EmployeeDirectoryController extends Controller
             'employees' => [$this->record($employee)],
             'profileOnly' => true,
             'focusId' => $employee->id,
-            'pagination' => [
-                'current_page' => 1,
-                'last_page' => 1,
-                'per_page' => 1,
-                'total' => 1,
-            ],
+
             'stats' => [
                 'total' => User::whereNull('worker_id')->count(),
                 'active' => User::whereNull('worker_id')->where('is_active', true)->count(),
@@ -144,9 +135,6 @@ class EmployeeDirectoryController extends Controller
             'basic_salary' => 'nullable|numeric|min:0', 'bank_account' => 'nullable|string|max:255',
             'tax_id' => 'nullable|string|max:60', 'sss_id' => 'nullable|string|max:60',
             'pagibig_id' => 'nullable|string|max:60', 'philhealth_id' => 'nullable|string|max:60',
-            'sss_contribution' => 'nullable|numeric|min:0',
-            'pagibig_contribution' => 'nullable|numeric|min:0',
-            'philhealth_contribution' => 'nullable|numeric|min:0',
             'work_schedule' => 'nullable|string|max:255', 'shift' => 'nullable|string|max:255',
             'timezone' => 'nullable|string|max:20', 'biometrics_id' => 'nullable|string|max:60',
             'join_date' => 'nullable|date', 'probation_end_date' => 'nullable|date',
@@ -304,7 +292,11 @@ class EmployeeDirectoryController extends Controller
                 'date' => $a->date, 'clock_in' => $a->clock_in, 'clock_out' => $a->clock_out,
                 'status' => $a->status,
             ])->values()->all();
-        $payroll = Payroll::where('employee_id', $u->id)->latest()->first();
+        $payroll = $u->employee_id
+            ? Payroll::where('employee_id', $u->employee_id)->latest()->first()
+            : null;
+        $monthlyBasicSalary = (float) ($u->basic_salary ?? $payroll?->monthly_salary ?? $payroll?->base_salary ?? 0);
+        $monthlyContributions = GovernmentContributionCalculator::monthlyEmployeeShares($monthlyBasicSalary);
         $payrollHistory = Payroll::where('employee_id', $u->id)->orderByDesc('id')->take(10)->get()
             ->map(fn ($p) => [
                 'id' => $p->id,
@@ -324,7 +316,15 @@ class EmployeeDirectoryController extends Controller
                 'id' => $s->id, 'dept_code' => $s->dept_code, 'shift_type' => $s->shift_type,
                 'effective_date' => $s->effective_date, 'schedule' => $s->schedule_range, 'status' => $s->status,
             ])->values()->all();
-        $applicant = Applicant::where('email', $u->email)->with('documents')->first();
+        $applicant = Applicant::where('hired_user_id', $u->id)->with('documents')->first();
+        if (! $applicant && $u->personal_email) {
+            $applicant = Applicant::where('email', $u->personal_email)->with('documents')->latest('id')->first();
+        }
+        if (! $applicant) {
+            $applicant = Applicant::where('email', $u->email)->with('documents')->latest('id')->first();
+        }
+        $birthDate = $u->date_of_birth ?: $applicant?->date_of_birth;
+        $birthDate = $birthDate ? \Illuminate\Support\Carbon::parse($birthDate)->toDateString() : '';
         $certModels = HrmCertification::where('user_id', $u->id)->orderByDesc('id')->get();
         $certs = $certModels->pluck('name')->all();
         $enrollModels = HrmTrainingEnrollment::with('training')->where('user_id', $u->id)->orderByDesc('id')->get();
@@ -369,12 +369,12 @@ class EmployeeDirectoryController extends Controller
             'firstName' => $u->first_name ?? strtok((string) $u->name, ' '),
             'middleName' => $u->middle_name ?? '',
             'lastName' => $u->last_name ?? '',
-            'suffix' => $u->suffix ?? '',
+            'suffix' => $u->suffix ?: ($applicant?->suffix ?? ''),
             'nickname' => $u->nickname ?? '',
             'preferredName' => $u->preferred_name ?? $u->name,
-            'gender' => $u->gender ?? '',
-            'dateOfBirth' => $u->date_of_birth,
-            'civilStatus' => $u->civil_status ?? '',
+            'gender' => $u->gender ?: ($applicant?->sex ?? ''),
+            'dateOfBirth' => $birthDate,
+            'civilStatus' => $u->civil_status ?: ($applicant?->civil_status ?? ''),
             'nationality' => $u->nationality ?? 'Filipino',
             'profilePicture' => $u->profile_photo_path ? Storage::url($u->profile_photo_path) : '',
             'personalEmail' => $u->personal_email ?? '',
@@ -415,13 +415,13 @@ class EmployeeDirectoryController extends Controller
             'workLocation' => $u->work_location ?? '',
             'payrollGroup' => $u->payroll_group ?? '',
             'salaryGrade' => $u->salary_grade ?? '',
-            'basicSalary' => $u->basic_salary !== null ? '₱' . number_format((float) $u->basic_salary, 2) : ($payroll?->base_salary ? '₱' . number_format((float) $payroll->base_salary, 2) : ''),
-            'basicSalaryRaw' => $u->basic_salary,
+            'basicSalary' => $monthlyBasicSalary > 0 ? '₱' . number_format($monthlyBasicSalary, 2) : '',
+            'basicSalaryRaw' => $monthlyBasicSalary > 0 ? $monthlyBasicSalary : null,
             'bankAccount' => $u->bank_account ?? '',
             'taxID' => $u->tax_id ?? '',
-            'sssContribution' => $u->sss_contribution,
-            'pagibigContribution' => $u->pagibig_contribution,
-            'philhealthContribution' => $u->philhealth_contribution,
+            'sssContribution' => $monthlyContributions['sss'],
+            'pagibigContribution' => $monthlyContributions['pagibig'],
+            'philhealthContribution' => $monthlyContributions['philhealth'],
             'workSchedule' => $u->work_schedule ?? '',
             'shift' => $u->shift ?? '',
             'timeZone' => $u->timezone ?? 'GMT+8',

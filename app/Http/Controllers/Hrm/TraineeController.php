@@ -44,17 +44,19 @@ class TraineeController extends Controller
             ->with($with)
             ->orderBy('created_at', 'desc')
             ->get()
-            // Exclude trainees already forwarded to HR / Onboarding
-            ->filter(fn ($t) => ! ($t->traineeGrade?->passed_to_hr ?? false));
+            // Keep accounts visible until HR actually regularizes them.
+            ->filter(fn ($t) => ! ($t->traineeGrade?->passed_to_hr ?? false)
+                || (! $t->regularization_date && strtolower((string) $t->employment_status) !== 'regular'));
 
-        // Newly created employees also land here so HR can monitor and
-        // evaluate them: any rank hired in the last 30 days, newest first.
-        // (Covers staff + manager/supervisor/secretary/special_officer/
-        // vice_president created from Onboarding -> Create Employee.)
+        // Keep active employees visible while they remain unregularized,
+        // even when they were hired more than 30 days ago. Recent hires are
+        // also included during their initial training window.
         $newStaff = User::whereIn('position', ['staff', 'supervisor', 'manager', 'secretary', 'special_officer', 'vice_president'])
             ->where('is_active', true)
             ->where(function ($query) {
-                $query->where('created_at', '>=', now()->subDays(30))
+                $query->whereNull('regularization_date')
+                    ->orWhere('employment_status', '!=', 'Regular')
+                    ->orWhere('created_at', '>=', now()->subDays(30))
                     ->orWhere(function ($workers) {
                         $workers->whereNotNull('worker_id')
                             ->whereNotNull('training_duration_weeks');
@@ -62,7 +64,6 @@ class TraineeController extends Controller
             })
             ->with($with)
             ->orderByDesc('created_at')
-            ->take(50)
             ->get();
 
         // A recent hire belongs in the training dashboard only when their

@@ -695,8 +695,8 @@
                         <section>
                             <h4 class="text-xs font-bold text-slate-900 dark:text-zinc-100 tracking-wide">2. EMPLOYMENT ASSIGNMENT</h4>
                             <div class="border-t border-slate-200 dark:border-zinc-700 mt-1 mb-3"></div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div class="hidden">
                                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Position *</label>
                                     <input v-model="hireForm.position" type="text" readonly class="w-full px-3 py-2.5 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs text-slate-700 dark:text-zinc-200 shadow-sm cursor-not-allowed" />
                                 </div>
@@ -750,8 +750,8 @@
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Reporting Manager *</label>
-                                    <select v-model="hireForm.reporting_manager" @change="syncReportingManagerId" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
-                                        <option value="">-- Select manager --</option>
+                                    <select v-model="hireForm.reporting_manager" @change="syncReportingManagerId" :disabled="!(managers || []).length" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 dark:disabled:bg-zinc-800">
+                                        <option value="">{{ (managers || []).length ? '-- Select manager --' : 'No manager or supervisor assigned to this department' }}</option>
                                         <option v-for="m in (managers || [])" :key="m.id" :value="m.name">{{ m.name }} — {{ m.department || m.role }} · {{ caps(m.seat || m.position) }}</option>
                                     </select>
                                     <p v-if="(conversion?.reporting?.chain || []).length" class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">Position chain: {{ conversion.reporting.chain.join(' → ') }}</p>
@@ -828,8 +828,8 @@
                         <section>
                             <h4 class="text-xs font-bold text-slate-900 dark:text-zinc-100 tracking-wide">4. COMPENSATION</h4>
                             <div class="border-t border-slate-200 dark:border-zinc-700 mt-1 mb-3"></div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div class="hidden">
                                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Salary Type</label>
                                     <select v-model="hireForm.salary_type" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <option>Monthly</option>
@@ -842,7 +842,7 @@
                                     <input v-model="hireForm.basic_salary" type="number" min="0" step="0.01" placeholder="18000.00" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm" />
                                     <p v-if="hireForm.basic_salary !== ''" class="text-[10px] text-slate-500 dark:text-zinc-300 mt-1">[ {{ peso(hireForm.basic_salary) }} ]</p>
                                 </div>
-                                <div>
+                                <div class="hidden">
                                     <label class="block text-xs font-semibold text-slate-600 dark:text-zinc-300 mb-1.5">Pay Frequency</label>
                                     <select v-model="hireForm.pay_frequency" class="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
                                         <option>Monthly</option>
@@ -1483,7 +1483,7 @@ const openHireModal = () => {
         probation_duration_months: probationMonths,
         probation_evaluation_interval_months: isProbationary ? 1 : '',
         probation_end_date: d.probation_end_date || '',
-        reporting_manager: d.reporting_manager || props.onboarding.assigned_manager || '',
+        reporting_manager: d.reporting_manager || '',
         reporting_manager_id: d.reporting_manager_id || '',
         employee_status: 'Pending Training',
         work_location: d.work_location || 'Main Manufacturing Plant',

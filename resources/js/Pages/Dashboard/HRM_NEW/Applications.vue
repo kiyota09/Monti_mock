@@ -1486,14 +1486,12 @@ interface JobOption {
 // ============================================
 const props = withDefaults(defineProps<{
     applications: Application[] | Record<string, any>;
-    pagination?: Record<string, any>;
     metrics: Record<string, any>;
     filters: Record<string, any>;
     filterOptions: Record<string, any>;
     jobPostings?: JobOption[];
 }>(), {
     applications: () => [],
-    pagination: () => ({}),
     metrics: () => ({}),
     filters: () => ({}),
     filterOptions: () => ({}),
@@ -1514,7 +1512,7 @@ const applicationList = computed<Application[]>(() => {
 const pageLoading = ref(true);
 const activeModal = ref<'create' | 'edit' | null>(null);
 const searchQuery = ref(props.filters?.search || "");
-const filterStatus = ref(props.filters?.status || "Submitted");
+const filterStatus = ref(props.filters?.status || "");
 const filterPosition = ref("");
 const viewActiveTab = ref('personal');
 const showViewModal = ref(false);
@@ -1645,7 +1643,7 @@ const viewTabs = [
 // ============================================
 // DATA
 // ============================================
-const statusOptions = ['On Hold', 'Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Interview Passed', 'Selected', 'Onboard', 'Onboarding', 'Hired', 'Rejected', 'Withdrawn'];
+const statusOptions = ['On Hold', 'Submitted', 'Screening', 'Shortlisted', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Interview Passed', 'Selected', 'Onboard', 'Onboarding', 'Rejected', 'Withdrawn'];
 // Applications already at the interview stage show only the View button
 // (the "More" actions menu is hidden).
 const interviewStatuses = ['Interview', 'Interview Scheduled', 'Initial Interview', 'Final Interview', 'Interviewed', 'Interview Passed'];

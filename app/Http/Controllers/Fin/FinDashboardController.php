@@ -10,11 +10,14 @@ use App\Models\Fin\FinBudget;
 use App\Models\Fin\FinExpense;
 use App\Models\Fin\FinInvoice;
 use App\Models\Fin\FinPaymongoCheckout;
+use App\Models\Hrm\BillingStatement;
 use App\Models\Scm\ScmPurchaseOrder;
 use App\Services\Fin\FinanceService;
 use App\Services\Fin\PayMongoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class FinDashboardController extends Controller
@@ -95,9 +98,27 @@ class FinDashboardController extends Controller
         return Inertia::render('Dashboard/FIN/Manager/Payroll', [
             'payroll' => $this->finance->payrollRows(),
             'employees' => $this->finance->payrollEmployees(),
+            'agencyInvoices' => $this->finance->agencyInvoiceRows(),
             'stats' => $this->finance->stats(),
             'isDummy' => false,
         ]);
+    }
+
+    public function downloadAgencyInvoiceUpload(int $upload)
+    {
+        $file = DB::table('agency_billing_uploads')->where('id', $upload)->first();
+        abort_unless($file && Storage::exists($file->path), 404);
+
+        return Storage::response($file->path, $file->original_name);
+    }
+
+    public function downloadAgencyStatementAttachment(BillingStatement $statement, int $index)
+    {
+        abort_unless(in_array($statement->status, [BillingStatement::STATUS_ISSUED, BillingStatement::STATUS_PAID], true), 404);
+        $file = $statement->attachments[$index] ?? null;
+        abort_unless($file && Storage::exists($file['path'] ?? ''), 404);
+
+        return Storage::response($file['path'], $file['name'] ?? 'agency-invoice');
     }
 
     public function reports()

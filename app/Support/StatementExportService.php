@@ -10,7 +10,7 @@ use App\Models\Hrm\BillingStatement;
  * Dependency-free:
  *  - pdf():   a print-ready HTML statement; the browser's Print dialog
  *             "Save as PDF" produces the PDF (no dompdf required).
- *  - excel(): a UTF-8 CSV spreadsheet that opens directly in Excel.
+ *  - excel(): an Excel-compatible XML workbook with explicit black text.
  */
 class StatementExportService
 {
@@ -27,38 +27,42 @@ class StatementExportService
         $s = $data['statement'];
 
         return response()->streamDownload(function () use ($data, $s) {
-            $out = fopen('php://output', 'w');
-            // UTF-8 BOM so Excel reads accented names correctly.
-            fwrite($out, "\xEF\xBB\xBF");
+            $xml = static fn ($value) => htmlspecialchars((string) $value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+            $row = static function (array $cells, string $style = '') use ($xml): string {
+                $styleAttr = $style !== '' ? ' ss:StyleID="' . $style . '"' : '';
+                $result = '<Row>';
+                foreach ($cells as $cell) {
+                    $result .= '<Cell' . $styleAttr . '><Data ss:Type="String">' . $xml($cell) . '</Data></Cell>';
+                }
+                return $result . '</Row>';
+            };
 
-            fputcsv($out, ['Statement', $s->code]);
-            fputcsv($out, ['Agency', $data['agency']?->name]);
-            fputcsv($out, ['Period', $data['period']]);
-            fputcsv($out, ['Status', $s->status]);
-            fputcsv($out, []);
-
-            fputcsv($out, ['Worker', 'Worker ID', 'Request', 'Department', 'Days', 'Hours', 'OT hours', 'Rate', 'Labor']);
+            echo '<?xml version="1.0" encoding="UTF-8"?>';
+            echo '<?mso-application progid="Excel.Sheet"?>';
+            echo '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
+            echo '<Styles><Style ss:ID="Default" ss:Name="Normal"><Font ss:Color="#000000"/></Style><Style ss:ID="Header"><Font ss:Color="#000000" ss:Bold="1"/><Interior ss:Color="#D9EAF7" ss:Pattern="Solid"/></Style></Styles>';
+            echo '<Worksheet ss:Name="Statement"><Table>';
+            echo $row(['Statement', $s->code]);
+            echo $row(['Agency', $data['agency']?->name]);
+            echo $row(['Period', $data['period']]);
+            echo $row(['Status', $s->status]);
+            echo $row([]);
+            echo $row(['Worker', 'Request', 'Department', 'Days', 'Hours', 'OT hours', 'Rate', 'Labor'], 'Header');
             foreach ($data['calc']['lines'] as $l) {
-                fputcsv($out, [
-                    $l['worker_name'],
-                    $l['worker_code'],
-                    $l['request_code'],
-                    $l['department'],
-                    $l['days'],
-                    $l['hours'],
-                    $l['overtime_hours'],
-                    $l['rate'],
-                    $l['labor'],
-                ]);
+                echo $row([$l['worker_name'], $l['request_code'], $l['department'], $l['days'], $l['hours'], $l['overtime_hours'], $l['rate'], $l['labor']]);
             }
-
-            fputcsv($out, []);
-            fputcsv($out, ['Labor cost', '', '', '', '', '', '', '', $s->labor_cost]);
-            fputcsv($out, ['Service fee', '', '', '', '', '', '', '', $s->service_fee]);
-            fputcsv($out, ['Total', '', '', '', '', '', '', '', $s->total]);
-
-            fclose($out);
-        }, $s->code . '.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+            echo $row([]);
+            $days = array_sum(array_column($data['calc']['lines'], 'days'));
+            $hours = array_sum(array_column($data['calc']['lines'], 'hours'));
+            echo $row(['Records', $data['calc']['count']]);
+            echo $row(['Days', $days]);
+            echo $row(['Hours', $hours]);
+            echo $row([]);
+            echo $row(['Labor cost', '', '', '', '', '', '', $s->labor_cost]);
+            echo $row(['Service fee', '', '', '', '', '', '', $s->service_fee]);
+            echo $row(['Total', '', '', '', '', '', '', $s->total]);
+            echo '</Table></Worksheet></Workbook>';
+        }, $s->code . '.xls', ['Content-Type' => 'application/vnd.ms-excel; charset=UTF-8']);
     }
 
     /**

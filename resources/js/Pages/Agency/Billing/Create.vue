@@ -29,6 +29,7 @@ const selectedUploadKind = computed(() => {
     if (/\.pdf$/.test(name)) return 'pdf';
     if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) return 'image';
     if (/\.csv$/.test(name)) return 'csv';
+    if (/\.xls$/.test(name)) return 'xls';
     if (/\.(txt|log)$/.test(name)) return 'text';
     return 'unsupported';
 });
@@ -71,6 +72,10 @@ function parseCsv(text: string): string[][] {
     return rows;
 }
 const csvRows = computed(() => parseCsv(textPreview.value));
+const csvColumnCount = computed(() => Math.max(0, ...csvRows.value.map((row) => row.length)));
+const csvDisplayRows = computed(() => csvRows.value.map((row) =>
+    Array.from({ length: csvColumnCount.value }, (_, index) => row[index] ?? '')
+));
 function spreadsheetColumn(index: number): string {
     let value = index + 1;
     let label = '';
@@ -115,12 +120,24 @@ watch(selectedUpload, async (file) => {
     textPreview.value = '';
     textPreviewError.value = '';
     textPreviewLoading.value = false;
-    if (!file || !/\.(csv|txt|log)$/i.test(file.name)) return;
+    if (!file || !/\.(csv|xls|txt|log)$/i.test(file.name)) return;
     textPreviewLoading.value = true;
     try {
         const response = await fetch(file.url, { credentials: 'same-origin' });
         if (!response.ok) throw new Error('Unable to load this document.');
-        textPreview.value = await response.text();
+        const content = await response.text();
+        if (/\.xls$/i.test(file.name)) {
+            const document = new DOMParser().parseFromString(content, 'application/xml');
+            if (document.querySelector('parsererror')) throw new Error('Invalid spreadsheet');
+            const rows = Array.from(document.getElementsByTagNameNS('*', 'Row')).map((row) =>
+                Array.from(row.getElementsByTagNameNS('*', 'Cell')).map((cell) =>
+                    cell.getElementsByTagNameNS('*', 'Data')[0]?.textContent || ''
+                )
+            );
+            textPreview.value = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
+        } else {
+            textPreview.value = content;
+        }
     } catch {
         textPreviewError.value = 'This document could not be previewed.';
     } finally {
@@ -197,6 +214,9 @@ watch(from, (v) => {
             </div>
             <input ref="fileInput" type="file" multiple class="hidden" @change="addAttachments" />
             <div class="flex items-center gap-2">
+                <Link :href="route('agency.billing.index')" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-900 transition hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700">
+                    <ChevronLeft class="h-4 w-4" /> Back
+                </Link>
                 <button type="button" @click="showUploadModal = true" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
                     <Upload class="h-4 w-4" /> Upload files
                 </button>
@@ -213,19 +233,19 @@ watch(from, (v) => {
                     <div v-else-if="selectedUpload && selectedUploadKind === 'image'" class="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
                         <img :src="selectedUpload.url" :alt="selectedUpload.name" class="max-h-full max-w-full object-contain" />
                     </div>
-                    <div v-else-if="selectedUpload && (selectedUploadKind === 'csv' || selectedUploadKind === 'text')" class="min-h-0 flex-1 overflow-auto bg-white dark:bg-slate-900">
+                    <div v-else-if="selectedUpload && (selectedUploadKind === 'csv' || selectedUploadKind === 'xls' || selectedUploadKind === 'text')" class="min-h-0 flex-1 overflow-auto bg-white dark:bg-slate-900">
                         <p v-if="textPreviewError" class="p-4 text-sm text-rose-600">{{ textPreviewError }}</p>
                         <div v-else-if="textPreviewLoading" class="flex min-h-[320px] flex-col items-center justify-center gap-3 p-6 text-slate-500 dark:text-slate-400">
                             <div class="h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600 dark:border-slate-700 dark:border-t-blue-400" aria-hidden="true"></div>
                             <p class="text-sm font-semibold">Loading preview...</p>
                         </div>
-                        <template v-else-if="selectedUploadKind === 'csv'">
+                        <template v-else-if="selectedUploadKind === 'csv' || selectedUploadKind === 'xls'">
                             <table class="w-max min-w-full table-fixed border-collapse text-left text-xs">
                                 <thead class="sticky top-0 z-10 bg-slate-100 text-[10px] font-bold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                                    <tr><th class="sticky left-0 z-20 w-10 border border-slate-200 bg-slate-200 px-1.5 py-1 text-center dark:border-slate-700 dark:bg-slate-700">#</th><th v-for="(cell, column) in csvRows[0] || []" :key="column" :style="{ width: (csvColumnWidths[column] || 120) + 'px', minWidth: (csvColumnWidths[column] || 120) + 'px' }" class="relative border border-slate-200 px-2 py-1 dark:border-slate-700">{{ spreadsheetColumn(column) }}<span @pointerdown="startCsvResize($event, 'column', column)" class="absolute right-0 top-0 z-30 h-full w-1.5 cursor-col-resize touch-none hover:bg-blue-500/60"></span></th></tr>
+                                    <tr><th class="sticky left-0 z-20 w-10 border border-slate-200 bg-slate-200 px-1.5 py-1 text-center dark:border-slate-700 dark:bg-slate-700">#</th><th v-for="column in csvColumnCount" :key="column" :style="{ width: (csvColumnWidths[column - 1] || 120) + 'px', minWidth: (csvColumnWidths[column - 1] || 120) + 'px' }" class="relative border border-slate-200 px-2 py-1 dark:border-slate-700">{{ spreadsheetColumn(column - 1) }}<span @pointerdown="startCsvResize($event, 'column', column - 1)" class="absolute right-0 top-0 z-30 h-full w-1.5 cursor-col-resize touch-none hover:bg-blue-500/60"></span></th></tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="(row, rowIndex) in csvRows" :key="rowIndex" :style="{ height: (csvRowHeights[rowIndex] || 30) + 'px' }" class="hover:bg-blue-50/70 dark:hover:bg-blue-900/10">
+                                    <tr v-for="(row, rowIndex) in csvDisplayRows" :key="rowIndex" :style="{ height: (csvRowHeights[rowIndex] || 30) + 'px' }" class="hover:bg-blue-50/70 dark:hover:bg-blue-900/10">
                                         <th class="sticky left-0 relative border border-slate-200 bg-slate-50 px-1.5 py-1 text-center font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">{{ rowIndex + 1 }}<span @pointerdown="startCsvResize($event, 'row', rowIndex)" class="absolute bottom-0 left-0 z-20 h-1.5 w-full cursor-row-resize touch-none hover:bg-blue-500/60"></span></th>
                                         <td v-for="(cell, column) in row" :key="column" :style="{ width: (csvColumnWidths[column] || 120) + 'px', minWidth: (csvColumnWidths[column] || 120) + 'px' }" class="border border-slate-200 p-0 align-top text-slate-700 dark:border-slate-700 dark:text-slate-200"><div :style="{ height: (csvRowHeights[rowIndex] || 30) + 'px' }" class="overflow-auto whitespace-nowrap px-2 py-1">{{ cell }}</div></td>
                                     </tr>

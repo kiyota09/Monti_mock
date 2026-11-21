@@ -50,6 +50,9 @@ class BillingPortalController extends Controller
             'from' => $from,
             'to' => $to,
             'today' => today()->toDateString(),
+            'issuedStatementCount' => BillingStatement::where('agency_id', $agency->id)
+                ->whereIn('status', [BillingStatement::STATUS_ISSUED, BillingStatement::STATUS_PAID])
+                ->count(),
             'preview' => BillingCalc::preview($agency, $from, $to),
             'attachmentHistory' => DB::table('agency_billing_uploads')
                 ->where('agency_id', $agency->id)
@@ -195,7 +198,38 @@ class BillingPortalController extends Controller
 
     public function index(Request $request)
     {
-        return redirect()->route('agency.billing.create');
+        $query = BillingStatement::where('agency_id', $this->agencyId($request))
+            ->whereIn('status', [BillingStatement::STATUS_ISSUED, BillingStatement::STATUS_PAID]);
+
+        if ($from = $request->query('from')) {
+            $query->whereDate('period_end', '>=', $from);
+        }
+        if ($to = $request->query('to')) {
+            $query->whereDate('period_start', '<=', $to);
+        }
+
+        $paginated = $query->orderByDesc('period_end')->paginate(15)->withQueryString();
+
+        return Inertia::render('Agency/Billing/Index', [
+            'statements' => $paginated->getCollection()->map(fn (BillingStatement $statement) => [
+                'id' => $statement->id,
+                'code' => $statement->code,
+                'period' => BillingCalc::periodLabel($statement->period_start->toDateString(), $statement->period_end->toDateString()),
+                'labor_cost' => $statement->labor_cost,
+                'service_fee' => $statement->service_fee,
+                'total' => $statement->total,
+                'status' => $statement->status,
+                'paid_at' => optional($statement->paid_at)->toDateString(),
+                'payment_reference' => $statement->payment_reference,
+            ])->values(),
+            'pagination' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+            ],
+            'filters' => $request->only(['from', 'to']),
+        ]);
     }
 
     public function show(Request $request, BillingStatement $statement)

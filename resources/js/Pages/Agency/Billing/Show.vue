@@ -3,7 +3,7 @@
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { watch } from 'vue';
 import AgencyLayout from '@/Layouts/AgencyLayout.vue';
-import { FileDown, FileSpreadsheet } from 'lucide-vue-next';
+import { ArrowLeft, FileDown, FileSpreadsheet } from 'lucide-vue-next';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 import { formatHours } from '@/lib/utils';
@@ -50,10 +50,13 @@ function money(v: any): string {
                 <p class="mt-1 text-sm">{{ statement.period }} · <strong>{{ statement.status }}</strong></p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-                <a :href="route('agency.billing.export-pdf', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition">
+                <Link :href="route('agency.billing.index')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold !text-slate-900 dark:!text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                    <ArrowLeft class="w-3.5 h-3.5" /> Back
+                </Link>
+                <a :href="route('agency.billing.export-pdf', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold !text-slate-900 dark:!text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition">
                     <FileDown class="w-3.5 h-3.5" /> PDF
                 </a>
-                <a :href="route('agency.billing.export-excel', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition">
+                <a :href="route('agency.billing.export-excel', statement.id)" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold !text-slate-900 dark:!text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition">
                     <FileSpreadsheet class="w-3.5 h-3.5" /> Excel
                 </a>
             </div>
@@ -74,7 +77,7 @@ function money(v: any): string {
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                         <tr v-for="(l, i) in statement.lines" :key="i">
-                            <td class="py-2 px-3 text-sm font-bold">{{ l.worker_name }} <span class="font-mono text-[10px] text-slate-400">({{ l.worker_code }})</span></td>
+                            <td class="py-2 px-3 text-sm font-bold">{{ l.worker_name }}</td>
                             <td class="py-2 px-3 text-xs font-mono">{{ l.request_code }}</td>
                             <td class="py-2 px-3 text-center text-xs">{{ l.days }}</td>
                             <td class="py-2 px-3 text-center text-xs">{{ formatHours(l.hours) }}{{ l.overtime_hours ? '+' + formatHours(l.overtime_hours) + ' OT' : '' }}</td>

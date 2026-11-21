@@ -292,13 +292,15 @@
                                                 >
                                                     <span class="inline-flex items-center gap-1"><Eye class="w-3.5 h-3.5" />View</span>
                                                 </button>
-                                                <button
+                                                <a
                                                     v-if="interview.meeting_link && interview.status === 'Scheduled'"
-                                                    @click="openMeeting(interview.meeting_link)"
-                                                    class="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white rounded-lg text-[10px] font-bold transition-all duration-200 shadow-md hover:shadow-lg"
+                                                    :href="interview.meeting_link"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="inline-flex px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white rounded-lg text-[10px] font-bold transition-all duration-200 shadow-md hover:shadow-lg"
                                                 >
                                                     Join
-                                                </button>
+                                                </a>
                                             </div>
                                         </td>
                                     </tr>
@@ -441,7 +443,7 @@
                                         <td class="px-4 py-3 text-right">
                                             <button v-if="interview._queue" @click="scheduleFinalInterview(interview._sourceInterview)" class="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-lg text-[10px] font-bold transition-all duration-200 shadow-md hover:shadow-lg"><Calendar class="w-3.5 h-3.5" />Schedule Final Interview</button>
                                             <template v-else>
-                                                <button v-if="interview.meeting_link && interview.status === 'Scheduled'" @click="openMeeting(interview.meeting_link)" class="mr-1 inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-md transition-all duration-200 hover:from-emerald-400 hover:to-emerald-500">Join</button>
+                                                <a v-if="interview.meeting_link && interview.status === 'Scheduled'" :href="interview.meeting_link" target="_blank" rel="noopener noreferrer" class="mr-1 inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-md transition-all duration-200 hover:from-emerald-400 hover:to-emerald-500">Join</a>
                                                 <button @click="viewInterviewDetails(interview)" class="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 text-slate-600 hover:text-indigo-600 rounded-lg text-[10px] font-semibold transition-all duration-200"><Eye class="w-3.5 h-3.5" />View</button>
                                             </template>
                                         </td>
@@ -508,7 +510,7 @@
                             <div class="grid grid-cols-2 gap-4"><div><label class="block text-xs font-semibold text-slate-600 mb-1.5">New Date *</label><input v-model="rescheduleForm.date" type="date" :min="todayDate" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" /></div><div><label class="block text-xs font-semibold text-slate-600 mb-1.5">Interviewer *</label><div class="relative"><button type="button" @click="rescheduleMenuOpen = !rescheduleMenuOpen" class="w-full flex items-center gap-3 px-4 py-3 bg-white border border-slate-200 rounded-xl text-left hover:border-blue-300 hover:shadow-md transition-all duration-200"><span class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white text-xs font-bold flex items-center justify-center shrink-0 shadow">{{ interviewerInitials(selectedRescheduleInterviewer?.name) }}</span><span class="flex-1 min-w-0"><span class="block text-sm font-semibold text-slate-900 truncate">{{ selectedRescheduleInterviewer?.name || 'Select interviewer...' }}</span><span class="block text-[11px] text-slate-400 truncate">{{ selectedRescheduleInterviewer ? interviewerRoleLine(selectedRescheduleInterviewer) : 'Choose who will conduct this interview' }}</span></span><svg class="w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200" :class="rescheduleMenuOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div v-if="rescheduleMenuOpen" class="fixed inset-0 z-40 cursor-default" @click="rescheduleMenuOpen = false"></div><div v-if="rescheduleMenuOpen" class="absolute left-0 right-0 top-full mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden"><div class="max-h-60 overflow-y-auto p-1.5"><button v-for="i in interviewers" :key="i.id" type="button" @click="pickRescheduleInterviewer(i.id)" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors" :class="String(rescheduleForm.interviewer_id) === String(i.id) ? 'bg-blue-50' : 'hover:bg-slate-50'"><span class="w-9 h-9 rounded-full text-xs font-bold flex items-center justify-center shrink-0" :class="String(rescheduleForm.interviewer_id) === String(i.id) ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow' : 'bg-slate-100 text-slate-500'">{{ interviewerInitials(i.name) }}</span><span class="flex-1 min-w-0"><span class="block text-sm font-semibold text-slate-900 truncate">{{ i.name }}</span><span class="block text-[11px] text-slate-400 truncate">{{ interviewerRoleLine(i) }}</span></span><svg v-if="String(rescheduleForm.interviewer_id) === String(i.id)" class="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></button><div v-if="!interviewers.length" class="px-3 py-6 text-center text-xs text-slate-400">No interviewers available.</div></div></div></div></div></div>
                             <div class="grid grid-cols-2 gap-4"><div><label class="block text-xs font-semibold text-slate-600 mb-1.5">Start Time *</label><input v-model="rescheduleForm.start_time" type="time" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" /></div><div><label class="block text-xs font-semibold text-slate-600 mb-1.5">End Time *</label><input v-model="rescheduleForm.end_time" type="time" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" /></div></div>
                             <div><label class="block text-xs font-semibold text-slate-600 mb-1.5">Interview Method *</label><div class="flex gap-5"><label class="flex items-center gap-2 text-sm"><input type="radio" value="Online" v-model="rescheduleForm.method" /> Online</label><label class="flex items-center gap-2 text-sm"><input type="radio" value="Onsite" v-model="rescheduleForm.method" /> Onsite</label></div></div>
-                            <div v-if="rescheduleForm.method === 'Online'"><label class="block text-xs font-semibold text-slate-600 mb-1.5">Meeting Link *</label><input v-model="rescheduleForm.meeting_link" type="url" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="https://meet.google.com/..." /></div>
+                            <div v-if="rescheduleForm.method === 'Online'"><label class="block text-xs font-semibold text-slate-600 mb-1.5">Google Meet Link *</label><input v-model="rescheduleForm.meeting_link" type="url" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="https://meet.google.com/..." /></div>
                             <div v-else><label class="block text-xs font-semibold text-slate-600 mb-1.5">Location *</label><input v-model="rescheduleForm.location" type="text" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="HR Office / Conference Room" /></div>
                             <div><label class="block text-xs font-semibold text-slate-600 mb-1.5">Reason *</label><textarea v-model="rescheduleForm.reason" rows="3" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="Reason for rescheduling..."></textarea></div>
                         </div>
@@ -863,9 +865,10 @@
 
                             <!-- Meeting Link (Online) -->
                             <div v-if="scheduleForm.method === 'Online'">
-                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Meeting Link <span class="text-red-500">*</span></label>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Google Meet Link <span class="text-red-500">*</span></label>
                                 <input v-model="scheduleForm.meeting_link" type="url" placeholder="https://meet.google.com/..." class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200" />
-                                <p v-if="validationErrors.includes('Please provide a meeting link for the online interview.')" class="text-xs text-red-500 mt-1">Please provide a meeting link for the online interview.</p>
+                                <p v-if="validationErrors.includes('Please provide a Google Meet link for the online interview.')" class="text-xs text-red-500 mt-1">Please provide a Google Meet link for the online interview.</p>
+                                <p v-if="validationErrors.includes('Enter a valid Google Meet URL (https://meet.google.com/)...')" class="text-xs text-red-500 mt-1">Enter a valid Google Meet URL (https://meet.google.com/...).</p>
                             </div>
 
                             <!-- Location (Onsite) -->
@@ -1114,12 +1117,11 @@
                             <button v-if="selectedInterview.status === 'Completed' && !isFinalInterview(selectedInterview) && selectedInterview.evaluation?.recommendation === 'proceed_to_final_interview' && ['Shortlisted','Interview Scheduled','Initial Interview','Final Interview','Interviewed'].includes(selectedInterview.applicant?.status)" @click="scheduleFinalInterview(selectedInterview)" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><Calendar class="w-3.5 h-3.5" />Schedule Final Interview</button>
                             <button v-if="selectedInterview.status === 'Completed' && isFinalInterview(selectedInterview) && ['proceed_to_onboarding_training', 'recommend_onboarding_training'].includes(selectedInterview.evaluation?.recommendation) && !['Onboard','Onboarding','Hired','Rejected','Withdrawn'].includes(selectedInterview.applicant?.status)" @click="advanceToOnboarding(selectedInterview)" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md inline-flex items-center gap-1"><ArrowRight class="w-3.5 h-3.5" />Advance to Onboarding</button>
                             <button @click="closeDetailModal" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md">Close</button>
-                            <button v-if="selectedInterview.meeting_link && selectedInterview.status === 'Scheduled'" @click="openMeeting(selectedInterview.meeting_link)" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-md hover:shadow-md">
+                            <a v-if="selectedInterview.meeting_link && selectedInterview.status === 'Scheduled'" :href="selectedInterview.meeting_link" target="_blank" rel="noopener noreferrer" class="inline-flex px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all duration-200 shadow-md hover:shadow-md">
                                 <svg class="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.357-1.357a4.5 4.5 0 0 0-6.364-6.364l-1.757 1.757"/>
                                 </svg>
-                                Join Meeting
-                            </button>
+                                Join Meeting</a>
                         </div>
                     </div>
                 </div>
@@ -1762,6 +1764,16 @@ const showToastMessage = (title, message, type = 'success') => {
     }, 5000);
 };
 
+const isGoogleMeetLink = (value) => {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'https:'
+            && url.hostname.toLowerCase() === 'meet.google.com'
+            && url.pathname.length > 1;
+    } catch {
+        return false;
+    }
+};
 const validateScheduleForm = () => {
     const errors = [];
     
@@ -1796,7 +1808,9 @@ const validateScheduleForm = () => {
         errors.push('Please select an interviewer.');
     }
     if (scheduleForm.value.method === 'Online' && !scheduleForm.value.meeting_link) {
-        errors.push('Please provide a meeting link for the online interview.');
+        errors.push('Please provide a Google Meet link for the online interview.');
+    } else if (scheduleForm.value.meeting_link && !isGoogleMeetLink(scheduleForm.value.meeting_link)) {
+        errors.push('Enter a valid Google Meet URL (https://meet.google.com/...).');
     }
     if (scheduleForm.value.method === 'Onsite' && !scheduleForm.value.location) {
         errors.push('Please provide a location for the onsite interview.');
@@ -1961,12 +1975,6 @@ const closeDetailModal = () => {
     document.body.style.overflow = '';
 };
 
-const openMeeting = (link) => {
-    if (link) {
-        window.open(link, '_blank');
-    }
-};
-
 const openRescheduleModal = (interview) => {
     selectedInterview.value = interview;
     rescheduleForm.value = {
@@ -2012,7 +2020,9 @@ const rescheduleInterview = async () => {
         showToastMessage('Validation Error', 'End time must be after start time.', 'error'); return;
     }
     if (rescheduleForm.value.method === 'Online' && !rescheduleForm.value.meeting_link) {
-        showToastMessage('Validation Error', 'Please provide a meeting link.', 'error'); return;
+        showToastMessage('Validation Error', 'Please provide a Google Meet link.', 'error'); return;
+    } else if (rescheduleForm.value.meeting_link && !isGoogleMeetLink(rescheduleForm.value.meeting_link)) {
+        showToastMessage('Validation Error', 'Enter a valid Google Meet URL (https://meet.google.com/...).', 'error'); return;
     }
     if (rescheduleForm.value.method === 'Onsite' && !rescheduleForm.value.location) {
         showToastMessage('Validation Error', 'Please provide a location.', 'error'); return;
